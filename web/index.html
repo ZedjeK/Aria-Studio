@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aria - Studio</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="large">
+    <main>
+        <h1>Aria <span>- Studio</span></h1>
+        <p class="sous-titre">Studio d'images et de vidéos</p>
+
+        <nav>
+            <!-- Création : on écrit, on tourne, on monte. -->
+            <div class="famille-onglets" title="Création">
+                <button class="onglet" data-vue="scenario">📝 Scénario</button>
+                <button class="onglet actif" data-vue="plateau">🎬 Plateau</button>
+                <button class="onglet" data-vue="montage">🎞️ Montage</button>
+            </div>
+            <!-- Préparation : les modèles, leur casting à l'aveugle, leurs réglages. -->
+            <div class="famille-onglets" title="Préparation">
+                <button class="onglet" data-vue="modeles">🧩 Modèles</button>
+                <button class="onglet" data-vue="casting">🎭 Casting</button>
+                <button class="onglet" data-vue="reglages">⚙ Réglages</button>
+            </div>
+            <!-- État en direct des moteurs, visible depuis tous les onglets. -->
+            <div id="etat-direct" class="etat-direct" title="État en direct"></div>
+        </nav>
+
+        <div class="vue" id="vue-plateau">
+            <section class="carte">
+                <h2>Créer</h2>
+                <form id="form-creation">
+                    <textarea id="idee-creation" rows="3" required
+                              placeholder="Ton idée, en français : une samouraï androïde sous la pluie à Tokyo, ambiance néon…"></textarea>
+                    <div class="options-creation">
+                        <label>LLM <select id="llm-creation"></select></label>
+                        <label class="case"><input type="checkbox" id="sans-reecriture"> Sans réécriture</label>
+                        <label>Modèle <select id="workflow-creation"></select></label>
+                        <label>Format <select id="format-creation"></select></label>
+                        <label>Seed <input id="seed-creation" type="number" min="0" placeholder="aléatoire"></label>
+                        <label>Images <select id="nombre-creation"></select></label>
+                        <button type="submit" class="principal">Créer</button>
+                    </div>
+                    <div id="loras-creation" class="loras"></div>
+                    <details id="zone-references" class="references">
+                        <summary>＋ Références <span id="compte-references" class="discret"></span></summary>
+                        <div class="ligne entete-references">
+                            <label class="case"><input type="radio" name="mode-reference" value="inspirer" checked> 🎭 S'inspirer</label>
+                            <label class="case"><input type="radio" name="mode-reference" value="variation"> 🎨 Variation</label>
+                            <label id="bloc-liberte" class="case discret" hidden>Liberté
+                                <input id="liberte-reference" type="range" min="0.3" max="0.9" step="0.05" value="0.6">
+                                <span id="valeur-liberte">0,60</span></label>
+                        </div>
+                        <div id="emplacements-references" class="emplacements"></div>
+                        <p id="aide-references" class="discret"></p>
+                        <input id="fichier-reference" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                    </details>
+                </form>
+
+                <div id="progression-creation" hidden>
+                    <div class="barre"><div></div></div>
+                    <span class="discret"></span>
+                </div>
+                <p id="erreur-creation" class="ko" hidden></p>
+
+                <div id="resultat-creation" hidden>
+                    <div id="images-creation" class="vignettes"></div>
+                    <label class="discret" for="prompt-creation">Prompt envoyé au modèle (modifiable)</label>
+                    <textarea id="prompt-creation" rows="4"></textarea>
+                    <button id="regenerer" type="button">Régénérer avec ce prompt</button>
+                </div>
+            </section>
+
+            <section class="carte" id="rushes-plateau">
+                <div class="ligne entete-galerie">
+                    <h2>Rushes <span data-role="compte" class="discret"></span></h2>
+                    <div class="ligne">
+                        <button data-role="selectionner" type="button" class="petit">Sélectionner</button>
+                        <label class="bouton petit">Importer une image
+                            <input id="importer" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                        </label>
+                    </div>
+                </div>
+                <!-- Tous · Non rangés · dossiers · ＋ │ Archives · Corbeille ; on y glisse des vignettes pour ranger. -->
+                <div data-role="vues" class="vues-rushes"></div>
+                <div data-role="barre" class="barre-selection" hidden>
+                    <span data-role="compte-selection"></span>
+                    <button type="button" class="petit" data-selection="tout">Tout</button>
+                    <button type="button" class="petit" data-selection="aucun">Aucun</button>
+                    <span class="separateur"></span>
+                    <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
+                    <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
+                    <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
+                    <button type="button" class="petit" data-action="restaurer">Restaurer</button>
+                    <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
+                    <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                </div>
+                <div id="galerie" data-role="vignettes" class="vignettes"></div>
+                <p data-role="pied-corbeille" class="ligne pied-corbeille" hidden>
+                    <span class="discret">Ce qui est dans la corbeille reste restaurable jusqu'à ce que tu la vides.</span>
+                    <button data-role="vider-corbeille" type="button" class="petit danger">Vider la corbeille</button>
+                </p>
+            </section>
+        </div>
+
+        <div id="voile-depot" class="voile voile-depot" hidden>
+            <div>Dépose ton image<span class="discret">PNG, JPEG ou WebP · elle rejoint les rushes, prête à retoucher</span></div>
+        </div>
+
+        <div id="detail-creation" class="voile" hidden>
+            <div class="fenetre">
+                <button id="fermer-detail" class="petit fermer" title="Fermer">✕</button>
+                <img id="image-detail" alt="">
+                <dl id="fiche-detail"></dl>
+                <div class="ligne actions-detail">
+                    <button id="variante" class="principal">Variante</button>
+                    <button id="reutiliser">Réutiliser le prompt</button>
+                    <button id="comme-reference">Comme référence</button>
+                    <button id="animer-rush">🎞️ Animer</button>
+                    <button id="ouvrir-retouche">Retoucher</button>
+                    <button id="ouvrir-agrandir">Agrandir</button>
+                    <a id="telecharger" class="bouton" download>Télécharger</a>
+                    <button id="supprimer-creation">🗑 Corbeille</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="panneau-retouche" class="voile" hidden>
+            <div class="fenetre large">
+                <button id="fermer-retouche" class="petit fermer" title="Fermer">✕</button>
+                <h2 id="titre-retouche">Retoucher</h2>
+
+                <div id="outils-pinceau" class="ligne outils">
+                    <button id="mode-pinceau" class="actif" type="button">🖌 Pinceau</button>
+                    <button id="mode-gomme" type="button">🧽 Gomme</button>
+                    <label class="discret">Taille <input id="taille-pinceau" type="range" min="5" max="250" value="60"></label>
+                    <button id="effacer-masque" type="button">Effacer le masque</button>
+                    <span class="discret">Sans masque, toute l'image est retouchée.</span>
+                </div>
+
+                <div id="toile" class="toile">
+                    <img id="image-retouche" alt="">
+                    <canvas id="canevas-masque"></canvas>
+                </div>
+
+                <div id="outils-agrandir" class="outils" hidden>
+                    <div class="ligne">
+                        <label class="discret">Largeur <input id="largeur-agrandir" type="number" min="64" max="4096" step="8"></label>
+                        <label class="discret">Hauteur <input id="hauteur-agrandir" type="number" min="64" max="4096" step="8"></label>
+                        <div class="ancrages" id="ancrages"></div>
+                        <div class="apercu-agrandir"><div id="apercu-cadre"><div id="apercu-image"></div></div></div>
+                    </div>
+                    <p class="discret">L'image d'origine reste intacte ; seules les zones ajoutées sont inventées.</p>
+                </div>
+
+                <textarea id="consigne-retouche" rows="2"></textarea>
+                <div class="options-creation">
+                    <label>LLM <select id="llm-retouche"></select></label>
+                    <label class="case"><input type="checkbox" id="sans-reecriture-retouche"> Sans traduction</label>
+                    <label>Modèle <select id="workflow-retouche"></select></label>
+                    <label>Fondu <input id="fondu-retouche" type="range" min="0" max="128" value="24"></label>
+                    <button id="lancer-retouche" class="principal" type="button">Lancer</button>
+                </div>
+                <div id="loras-retouche" class="loras"></div>
+                <p id="erreur-retouche" class="ko" hidden></p>
+            </div>
+        </div>
+
+        <div class="vue" id="vue-montage" hidden>
+            <section class="carte">
+                <h2>Tourner un clip</h2>
+                <form id="form-montage">
+                    <div class="ligne modes-montage">
+                        <label class="case"><input type="radio" name="mode-montage" value="animer" checked> 🎬 Animer un rush</label>
+                        <label class="case"><input type="radio" name="mode-montage" value="texte"> ✍️ Texte → vidéo</label>
+                        <label class="case"><input type="radio" name="mode-montage" value="sequence"> 📽️ Séquence</label>
+                    </div>
+                    <div class="ligne grille-montage">
+                        <div id="bloc-source-montage" class="bloc-source">
+                            <div id="source-montage" class="emplacement vide" title="Glisse une image ici, ou clique pour choisir un rush">
+                                <span class="numero">＋</span></div>
+                            <button id="choisir-rush" type="button" class="petit">Choisir un rush</button>
+                        </div>
+                        <textarea id="idee-montage" rows="4" required
+                                  placeholder="Ton idée, en français. Les répliques entre guillemets : elle lève les yeux et murmure « On décolle ce soir. »"></textarea>
+                    </div>
+                    <div class="options-creation">
+                        <label>Qualité <select id="qualite-montage"></select></label>
+                        <label>Durée <select id="duree-montage"></select></label>
+                        <label id="bloc-format-montage" hidden>Format <select id="format-montage"></select></label>
+                        <label>LLM <select id="llm-montage"></select></label>
+                        <label class="case"><input type="checkbox" id="sans-reecriture-montage"> Sans réécriture</label>
+                        <label>Seed <input id="seed-montage" type="number" min="0" placeholder="aléatoire"></label>
+                        <label>Clips <select id="nombre-montage"></select></label>
+                        <button type="submit" class="principal">Tourner</button>
+                    </div>
+                    <p id="estimation-montage" class="discret"></p>
+                    <input id="fichier-montage" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                </form>
+
+                <div id="sequence-montage" class="sequence" hidden>
+                    <div class="ligne entete-sequence">
+                        <label>Séquence <select id="choix-sequence"></select></label>
+                        <input id="titre-sequence" type="text" maxlength="40" placeholder="Titre de la séquence">
+                        <span id="etat-sequence" class="discret"></span>
+                        <button id="enregistrer-sequence" type="button" class="petit">Enregistrer</button>
+                        <button id="supprimer-sequence" type="button" class="petit danger">Supprimer</button>
+                    </div>
+                    <div class="ligne casting-sequence">
+                        <div class="bloc-source">
+                            <div id="personnage-sequence" class="emplacement vide"
+                                 title="Personnage de référence des plans coupés (sinon : le rush du premier plan)">
+                                <span class="numero">👤</span></div>
+                            <span class="discret">Personnage</span>
+                        </div>
+                        <div class="champs-casting">
+                            <label>Ambiance commune
+                                <textarea id="ambiance-sequence" rows="2" maxlength="300"
+                                          placeholder="ex. nuit, hangar éclairé d'une lumière orange chaude"></textarea></label>
+                            <div class="options-creation">
+                                <label>Voix <select id="voix-sequence"></select></label>
+                                <label>Qualité <select id="qualite-sequence"></select></label>
+                                <label id="bloc-format-sequence" hidden>Format <select id="format-sequence"></select></label>
+                                <label>LLM <select id="llm-sequence"></select></label>
+                            </div>
+                        </div>
+                    </div>
+                    <ol id="plans-sequence" class="plans-sequence"></ol>
+                    <button id="ajouter-plan" type="button">＋ Ajouter un plan</button>
+                    <div class="ligne pied-sequence">
+                        <span id="estimation-sequence" class="discret"></span>
+                        <button id="tourner-sequence" type="button" class="principal">🎬 Tourner la séquence</button>
+                    </div>
+                    <div id="progression-sequence" hidden>
+                        <div class="barre"><div></div></div>
+                        <span class="discret"></span>
+                    </div>
+                    <p id="erreur-sequence" class="ko" hidden></p>
+                    <div id="film-sequence" hidden>
+                        <h3 class="titre-bloc">Film</h3>
+                        <video controls playsinline></video>
+                    </div>
+                </div>
+
+                <div id="progression-montage" hidden>
+                    <div class="barre"><div></div></div>
+                    <span class="discret"></span>
+                </div>
+                <p id="erreur-montage" class="ko" hidden></p>
+
+                <div id="resultat-montage" hidden>
+                    <div id="clips-montage" class="vignettes clips"></div>
+                    <label class="discret" for="prompt-montage">Prompt envoyé au modèle (modifiable)</label>
+                    <textarea id="prompt-montage" rows="4"></textarea>
+                    <button id="retourner" type="button">Retourner avec ce prompt</button>
+                </div>
+            </section>
+
+            <section class="carte" id="bobines-montage">
+                <div class="ligne entete-galerie">
+                    <h2>Bobines <span data-role="compte" class="discret"></span></h2>
+                    <button data-role="selectionner" type="button" class="petit">Sélectionner</button>
+                </div>
+                <div data-role="vues" class="vues-rushes"></div>
+                <div data-role="barre" class="barre-selection" hidden>
+                    <span data-role="compte-selection"></span>
+                    <button type="button" class="petit" data-selection="tout">Tout</button>
+                    <button type="button" class="petit" data-selection="aucun">Aucun</button>
+                    <span class="separateur"></span>
+                    <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
+                    <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
+                    <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
+                    <button type="button" class="petit" data-action="restaurer">Restaurer</button>
+                    <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
+                    <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                </div>
+                <div data-role="vignettes" class="vignettes clips"></div>
+                <p data-role="pied-corbeille" class="ligne pied-corbeille" hidden>
+                    <span class="discret">Ce qui est dans la corbeille reste restaurable jusqu'à ce que tu la vides.</span>
+                    <button data-role="vider-corbeille" type="button" class="petit danger">Vider la corbeille</button>
+                </p>
+            </section>
+        </div>
+
+        <div id="detail-clip" class="voile" hidden>
+            <div class="fenetre">
+                <button id="fermer-clip" class="petit fermer" title="Fermer">✕</button>
+                <video id="video-clip" controls loop playsinline></video>
+                <dl id="fiche-clip"></dl>
+                <div class="ligne actions-detail">
+                    <button id="variante-clip" class="principal">Variante</button>
+                    <button id="reutiliser-clip">Réutiliser l'idée</button>
+                    <button id="ouvrir-sequence-clip" class="principal" hidden>📽️ Ouvrir la séquence</button>
+                    <a id="telecharger-clip" class="bouton" download>Télécharger</a>
+                    <button id="corbeille-clip">🗑 Corbeille</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="choix-rush" class="voile" hidden>
+            <div class="fenetre large">
+                <button id="fermer-choix-rush" class="petit fermer" title="Fermer">✕</button>
+                <h2 id="titre-choix-rush">Quel rush animer ?</h2>
+                <div id="liste-choix-rush" class="vignettes"></div>
+            </div>
+        </div>
+
+        <div class="vue" id="vue-scenario" hidden>
+            <section class="carte">
+                <div class="options-creation">
+                    <div id="sujets-prompt" class="sujets"></div>
+                    <label>Modèle cible <select id="workflow-prompt"></select></label>
+                    <div class="ligne forme-video" data-video-seule hidden>
+                        <label class="case"><input type="radio" name="forme-video" value="clip" checked> 🎞️ Clip seul</label>
+                        <label class="case"><input type="radio" name="forme-video" value="sequence"> 📽️ Séquence</label>
+                    </div>
+                    <label>LLM <select id="llm-prompt"></select></label>
+                    <button id="effacer-prompt" type="button">Effacer</button>
+                </div>
+                <div id="personnages-prompt" class="options-creation personnages-prompt">
+                    <label>Mes personnages <select id="personnage-prompt"></select></label>
+                    <button id="enregistrer-personnage" type="button" class="petit">Enregistrer</button>
+                    <button id="supprimer-personnage" type="button" class="petit" disabled>Supprimer</button>
+                    <span class="discret">Seul le bloc Personnage est enregistré : rappelle-le dans n'importe quelle scène.</span>
+                </div>
+            </section>
+            <div class="prompt-guide">
+                <section class="carte">
+                    <div id="blocs-prompt" class="blocs-prompt"></div>
+                    <h3 class="titre-bloc" data-clip-seul>Libre</h3>
+                    <div class="sous-listes">
+                        <div class="sous-liste" data-image-seule>
+                            <label><span>Texte dans l'image</span>
+                                <input id="texte-prompt" type="text" maxlength="200" placeholder="ex. ARIA, affiché tel quel"></label>
+                        </div>
+                        <div class="sous-liste large" data-clip-seul>
+                            <label><span>Précisions (traduites par Llama à l'envoi)</span>
+                                <input id="precisions-prompt" type="text" maxlength="500" placeholder="ex. tient un parapluie rouge"></label>
+                        </div>
+                        <div class="sous-liste large" data-video-seule data-clip-seul hidden>
+                            <label><span>🎞️ Action (traduite par Llama à l'envoi)</span>
+                                <input id="action-prompt" type="text" maxlength="500"
+                                       placeholder="ex. elle tourne lentement la tête vers la caméra et sourit"></label>
+                        </div>
+                        <div class="sous-liste large" data-video-seule data-clip-seul hidden>
+                            <label><span>🎞️ Réplique (gardée mot pour mot)</span>
+                                <input id="replique-prompt" type="text" maxlength="200" placeholder="ex. Prêt pour le décollage ?"></label>
+                        </div>
+                        <div class="sous-liste" data-video-seule data-clip-seul hidden>
+                            <label><span>🎞️ Durée du clip</span> <select id="duree-prompt"></select></label>
+                        </div>
+                    </div>
+
+                    <div id="sequence-scenario" data-sequence-seule>
+                        <h3 class="titre-bloc">📽️ Séquence</h3>
+                        <p class="discret">Les listes ci-dessus donnent le personnage et le décor ; raconte l'histoire, choisis les plans,
+                            et Llama écrit le prompt de chacun.</p>
+                        <div class="ligne synopsis-scenario">
+                            <div class="bloc-source">
+                                <div id="reference-scenario" class="emplacement vide"
+                                     title="Image de référence du personnage (facultatif), prise dans les Rushes du Plateau">
+                                    <span class="numero">👤</span></div>
+                                <span class="discret">Référence</span>
+                            </div>
+                            <textarea id="synopsis-scenario" rows="4" maxlength="2000"
+                                      placeholder="L'histoire, du début à la fin, en français. Les répliques entre guillemets : elle lève les yeux et dit « On décolle ce soir. »"></textarea>
+                        </div>
+                        <div class="options-creation">
+                            <label>Nombre de plans <select id="nombre-plans-scenario"></select></label>
+                            <span id="duree-sequence-scenario" class="discret"></span>
+                        </div>
+                        <ol id="plans-scenario" class="plans-scenario"></ol>
+                    </div>
+                </section>
+                <aside class="carte apercu-prompt">
+                    <h2>Aperçu</h2>
+                    <p id="texte-apercu"></p>
+                    <span id="mots-prompt" class="discret"></span>
+                    <p id="mineur-prompt" class="discret" hidden>Personnage mineur : options adultes masquées (AS-18).</p>
+                    <ul id="alertes-prompt" class="alertes-prompt"></ul>
+                    <p id="erreur-prompt" class="ko" hidden></p>
+                    <div id="etiquettes-prompt" class="etiquettes"></div>
+                    <button id="peaufiner-prompt" type="button" data-clip-seul disabled>✨ Peaufiner avec Llama</button>
+                    <p class="discret" data-clip-seul>Ministral a tendance à édulcorer ; Bonsai garde les termes tels quels.</p>
+                    <div id="decoupage-scenario" data-sequence-seule>
+                        <button id="decouper-scenario" type="button" class="principal">✂ Découper avec Llama</button>
+                        <ul id="alertes-decoupage" class="alertes-prompt"></ul>
+                        <ol id="resultat-decoupage" class="resultat-decoupage"></ol>
+                        <div class="ligne actions-prompt" id="creation-sequence-scenario" hidden>
+                            <input id="titre-sequence-scenario" type="text" maxlength="40" placeholder="Titre de la séquence">
+                            <button id="creer-sequence-scenario" type="button" class="principal">→ Créer dans le Montage</button>
+                        </div>
+                    </div>
+                    <div id="peaufine-prompt" data-clip-seul hidden>
+                        <label class="discret" for="texte-peaufine">Version peaufinée (modifiable)</label>
+                        <textarea id="texte-peaufine" rows="6"></textarea>
+                        <label class="case discret"><input type="checkbox" id="utiliser-peaufine" checked> Utiliser cette version</label>
+                    </div>
+                    <p id="statut-prompt" class="discret" hidden></p>
+                    <div class="ligne actions-prompt" data-clip-seul>
+                        <button id="envoyer-prompt" type="button" disabled>→ Envoyer au Plateau</button>
+                        <button id="creer-prompt" class="principal" type="button" disabled>Créer</button>
+
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <div class="vue" id="vue-modeles" hidden>
+            <div class="sous-onglets">
+                <button class="sous-onglet actif" type="button" data-sous="installes">Installés</button>
+                <button class="sous-onglet" type="button" data-sous="decouvrir">Découvrir</button>
+            </div>
+            <div id="modeles-installes">
+                <section class="carte">
+                    <h2>Workflows</h2>
+                    <ul id="workflows" class="liste"></ul>
+                </section>
+
+                <section class="carte">
+                    <h2>Ajouter un modèle</h2>
+                    <form id="form-fiche" class="ligne">
+                        <input id="url-modele" type="url" required
+                               placeholder="Lien Hugging Face (fichier) ou Civitai (modèle)">
+                        <button type="submit">Préparer</button>
+                    </form>
+                    <p id="erreur-fiche" class="ko" hidden></p>
+                    <div id="fiche" hidden></div>
+                </section>
+
+                <section class="carte">
+                    <h2>Téléchargements</h2>
+                    <ul id="telechargements" class="liste"></ul>
+                </section>
+
+                <section class="carte">
+                    <h2>Modèles installés <span id="espace" class="discret"></span></h2>
+                    <table id="inventaire">
+                        <thead>
+                            <tr><th>Dossier</th><th>Fichier</th><th>Taille</th><th>Origine</th><th></th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </section>
+            </div>
+            <div id="modeles-decouvrir" hidden>
+                <section class="carte">
+                    <form id="form-decouvrir" class="options-creation">
+                        <label class="recherche">Rechercher <input id="texte-decouvrir" type="search" placeholder="anime, réaliste, qwen…"></label>
+                        <label>Source
+                            <select id="source-decouvrir">
+                                <option value="civitai">Civitai</option>
+                                <option value="huggingface">Hugging Face</option>
+                            </select>
+                        </label>
+                        <label>Type <select id="type-decouvrir"></select></label>
+                        <label>Famille <select id="famille-decouvrir"></select></label>
+                        <label>Tri
+                            <select id="tri-decouvrir">
+                                <option value="telechargements">Téléchargements</option>
+                                <option value="recents">Plus récents</option>
+                                <option value="notes">Mieux notés</option>
+                                <option value="tendances">Tendances (HF)</option>
+                            </select>
+                        </label>
+                        <label class="case"><input type="checkbox" id="nsfw-decouvrir"> Aperçus NSFW</label>
+                        <button type="submit" class="principal">Chercher</button>
+                    </form>
+                    <p id="message-decouvrir" class="discret"></p>
+                </section>
+                <div id="resultats-decouvrir" class="resultats"></div>
+                <button id="plus-decouvrir" type="button" hidden>Plus de résultats</button>
+            </div>
+        </div>
+
+        <div class="vue" id="vue-reglages" hidden>
+            <div class="ligne entete-reglages">
+                <p class="discret">Seuls tes changements sont enregistrés (data/reglages.yaml) : ↺ ramène une valeur à celle d'origine.</p>
+                <button id="optimiser" type="button" class="principal">⚡ Optimiser</button>
+            </div>
+            <section id="carte-optimiser" class="carte" hidden>
+                <h2>Propositions</h2>
+                <p id="materiel-optimiser" class="discret"></p>
+                <ul id="alertes-optimiser" class="alertes-prompt"></ul>
+                <div id="tableau-optimiser"></div>
+                <p id="sans-reco-optimiser" class="discret"></p>
+                <div class="ligne pied-reglages">
+                    <span id="etat-optimiser" class="discret"></span>
+                    <button id="fermer-optimiser" type="button">Fermer</button>
+                    <button id="appliquer-optimiser" type="button" class="principal" disabled>Appliquer la sélection</button>
+                </div>
+            </section>
+            <div class="grille-reglages">
+                <section class="carte">
+                    <h2>LLM</h2>
+                    <label class="cible-reglages">Modèle <select id="llm-reglages"></select></label>
+                    <div id="params-llm" class="params"></div>
+                    <h3 class="titre-bloc">Consignes</h3>
+                    <div id="consignes-llm" class="consignes"></div>
+                    <p class="clause">🔒 Toujours ajoutée à la fin de chaque consigne, non modifiable :
+                        <em id="clause-reglages"></em></p>
+                    <div class="ligne pied-reglages">
+                        <span id="etat-llm" class="discret"></span>
+                        <button id="enregistrer-llm" class="principal" type="button" disabled>Enregistrer</button>
+                    </div>
+                </section>
+                <section class="carte">
+                    <h2>Workflows</h2>
+                    <label class="cible-reglages">Workflow <select id="workflow-reglages"></select></label>
+                    <div id="params-workflow" class="params"></div>
+                    <p id="source-samplers" class="discret"></p>
+                    <div class="ligne pied-reglages">
+                        <span id="etat-workflow" class="discret"></span>
+                        <button id="enregistrer-workflow" class="principal" type="button" disabled>Enregistrer</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div class="vue" id="vue-casting" hidden>
+            <section class="carte">
+                <h2>Lancer un casting</h2>
+                <div class="ligne">
+                    <select id="tache-banc">
+                        <option value="texte_vers_image">Texte vers image</option>
+                        <option value="retouche">Retouche</option>
+                        <option value="reecriture">Réécriture (LLM)</option>
+                        <option value="image_vers_video">Image vers vidéo</option>
+                        <option value="texte_vers_video">Texte vers vidéo</option>
+                    </select>
+                    <button id="lancer-banc" class="principal">Lancer</button>
+                </div>
+                <div id="progression-banc" hidden>
+                    <div class="barre"><div></div></div>
+                    <span class="discret"></span>
+                </div>
+                <p id="erreur-banc" class="ko" hidden></p>
+            </section>
+
+            <section class="carte">
+                <h2>Résultats</h2>
+                <select id="liste-bancs"></select>
+                <div id="banc"></div>
+            </section>
+        </div>
+    </main>
+    <script src="/static/app.js"></script>
+    <script src="/static/galerie.js"></script>
+    <script src="/static/casting.js"></script>
+    <script src="/static/plateau.js"></script>
+    <script src="/static/decouvrir.js"></script>
+    <script src="/static/scenario.js"></script>
+    <script src="/static/reglages.js"></script>
+    <script src="/static/montage.js"></script>
+    <script src="/static/sequence.js"></script>
+    <script src="/static/decoupage.js"></script>
+</body>
+</html>

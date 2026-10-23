@@ -1,0 +1,64 @@
+id: qwen_image_2_1
+nom: Qwen-Image 2.1
+tache: texte_vers_image
+famille: Qwen-Image2.1
+origine: template ComfyUI image_qwen_image_2_1_t2i (v0.42.1), améliorateur de prompt retiré
+licence: qwen-research
+fichiers:
+-   dossier: Qwen-Image2.1/modeles
+    nom: qwen_image_2.1_int8_convrot.safetensors
+    url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors
+    taille: 7256783064
+    sha256: cb74113cb03faecd79611b01fd7fd642f0aa60d6f0b95086abee214d75eaa57d
+-   dossier: _base/text_encoders
+    nom: qwen3vl_8b_int8_convrot.safetensors
+    url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors
+    taille: 9350798360
+    sha256: 8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f
+-   dossier: _base/vae
+    nom: qwen_image_2.1_vae_bf16.safetensors
+    url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors
+    taille: 675509688
+    sha256: bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9
+entrees:
+    prompt:
+    - 459:452
+    - prompt
+    seed:
+    - 459:458
+    - seed
+    steps:
+    - 459:458
+    - steps
+    ratio:
+    - '13'
+    - aspect_ratio
+    megapixels:
+    - '13'
+    - megapixels
+    prefixe:
+    - '461'
+    - filename_prefix
+    modele:
+    - 459:451
+    - unet_name
+defauts:
+    steps: 25
+    ratio: 1:1 (Square)
+    megapixels: 1
+vram_estimee_go: 8.7
+profil_prompt:
+    mots_max: 200  # valeur de départ, à affiner au banc
+# Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
+recommandations:
+    resolution_native_mp: 4.2  # 2048 × 2048, « native 2K »
+    source_resolution: https://github.com/QwenLM/Qwen-Image-2.1
+    valeurs:
+    -   cle: steps
+        valeur: 40
+        source: https://github.com/QwenLM/Qwen-Image-2.1
+        note: Valeur par défaut officielle (le modèle de workflow ComfyUI en utilise 25, plus rapide)
+    -   cle: cfg
+        valeur: 1.0
+        source: https://github.com/QwenLM/Qwen-Image-2.1
+        note: Guidage désactivé par défaut (guidance-scale 1)

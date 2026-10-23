@@ -1,0 +1,196 @@
+{
+    "41": {
+        "inputs": {
+            "image": "lily_girl_blue.png"
+        },
+        "class_type": "LoadImage"
+    },
+    "195": {
+        "inputs": {
+            "filename_prefix": "Qwen_Edit_2511",
+            "format": "png",
+            "format.bit_depth": "8-bit",
+            "format.input_color_space": "sRGB",
+            "images": [
+                "170:158",
+                0
+            ]
+        },
+        "class_type": "SaveImageAdvanced"
+    },
+    "170:145": {
+        "inputs": {
+            "shift": 3.1,
+            "sampling": "flow",
+            "model": [
+                "170:161",
+                0
+            ]
+        },
+        "class_type": "ModelSamplingAuraFlow"
+    },
+    "170:146": {
+        "inputs": {
+            "vae_name": "qwen_image_vae.safetensors"
+        },
+        "class_type": "VAELoader"
+    },
+    "170:147": {
+        "inputs": {
+            "reference_latents_method": "index_timestep_zero",
+            "conditioning": [
+                "170:149",
+                0
+            ]
+        },
+        "class_type": "FluxKontextMultiReferenceLatentMethod"
+    },
+    "170:148": {
+        "inputs": {
+            "reference_latents_method": "index_timestep_zero",
+            "conditioning": [
+                "170:151",
+                0
+            ]
+        },
+        "class_type": "FluxKontextMultiReferenceLatentMethod"
+    },
+    "170:149": {
+        "inputs": {
+            "prompt": "",
+            "clip": [
+                "170:162",
+                0
+            ],
+            "vae": [
+                "170:146",
+                0
+            ],
+            "image1": [
+                "170:160",
+                0
+            ]
+        },
+        "class_type": "TextEncodeQwenImageEditPlus"
+    },
+    "170:151": {
+        "inputs": {
+            "prompt": "Convert this image to pop art poster style",
+            "clip": [
+                "170:162",
+                0
+            ],
+            "vae": [
+                "170:146",
+                0
+            ],
+            "image1": [
+                "170:160",
+                0
+            ]
+        },
+        "class_type": "TextEncodeQwenImageEditPlus"
+    },
+    "170:152": {
+        "inputs": {
+            "strength": 1,
+            "pre_cfg": false,
+            "model": [
+                "170:145",
+                0
+            ]
+        },
+        "class_type": "CFGNorm"
+    },
+    "170:153": {
+        "inputs": {
+            "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+            "strength_model": 1,
+            "model": [
+                "170:152",
+                0
+            ]
+        },
+        "class_type": "LoraLoaderModelOnly"
+    },
+    "170:156": {
+        "inputs": {
+            "pixels": [
+                "170:160",
+                0
+            ],
+            "vae": [
+                "170:146",
+                0
+            ]
+        },
+        "class_type": "VAEEncode"
+    },
+    "170:161": {
+        "inputs": {
+            "unet_name": "qwen_image_edit_2511_int8_convrot.safetensors",
+            "weight_dtype": "default"
+        },
+        "class_type": "UNETLoader"
+    },
+    "170:162": {
+        "inputs": {
+            "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+            "type": "qwen_image",
+            "device": "default"
+        },
+        "class_type": "CLIPLoader"
+    },
+    "170:169": {
+        "inputs": {
+            "seed": 1119496583977398,
+            "steps": 4,
+            "cfg": 1,
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "denoise": 1,
+            "model": [
+                "170:153",
+                0
+            ],
+            "positive": [
+                "170:148",
+                0
+            ],
+            "negative": [
+                "170:147",
+                0
+            ],
+            "latent_image": [
+                "170:156",
+                0
+            ]
+        },
+        "class_type": "KSampler"
+    },
+    "170:158": {
+        "inputs": {
+            "samples": [
+                "170:169",
+                0
+            ],
+            "vae": [
+                "170:146",
+                0
+            ]
+        },
+        "class_type": "VAEDecode"
+    },
+    "170:160": {
+        "inputs": {
+            "image": [
+                "41",
+                0
+            ],
+            "upscale_method": "lanczos",
+            "megapixels": 1.0,
+            "resolution_steps": 16
+        },
+        "class_type": "ImageScaleToTotalPixels"
+    }
+}

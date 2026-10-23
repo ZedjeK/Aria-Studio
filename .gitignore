@@ -1,0 +1,11 @@
+# Lourd ou propre à cette machine : se réinstalle (run.ps1) ou se télécharge (onglet Découvrir)
+.venv/
+modeles/
+services/
+
+# Créations, séquences, voix, réglages, bancs et journaux de Jérémy : restent sur sa machine
+data/
+
+__pycache__/
+*.pyc
+*.tmp

@@ -1,0 +1,64 @@
+id: qwen_image_edit_2511
+nom: Qwen-Image-Edit 2511 Lightning
+tache: retouche
+famille: Qwen-Edit2511
+origine: template ComfyUI image_qwen_image_edit_2511_int8 (v0.42.1), Lightning 4 steps activé, FluxKontextImageScale (recadrage) remplacé par ImageScaleToTotalPixels (proportions conservées)
+licence: apache-2.0
+fichiers:
+-   dossier: _base/vae
+    nom: qwen_image_vae.safetensors
+    url: https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors
+    taille: 253806246
+    sha256: a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f
+-   dossier: _base/loras
+    nom: Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors
+    url: https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors
+    taille: 849608296
+    sha256: 22226e8d05d354bb356627d428809f5afd7819399b077238a2b70a82883a904f
+-   dossier: Qwen-Edit2511/modeles
+    nom: qwen_image_edit_2511_int8_convrot.safetensors
+    url: https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors
+    taille: 20499083824
+    sha256: 11b5af5ac601821d73930c84846c9a158e67177356daf927ce1c8d10f3963829
+-   dossier: _base/text_encoders
+    nom: qwen_2.5_vl_7b_fp8_scaled.safetensors
+    url: https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors
+    taille: 9384670680
+    sha256: cb5636d852a0ea6a9075ab1bef496c0db7aef13c02350571e388aea959c5c0b4
+entrees:
+    prompt:
+    - 170:151
+    - prompt
+    image:
+    - '41'
+    - image
+    seed:
+    - 170:169
+    - seed
+    steps:
+    - 170:169
+    - steps
+    prefixe:
+    - '195'
+    - filename_prefix
+    modele:
+    - 170:161
+    - unet_name
+defauts:
+    steps: 4
+vram_estimee_go: 19.1
+# Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
+recommandations:
+    valeurs:
+    -   cle: steps
+        valeur: 4
+        source: https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning
+        note: LoRA Lightning distillée pour 4 steps
+    -   cle: cfg
+        valeur: 1.0
+        source: https://github.com/ModelTC/LightX2V-Qwen-Image-Lightning/blob/main/generate_with_diffusers.py
+        note: CFG 1 avec une LoRA Lightning (script officiel)
+    -   cle: shift
+        valeur: 3.0
+        source: https://github.com/ModelTC/LightX2V-Qwen-Image-Lightning/blob/main/generate_with_diffusers.py
+        note: « We use shift=3 in distillation » (le modèle de workflow ComfyUI met 3,1)

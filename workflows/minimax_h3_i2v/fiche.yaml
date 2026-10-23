@@ -1,0 +1,98 @@
+id: minimax_h3_i2v
+nom: MiniMax H3 · image vers vidéo
+tache: image_vers_video
+famille: MiniMax-H3
+origine: template ComfyUI video_minimax_h3_i2v (v0.42.1), Turbo 8 steps branché, format de l'image source
+licence: minimax-h3 (poids ouverts ; UE, Royaume-Uni, États-Unis et Corée exclus — choix assumé par Jérémy, usage personnel)
+fichiers:
+-   dossier: _base/vae
+    nom: minimax_h3_video_vae_int8_convrot.safetensors
+    url: https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_int8_convrot.safetensors
+    taille: 2811065184
+    sha256: 52a2c8c73583c86e4f41cdcce3a6ad0ea562987bc0bf3d60a0cef5f5c8e60c0e
+-   dossier: _base/vae
+    nom: minimax_h3_audio_vae_fp32.safetensors
+    url: https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors
+    taille: 605254808
+    sha256: 8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48
+-   dossier: MiniMax-H3/modeles
+    nom: minimax_h3_fl2va_pruned_int8_convrot.safetensors
+    url: https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors
+    taille: 20970379616
+    sha256: e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a
+-   dossier: _base/text_encoders
+    nom: qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+    url: https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+    taille: 15687142551
+    sha256: 35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6
+-   dossier: _base/loras
+    nom: minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
+    url: https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
+    taille: 1956193000
+    sha256: 2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e
+entrees:
+    prompt:
+    - 105:104
+    - prompt
+    image:
+    - '114'
+    - image
+    seed:
+    - '105:15'
+    - noise_seed
+    duree:
+    - 105:111
+    - value
+    megapixels:
+    - '119'
+    - megapixels
+    prefixe:
+    - '92'
+    - filename_prefix
+    modele:
+    - '105:6'
+    - unet_name
+    steps:
+    - '105:9'
+    - steps
+defauts:
+    duree: 5
+    megapixels: 0.4
+    steps: 8
+video:
+    fps: 24
+    duree_max: 10
+    son: true
+vram_estimee_go: 19.5
+profil_prompt:
+    mots_max: 110  # borne haute de la consigne vidéo (40 à 110 mots)
+recommandations:
+    resolution_native_mp: 0.98
+    source_resolution: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
+    valeurs:
+    -   cle: steps
+        valeur: 12
+        source: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
+        note: 'Turbo : 8 steps en T2V/I2V, mais « Audio needs 12+ steps » (le son est le maillon faible à 8)'
+    -   cle: sampler
+        valeur: res_multistep
+        source: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
+        note: Sampler du template officiel ComfyUI (avec le Turbo LoRA)
+    -   cle: scheduler
+        valeur: simple
+        source: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
+        note: Scheduler du template officiel ComfyUI
+    notes:
+    - Entraîné vers 1 MP (768 px de petit côté), 24 i/s, 5 à 15 s ; au-delà, qualité non garantie.
+    - 'Sur RTX 4080 (2026-10-20) : 0,4 MP / 8 steps ≈ 1 min 20 pour 5 s ; ~1 MP / 12 steps ≈ 7 min pour 5 s.'
+conseils_prompt:
+    sources:
+    - https://docs.comfy.org/tutorials/video/minimax/minimax-h3
+    - https://www.atlascloud.ai/blog/tips/minimax-h3-prompt-guide
+    regles:
+    - 'Un court brief de production : sujet, action, décor, caméra, son.'
+    - Un seul mouvement de caméra, nommé précisément, avec sa vitesse (slow push-in, slow pan…).
+    - 'Répliques courtes : qui parle, la phrase entre guillemets, la langue et le ton ; 1 à 2 phrases par plan.'
+    - Sons concrets liés à l'action ; la musique de fond à part, jamais mélangée aux bruitages.
+    - 'Scènes complexes : chronologie par segments ([0s-2s], [2s-4s]).'
+    - Éviter les consignes contradictoires (plan continu ET coupes).

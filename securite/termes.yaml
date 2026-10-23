@@ -1,0 +1,11 @@
+# Ajouts au filtre AS-18 (app/securite.py). Ce fichier ne peut qu'AJOUTER des termes :
+# le noyau des listes est figé dans le code et ne peut pas être retiré d'ici.
+#
+# La règle : mineur seul = autorisé ; mineur + terme sensible = bloqué ; toujours_bloques = bloqué partout.
+# Écris les termes comme tu veux (accents, majuscules) : ils sont normalisés automatiquement.
+
+mineurs: []
+
+sensibles: []
+
+toujours_bloques: []

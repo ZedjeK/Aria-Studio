@@ -1,0 +1,18 @@
+{
+    "portrait.png": {
+        "banc": "2026-10-19_222230_texte_vers_image",
+        "image": "qwen_image_2_1/portrait_42.png"
+    },
+    "neon.png": {
+        "banc": "2026-10-19_222230_texte_vers_image",
+        "image": "qwen_image_2_1/neon_1234.png"
+    },
+    "jeu.png": {
+        "banc": "2026-10-19_222230_texte_vers_image",
+        "image": "qwen_image_2_1/jeu_42.png"
+    },
+    "miniature.png": {
+        "banc": "2026-10-19_222230_texte_vers_image",
+        "image": "krea2_turbo/miniature_1234.png"
+    }
+}

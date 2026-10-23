@@ -1,0 +1,64 @@
+id: krea2_turbo
+nom: Krea 2 Turbo
+tache: texte_vers_image
+famille: Krea2
+origine: template ComfyUI image_krea2_turbo_t2i_int8 (v0.42.1), LoRA de style et affineur de prompt retirés
+licence: krea-2-community-license
+fichiers:
+-   dossier: Krea2/modeles
+    nom: krea2_turbo_int8_convrot.safetensors
+    url: https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_int8_convrot.safetensors
+    taille: 13492686496
+    sha256: 8e4eeda70dd5037ab1ba2bef6b417f9f901e26093117cf397f741fc1fdaaf3f1
+-   dossier: _base/text_encoders
+    nom: qwen3vl_4b_fp8_scaled.safetensors
+    url: https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors
+    taille: 5242467968
+    sha256: 54bd5144df0bbc25dd6ccadfcb826b521445a1b06ae5a42570bdd2974ca87094
+-   dossier: _base/vae
+    nom: qwen_image_vae.safetensors
+    url: https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors
+    taille: 253806246
+    sha256: a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f
+entrees:
+    prompt:
+    - '30:19'
+    - value
+    seed:
+    - '30:3'
+    - seed
+    steps:
+    - '30:3'
+    - steps
+    ratio:
+    - '49'
+    - aspect_ratio
+    megapixels:
+    - '49'
+    - megapixels
+    prefixe:
+    - '29'
+    - filename_prefix
+    modele:
+    - '30:10'
+    - unet_name
+defauts:
+    steps: 8
+    ratio: 1:1 (Square)
+    megapixels: 1
+vram_estimee_go: 12.6
+profil_prompt:
+    mots_max: 120  # valeur de départ, à affiner au banc
+# Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
+recommandations:
+    resolution_native_mp: 4.2  # 2048 × 2048
+    source_resolution: https://huggingface.co/krea/Krea-2-Turbo
+    valeurs:
+    -   cle: steps
+        valeur: 8
+        source: https://huggingface.co/krea/Krea-2-Turbo
+        note: Modèle distillé pour 8 steps (exemples officiels)
+    -   cle: cfg
+        valeur: 1.0
+        source: https://huggingface.co/krea/Krea-2-Turbo
+        note: Guidage désactivé (guidance_scale 0 dans diffusers, soit CFG 1 dans ComfyUI)

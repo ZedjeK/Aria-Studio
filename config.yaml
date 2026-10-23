@@ -1,0 +1,65 @@
+app:
+    host: 127.0.0.1
+    port: 8075
+    open_browser: true
+
+comfyui:
+    # ComfyUI portable dédié au projet.
+    dossier: services/comfyui
+    port: 8195
+
+modeles:
+    # Tous les modèles : <Famille>/modeles et <Famille>/loras, _base/<type>, llm (GGUF).
+    # Les dossiers sont déclarés à ComfyUI automatiquement à chaque démarrage (data/comfyui_chemins.yaml).
+    dossier: modeles
+    # Base Civitai (« baseModel ») -> famille : sert à proposer le dossier d'une LoRA ou d'une variante.
+    familles_civitai:
+        "Krea 2": Krea2
+        "Qwen 2.1": Qwen-Image2.1
+        "Qwen (édition)": Qwen-Edit2511
+
+llama:
+    server: services/llama/llama-server.exe
+    port: 8095
+    # GGUF par défaut, dans modeles/llm : présélectionné dans le sélecteur de l'appli.
+    modele: "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf"
+    # Modèles proposés au choix dans l'appli (gagnants du Casting LLM).
+    modeles_au_choix:
+        - nom: Ministral 3 14B
+          fichier: Ministral-3-14B-Instruct-2512-Q4_K_M.gguf
+        - nom: Bonsai 2 27B
+          fichier: Ternary-Bonsai-2-27B-PTQ1_0.gguf
+    contexte: 4096
+    # Serveurs particuliers pour les GGUF que le llama.cpp officiel ne sait pas lire.
+    serveurs_specifiques:
+        Ternary-Bonsai-2-27B-PTQ1_0.gguf: services/llama-prism/llama-server.exe
+    # Réflexion (« thinking ») des modèles qui la proposent : coupée pour la réécriture de prompts.
+    reflexion: false
+
+casting:
+    prompts: casting/prompts.yaml
+    # Un banc refuse de démarrer si la VRAM est déjà plus occupée que ça (autres applis).
+    vram_max_occupee_go: 2.5
+    seeds: [42, 1234]
+    # Casting LLM : jeu d'idées, candidats (GGUF de modeles/llm, « temoin » = idée brute sans LLM) et seed de rendu.
+    idees: casting/idees.yaml
+    candidats_llm:
+        - Qwen3.5-9B-Q4_K_M.gguf
+        - Ministral-3-14B-Instruct-2512-Q4_K_M.gguf
+        - gemma-4-26B_q4_0-it.gguf
+        - Ternary-Bonsai-2-27B-PTQ1_0.gguf
+    seed_llm: 42
+
+generation:
+    # Workflows par défaut, mis à jour par le bouton « favori » du Casting.
+    texte_vers_image: "qwen_image_2_1"
+    retouche: "qwen_image_edit_2511"
+    # Créer depuis des références (S'inspirer) : garde le mieux le personnage et le style (essais du 2026-10-20).
+    references: "qwen_image_2_1_edit"
+    # Vidéo : MiniMax H3, vainqueur du Casting vidéo (LTX-2.5 retiré à la demande de Jérémy).
+    image_vers_video: "minimax_h3_i2v"
+    texte_vers_video: "minimax_h3_t2v"
+
+securite:
+    # Plancher fixe : le code refuse toute valeur inférieure à 18.
+    age_min: 18

@@ -1,0 +1,76 @@
+# Jeu de prompts du banc d'essai. Chaque entrée cible une faiblesse classique des modèles.
+# Les identifiants servent à nommer les images : garde-les courts et uniques.
+
+texte_vers_image:
+    - id: portrait
+      teste: peau et regard
+      prompt: Close-up portrait photo of a Korean woman in her late twenties, natural skin texture, soft window light, shallow depth of field, 85mm lens
+    - id: mains
+      teste: les mains
+      prompt: A man in his thirties holding a ceramic tea cup with both hands, fingers clearly visible, warm kitchen light, photo
+    - id: neon
+      teste: le texte dans l'image
+      prompt: A neon sign reading "ARIA" above a ramen shop door at night, rain-soaked street, cyberpunk Tokyo
+    - id: jeu
+      teste: plusieurs sujets et leurs attributs
+      prompt: "Three adults playing a board game at a wooden table: a red-haired woman laughing, an old man with glasses thinking, a man in a grey hoodie pointing at the board, cozy evening light"
+    - id: miniature
+      teste: les micro-détails
+      prompt: Macro photo of a painted sci-fi space knight miniature on a hobby desk, visible brush strokes, resin texture, studio lighting
+    - id: android
+      teste: le style illustré
+      prompt: Anime-style illustration of a female android with silver hair under pink and cyan neon lights, cel shading
+
+# Les images sources sont figées dans labo/sources/ (copiées depuis un banc texte vers image).
+retouche:
+    - id: veste
+      teste: modifier un vêtement sans changer le visage
+      source: portrait.png
+      prompt: Change her top to a red leather jacket, keep her face identical
+    - id: jour
+      teste: la lumière globale
+      source: neon.png
+      prompt: Make it a sunny afternoon with a clear sky
+    - id: suppression
+      teste: supprimer un élément
+      source: jeu.png
+      prompt: Remove the man in the grey hoodie
+    - id: enseigne
+      teste: le texte
+      source: neon.png
+      prompt: Change the sign text to "JEREMY"
+    - id: aquarelle
+      teste: le style
+      source: miniature.png
+      prompt: Turn this photo into a watercolor painting
+
+# Vidéo (5 s, 24 i/s, avec le son). Règles tirées des guides officiels MiniMax H3 / LTX-2.5 : un paragraphe au présent,
+# le type de plan, un seul mouvement de caméra, la réplique entre guillemets (qui parle, quelle langue, quel ton),
+# des sons concrets liés à l'action ; en image → vidéo, décrire ce qui bouge sans redécrire l'image.
+image_vers_video:
+    - id: portrait
+      teste: visage, expressions et parole en français
+      source: portrait.png
+      prompt: >-
+        Close-up. The woman slowly turns toward the camera, smiles warmly and says softly in French: "Bonjour, je m'appelle Aria." Her lips move in sync with the words, then she holds the smile. Static camera with a very slight push-in. Quiet room tone and a faint street murmur outside the window.
+    - id: jeu
+      teste: plusieurs personnages qui interagissent
+      source: jeu.png
+      prompt: Medium shot around the wooden table. The red-haired woman bursts out laughing, the old man adjusts his glasses with a puzzled frown, and the man in the grey hoodie moves a piece on the board and taps it twice. The camera slowly pans from left to right. Warm laughter, the click of the game piece on wood, cozy indoor ambience.
+    - id: pilote
+      teste: style illustré et cohérence du personnage
+      source: pilote.png
+      prompt: Wide shot. The pilot pushes herself up from the cockpit seat, stands and walks toward the bright open hangar door, her silhouette moving into the warm evening light. The camera slowly tracks behind her. Footsteps on the metal floor, a distant engine hum, a soft electronic beep from the console.
+    - id: dragon
+      teste: grand mouvement, créature et caméra
+      source: dragon.png
+      prompt: Wide aerial shot. The jade dragon uncoils from around the pagoda, stretches out its long body and rises into the dawn mist, its scales catching the light. The camera slowly tilts up and follows its flight. A deep resonant roar, rushing wind, temple bells in the distance.
+
+texte_vers_video:
+    - id: samourai
+      teste: action, physique de la pluie, bruitages
+      prompt: Medium shot at night. An android samurai with a cracked white faceplate stands on a rain-soaked neon street in Tokyo and slowly draws a glowing blue katana, raising it in slow motion while neon reflections ripple in the puddles. The camera slowly circles around the samurai. Heavy rain, a high metallic ring as the blade leaves its sheath, a distant city hum.
+    - id: dialogue
+      teste: voix et synchronisation labiale en français
+      prompt: >-
+        Medium two-shot in an autumn park. A young woman and an old man sit side by side on a wooden bench while golden leaves fall around them. She turns to him and asks in French with a gentle smile: "On y va ?" He chuckles softly and nods. Static camera. Light wind in the trees, rustling leaves, birds in the distance.

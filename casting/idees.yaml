@@ -1,0 +1,28 @@
+# Jeu d'idées du labo LLM : chaque idée en français cache un piège de traduction ou de fidélité.
+# Les identifiants servent à nommer les images : garde-les courts et uniques.
+
+reecriture:
+    - id: samourai
+      teste: le genre
+      prompt: une samouraï androïde sous la pluie à Tokyo, ambiance néon
+    - id: chevalier
+      teste: la négation
+      prompt: un chevalier en armure sans casque, au coucher du soleil
+    - id: chats
+      teste: les nombres
+      prompt: trois chats noirs assis sur un muret, un seul a les yeux verts
+    - id: enseigne
+      teste: le texte à garder
+      prompt: une enseigne de bar où il est écrit « Chez Jérémy »
+    - id: bretagne
+      teste: l'expression idiomatique
+      prompt: un temps de chien sur la côte bretonne, un phare dans la tempête
+    - id: ramen
+      teste: l'idée ultra-courte
+      prompt: un ramen
+    - id: seoul
+      teste: la culture
+      prompt: une ruelle de Séoul la nuit, des stands de tteokbokki fumants
+    - id: portrait
+      teste: le respect du détail
+      prompt: portrait en clair-obscur d'une femme d'une quarantaine d'années aux cheveux gris courts, veste en tweed vert, assise dans une bibliothèque ancienne, lumière d'une seule fenêtre à gauche, style peinture flamande
