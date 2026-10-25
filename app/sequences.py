@@ -134,6 +134,27 @@ def garder_repliques(idee: str, prompt_plan: str) -> str:
     return " ".join([prompt_plan.rstrip()] + [f'The character says: "{r}"' for r in manquantes])
 
 
+_FIN_PHRASE = re.compile(r"[.!?…][\"”»]?(?:\s|$)")  # fin de phrase, guillemet fermant compris
+
+
+def sans_repliques_inventees(source: str, prompt_plan: str) -> tuple[str, list[str]]:
+    """Retire les phrases où Llama fait dire une réplique absente de `source` (l'idée, et ce qui l'accompagne).
+    Vu à l'essai du 2026-10-25 : « Mmm, c'est vrai, ça » inventé dans un plan prolongé malgré la consigne, puis
+    recopié dans la transition suivante. Un texte entre guillemets présent dans la source (réplique, enseigne) reste.
+    Renvoie le prompt et les répliques retirées."""
+    permis, retirees = _simple(source), []
+    while True:
+        inventee = next((m for m in _REPLIQUES.finditer(prompt_plan)
+                         if _simple(next(g for g in m.groups() if g)) not in permis), None)
+        if inventee is None:
+            return " ".join(prompt_plan.split()), retirees
+        avant = [f.end() for f in _FIN_PHRASE.finditer(prompt_plan, 0, inventee.start())]
+        debut = avant[-1] if avant else 0
+        fin = _FIN_PHRASE.search(prompt_plan, inventee.end() - 2)  # la réplique peut finir la phrase (« Salut. »)
+        retirees.append(next(g for g in inventee.groups() if g).strip())
+        prompt_plan = prompt_plan[:debut] + " " + prompt_plan[fin.end() if fin else len(prompt_plan):]
+
+
 def a_tourner(s: dict, demandes: list[int] | None = None) -> list[int]:
     """Plans à tourner : ceux demandés (ou pas encore à jour), plus ceux qui partent du plan d'avant."""
     plans = s["plans"]
@@ -659,8 +680,11 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
                     raise
 
     alertes, sortie = [], []
+    source = " ".join([synopsis, contrainte, *(p["note"] for p in plans)])  # une réplique du synopsis va où Llama veut
     for k, (p, (fr, en)) in enumerate(zip(plans, blocs), 1):
-        texte = sans_etiquette(prompt.nettoyer_markdown(en))
+        texte, inventees = sans_repliques_inventees(source, sans_etiquette(prompt.nettoyer_markdown(en)))
+        fr, _ = sans_repliques_inventees(source, prompt.nettoyer_markdown(fr))
+        alertes += [f"Plan {k} : réplique inventée par Llama, retirée : « {r} »" for r in inventees]
         if p["enchainement"] == "prolonger" and not texte.lower().startswith("continuous shot"):
             texte = f"Continuous shot, same scene. {texte}"
         if p["enchainement"] in ("texte", "couper"):
@@ -668,7 +692,7 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
         texte = garder_repliques(p["note"], texte)  # une réplique de la note est à sa place, mot pour mot
         if len(texte.split()) > mots_max + 20:
             alertes.append(f"Plan {k} : {len(texte.split())} mots, au-delà des {mots_max} conseillés")
-        sortie.append({**p, "idee": prompt.nettoyer_markdown(fr), "prompt": texte})
+        sortie.append({**p, "idee": fr, "prompt": texte})
     tout = " ".join(p["prompt"] for p in sortie)
     for r in repliques(synopsis):
         if _simple(r) not in _simple(tout):
@@ -759,6 +783,8 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
             mode = "animer" if plan["enchainement"] == "rush" else "texte"
             reecrit = (await prompt.reecrire(p_.orchestrateur, idee_pour_llm(s, k), s["llm"], video=mode,
                                              duree=plan["duree"]))["prompt"]
+            source = " ".join([plan["idee"], s["casting"]["ambiance"], s["casting"].get("contrainte", "")])
+            reecrit, _ = sans_repliques_inventees(source, reecrit)
             plan["prompt_final"] = garder_repliques(plan["idee"], reecrit)
         if plan["enchainement"] == "prolonger" and not plan["prompt"]:
             plan["prompt_final"] = f"Continuous shot, same scene. {plan['prompt_final']}"

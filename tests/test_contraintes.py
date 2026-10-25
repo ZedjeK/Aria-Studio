@@ -158,6 +158,60 @@ class Tournage(Base):
         self.assertTrue(s["film"])
 
 
+class RepliquesInventees(Base):
+    # Le prompt réel de l'essai du 2026-10-25 (plan prolongé), raccourci.
+    INVENTE = ("Continuous shot, same scene. The camera holds tight on the character’s face as she slowly nods. "
+               "A faint, knowing hum escapes her lips—\"Mmm, c’est vrai, ça…\"—spoken in French with a teasing tone. "
+               "The lenses of her aviator sunglasses glint.")
+
+    def test_phrase_retiree_le_reste_garde(self):
+        texte, retirees = sequences.sans_repliques_inventees("elle sourit et hoche la tête", self.INVENTE)
+        self.assertEqual(texte, "Continuous shot, same scene. The camera holds tight on the character’s face as she "
+                                "slowly nods. The lenses of her aviator sunglasses glint.")
+        self.assertEqual(retirees, ["Mmm, c’est vrai, ça…"])
+
+    def test_ce_que_dit_l_idee_reste(self):
+        idee = "elle dit « On y va. Accroche-toi ! » devant l'enseigne ARIA"
+        texte = 'She says "On y va. Accroche-toi !" under a neon sign reading "ARIA". She smiles.'
+        self.assertEqual(sequences.sans_repliques_inventees(idee, texte), (texte, []))
+        # Une réplique déformée est retirée… puis garder_repliques remet celle de l'idée, mot pour mot.
+        deformee, retirees = sequences.sans_repliques_inventees(idee, 'She says "Allez, on y va !" She smiles.')
+        self.assertEqual((deformee, retirees), ("She smiles.", ["Allez, on y va !"]))
+        self.assertIn('"On y va. Accroche-toi !"', sequences.garder_repliques(idee, deformee))
+
+    def test_plusieurs_inventees(self):
+        texte, retirees = sequences.sans_repliques_inventees("elle marche", 'She says "Bonjour." He answers “Salut.” '
+                                                                            "She walks away.")
+        self.assertEqual((texte, retirees), ("She walks away.", ["Bonjour.", "Salut."]))
+
+    def test_au_tournage(self):
+        from unittest import mock
+        from app import prompt
+        plans = self.plans()[:2]  # départ (« On décolle ce soir. ») puis prolonger, sans réplique
+        s = self.creer(plans=plans, casting={"ambiance": ""})
+        reponses = iter([{"prompt": 'She looks up and says "On décolle ce soir."'},
+                         {"prompt": self.INVENTE}])
+
+        class FauxComfy:
+            async def televerser(self, chemin):
+                return chemin.name
+
+            async def executer(self, api, progression=None):
+                return [("clip.mp4", b"mp4"), ("affiche.png", png(8, 8))]
+
+        @asynccontextmanager
+        async def comfyui():
+            yield FauxComfy()
+
+        p = Plateau(orchestrateur=SimpleNamespace(comfyui=comfyui))
+        with mock.patch.object(Plateau, "_valider_llm", return_value="x.gguf"), \
+                mock.patch.object(prompt, "reecrire", side_effect=lambda *a, **k: next(reponses)):  # AsyncMock
+            asyncio.run(sequences.tourner(p, p.commander_sequence(s["id"])))
+        finals = [pl["prompt_final"] for pl in sequences.lire(s["id"])["plans"]]
+        self.assertIn('"On décolle ce soir."', finals[0])  # la réplique de l'idée reste
+        self.assertNotIn("Mmm", finals[1])
+
+
 class DecoupageAvecContrainte(Base):
     PLANS = [{"enchainement": "texte", "duree": 5, "note": ""}, {"enchainement": "couper", "duree": 5, "note": ""}]
 
@@ -167,6 +221,18 @@ class DecoupageAvecContrainte(Base):
                                            f"  {CONTRAINTE} "))
         self.assertEqual(r["contrainte"], CONTRAINTE)
         self.assertIn(f"Mandatory constraint, respected in EVERY shot: {CONTRAINTE}", llama.messages[0][1]["content"])
+
+    def test_replique_inventee_retiree_et_signalee(self):
+        llama = FauxLlama("SHOT 1\nFR: elle marche et dit « Quelle belle journée. »\n"
+                          "EN: She walks and says \"Quelle belle journée.\" The sun rises.\n"
+                          "SHOT 2\nFR: gros plan, elle dit « On décolle ce soir. »\n"
+                          "EN: Close-up, she says \"On décolle ce soir.\"")
+        r = asyncio.run(sequences.decouper(llama, "Une pilote marche, puis dit « On décolle ce soir. »", "", "",
+                                           self.PLANS, None))
+        self.assertNotIn("Quelle belle journée", r["plans"][0]["prompt"])
+        self.assertNotIn("Quelle belle journée", r["plans"][0]["idee"])
+        self.assertIn('"On décolle ce soir."', r["plans"][1]["prompt"])
+        self.assertIn("Plan 1 : réplique inventée par Llama, retirée : « Quelle belle journée. »", r["alertes"])
 
     def test_as18_et_longueur(self):
         with self.assertRaises(ErreurSecurite):
