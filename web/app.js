@@ -69,11 +69,37 @@ async function majEtatDirect() {
     }
     const pastille = (nom, m, detail = "") => `<span class="pastille ${m.etat}"
         title="${nom} : ${ETATS_MOTEUR[m.etat]}${detail ? ` · ${echapper(detail)}` : ""}">● ${nom}</span>`;
+    // Orange : une autre appli tient la carte (garde-VRAM), avec le coupable probable en infobulle.
+    const alerte = e.garde?.attente ?? e.garde?.alerte;
+    const titreVram = alerte
+        ? `Carte occupée hors Aria${alerte.coupables.length ? ` : probablement ${alerte.coupables.map((c) => c.nom).join(", ")}` : ""}`
+        : "VRAM occupée, tous programmes confondus";
     const vram = e.vram_totale_go
-        ? `<span class="vram-direct" title="VRAM occupée, tous programmes confondus">${e.vram_utilisee_go.toLocaleString("fr-FR")} / ${e.vram_totale_go.toLocaleString("fr-FR")} Go</span>`
+        ? `<span class="vram-direct ${alerte ? "alerte-vram" : ""}" title="${echapper(titreVram)}">${alerte ? "⚠ " : ""}${e.vram_utilisee_go.toLocaleString("fr-FR")} / ${e.vram_totale_go.toLocaleString("fr-FR")} Go</span>`
         : "";
     zone.innerHTML = pastille("ComfyUI", e.comfyui) + pastille("Llama", e.llama, e.llama.modele) + vram;
+    majBandeauGarde(e.garde?.attente);
 }
+
+// Garde-VRAM : bandeau d'une demande qui attend la carte. Aria ne ferme jamais l'appli qui la tient : c'est toi.
+function majBandeauGarde(attente) {
+    const bandeau = document.getElementById("bandeau-garde");
+    bandeau.hidden = !attente;
+    if (!attente) return;
+    const qui = attente.coupables.length ? ` par ${attente.coupables[0].nom}, probablement` : " par une autre appli";
+    bandeau.querySelector("span").textContent = `⏸ ${attente.moteur} attend la carte graphique : `
+        + `${attente.vram_go.toLocaleString("fr-FR")} Go occupés${qui} (seuil ${attente.seuil_go.toLocaleString("fr-FR")} Go). `
+        + `Ça repart tout seul dès qu'elle est libérée · ${enDuree(attente.depuis_s)}`;
+}
+
+const enDuree = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}` : `${s} s`);
+
+["forcer", "annuler"].forEach((action) => {
+    document.getElementById(`${action}-garde`).addEventListener("click", async () => {
+        await api("POST", `/api/garde/${action}`);
+        majEtatDirect();
+    });
+});
 
 majEtatDirect();
 setInterval(majEtatDirect, 3000);

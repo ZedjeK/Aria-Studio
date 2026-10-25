@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from app import mesures, prompt, reglages, securite, workflows
+from app import garde, mesures, prompt, reglages, securite, workflows
 from app.config import CONFIG, ROOT, chemin
 from app.modeles import DOSSIER as MODELES
 from app.orchestrateur import Orchestrateur
@@ -47,8 +47,8 @@ def _garde_vram() -> int:
     """Refuse de lancer un banc si d'autres applis occupent déjà la VRAM ; renvoie la VRAM au repos."""
     base = mesures.vram_utilisee()
     if base > CONFIG["casting"]["vram_max_occupee_go"] * GO:
-        autres = ", ".join(mesures.processus_gpu()) or "inconnus"
-        raise ErreurBanc(f"VRAM déjà occupée : {_go(base)} Go (processus GPU : {autres})")
+        autres = ", ".join(s["nom"] for s in garde.coupables(garde.pids_aria())) or "inconnu"
+        raise ErreurBanc(f"VRAM déjà occupée : {_go(base)} Go (probablement : {autres})")
     return base
 
 

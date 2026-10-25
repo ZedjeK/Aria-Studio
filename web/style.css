@@ -1279,6 +1279,29 @@ nav {
     font-family: "Cascadia Code", Consolas, monospace;
 }
 
+.vram-direct.alerte-vram {
+    color: #ffb347;
+}
+
+/* Garde-VRAM : une demande attend que d'autres applis rendent la carte. */
+.bandeau-garde {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 12px 0 0;
+    padding: 10px 14px;
+    border: 1px solid #ffb347;
+    border-radius: 8px;
+    background: rgba(255, 179, 71, 0.08);
+    font-size: 0.9rem;
+}
+
+.bandeau-garde span {
+    flex: 1;
+    min-width: 240px;
+}
+
 .sous-onglets {
     display: flex;
     gap: 4px;

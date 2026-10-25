@@ -6,6 +6,8 @@ ne puisse survenir au milieu d'une génération.
 Bascules :
 - vers llama : ComfyUI vide sa VRAM (/free) mais reste lancé, pour repartir vite ;
 - vers ComfyUI : llama-server est arrêté complètement.
+À chaque bascule, une fois notre autre moteur libéré, le garde-VRAM (app/garde.py) attend que les autres applis
+aient rendu la carte.
 """
 
 import asyncio
@@ -13,6 +15,7 @@ from contextlib import asynccontextmanager
 
 from app import modeles, reglages
 from app.comfy import ComfyUI
+from app.garde import Garde
 from app.config import CONFIG, chemin
 from app.llm import Llama
 from app.modeles import DOSSIER as MODELES
@@ -32,6 +35,7 @@ class Orchestrateur:
             CONFIG["llama"]["reflexion"],
         )
         self.actif: str | None = None
+        self.garde = Garde()
         self._verrou = asyncio.Lock()
         self._samplers_lus = False
 
@@ -48,6 +52,7 @@ class Orchestrateur:
         async with self._verrou:
             if self.actif != "comfyui":
                 await self.llama.arreter()
+                await self.garde.attendre("ComfyUI")
                 if self.comfy.process is None:
                     modeles.ecrire_chemins_comfyui()  # familles ajoutées depuis le dernier démarrage
                 await self.comfy.demarrer()
@@ -65,6 +70,8 @@ class Orchestrateur:
         async with self._verrou:
             if self.actif == "comfyui" and await self.comfy.est_pret():
                 await self.comfy.liberer_vram()
+            if self.actif != "llama":
+                await self.garde.attendre("Llama")
             # Ne redémarre que si le modèle, son serveur ou ses réglages de lancement changent.
             regle = reglages.valeurs_llm(nom)
             await self.llama.demarrer(fichier, chemin(specifique) if specifique else None,

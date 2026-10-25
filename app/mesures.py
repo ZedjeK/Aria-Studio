@@ -31,17 +31,6 @@ def nom_gpu() -> str:
     return nom.decode() if isinstance(nom, bytes) else nom
 
 
-def processus_gpu() -> list[str]:
-    """Noms des processus qui utilisent le GPU en calcul (Windows ne donne pas leur VRAM)."""
-    noms = set()
-    for p in pynvml.nvmlDeviceGetComputeRunningProcesses(_gpu()):
-        try:
-            noms.add(psutil.Process(p.pid).name())
-        except psutil.Error:
-            pass
-    return sorted(noms)
-
-
 def _ram(pid: int) -> int:
     racine = psutil.Process(pid)
     total = racine.memory_info().rss

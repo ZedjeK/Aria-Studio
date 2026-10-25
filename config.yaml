@@ -36,6 +36,13 @@ llama:
     # Réflexion (« thinking ») des modèles qui la proposent : coupée pour la réécriture de prompts.
     reflexion: false
 
+garde_vram:
+    # Avant de donner la carte à ComfyUI ou à Llama (nos moteurs déjà libérés) : au-delà de cette VRAM occupée,
+    # d'autres applis tiennent la carte et la demande attend (bandeau « Lancer quand même » / « Annuler »).
+    # Au repos, le bureau occupe 1 à 2 Go ; un llama-server d'une autre appli, 9 à 13 Go.
+    externe_max_go: 3.5
+    intervalle_s: 5
+
 casting:
     prompts: casting/prompts.yaml
     # Un banc refuse de démarrer si la VRAM est déjà plus occupée que ça (autres applis).

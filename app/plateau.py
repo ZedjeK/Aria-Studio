@@ -380,6 +380,16 @@ class Plateau:
 
     async def _executer(self, c: Commande):
         c.etat = "en_cours"
+        garde = getattr(self.orchestrateur, "garde", None)
+        if garde is not None:
+            garde.commande = c  # une attente de la carte s'affiche dans l'étape de la commande
+        try:
+            await self._executer_type(c)
+        finally:
+            if garde is not None:
+                garde.commande = None
+
+    async def _executer_type(self, c: Commande):
         if c.type == "creation":
             await self._creer(c)
         elif c.type == "clip":

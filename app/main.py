@@ -9,11 +9,11 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (casting, decouvrir, listes, mesures, modeles, optimiseur, personnages, plateau, prompt,
+from app import (casting, decouvrir, garde, listes, mesures, modeles, optimiseur, personnages, plateau, prompt,
                  reglages, retouche, rushes, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
@@ -59,6 +59,12 @@ app = FastAPI(title="Aria - Studio", lifespan=cycle_de_vie)
 app.mount("/static", InterfaceSansCache(directory=WEB), name="static")
 
 
+@app.exception_handler(garde.ErreurGarde)
+async def attente_annulee(_requete, e: garde.ErreurGarde):
+    """Jérémy a annulé une demande qui attendait la carte (réécriture, peaufinage…)."""
+    return JSONResponse(status_code=409, content={"detail": str(e)})
+
+
 _RESSOURCE = re.compile(r'"/static/([\w./-]+\.(?:js|css))"')
 
 
@@ -98,7 +104,21 @@ def etat_direct():
         "llama": {"etat": etat(llama.process, sante_["llama"]["installe"]),
                   "modele": favoris.get(llama.modele.name, llama.modele.stem) if llama.modele else None},
         **vram,
+        # Garde-VRAM : une demande attend la carte (bandeau), ou une autre appli la tient (pastille orange).
+        "garde": {"attente": orchestrateur.garde.attente,
+                  "alerte": None if orchestrateur.garde.attente else garde.alerte(orchestrateur.actif)},
     }
+
+
+@app.post("/api/garde/forcer")
+def forcer_garde():
+    """« Lancer quand même » : la demande qui attend la carte part, lentement s'il le faut."""
+    return {"ok": orchestrateur.garde.forcer()}
+
+
+@app.post("/api/garde/annuler")
+def annuler_garde():
+    return {"ok": orchestrateur.garde.annuler()}
 
 
 @app.get("/api/sante")

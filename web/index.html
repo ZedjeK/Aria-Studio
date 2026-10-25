@@ -27,6 +27,12 @@
             <!-- État en direct des moteurs, visible depuis tous les onglets. -->
             <div id="etat-direct" class="etat-direct" title="État en direct"></div>
         </nav>
+        <!-- Garde-VRAM : une demande attend que d'autres applis rendent la carte graphique. -->
+        <div id="bandeau-garde" class="bandeau-garde" hidden>
+            <span></span>
+            <button id="forcer-garde" type="button" class="petit" title="Elle partira tout de suite, plus lentement">▶ Lancer quand même</button>
+            <button id="annuler-garde" type="button" class="petit danger">✕ Annuler</button>
+        </div>
 
         <div class="vue" id="vue-plateau">
             <section class="carte">
