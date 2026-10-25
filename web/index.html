@@ -209,18 +209,63 @@
                         <button id="supprimer-sequence" type="button" class="petit danger">Supprimer</button>
                     </div>
                     <div class="ligne casting-sequence">
-                        <div class="bloc-source">
+                        <div class="bloc-source personnage-casting">
                             <div id="personnage-sequence" class="emplacement vide"
-                                 title="Personnage de référence des plans coupés (sinon : le rush du premier plan)">
+                                 title="Personnage de référence (sinon : le rush du premier plan)">
                                 <span class="numero">👤</span></div>
                             <span class="discret">Personnage</span>
+                            <label class="case discret" title="Départs et transitions reçoivent aussi le personnage (les plans coupés toujours, les plans prolongés jamais : leurs images ancrées le tiennent déjà)">
+                                <input type="checkbox" id="reference-partout-sequence" checked> sur tous les plans</label>
                         </div>
                         <div class="champs-casting">
-                            <label>Ambiance commune
+                            <div class="onglets-casting" role="tablist">
+                                <button type="button" class="onglet-casting actif" data-onglet-casting="ambiance">🎨 Ambiance</button>
+                                <button type="button" class="onglet-casting" data-onglet-casting="contraintes">🔒 Contraintes</button>
+                                <button type="button" class="onglet-casting" data-onglet-casting="voix">🎙️ Voix</button>
+                            </div>
+                            <div class="volet-casting" data-volet-casting="ambiance">
                                 <textarea id="ambiance-sequence" rows="2" maxlength="300"
-                                          placeholder="ex. nuit, hangar éclairé d'une lumière orange chaude"></textarea></label>
+                                          placeholder="ex. nuit, hangar éclairé d'une lumière orange chaude"></textarea>
+                                <p class="discret">Toile de fond : un plan qui se passe ailleurs décoche « suit l'ambiance ».</p>
+                            </div>
+                            <div class="volet-casting" data-volet-casting="contraintes" hidden>
+                                <textarea id="contrainte-sequence" rows="2" maxlength="300"
+                                          placeholder="ex. elle garde sa combinaison bleue et les cheveux attachés · jamais de musique"></textarea>
+                                <p class="discret">Impérative : chaque plan la respecte, elle est ajoutée au prompt de tous les plans.
+                                    Une image ancrée (rush de départ, arrivée d'une transition) garde ce qu'elle montre.</p>
+                            </div>
+                            <div class="volet-casting" data-volet-casting="voix" hidden>
+                                <div class="ligne voix-casting">
+                                    <label>Voix de référence <select id="voix-sequence"></select></label>
+                                    <audio id="ecoute-voix-sequence" controls preload="none" hidden></audio>
+                                </div>
+                                <details id="essai-voix">
+                                    <summary>🎙️ Nouvel essai de voix</summary>
+                                    <p class="discret">Un gros plan en cabine silencieuse, avec le personnage du casting : seul le son est gardé.</p>
+                                    <label>Phrase d'essai <input id="phrase-voix" type="text" maxlength="200"></label>
+                                    <label>Voix <input id="description-voix" type="text" maxlength="300"
+                                                       placeholder="ex. douce, un peu grave, posée (sans personnage : qui parle)"></label>
+                                    <button id="lancer-essai-voix" type="button">🎙️ Tourner l'essai</button>
+                                    <div id="progression-voix" hidden>
+                                        <div class="barre"><div></div></div>
+                                        <span class="discret"></span>
+                                    </div>
+                                    <div id="resultat-voix" class="ligne" hidden>
+                                        <audio controls preload="none"></audio>
+                                        <input id="nom-voix" type="text" maxlength="40" placeholder="Nom de la voix">
+                                        <button id="garder-voix" type="button" class="petit principal">✓ Garder</button>
+                                        <button id="autre-prise-voix" type="button" class="petit">🔁 Autre prise</button>
+                                    </div>
+                                </details>
+                                <details id="bibliotheque-voix">
+                                    <summary>📚 Bibliothèque</summary>
+                                    <ul id="liste-voix" class="liste-voix"></ul>
+                                    <button id="importer-voix" type="button" class="petit">📁 Importer un fichier audio…</button>
+                                    <input id="fichier-voix" type="file" accept=".wav,.mp3,.flac,.ogg,audio/*" hidden>
+                                </details>
+                                <p id="erreur-voix" class="ko" hidden></p>
+                            </div>
                             <div class="options-creation">
-                                <label>Voix <select id="voix-sequence"></select></label>
                                 <label>Qualité <select id="qualite-sequence"></select></label>
                                 <label id="bloc-format-sequence" hidden>Format <select id="format-sequence"></select></label>
                                 <label>LLM <select id="llm-sequence"></select></label>
@@ -238,6 +283,7 @@
                         <span class="discret"></span>
                     </div>
                     <p id="erreur-sequence" class="ko" hidden></p>
+                    <p id="alerte-sequence" class="alerte" hidden></p>
                     <div id="film-sequence" hidden>
                         <h3 class="titre-bloc">Film</h3>
                         <video controls playsinline></video>
@@ -367,6 +413,9 @@
                             <textarea id="synopsis-scenario" rows="4" maxlength="2000"
                                       placeholder="L'histoire, du début à la fin, en français. Les répliques entre guillemets : elle lève les yeux et dit « On décolle ce soir. »"></textarea>
                         </div>
+                        <label class="contrainte-scenario">🔒 Contraintes (tous les plans)
+                            <textarea id="contrainte-scenario" rows="2" maxlength="300"
+                                      placeholder="ex. elle garde sa combinaison bleue et les cheveux attachés · jamais de musique"></textarea></label>
                         <div class="options-creation">
                             <label>Nombre de plans <select id="nombre-plans-scenario"></select></label>
                             <span id="duree-sequence-scenario" class="discret"></span>

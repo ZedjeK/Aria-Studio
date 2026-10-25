@@ -1,6 +1,8 @@
 // Montage, mode Séquence : un casting, des plans enchaînés (prolonger, couper, transition), tournés dans l'ordre
 // et assemblés en un film par le serveur (app/sequences.py). La séquence se modifie ici, puis s'enregistre ;
 // un plan modifié n'est plus « à jour » et sera retourné, avec les plans qui partent de lui.
+// Le casting a trois onglets : l'ambiance (toile de fond), la contrainte (impérative sur tous les plans) et la voix
+// (bibliothèque data/voix : essais tournés en cabine silencieuse, ou fichiers audio importés ; app/voix.py).
 
 const ENCHAINEMENTS_DEPART = [["rush", "🖼️ Depuis un rush"], ["texte", "✍️ Depuis le texte"]];
 const ENCHAINEMENTS_SUITE = [["prolonger", "↪ Prolonger"], ["couper", "✂ Couper"], ["transition", "🌀 Transition"]];
@@ -24,7 +26,8 @@ const nouveauPlan = (enchainement) => ({ idee: "", duree: 5, enchainement, rush:
 function sequenceVide() {
     // Rapide par défaut : choix de Jérémy pour les séquences (les plans qui parlent montent seuls à 12 steps).
     return { id: null, titre: "", qualite: "rapide", format: "16:9 (Widescreen)", llm: null, film: null,
-             casting: { personnage: null, voix: "auto", ambiance: "" }, plans: [nouveauPlan("rush")] };
+             casting: { personnage: null, voix: "auto", ambiance: "", contrainte: "", reference_partout: true },
+             plans: [nouveauPlan("rush")] };
 }
 
 async function preparerSequence() {
@@ -34,9 +37,9 @@ async function preparerSequence() {
     remplirSelect("format-sequence", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     remplirSelect("llm-sequence", optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]),
                   optionsMontage.llm.defaut);
-    const clips = await api("GET", "/api/creations?genre=clips");
-    remplirSelect("voix-sequence", [["auto", "Auto : le premier plan qui parle"], ["", "Aucune référence"],
-        ...clips.filter((f) => f.mode_video !== "film").map((f) => [f.id, `Clip : ${(f.idee || f.id).slice(0, 50)}`])], "auto");
+    document.getElementById("phrase-voix").placeholder = v.voix.phrase_defaut;
+    document.getElementById("lancer-essai-voix").textContent = `🎙️ Tourner l'essai (≈ ${enMinutes(v.voix.estimation_s)})`;
+    await chargerVoix();
     await chargerListeSequences();
     if (!sequenceCourante) afficherSequence(sequencesConnues[0] ?? sequenceVide());
 }
@@ -64,7 +67,13 @@ function afficherSequence(s) {
     document.getElementById("choix-sequence").value = s.id ?? "";
     document.getElementById("titre-sequence").value = s.titre;
     document.getElementById("ambiance-sequence").value = s.casting.ambiance ?? "";
+    document.getElementById("contrainte-sequence").value = s.casting.contrainte ?? "";
+    document.getElementById("reference-partout-sequence").checked = s.casting.reference_partout !== false;
     document.getElementById("voix-sequence").value = s.casting.voix ?? "";
+    majEcouteVoix();
+    const alerte = document.getElementById("alerte-sequence");  // ex. sa voix de la bibliothèque a été supprimée
+    alerte.textContent = s.alerte ?? "";
+    alerte.hidden = !s.alerte;
     document.getElementById("qualite-sequence").value = s.qualite;
     document.getElementById("format-sequence").value = s.format;
     if (s.llm) document.getElementById("llm-sequence").value = s.llm;
@@ -209,7 +218,21 @@ document.getElementById("ambiance-sequence").addEventListener("input", (e) => {
     sequenceCourante.casting.ambiance = e.target.value;
     modifiee(true);
 });
-[["voix-sequence", (v) => { sequenceCourante.casting.voix = v || null; }],
+document.getElementById("contrainte-sequence").addEventListener("input", (e) => {
+    sequenceCourante.casting.contrainte = e.target.value;
+    modifiee(true);  // ajoutée au prompt de chaque plan : tout est à retourner
+});
+document.getElementById("reference-partout-sequence").addEventListener("change", (e) => {
+    sequenceCourante.casting.reference_partout = e.target.checked;
+    modifiee(true);
+});
+document.querySelector(".onglets-casting").addEventListener("click", (e) => {
+    const onglet = e.target.closest("[data-onglet-casting]")?.dataset.ongletCasting;
+    if (!onglet) return;
+    document.querySelectorAll(".onglet-casting").forEach((b) => b.classList.toggle("actif", b.dataset.ongletCasting === onglet));
+    document.querySelectorAll(".volet-casting").forEach((v) => { v.hidden = v.dataset.voletCasting !== onglet; });
+});
+[["voix-sequence", (v) => { sequenceCourante.casting.voix = v || null; majEcouteVoix(); }],
  ["qualite-sequence", (v) => { sequenceCourante.qualite = v; }],
  ["format-sequence", (v) => { sequenceCourante.format = v; }]].forEach(([id, poser]) => {
     document.getElementById(id).addEventListener("change", (e) => {
@@ -335,7 +358,8 @@ document.getElementById("ajouter-plan").addEventListener("click", () => {
 function corpsSequence() {
     const s = sequenceCourante;
     return { titre: s.titre.trim(), qualite: s.qualite, format: s.format, llm: s.llm || null,
-             casting: { personnage: s.casting.personnage, voix: s.casting.voix, ambiance: s.casting.ambiance },
+             casting: { personnage: s.casting.personnage, voix: s.casting.voix, ambiance: s.casting.ambiance,
+                        contrainte: s.casting.contrainte ?? "", reference_partout: s.casting.reference_partout !== false },
              plans: s.plans.map((p) => ({ ...p })) };
 }
 
@@ -429,3 +453,188 @@ async function suivreSequence(debut, estimation) {
 }
 
 document.getElementById("tourner-sequence").addEventListener("click", () => tournerSequence());
+
+// Casting, onglet Voix : la voix de référence, les essais de voix et la bibliothèque (app/voix.py)
+
+let voixConnues = [];
+let brouillonVoix = null;  // essai tourné, pas encore gardé
+
+async function chargerVoix() {
+    voixConnues = await api("GET", "/api/voix");
+    const clips = (await api("GET", "/api/creations?genre=clips")).filter((f) => f.mode_video !== "film");
+    const select = document.getElementById("voix-sequence");
+    const garde = sequenceCourante ? (sequenceCourante.casting.voix ?? "") : (select.value || "auto");
+    const option = (valeur, texte) => `<option value="${echapper(valeur)}">${echapper(texte)}</option>`;
+    select.innerHTML = option("auto", "Auto : le premier plan qui parle") + option("", "Aucune référence")
+        + (voixConnues.length ? `<optgroup label="📚 Bibliothèque">${voixConnues.map((v) =>
+            option(`voix:${v.id}`, `${v.source === "fichier" ? "📁" : "🎙️"} ${v.nom}`)).join("")}</optgroup>` : "")
+        + (clips.length ? `<optgroup label="🎞️ Son d'un clip">${clips.map((f) =>
+            option(f.id, (f.idee || f.id).slice(0, 50))).join("")}</optgroup>` : "");
+    select.value = garde;
+    rendreBibliotheque();
+    majEcouteVoix();
+}
+
+function majEcouteVoix() {
+    const valeur = document.getElementById("voix-sequence").value;
+    const audio = document.getElementById("ecoute-voix-sequence");
+    const src = valeur.startsWith("voix:") ? `/api/voix/${encodeURIComponent(valeur.slice(5))}/son`
+        : valeur && valeur !== "auto" ? urlVideo(valeur) : null;  // le son d'un clip se lit aussi
+    audio.hidden = !src;
+    if (!src) audio.removeAttribute("src");
+    else if (audio.getAttribute("src") !== src) audio.src = src;
+}
+
+function rendreBibliotheque() {
+    document.querySelector("#bibliotheque-voix summary").textContent = `📚 Bibliothèque (${voixConnues.length})`;
+    document.getElementById("liste-voix").innerHTML = voixConnues.length ? voixConnues.map((v) => `
+        <li data-voix="${echapper(v.id)}">
+            <span class="nom-voix">${v.source === "fichier" ? "📁" : "🎙️"} ${echapper(v.nom)}</span>
+            <span class="discret">${v.duree_son ? `${Math.round(v.duree_son)} s · ` : ""}${
+                v.source === "fichier" ? "fichier importé" : echapper(v.phrase ?? "")}</span>
+            <audio controls preload="none" src="/api/voix/${encodeURIComponent(v.id)}/son"></audio>
+            <span class="actions-plan">
+                <button type="button" class="petit" data-action="choisir" title="Voix de cette séquence">Choisir</button>
+                <button type="button" class="petit" data-action="renommer" title="Renommer">✏️</button>
+                <button type="button" class="petit danger" data-action="supprimer" title="Supprimer">✕</button>
+            </span>
+        </li>`).join("")
+        : "<li class=\"discret\">Aucune voix pour l'instant : tourne un essai, ou importe un fichier audio.</li>";
+}
+
+function erreurVoix(message) {
+    const p = document.getElementById("erreur-voix");
+    p.textContent = message ?? "";
+    p.hidden = !message;
+}
+
+async function choisirVoix(id) {  // la voix devient celle de la séquence : tout est à retourner
+    sequenceCourante.casting.voix = `voix:${id}`;
+    await chargerVoix();
+    modifiee(true);
+}
+
+// Essai de voix : une commande du Plateau, suivie comme un tournage.
+
+async function lancerEssaiVoix() {
+    erreurVoix(null);
+    const premier = sequenceCourante.plans[0];
+    const personnage = sequenceCourante.casting.personnage
+        ?? (premier?.enchainement === "rush" ? premier.rush : null);  // comme le serveur (sequences.personnage)
+    let commande;
+    try {
+        commande = await api("POST", "/api/voix/essais", {
+            phrase: document.getElementById("phrase-voix").value.trim(),
+            description: document.getElementById("description-voix").value.trim(), personnage });
+    } catch (err) {
+        erreurVoix(err.message);
+        return;
+    }
+    brouillonVoix = null;
+    document.getElementById("resultat-voix").hidden = true;
+    document.getElementById("lancer-essai-voix").disabled = true;
+    document.getElementById("progression-voix").hidden = false;
+    suivreEssaiVoix(commande.id, Date.now());
+}
+
+async function suivreEssaiVoix(id, debut) {
+    const c = await api("GET", `/api/commandes/${id}`);
+    const estimation = optionsMontage.video.voix.estimation_s;
+    const ecoule = (Date.now() - debut) / 1000;
+    const bloc = document.getElementById("progression-voix");
+    bloc.querySelector(".barre div").style.width = `${Math.round(100 * Math.min(1, ecoule / estimation))}%`;
+    bloc.querySelector("span").textContent = c.etat === "attente" ? `En file d'attente… ${enMinutes(ecoule)}`
+        : `${c.etape || "Préparation"} · ${Math.round(100 * c.progression)} % · ${enMinutes(ecoule)}`;
+    if (["attente", "en_cours"].includes(c.etat)) {
+        setTimeout(() => suivreEssaiVoix(id, debut), 1500);
+        return;
+    }
+    bloc.hidden = true;
+    document.getElementById("lancer-essai-voix").disabled = false;
+    if (c.etat === "erreur") {
+        erreurVoix(c.erreur);
+        return;
+    }
+    brouillonVoix = c.voix;
+    const resultat = document.getElementById("resultat-voix");
+    resultat.querySelector("audio").src = `/api/voix/${encodeURIComponent(c.voix)}/son`;
+    resultat.hidden = false;
+    document.getElementById("nom-voix").focus();
+}
+
+document.getElementById("lancer-essai-voix").addEventListener("click", lancerEssaiVoix);
+document.getElementById("autre-prise-voix").addEventListener("click", lancerEssaiVoix);  // nouvelle seed
+document.getElementById("garder-voix").addEventListener("click", async () => {
+    const nom = document.getElementById("nom-voix");
+    if (!nom.value.trim()) {
+        nom.focus();
+        erreurVoix("Donne un nom à cette voix pour la garder.");
+        return;
+    }
+    try {
+        await api("PUT", `/api/voix/${encodeURIComponent(brouillonVoix)}`, { nom: nom.value.trim() });
+    } catch (err) {
+        erreurVoix(err.message);
+        return;
+    }
+    erreurVoix(null);
+    document.getElementById("resultat-voix").hidden = true;
+    nom.value = "";
+    await choisirVoix(brouillonVoix);
+    brouillonVoix = null;
+});
+
+// Bibliothèque : choisir, renommer, supprimer, importer.
+
+document.getElementById("liste-voix").addEventListener("click", async (e) => {
+    const action = e.target.closest("[data-action]")?.dataset.action;
+    const id = e.target.closest("[data-voix]")?.dataset.voix;
+    if (!action || !id) return;
+    const v = voixConnues.find((x) => x.id === id);
+    erreurVoix(null);
+    try {
+        if (action === "choisir") {
+            await choisirVoix(id);
+        } else if (action === "renommer") {
+            const nom = prompt("Nouveau nom de la voix :", v.nom);
+            if (!nom?.trim()) return;
+            await api("PUT", `/api/voix/${encodeURIComponent(id)}`, { nom: nom.trim() });
+            await chargerVoix();
+        } else if (action === "supprimer") {
+            if (!confirm(`Supprimer la voix « ${v.nom} » ? Elle part dans la corbeille des voix ; `
+                + "les séquences qui l'utilisent repassent en Auto (leurs plans seront à retourner).")) return;
+            const r = await api("DELETE", `/api/voix/${encodeURIComponent(id)}`);
+            if (sequenceCourante.casting.voix === `voix:${id}`) {
+                if (sequenceCourante.id && r.sequences.includes(sequenceCourante.id) && !sequenceModifiee) {
+                    afficherSequence(await api("GET", `/api/sequences/${encodeURIComponent(sequenceCourante.id)}`));
+                } else {
+                    sequenceCourante.casting.voix = "auto";
+                    modifiee(true);
+                }
+            }
+            await chargerVoix();
+        }
+    } catch (err) {
+        erreurVoix(err.message);
+    }
+});
+
+document.getElementById("importer-voix").addEventListener("click", () => document.getElementById("fichier-voix").click());
+document.getElementById("fichier-voix").addEventListener("change", (e) => {
+    const fichier = e.target.files[0];
+    e.target.value = "";  // le même fichier pourra être repris
+    if (!fichier) return;
+    const nom = prompt("Nom de la voix :", fichier.name.replace(/\.[^.]+$/, "").slice(0, 40));
+    if (!nom?.trim()) return;
+    const lecteur = new FileReader();
+    lecteur.onload = async () => {
+        erreurVoix(null);
+        try {
+            const v = await api("POST", "/api/voix/import", { audio: lecteur.result, nom: nom.trim(), nom_origine: fichier.name });
+            await choisirVoix(v.id);
+        } catch (err) {
+            erreurVoix(err.message);
+        }
+    };
+    lecteur.readAsDataURL(fichier);
+});

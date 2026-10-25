@@ -13,7 +13,7 @@ const NOTES_TYPES = {
 };
 
 let formeVideo = "clip";
-const decoupage = { reference: null, synopsis: "", plans: [], resultat: null, perime: false };
+const decoupage = { reference: null, synopsis: "", contrainte: "", plans: [], resultat: null, perime: false };
 let decoupagePret = false;
 
 const enSequence = () => cibleVideo() && formeVideo === "sequence";
@@ -136,6 +136,11 @@ document.getElementById("synopsis-scenario").addEventListener("input", (e) => {
     perime();
 });
 
+document.getElementById("contrainte-scenario").addEventListener("input", (e) => {
+    decoupage.contrainte = e.target.value;  // donnée à Llama, puis gardée au casting de la séquence créée
+    perime();
+});
+
 document.getElementById("nombre-plans-scenario").addEventListener("change", (e) => {
     const n = Number(e.target.value);
     decoupage.plans = decoupage.plans.slice(0, n);
@@ -188,7 +193,7 @@ document.getElementById("decouper-scenario").addEventListener("click", () => {
             !structurePrompt.blocs.find((b) => b.id === bloc)?.video));  // le Plan d'un clip seul ne compte pas ici
         const r = await api("POST", "/api/sequences/decouper", {
             synopsis: decoupage.synopsis, sujet: sujetPrompt, choix, age: etat.age,
-            plans: decoupage.plans, reference: decoupage.reference, llm: llmPrompt(),
+            plans: decoupage.plans, reference: decoupage.reference, contrainte: decoupage.contrainte, llm: llmPrompt(),
         });
         decoupage.resultat = r;
         decoupage.perime = false;
@@ -238,7 +243,8 @@ document.getElementById("creer-sequence-scenario").addEventListener("click", asy
     try {
         const s = await api("POST", "/api/sequences", {
             titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmPrompt(),
-            casting: { personnage: decoupage.reference, voix: "auto", ambiance: "" },
+            casting: { personnage: decoupage.reference, voix: "auto", ambiance: "",
+                       contrainte: decoupage.resultat.contrainte ?? "", reference_partout: true },
             plans: decoupage.resultat.plans.map((p, k) => ({
                 idee: p.idee || p.note || `Plan ${k + 1}`, prompt: p.prompt, duree: p.duree,
                 enchainement: p.enchainement, rush: p.rush, ambiance: true,

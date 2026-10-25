@@ -1626,6 +1626,129 @@ button.danger:not(:disabled) {
     color: var(--discret);
 }
 
+.personnage-casting {
+    max-width: 140px;
+    text-align: center;
+}
+
+.personnage-casting .case {
+    font-size: 0.75rem;
+}
+
+/* Casting de la séquence : onglets Ambiance, Contraintes, Voix (même allure que les sous-onglets de Modèles). */
+.onglets-casting {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--bord);
+}
+
+button.onglet-casting {
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--discret);
+    padding: 6px 12px;
+}
+
+button.onglet-casting.actif {
+    border-bottom-color: var(--neon);
+    background: none;
+    color: var(--texte);
+}
+
+.volet-casting {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.volet-casting textarea,
+.volet-casting p {
+    margin: 0;
+}
+
+.volet-casting label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: var(--discret);
+}
+
+.volet-casting details {
+    border: 1px solid var(--bord);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+.volet-casting details[open] {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.volet-casting summary {
+    cursor: pointer;
+}
+
+.voix-casting {
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.voix-casting label {
+    flex: 1;
+    min-width: 200px;
+}
+
+.volet-casting audio {
+    height: 32px;
+    max-width: 100%;
+}
+
+#resultat-voix {
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+#resultat-voix input {
+    flex: 1;
+    min-width: 140px;
+    width: auto;
+}
+
+.liste-voix {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.liste-voix li[data-voix] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--bord);
+}
+
+.liste-voix .nom-voix {
+    font-weight: 600;
+}
+
+.liste-voix .discret {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+}
+
 .plans-sequence {
     list-style: none;
     margin: 0 0 10px;
@@ -1735,6 +1858,19 @@ button.danger:not(:disabled) {
 }
 
 /* Scénario, mode Séquence */
+
+.contrainte-scenario {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+    font-size: 0.8rem;
+    color: var(--discret);
+}
+
+.contrainte-scenario textarea {
+    margin: 0;
+}
 
 #vue-scenario.forme-sequence [data-clip-seul],
 #vue-scenario:not(.forme-sequence) [data-sequence-seule] {

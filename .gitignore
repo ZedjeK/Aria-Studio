@@ -9,3 +9,6 @@ data/
 __pycache__/
 *.pyc
 *.tmp
+
+# Réglages locaux de Claude Code (serveur de test)
+.claude/
