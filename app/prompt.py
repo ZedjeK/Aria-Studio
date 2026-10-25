@@ -113,19 +113,24 @@ CONSIGNES_DEFAUT = {"reecriture": CONSIGNE, "retouche": CONSIGNE_RETOUCHE, "peau
                     "video": CONSIGNE_VIDEO, "decoupage": CONSIGNE_DECOUPAGE}
 
 
-def consigne(nom: str, modele: str | None = None, mots_max: int | None = None) -> str:
-    """Consigne du GGUF (réglée ou d'origine), toujours suivie de la clause verrouillée."""
+def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
+             regles: list[str] | None = None) -> str:
+    """Consigne du GGUF (réglée ou d'origine), puis les règles propres au modèle cible (profil_prompt.regles de sa
+    fiche), toujours suivie de la clause verrouillée."""
     texte = reglages.consigne_llm(modele, nom) or CONSIGNES_DEFAUT[nom]
-    texte = texte.replace("{mots_max}", str(mots_max or 150))
-    return f"{texte.rstrip()}\n\n{CLAUSE_MINEURS}"
+    texte = texte.replace("{mots_max}", str(mots_max or 150)).rstrip()
+    if regles:
+        texte += "\n\nRules of the target model:\n" + "\n".join(f"- {r}" for r in regles)
+    return f"{texte}\n\n{CLAUSE_MINEURS}"
 
 
-async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, modele: str | None = None) -> str:
+async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, modele: str | None = None,
+                               regles: list[str] | None = None) -> str:
     securite.verifier(instruction)
     regle = reglages.valeurs_llm(modele)
     async with orchestrateur.llm(modele) as llama:
         reponse = await llama.generer(
-            [{"role": "system", "content": consigne("retouche", modele)}, {"role": "user", "content": instruction}],
+            [{"role": "system", "content": consigne("retouche", modele, regles=regles)}, {"role": "user", "content": instruction}],
             temperature=regle["temperature_retouche"], max_tokens=200, **reglages.echantillonnage(modele),
         )
     securite.verifier(instruction, reponse.texte)
@@ -133,16 +138,17 @@ async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, m
 
 
 async def peaufiner(orchestrateur: Orchestrateur, assemble: str, modele: str | None = None,
-                    mots_max: int | None = None, duree_video: int | None = None) -> dict:
+                    mots_max: int | None = None, duree_video: int | None = None,
+                    regles: list[str] | None = None) -> dict:
     """Rend fluide un prompt assemblé par l'onglet Scénario, sans rien retirer ni ajouter.
     `duree_video` : la cible est un modèle vidéo ; la consigne vidéo garde les répliques mot pour mot."""
     securite.verifier(assemble)
     regle = reglages.valeurs_llm(modele)
     if duree_video:
-        echanges = [{"role": "system", "content": consigne("video", modele)},
+        echanges = [{"role": "system", "content": consigne("video", modele, regles=regles)},
                     {"role": "user", "content": f"{assemble}\n\n(Clip: {duree_video} s, from text only)"}]
     else:
-        echanges = [{"role": "system", "content": consigne("peaufinage", modele, mots_max)},
+        echanges = [{"role": "system", "content": consigne("peaufinage", modele, mots_max, regles)},
                     {"role": "user", "content": assemble}]
     async with orchestrateur.llm(modele) as llama:
         debut = time.perf_counter()
@@ -176,25 +182,27 @@ def nettoyer_markdown(texte: str) -> str:
     return " ".join(texte.split())
 
 
-def messages(idee: str, modele: str | None = None) -> list[dict]:
-    return [{"role": "system", "content": consigne("reecriture", modele)}, {"role": "user", "content": idee}]
+def messages(idee: str, modele: str | None = None, regles: list[str] | None = None) -> list[dict]:
+    return [{"role": "system", "content": consigne("reecriture", modele, regles=regles)},
+            {"role": "user", "content": idee}]
 
 
 async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None = None, references: int = 0,
-                   video: str | None = None, duree: int = 5) -> dict:
+                   video: str | None = None, duree: int = 5, regles: list[str] | None = None) -> dict:
     """`references` : nombre d'images de référence (S'inspirer) ; la consigne dédiée les fait citer par numéro.
-    `video` : animer ou texte (Montage) ; consigne vidéo, répliques gardées mot pour mot."""
+    `video` : animer ou texte (Montage) ; consigne vidéo, répliques gardées mot pour mot.
+    `regles` : celles du modèle cible (workflows.regles_prompt)."""
     securite.verifier(idee)
     regle = reglages.valeurs_llm(modele)
     if video:
         cadre = "animate the provided image" if video == "animer" else "from text only"
-        echanges = [{"role": "system", "content": consigne("video", modele)},
+        echanges = [{"role": "system", "content": consigne("video", modele, regles=regles)},
                     {"role": "user", "content": f"{idee}\n\n(Clip: {duree} s, {cadre})"}]
     elif references:
-        echanges = [{"role": "system", "content": consigne("references", modele)},
+        echanges = [{"role": "system", "content": consigne("references", modele, regles=regles)},
                     {"role": "user", "content": f"{idee}\n\n(Reference pictures: {references})"}]
     else:
-        echanges = messages(idee, modele)
+        echanges = messages(idee, modele, regles)
     async with orchestrateur.llm(modele) as llama:
         debut = time.perf_counter()
         reponse = await llama.generer(echanges, temperature=regle["temperature_reecriture"],

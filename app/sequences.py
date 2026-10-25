@@ -659,7 +659,7 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     wf = workflows.obtenir(CONFIG.get("generation", {}).get("texte_vers_video"))
     mots_max = reglages.valeurs_workflow(wf).get("mots_max") or 110
     regle_personnage = prompt.REGLE_AVEC_REFERENCE if reference else prompt.REGLE_SANS_REFERENCE
-    systeme = prompt.consigne("decoupage", llm, mots_max)
+    systeme = prompt.consigne("decoupage", llm, mots_max, wf.profil.get("regles"))
     systeme = (systeme.replace("{regle_personnage}", regle_personnage) if "{regle_personnage}" in systeme
                else f"{systeme}\n\nCharacter: {regle_personnage}")  # consigne retouchée sans le repère
     echanges = [{"role": "system", "content": systeme},
@@ -774,6 +774,7 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
     if s["casting"].get("contrainte"):
         c.etape = "Traduction de la contrainte"
     contrainte_en = await traduire_contrainte(p_.orchestrateur, s)
+    regles = workflows.regles_prompt(CONFIG.get("generation", {}).get("image_vers_video"))
     for rang, k in enumerate(c.plans, 1):
         plan = s["plans"][k]
         if plan["prompt"]:
@@ -782,7 +783,7 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
             c.etape = f"Plan {k + 1} · réécriture ({rang}/{total})"
             mode = "animer" if plan["enchainement"] == "rush" else "texte"
             reecrit = (await prompt.reecrire(p_.orchestrateur, idee_pour_llm(s, k), s["llm"], video=mode,
-                                             duree=plan["duree"]))["prompt"]
+                                             duree=plan["duree"], regles=regles))["prompt"]
             source = " ".join([plan["idee"], s["casting"]["ambiance"], s["casting"].get("contrainte", "")])
             reecrit, _ = sans_repliques_inventees(source, reecrit)
             plan["prompt_final"] = garder_repliques(plan["idee"], reecrit)

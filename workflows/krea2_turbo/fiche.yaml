@@ -1,9 +1,20 @@
+format: 2
 id: krea2_turbo
 nom: Krea 2 Turbo
 tache: texte_vers_image
 famille: Krea2
 origine: template ComfyUI image_krea2_turbo_t2i_int8 (v0.42.1), LoRA de style et affineur de prompt retirés
-licence: krea-2-community-license
+licence:
+    id: krea-2-community-license
+    nom: Krea 2 Community License
+    url: https://huggingface.co/krea/Krea-2-Turbo/blob/main/LICENSE.pdf
+    resume: "Licence propre à Krea, avec une politique d'usage acceptable ; qui le déploie pour d'autres doit mettre en place des garde-fous. Le texte complet n'est lisible qu'après inscription chez Krea (modèle à accès restreint) : conditions commerciales et pays éventuellement exclus à y lire."
+    commercial: null
+    territoires_exclus: null
+    verifiee: 2026-10-26
+    composants:
+    -   fichier: qwen_image_vae.safetensors
+        licence: "apache-2.0 (dépôt Comfy-Org/Qwen-Image_ComfyUI)" 
 fichiers:
 -   dossier: Krea2/modeles
     nom: krea2_turbo_int8_convrot.safetensors
@@ -46,9 +57,17 @@ defauts:
     steps: 8
     ratio: 1:1 (Square)
     megapixels: 1
-vram_estimee_go: 12.6
+materiel:
+    vram_estimee_go: 12.6  # poids chargés : une estimation, pas un minimum
+    vram_min_go: null  # mesurées par le banc de palier (carte simulée plus petite), pas encore fait
+    vram_confort_go: null
+    mesure: null
+    cartes_verifiees: [RTX 4080 16 Go]
 profil_prompt:
+    style: prose
+    langue: en
     mots_max: 120  # valeur de départ, à affiner au banc
+    regles: []
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
 recommandations:
     resolution_native_mp: 4.2  # 2048 × 2048

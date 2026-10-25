@@ -1,9 +1,20 @@
+format: 2
 id: qwen_image_edit_2511
 nom: Qwen-Image-Edit 2511 Lightning
 tache: retouche
 famille: Qwen-Edit2511
 origine: template ComfyUI image_qwen_image_edit_2511_int8 (v0.42.1), Lightning 4 steps activé, FluxKontextImageScale (recadrage) remplacé par ImageScaleToTotalPixels (proportions conservées)
-licence: apache-2.0
+licence:
+    id: apache-2.0
+    nom: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+    resume: "Licence libre (Qwen-Image-Edit-2511) ; usage commercial permis, en gardant l'avis de licence."
+    commercial: true
+    territoires_exclus: []
+    verifiee: 2026-10-26
+    composants:
+    -   fichier: qwen_2.5_vl_7b_fp8_scaled.safetensors
+        licence: "other (encodeur Qwen2.5-VL rangé dans le dépôt Comfy-Org/HunyuanVideo_1.5_repackaged, licence déclarée « other »)" 
 fichiers:
 -   dossier: _base/vae
     nom: qwen_image_vae.safetensors
@@ -46,7 +57,16 @@ entrees:
     - unet_name
 defauts:
     steps: 4
-vram_estimee_go: 19.1
+materiel:
+    vram_estimee_go: 19.1  # poids chargés : une estimation, pas un minimum
+    vram_min_go: null  # mesurées par le banc de palier (carte simulée plus petite), pas encore fait
+    vram_confort_go: null
+    mesure: null
+    cartes_verifiees: [RTX 4080 16 Go]
+profil_prompt:
+    style: instruction
+    langue: en
+    regles: []
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
 recommandations:
     valeurs:

@@ -1,9 +1,17 @@
+format: 2
 id: qwen_image_2_1_edit
 nom: Qwen-Image 2.1 Edit
 tache: retouche
 famille: Qwen-Image2.1
 origine: template ComfyUI image_qwen_image_2_1_image_edit (v0.42.1), améliorateur de prompt et 2e image retirés
-licence: qwen-research
+licence:
+    id: qwen-research
+    nom: Qwen Research License
+    url: https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE
+    resume: "Usage non commercial seulement (recherche ou évaluation) ; un usage commercial demande une licence séparée de Qwen."
+    commercial: false
+    territoires_exclus: []
+    verifiee: 2026-10-26
 fichiers:
 -   dossier: Qwen-Image2.1/modeles
     nom: qwen_image_2.1_int8_convrot.safetensors
@@ -41,7 +49,16 @@ entrees:
     - unet_name
 defauts:
     steps: 25
-vram_estimee_go: 8.7
+materiel:
+    vram_estimee_go: 8.7  # poids chargés : une estimation, pas un minimum
+    vram_min_go: null  # mesurées par le banc de palier (carte simulée plus petite), pas encore fait
+    vram_confort_go: null
+    mesure: null
+    cartes_verifiees: [RTX 4080 16 Go]
+profil_prompt:
+    style: instruction
+    langue: en
+    regles: []
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
 recommandations:
     valeurs:

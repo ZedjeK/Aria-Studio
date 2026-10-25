@@ -1,0 +1,82 @@
+# Fiches des LLM qui réécrivent les prompts (format 2, voir app/fiches.py) : un GGUF = une fiche.
+# Livré avec Aria (modeles/ n'est pas versionné) : c'est d'ici que l'assistant de premier lancement les propose,
+# et que l'Optimiser de l'onglet Réglages lit leurs recommandations officielles (relevées le 2026-10-20).
+# Licences relues à leur source le 2026-10-26 (API Hugging Face).
+format: 2
+llm:
+-   id: Ministral-3-14B-Instruct-2512-Q4_K_M.gguf
+    nom: Ministral 3 14B
+    page: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512-GGUF
+    url: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512-GGUF/resolve/main/Ministral-3-14B-Instruct-2512-Q4_K_M.gguf
+    taille: 8239593024
+    sha256: 824e0f3373e69b84f2cae46fdcb9bd1ebc6ab3bfc7acc125d818b7b8178cc613
+    serveur: llama  # llama.cpp officiel (services/llama)
+    licence:
+        id: apache-2.0
+        nom: Apache 2.0
+        url: https://www.apache.org/licenses/LICENSE-2.0
+        resume: "Licence libre : usage commercial permis, en gardant l'avis de licence."
+        commercial: true
+        territoires_exclus: []
+        verifiee: 2026-10-26
+    materiel:
+        vram_estimee_go: 9.2  # poids du GGUF + 1,5 Go (contexte et tampons, comme Découvrir et l'Optimiser) : une estimation, pas un minimum
+        vram_min_go: null  # mesurées par le banc de palier, pas encore fait
+        vram_confort_go: null
+        mesure: null
+        cartes_verifiees: [RTX 4080 16 Go]
+    casting: "Labo LLM du 2026-10-20 : 4,63 de moyenne sur 2 bancs, présélectionné. Tend à édulcorer les termes adultes par euphémisme (test du 2026-10-20)."
+    recommandations:
+        source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
+        valeurs:
+        -   cle: temperature_peaufinage
+            valeur: 0.05
+            note: « Use a temperature below 0.1 for daily-driver and production environments » ; tâche de fidélité
+        -   cle: temperature_traduction
+            valeur: 0.05
+            note: Même recommandation ; une traduction doit être fidèle
+        -   cle: temperature_retouche
+            valeur: 0.05
+            note: Même recommandation ; une consigne de retouche doit être fidèle
+        # La réécriture reste plus libre : la fiche admet des températures plus hautes pour les usages créatifs.
+
+-   id: Ternary-Bonsai-2-27B-PTQ1_0.gguf
+    nom: Bonsai 2 27B
+    page: https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
+    url: https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/Ternary-Bonsai-2-27B-PTQ1_0.gguf
+    taille: 5946648928
+    sha256: 53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3
+    serveur: llama-prism  # format ternaire : le fork PrismML de llama.cpp (services/llama-prism)
+    licence:
+        id: apache-2.0
+        nom: Apache 2.0
+        url: https://www.apache.org/licenses/LICENSE-2.0
+        resume: "Licence libre : usage commercial permis, en gardant l'avis de licence."
+        commercial: true
+        territoires_exclus: []
+        verifiee: 2026-10-26
+    materiel:
+        vram_estimee_go: 7.0  # poids du GGUF + 1,5 Go (contexte et tampons, comme Découvrir et l'Optimiser) : une estimation, pas un minimum
+        vram_min_go: null
+        vram_confort_go: null
+        mesure: null
+        cartes_verifiees: [RTX 4080 16 Go]
+    casting: "Labo LLM du 2026-10-20 : 4,38 de moyenne sur 2 bancs, au choix. Garde les termes adultes tels quels (test du 2026-10-20)."
+    recommandations:
+        source: https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
+        valeurs:
+        -   cle: temperature_reecriture
+            valeur: 0.7
+            note: Mode instruct (réflexion coupée), réglages de la fiche
+        -   cle: top_p
+            valeur: 0.8
+            note: Mode instruct, réglages de la fiche
+        -   cle: top_k
+            valeur: 20
+            note: Mode instruct, réglages de la fiche
+        -   cle: min_p
+            valeur: 0.0
+            note: Mode instruct, réglages de la fiche
+        -   cle: presence_penalty
+            valeur: 1.5
+            note: Mode instruct, réglages de la fiche (évite les répétitions)

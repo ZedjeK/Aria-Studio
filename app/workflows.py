@@ -1,4 +1,4 @@
-"""Catalogue des workflows : workflows/<id>/api.json + fiche.yaml."""
+"""Catalogue des workflows : workflows/<id>/api.json + fiche.yaml (format des fiches : app/fiches.py)."""
 
 import copy
 import json
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from app import modeles, reglages, securite
+from app import fiches, modeles, reglages, securite
 from app.config import ROOT
 
 DOSSIER = ROOT / "workflows"
@@ -45,6 +45,18 @@ class Workflow:
         return self.fiche["famille"]
 
     @property
+    def licence(self) -> dict:
+        return self.fiche["licence"]
+
+    @property
+    def materiel(self) -> dict:
+        return self.fiche["materiel"]
+
+    @property
+    def profil(self) -> dict:
+        return self.fiche["profil_prompt"]
+
+    @property
     def modele_origine(self) -> str:
         """Le modèle de diffusion livré avec le workflow (dans <Famille>/modeles)."""
         return next(f["nom"] for f in self.fiche["fichiers"] if f["dossier"] == f"{self.famille}/modeles")
@@ -64,8 +76,13 @@ class Workflow:
             "nom": self.fiche["nom"],
             "tache": self.fiche["tache"],
             "famille": self.famille,
-            "licence": self.fiche["licence"],
-            "vram_estimee_go": self.fiche["vram_estimee_go"],
+            "licence": self.licence["nom"],
+            "licence_fiche": {**self.licence, "verifiee": str(self.licence["verifiee"])},
+            "vram_estimee_go": self.materiel["vram_estimee_go"],
+            "vram_min_go": self.materiel["vram_min_go"],
+            "vram_confort_go": self.materiel["vram_confort_go"],
+            "taille": sum(f["taille"] for f in self.fiche["fichiers"]),
+            "style_prompt": self.profil["style"],
             "pret": not manquants,
             "manquants": manquants,
             "a_telecharger": sum(f["taille"] for f in manquants),
@@ -185,12 +202,44 @@ class Workflow:
 
 def _charger(dossier: Path) -> Workflow:
     fiche = yaml.safe_load((dossier / "fiche.yaml").read_text(encoding="utf-8"))
+    if problemes := fiches.problemes_workflow(fiche):
+        raise ErreurWorkflow(f"Fiche {dossier.name} : " + " ; ".join(problemes))
     api = json.loads((dossier / "api.json").read_text(encoding="utf-8"))
     return Workflow(fiche, api)
 
 
 def catalogue() -> list[Workflow]:
-    return [_charger(d) for d in sorted(DOSSIER.iterdir()) if (d / "fiche.yaml").is_file()]
+    """Les workflows aux fiches valides ; une fiche invalide (ajoutée à la main) est écartée, et dite par erreurs()."""
+    valides = []
+    for d in sorted(DOSSIER.iterdir()):
+        if (d / "fiche.yaml").is_file():
+            try:
+                valides.append(_charger(d))
+            except ErreurWorkflow:
+                pass
+    return valides
+
+
+def erreurs() -> list[str]:
+    """Pourquoi certaines fiches sont écartées du catalogue."""
+    sortie = []
+    for d in sorted(DOSSIER.iterdir()):
+        if (d / "fiche.yaml").is_file():
+            try:
+                _charger(d)
+            except ErreurWorkflow as e:
+                sortie.append(str(e))
+    return sortie
+
+
+def regles_prompt(id_workflow: str | None) -> list[str]:
+    """Règles propres au modèle cible, ajoutées à la consigne de Llama (profil_prompt.regles de sa fiche)."""
+    if not id_workflow:
+        return []
+    try:
+        return list(obtenir(id_workflow).profil.get("regles") or [])
+    except ErreurWorkflow:
+        return []
 
 
 def obtenir(id_workflow: str) -> Workflow:

@@ -418,7 +418,8 @@ class Plateau:
         source = retouche.ouvrir(chemin_image(c.parent).read_bytes())
         if c.prompt is None:
             c.etape = "Traduction de la consigne"
-            traduction = await prompt.traduire_instruction(self.orchestrateur, c.idee, c.llm)
+            traduction = await prompt.traduire_instruction(self.orchestrateur, c.idee, c.llm,
+                                                            workflows.regles_prompt(c.workflow))
             c.prompt = traduction if c.type == "retouche" else f"{CONSIGNE_AGRANDISSEMENT} {traduction}"
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
 
@@ -475,6 +476,7 @@ class Plateau:
         if c.prompt is None:
             c.etape = "Réécriture du prompt"
             c.prompt = (await prompt.reecrire(self.orchestrateur, c.idee, c.llm, video=c.mode_video,
+                                              regles=workflows.regles_prompt(c.workflow),
                                               duree=c.duree))["prompt"]
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
         duree_reecriture = time.perf_counter() - debut
@@ -526,7 +528,8 @@ class Plateau:
         if c.prompt is None:
             c.etape = "Réécriture du prompt"
             nombre_refs = len(c.references) if c.mode_reference == "inspirer" else 0
-            c.prompt = (await prompt.reecrire(self.orchestrateur, c.idee, c.llm, nombre_refs))["prompt"]
+            c.prompt = (await prompt.reecrire(self.orchestrateur, c.idee, c.llm, nombre_refs,
+                                              regles=workflows.regles_prompt(c.workflow)))["prompt"]
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
         duree_reecriture = time.perf_counter() - debut
 

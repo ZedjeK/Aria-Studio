@@ -208,6 +208,12 @@ def liste_workflows():
     return [wf.resume() for wf in workflows.catalogue()]
 
 
+@app.get("/api/workflows/erreurs")
+def erreurs_workflows():
+    """Fiches écartées du catalogue (ajoutées à la main, format incomplet) et pourquoi."""
+    return workflows.erreurs()
+
+
 class DemandeBanc(BaseModel):
     tache: str
     workflows: list[str] | None = None
@@ -376,7 +382,8 @@ async def peaufiner_prompt(demande: DemandePeaufinage):
         mots_max = reglages.valeurs_workflow(workflows.obtenir(demande.workflow)).get("mots_max") \
             if demande.workflow else None
         duree = demande.duree if listes.est_video(demande.workflow) else None
-        return await prompt.peaufiner(orchestrateur, demande.prompt, demande.llm, mots_max, duree)
+        return await prompt.peaufiner(orchestrateur, demande.prompt, demande.llm, mots_max, duree,
+                                      workflows.regles_prompt(demande.workflow))
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except workflows.ErreurWorkflow as e:

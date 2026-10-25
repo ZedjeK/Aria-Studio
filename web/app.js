@@ -235,19 +235,32 @@ document.getElementById("telechargements").addEventListener("click", async (e) =
 const TACHES = { texte_vers_image: "texte vers image", retouche: "retouche",
                  image_vers_video: "image vers vidéo", texte_vers_video: "texte vers vidéo" };
 
+// Licence d'une fiche (app/fiches.py) : ce qu'il faut savoir avant de télécharger le modèle.
+function resumeLicence(l) {
+    const usage = l.commercial === true ? "usage commercial permis" : l.commercial === false
+        ? "non commercial" : "usage commercial : à lire";
+    const pays = l.territoires_exclus === null ? " · pays exclus : à lire"
+        : l.territoires_exclus.length ? ` · interdit : ${l.territoires_exclus.join(", ")}` : "";
+    return `<a href="${echapper(l.url)}" target="_blank" rel="noopener">${echapper(l.nom)}</a> · ${usage}${echapper(pays)}
+        <br>${echapper(l.resume)}`;
+}
+
 async function chargerWorkflows() {
-    const liste = await api("GET", "/api/workflows");
+    const [liste, erreurs] = await Promise.all([api("GET", "/api/workflows"), api("GET", "/api/workflows/erreurs")]);
+    const vram = (wf) => wf.vram_min_go
+        ? `VRAM mesurée : ${wf.vram_min_go} Go minimum, ${wf.vram_confort_go} Go de confort`
+        : `VRAM estimée ${wf.vram_estimee_go} Go (pas encore mesurée)`;
     document.getElementById("workflows").innerHTML = liste.map((wf) => `<li>
         <div class="ligne"><strong style="flex:1">${echapper(wf.nom)}</strong>
         ${wf.pret
             ? '<span class="ok">prêt</span>'
             : `<span class="ko">il manque ${taille(wf.a_telecharger)}</span>`}</div>
-        <span class="discret">${TACHES[wf.tache] ?? echapper(wf.tache)} · ${echapper(wf.licence)}
-            · VRAM estimée ${wf.vram_estimee_go} Go</span>
+        <span class="discret">${TACHES[wf.tache] ?? echapper(wf.tache)} · ${taille(wf.taille)} · ${vram(wf)}</span>
+        <span class="discret licence-fiche"><br>${resumeLicence(wf.licence_fiche)}</span>
         ${wf.manquants.length
             ? `<span class="discret"><br>${wf.manquants.map((f) => `${echapper(f.dossier)}/${echapper(f.nom)}`).join("<br>")}</span>`
             : ""}
-    </li>`).join("");
+    </li>`).join("") + erreurs.map((e) => `<li class="ko">Fiche écartée : ${echapper(e)}</li>`).join("");
 }
 
 // Modèles : inventaire

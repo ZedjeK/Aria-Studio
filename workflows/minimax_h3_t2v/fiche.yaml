@@ -1,9 +1,20 @@
+format: 2
 id: minimax_h3_t2v
 nom: MiniMax H3 · texte vers vidéo
 tache: texte_vers_video
 famille: MiniMax-H3
 origine: template ComfyUI video_minimax_h3_t2v (v0.42.1), Turbo 8 steps branché
-licence: minimax-h3 (poids ouverts ; UE, Royaume-Uni, États-Unis et Corée exclus — choix assumé par Jérémy, usage personnel)
+licence:
+    id: minimax-h3-community-license-agreement
+    nom: MiniMax H3 Community License Agreement
+    url: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE
+    resume: "Utilisation non autorisée dans l'Union européenne, au Royaume-Uni, en Corée du Sud et aux États-Unis. Ailleurs, usage commercial permis (autorisation écrite de MiniMax au-delà de 20 M$ de chiffre d'affaires annuel, mention « MiniMax H3 » affichée) ; qui l'ouvre à d'autres doit tenir des garde-fous contre les usages interdits et un moyen de signaler un abus."
+    commercial: true
+    territoires_exclus: [Union européenne, Royaume-Uni, Corée du Sud, États-Unis]
+    verifiee: 2026-10-26
+    composants:
+    -   fichier: minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
+        licence: "non déclarée sur sa page (dépôt lightx2v/Minimax-h3-Turbo)" 
 fichiers:
 -   dossier: _base/vae
     nom: minimax_h3_video_vae_int8_convrot.safetensors
@@ -64,9 +75,27 @@ video:
     fps: 24
     duree_max: 10
     son: true
-vram_estimee_go: 19.5
+materiel:
+    vram_estimee_go: 19.5  # poids chargés : une estimation, pas un minimum
+    vram_min_go: null  # mesurées par le banc de palier (carte simulée plus petite), pas encore fait
+    vram_confort_go: null
+    mesure: null
+    cartes_verifiees: [RTX 4080 16 Go]
 profil_prompt:
+    style: brief_video
+    langue: en
     mots_max: 110  # borne haute de la consigne vidéo (40 à 110 mots)
+    regles: []  # rien à ajouter : les conseils ci-dessous sont déjà dans la consigne vidéo (app/prompt.py)
+    conseils:
+    - 'Un court brief de production : sujet, action, décor, caméra, son.'
+    - Un seul mouvement de caméra, nommé précisément, avec sa vitesse (slow push-in, slow pan…).
+    - 'Répliques courtes : qui parle, la phrase entre guillemets, la langue et le ton ; 1 à 2 phrases par plan.'
+    - Sons concrets liés à l'action ; la musique de fond à part, jamais mélangée aux bruitages.
+    - 'Scènes complexes : chronologie par segments ([0s-2s], [2s-4s]).'
+    - Éviter les consignes contradictoires (plan continu ET coupes).
+    sources:
+    - https://docs.comfy.org/tutorials/video/minimax/minimax-h3
+    - https://www.atlascloud.ai/blog/tips/minimax-h3-prompt-guide
 recommandations:
     resolution_native_mp: 0.98
     source_resolution: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
@@ -86,14 +115,3 @@ recommandations:
     notes:
     - Entraîné vers 1 MP (768 px de petit côté), 24 i/s, 5 à 15 s ; au-delà, qualité non garantie.
     - 'Sur RTX 4080 (2026-10-20) : 0,4 MP / 8 steps ≈ 1 min 20 pour 5 s ; ~1 MP / 12 steps ≈ 7 min pour 5 s.'
-conseils_prompt:
-    sources:
-    - https://docs.comfy.org/tutorials/video/minimax/minimax-h3
-    - https://www.atlascloud.ai/blog/tips/minimax-h3-prompt-guide
-    regles:
-    - 'Un court brief de production : sujet, action, décor, caméra, son.'
-    - Un seul mouvement de caméra, nommé précisément, avec sa vitesse (slow push-in, slow pan…).
-    - 'Répliques courtes : qui parle, la phrase entre guillemets, la langue et le ton ; 1 à 2 phrases par plan.'
-    - Sons concrets liés à l'action ; la musique de fond à part, jamais mélangée aux bruitages.
-    - 'Scènes complexes : chronologie par segments ([0s-2s], [2s-4s]).'
-    - Éviter les consignes contradictoires (plan continu ET coupes).

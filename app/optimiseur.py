@@ -5,7 +5,8 @@ ligne, et c'est Jérémy qui coche ce qu'il garde (l'interface passe ensuite par
 
 Sources des recommandations, relevées sur les pages officielles des modèles :
     workflows : bloc « recommandations » de workflows/<id>/fiche.yaml ;
-    LLM       : modeles/llm/recommandations.yaml (clé = nom du GGUF).
+    LLM       : bloc « recommandations » des fiches de catalogue/llm.yaml, complété par l'ancien fichier local
+                modeles/llm/recommandations.yaml (clé = nom du GGUF) pour les GGUF hors catalogue.
 """
 
 import os
@@ -13,7 +14,7 @@ import os
 import psutil
 import yaml
 
-from app import mesures, modeles, reglages, workflows
+from app import fiches, mesures, modeles, reglages, workflows
 from app.config import CONFIG, ROOT
 
 FICHIER_LLM = ROOT / "modeles" / "llm" / "recommandations.yaml"
@@ -57,9 +58,11 @@ def _proposer(sortie: list, type_cible: str, cible: str, nom: str, p: reglages.P
 
 
 def _recommandations_llm() -> dict:
-    if not FICHIER_LLM.is_file():
-        return {}
-    return yaml.safe_load(FICHIER_LLM.read_text(encoding="utf-8")) or {}
+    """Celles des fiches du catalogue (catalogue/llm.yaml, livré avec Aria), complétées par l'ancien fichier local
+    pour les GGUF ajoutés à la main."""
+    locales = yaml.safe_load(FICHIER_LLM.read_text(encoding="utf-8")) or {} if FICHIER_LLM.is_file() else {}
+    catalogue = {f["id"]: f["recommandations"] for f in fiches.catalogue_llm() if f.get("recommandations")}
+    return {**locales, **catalogue}
 
 
 def propositions() -> dict:
@@ -77,7 +80,7 @@ def propositions() -> dict:
             if r["cle"] in params:
                 _proposer(sortie, "workflow", wf.id, nom, params[r["cle"]], actuelles[r["cle"]], r["valeur"],
                           r.get("note", "Recommandation officielle"), r.get("source"))
-        estimee = float(wf.fiche.get("vram_estimee_go", 0))
+        estimee = float(wf.materiel["vram_estimee_go"])
         if estimee > libre:
             alertes.append(f"{nom} demande environ {estimee:g} Go de VRAM pour {libre:g} Go libres : ComfyUI en "
                            "décharge une partie en RAM, ça fonctionne mais plus lentement.")
