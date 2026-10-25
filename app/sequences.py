@@ -12,6 +12,10 @@ Les trois ont été essayés en réel le 2026-10-20 (data/tests/sequence) avant 
 La voix du casting (un clip, ou une voix de la bibliothèque : « voix:<id> », voir app/voix.py) sert aussi au plan
 de départ s'il parle : ReferenceToVideo, avec le rush de départ ancré à l'image 0 (MiniMaxH3AddGuide) ; essayé
 en réel le 2026-10-22 (data/tests/voix) : la première image est bien le rush.
+« Référence sur tous les plans » (casting, coché par défaut) : départs et transitions reçoivent aussi le personnage
+en <Picture 1> (ReferenceToVideo, leurs images de départ et d'arrivée deviennent des ancrages) ; pas les plans
+prolongés (essais du 2026-10-24, data/tests/reference).
+La contrainte du casting est impérative : donnée à Llama, puis ajoutée (en anglais) au prompt de chaque plan.
 
 Chaque plan tourné est un clip des Bobines (rangé dans le dossier de la séquence) ; le film assemblé aussi.
 AS-18 : les textes des plans, l'ambiance et les textes d'origine de tous les rushes utilisés passent par securite.
@@ -37,6 +41,9 @@ DEPARTS = ("rush", "texte")  # premier plan
 ENCHAINEMENTS = ("prolonger", "couper", "transition")  # plans suivants
 LONGUEUR_IDEE = 1000
 LONGUEUR_AMBIANCE = 300
+LONGUEUR_CONTRAINTE = 300
+# Ajouts au casting (2026-10-24) : une séquence plus ancienne les reçoit par défaut, sans être « à retourner ».
+CASTING_DEFAUT = {"contrainte": "", "reference_partout": True}
 _ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
 _REPLIQUE = re.compile(r"[«\"“]")
 _REPLIQUES = re.compile(r"«\s*([^»]+?)\s*»|\"([^\"]+)\"|“([^”]+)”")
@@ -153,14 +160,27 @@ def source_voix(s: dict, k: int) -> str | None:
 
 
 def voix_du_plan(s: dict, k: int) -> str | None:
-    """Voix de référence du plan k : celle des plans coupés, et celle du casting pour un plan de départ qui parle
-    (en Auto, c'est lui qui donne la voix : il n'en reçoit pas)."""
+    """Voix de référence du plan k : celle des plans coupés et des transitions qui parlent, et celle du casting pour
+    un plan de départ qui parle (en Auto, c'est lui qui donne la voix : il n'en reçoit pas). Un plan prolongé garde
+    la voix par le son des images ancrées."""
     plan, voix_ = s["plans"][k], s["casting"].get("voix")
-    if plan["enchainement"] == "couper":
+    if plan["enchainement"] == "couper" or (plan["enchainement"] == "transition" and parle(plan)):
         return source_voix(s, k)
     if plan["enchainement"] in DEPARTS and parle(plan) and voix_ not in (None, "auto"):
         return voix_
     return None
+
+
+def references(s: dict, k: int) -> tuple[str | None, str | None]:
+    """(personnage, voix) de référence du plan k ; s'il y en a une, le plan passe en ReferenceToVideo.
+    « Référence sur tous les plans » (casting) : départs et transitions reçoivent aussi le personnage. Pas les plans
+    prolongés : à l'essai du 2026-10-24 (data/tests/reference), la référence y agrandissait les sauts aux raccords
+    et recopiait la composition de l'image, alors que les 39 images ancrées tiennent déjà le personnage."""
+    plan = s["plans"][k]
+    if plan["enchainement"] == "prolonger":
+        return None, None
+    partout = s["casting"].get("reference_partout", True)
+    return (personnage(s) if plan["enchainement"] == "couper" or partout else None), voix_du_plan(s, k)
 
 
 def _id_voix(valeur: str | None) -> str | None:
@@ -228,8 +248,12 @@ def _valider(donnees: dict, pour_tourner: bool = False) -> dict:
     ambiance = str(casting.get("ambiance") or "").strip()
     if len(ambiance) > LONGUEUR_AMBIANCE:
         raise ErreurSequence(f"Ambiance de {LONGUEUR_AMBIANCE} caractères au plus")
+    contrainte = " ".join(str(casting.get("contrainte") or "").split())
+    if len(contrainte) > LONGUEUR_CONTRAINTE:
+        raise ErreurSequence(f"Contrainte de {LONGUEUR_CONTRAINTE} caractères au plus")
     casting = {"personnage": casting.get("personnage") or None, "voix": casting.get("voix", "auto") or None,
-               "ambiance": ambiance}
+               "ambiance": ambiance, "contrainte": contrainte,
+               "reference_partout": bool(casting.get("reference_partout", True))}
     if casting["personnage"]:
         plateau.chemin_image(casting["personnage"])  # existe ?
     if _id_voix(casting["voix"]):
@@ -279,7 +303,8 @@ def _valider(donnees: dict, pour_tourner: bool = False) -> dict:
     s = {"titre": titre, "qualite": qualite, "format": format_, "casting": casting, "plans": plans,
          "llm": donnees.get("llm") or None}
     # AS-18 : tout le texte de la séquence, avec les textes d'origine des rushes, clips et voix qu'elle utilise.
-    securite.verifier(ambiance, *(p["idee"] for p in plans), *(p["prompt"] or "" for p in plans), *_textes(s))
+    securite.verifier(ambiance, contrainte, *(p["idee"] for p in plans), *(p["prompt"] or "" for p in plans),
+                      *_textes(s))
     return s
 
 
@@ -297,8 +322,11 @@ def modifier(id_sequence: str, donnees: dict) -> dict:
     """Enregistre les changements ; un plan modifié (ou toute la séquence si la qualité, le format ou le casting
     change) n'est plus « à jour » : il sera retourné, ses anciens clips restent dans les Bobines."""
     ancienne = lire(id_sequence)
+    ancienne["casting"] = {**CASTING_DEFAUT, **ancienne["casting"]}
     s = _valider(donnees)
     tout_change = any(s[c] != ancienne[c] for c in CONTENU_SEQUENCE)
+    if ancienne.get("contrainte_en", {}).get("fr") == s["casting"]["contrainte"]:
+        s["contrainte_en"] = ancienne["contrainte_en"]  # traduction encore valable
     avant = {p["id"]: p for p in ancienne["plans"]}
     for p in s["plans"]:
         a = avant.get(p["id"])
@@ -389,8 +417,15 @@ def graphe_plan(s: dict, k: int, prompt_plan: str, seed: int, fichiers: dict) ->
         api[f"aria_{cle}_parts"] = {"class_type": "GetVideoComponents", "inputs": {"video": [f"aria_{cle}", 0]}}
         return [f"aria_{cle}", 0]
 
-    voix_ici = bool(fichiers.get("voix") or fichiers.get("voix_son"))
-    if p["enchainement"] == "couper" or (p["enchainement"] in DEPARTS and voix_ici):
+    if p["enchainement"] == "transition":  # de la dernière image du plan précédent au rush d'arrivée
+        n = images(precedent["duree"])
+        video("precedent", fichiers["precedent"])
+        api["aria_derniere"] = {"class_type": "ImageFromBatch", "inputs": {
+            "image": ["aria_precedent_parts", 0], "batch_index": n - 1, "length": 1}}
+        api["aria_arrivee"] = {"class_type": "LoadImage", "inputs": {"image": fichiers["rush"]}}
+
+    refs_ici = bool(fichiers.get("personnage") or fichiers.get("voix") or fichiers.get("voix_son"))
+    if p["enchainement"] == "couper" or (p["enchainement"] != "prolonger" and refs_ici):
         ref = {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": {
             "clip": entrees["clip"], "prompt": entrees["prompt"], "width": largeur, "height": hauteur,
             "length": entrees["length"], "ref_image_size": "match", "vae": [vae, 0], "audio_vae": [vae_audio, 0]}}
@@ -406,10 +441,17 @@ def graphe_plan(s: dict, k: int, prompt_plan: str, seed: int, fichiers: dict) ->
             video("voix", fichiers["voix"])
             ref["inputs"]["ref_audios.ref_audio_0"] = ["aria_voix_parts", 1]
         api[i2v] = ref
-        if p["enchainement"] == "rush":  # le plan de départ commence bien sur son rush (essai D du 2026-10-22)
-            api["aria_depart"] = {"class_type": "MiniMaxH3AddGuide", "inputs": {
-                "positive": [i2v, 0], "latent": [i2v, 1], "frame_idx": 0, "vae": [vae, 0], "image": premiere_image}}
-            api[guider]["inputs"]["conditioning"] = ["aria_depart", 0]
+        # Ce qui relie le plan devient un ancrage : le rush de départ à l'image 0 (essai D du 2026-10-22) ;
+        # la transition à ses deux bouts (essai du 2026-10-24 : départ et arrivée aussi exacts qu'en first / last
+        # frame, moins de saut, et le mouvement de caméra demandé mieux suivi).
+        ancres = {"rush": [(0, premiere_image)],
+                  "transition": [(0, ["aria_derniere", 0]), (-1, ["aria_arrivee", 0])]}.get(p["enchainement"], [])
+        positif = [i2v, 0]
+        for j, (indice, image) in enumerate(ancres):
+            api[f"aria_ancre_{j}"] = {"class_type": "MiniMaxH3AddGuide", "inputs": {
+                "positive": positif, "latent": [i2v, 1], "frame_idx": indice, "vae": [vae, 0], "image": image}}
+            positif = [f"aria_ancre_{j}", 0]
+        api[guider]["inputs"]["conditioning"] = positif
     elif p["enchainement"] == "rush":
         entrees["first_frame"] = premiere_image
     elif p["enchainement"] == "prolonger":
@@ -425,11 +467,6 @@ def graphe_plan(s: dict, k: int, prompt_plan: str, seed: int, fichiers: dict) ->
             "image": ["aria_fin_parts", 0], "audio": ["aria_fin_parts", 1]}}
         api[guider]["inputs"]["conditioning"] = ["aria_guide", 0]
     elif p["enchainement"] == "transition":
-        n = images(precedent["duree"])
-        video("precedent", fichiers["precedent"])
-        api["aria_derniere"] = {"class_type": "ImageFromBatch", "inputs": {
-            "image": ["aria_precedent_parts", 0], "batch_index": n - 1, "length": 1}}
-        api["aria_arrivee"] = {"class_type": "LoadImage", "inputs": {"image": fichiers["rush"]}}
         entrees.update(first_frame=["aria_derniere", 0], last_frame=["aria_arrivee", 0])
     wf.ajouter_affiche(api, "aria_sequence")
     return _elaguer(api)
@@ -521,12 +558,15 @@ def _valider_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[
     return propres
 
 
-def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[dict], reference: str | None) -> str:
-    """Message envoyé à Llama : l'histoire, le personnage (sauf avec une image de référence), le décor,
+def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[dict], reference: str | None,
+                      contrainte: str = "") -> str:
+    """Message envoyé à Llama : l'histoire, le personnage (sauf avec une image de référence), le décor, la contrainte,
     la langue de chaque réplique, puis la liste des plans avec leur type, durée, note et arrivée."""
     lignes = [f"Story: {synopsis.strip()}",
               "Character: " + ("shown by the reference picture" if reference else (personnage_.strip() or "free")),
               f"Setting and look: {decor.strip() or 'free'}"]
+    if contrainte:
+        lignes.append(f"Mandatory constraint, respected in EVERY shot: {contrainte}")
     toutes = list(dict.fromkeys(repliques(synopsis) + [r for p in plans for r in repliques(p["note"])]))
     if toutes:
         lignes.append("Spoken lines, each in this language: "
@@ -579,15 +619,20 @@ def avec_personnage(personnage_: str, texte: str) -> str:
 
 
 async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, plans: list[dict],
-                   reference: str | None, llm: str | None = None, mineur: bool = False) -> dict:
+                   reference: str | None, llm: str | None = None, mineur: bool = False, contrainte: str = "") -> dict:
     """Prompts de tous les plans d'une séquence, écrits ensemble par Llama, puis contrôlés ici.
-    `mineur` : le personnage du Scénario est mineur (AS-18 le sait, même si aucun mot ne le dit)."""
+    `mineur` : le personnage du Scénario est mineur (AS-18 le sait, même si aucun mot ne le dit).
+    `contrainte` : impérative sur tous les plans ; la séquence créée la garde au casting, et le tournage l'ajoute
+    au prompt de chaque plan."""
     plans = _valider_decoupage(synopsis, personnage_, decor, plans, reference)
+    contrainte = " ".join(str(contrainte or "").split())
+    if len(contrainte) > LONGUEUR_CONTRAINTE:
+        raise ErreurSequence(f"Contrainte de {LONGUEUR_CONTRAINTE} caractères au plus")
     if reference:
         personnage_ = ""  # l'image fait l'identité : la décrire ferait dériver H3 (essais du mode Séquence)
     rushes_ = [r for r in [reference, *(p["rush"] for p in plans)] if r]
-    entrees = [synopsis, personnage_, decor, *(p["note"] for p in plans), *plateau.textes_origine(rushes_),
-               *(["minor"] if mineur else [])]
+    entrees = [synopsis, personnage_, decor, contrainte, *(p["note"] for p in plans),
+               *plateau.textes_origine(rushes_), *(["minor"] if mineur else [])]
     securite.verifier(*entrees)
 
     wf = workflows.obtenir(CONFIG.get("generation", {}).get("texte_vers_video"))
@@ -597,7 +642,8 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     systeme = (systeme.replace("{regle_personnage}", regle_personnage) if "{regle_personnage}" in systeme
                else f"{systeme}\n\nCharacter: {regle_personnage}")  # consigne retouchée sans le repère
     echanges = [{"role": "system", "content": systeme},
-                {"role": "user", "content": demande_decoupage(synopsis, personnage_, decor, plans, reference)}]
+                {"role": "user", "content": demande_decoupage(synopsis, personnage_, decor, plans, reference,
+                                                              contrainte)}]
     regle = reglages.valeurs_llm(llm)
     debut = time.perf_counter()
     async with orchestrateur.llm(llm) as llama:
@@ -630,7 +676,7 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     # Ensemble : un mineur des textes d'origine reste un mineur, même si Llama l'a reformulé.
     securite.verifier(*entrees, tout)
     return {"plans": sortie, "alertes": alertes, "duree_s": round(time.perf_counter() - debut, 2),
-            "reference": reference}
+            "reference": reference, "contrainte": contrainte}
 
 
 # Tournage (appelé par la file du Plateau)
@@ -659,8 +705,30 @@ def idee_pour_llm(s: dict, k: int) -> str:
                         f"It ends exactly on this picture: {arrivee} Describe ONE continuous camera movement travelling "
                         "from the start to the end; the scene changes progressively over the whole clip, never all at "
                         "once at the end.")
+    if s["casting"].get("contrainte"):
+        morceaux.append("CONTRAINTE OBLIGATOIRE de toute la séquence, à respecter aussi dans ce plan : "
+                        f"{s['casting']['contrainte']}")
     morceaux.append(CONSIGNE_SEQUENCE)
     return "\n\n".join(morceaux)
+
+
+async def traduire_contrainte(orchestrateur, s: dict) -> str | None:
+    """La contrainte en anglais, traduite une seule fois par Llama (gardée dans s["contrainte_en"])."""
+    contrainte = s["casting"].get("contrainte")
+    if not contrainte:
+        return None
+    cache = s.get("contrainte_en") or {}
+    if cache.get("fr") != contrainte:
+        en = prompt.nettoyer_markdown(await prompt.traduire_precisions(orchestrateur, contrainte, s["llm"]))
+        s["contrainte_en"] = cache = {"fr": contrainte, "en": en}
+    return cache["en"]
+
+
+def avec_contrainte(texte: str, contrainte_en: str | None) -> str:
+    """La contrainte à la fin du prompt de chaque plan : Llama peut l'oublier, le serveur la garantit."""
+    if not contrainte_en:
+        return texte
+    return f"{texte.rstrip()} Constraint for every shot: {contrainte_en.strip().rstrip('.')}."
 
 
 def _reference(texte: str, personnage_: bool, voix: bool) -> str:
@@ -679,6 +747,9 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
     total = len(c.plans)
 
     # 1. Réécriture (Llama), avant de réserver la carte pour ComfyUI.
+    if s["casting"].get("contrainte"):
+        c.etape = "Traduction de la contrainte"
+    contrainte_en = await traduire_contrainte(p_.orchestrateur, s)
     for rang, k in enumerate(c.plans, 1):
         plan = s["plans"][k]
         if plan["prompt"]:
@@ -691,7 +762,9 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
             plan["prompt_final"] = garder_repliques(plan["idee"], reecrit)
         if plan["enchainement"] == "prolonger" and not plan["prompt"]:
             plan["prompt_final"] = f"Continuous shot, same scene. {plan['prompt_final']}"
-        securite.verifier(s["casting"]["ambiance"], plan["idee"], plan["prompt_final"], *textes)
+        plan["prompt_final"] = avec_contrainte(plan["prompt_final"], contrainte_en)  # prompts imposés compris
+        securite.verifier(s["casting"]["ambiance"], s["casting"].get("contrainte", ""), plan["idee"],
+                          plan["prompt_final"], *textes)
     _ecrire(s)
 
     # 2. Tournage, plan après plan : chacun peut partir du précédent.
@@ -700,11 +773,8 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
         debut = time.perf_counter()
         c.etape, c.progression = f"Plan {k + 1} · tournage ({rang}/{total})", 0.0
         seed = plan["seed"] if plan["seed"] is not None else random.randrange(2**48)
-        ref_voix = voix_du_plan(s, k)
-        avec_refs = plan["enchainement"] == "couper" or bool(ref_voix)  # ReferenceToVideo
-        ref_personnage = personnage(s) if avec_refs else None
-        prompt_plan = (_reference(plan["prompt_final"], bool(ref_personnage), bool(ref_voix))
-                       if avec_refs else plan["prompt_final"])
+        ref_personnage, ref_voix = references(s, k)
+        prompt_plan = _reference(plan["prompt_final"], bool(ref_personnage), bool(ref_voix))
         async with p_.orchestrateur.comfyui() as comfy:
             fichiers = {}
             if plan["rush"]:

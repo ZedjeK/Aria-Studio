@@ -246,7 +246,8 @@ class Graphes(Base):
         return sequences.graphe_plan(self.s, k, "A pilot in a hangar.", 42, self.fichiers)
 
     def test_depart_rush(self):
-        del self.fichiers["voix"]  # avec une voix, le départ passe en ReferenceToVideo (test_voix)
+        # Sans personnage ni voix (case « Référence sur tous les plans » décochée) : first frame, comme avant.
+        del self.fichiers["voix"], self.fichiers["personnage"]
         api = self.plan(0)
         i2v = next(iter(self.noeuds(api, "MiniMaxH3ImageToVideo").values()))["inputs"]
         self.assertEqual((i2v["width"], i2v["height"]), (544, 800))
@@ -275,6 +276,7 @@ class Graphes(Base):
         self.assertEqual((ref["width"], ref["height"]), (544, 800))
 
     def test_transition(self):
+        del self.fichiers["voix"], self.fichiers["personnage"]  # sans référence : first / last frame
         api = self.plan(3)
         i2v = next(iter(self.noeuds(api, "MiniMaxH3ImageToVideo").values()))["inputs"]
         self.assertEqual(api[i2v["last_frame"][0]]["inputs"]["image"], "r.png")

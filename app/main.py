@@ -620,7 +620,9 @@ class DemandeSequence(BaseModel):
     titre: str
     qualite: str = "compromis"
     format: str = "16:9 (Widescreen)"  # si le premier plan ne part pas d'un rush
-    casting: dict = {}  # {personnage: rush, voix: "auto" | clip | "voix:<id>" | None, ambiance: texte}
+    # {personnage: rush, voix: "auto" | clip | "voix:<id>" | None, ambiance: texte, contrainte: texte,
+    #  reference_partout: bool}
+    casting: dict = {}
     plans: list[dict] = []  # [{id, idee, prompt, duree, enchainement, rush, seed, ambiance}]
     llm: str | None = None
 
@@ -645,6 +647,7 @@ class DemandeDecoupage(BaseModel):
     age: int | None = None
     plans: list[dict]  # [{enchainement, duree, note, rush}]
     reference: str | None = None  # rush du personnage (galerie du Plateau)
+    contrainte: str = ""  # impérative sur tous les plans
     llm: str | None = None
 
 
@@ -655,7 +658,7 @@ async def decouper_sequence(d: DemandeDecoupage):
     try:
         desc = listes.description_sequence(d.sujet, d.choix, d.age)
         return await sequences.decouper(orchestrateur, d.synopsis, desc["personnage"], desc["decor"], d.plans,
-                                        d.reference, d.llm, desc["mineur"])
+                                        d.reference, d.llm, desc["mineur"], d.contrainte)
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (sequences.ErreurSequence, plateau.ErreurPlateau, listes.ErreurListes) as e:
