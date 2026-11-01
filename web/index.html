@@ -9,7 +9,7 @@
 <body class="large">
     <main>
         <h1>Aria <span>- Studio</span></h1>
-        <p class="sous-titre">Studio d'images et de vidéos</p>
+        <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
 
         <nav>
             <!-- Création : on écrit, on tourne, on monte. -->
@@ -27,6 +27,13 @@
             <!-- État en direct des moteurs, visible depuis tous les onglets. -->
             <div id="etat-direct" class="etat-direct" title="État en direct"></div>
         </nav>
+        <!-- Mise à jour : une release plus récente existe sur GitHub (rien ne s'installe tout seul). -->
+        <div id="bandeau-maj" class="bandeau-maj" hidden>
+            <span></span>
+            <a id="lien-maj" target="_blank" rel="noopener" class="petit">Voir la version</a>
+            <button id="plus-tard-maj" type="button" class="petit">Plus tard</button>
+            <details id="notes-maj" hidden><summary class="discret">Nouveautés</summary><pre></pre></details>
+        </div>
         <!-- Garde-VRAM : une demande attend que d'autres applis rendent la carte graphique. -->
         <div id="bandeau-garde" class="bandeau-garde" hidden>
             <span></span>
@@ -537,6 +544,14 @@
                 <p class="discret">Seuls tes changements sont enregistrés (data/reglages.yaml) : ↺ ramène une valeur à celle d'origine.</p>
                 <button id="optimiser" type="button" class="principal">⚡ Optimiser</button>
             </div>
+            <section class="carte" id="carte-maj">
+                <h2>Mises à jour</h2>
+                <p id="etat-maj" class="discret"></p>
+                <div class="ligne">
+                    <label class="case"><input type="checkbox" id="active-maj"> Vérifier au démarrage (une fois par jour, sur GitHub)</label>
+                    <button id="verifier-maj" type="button" class="petit">Vérifier maintenant</button>
+                </div>
+            </section>
             <section id="carte-optimiser" class="carte" hidden>
                 <h2>Propositions</h2>
                 <p id="materiel-optimiser" class="discret"></p>

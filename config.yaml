@@ -67,6 +67,11 @@ generation:
     image_vers_video: "minimax_h3_i2v"
     texte_vers_video: "minimax_h3_t2v"
 
+mises_a_jour:
+    # Dépôt public dont la dernière release est comparée à la version installée (une requête anonyme par jour au plus).
+    # La vérification se coupe dans l'onglet Réglages ; rien n'est jamais téléchargé tout seul.
+    depot: ZedjeK/Aria-Studio
+
 securite:
     # Plancher fixe : le code refuse toute valeur inférieure à 18.
     age_min: 18

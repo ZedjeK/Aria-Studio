@@ -300,3 +300,53 @@ document.querySelector("#inventaire tbody").addEventListener("click", async (e) 
 });
 
 chargerModeles();
+
+// Mise à jour : version installée, et bandeau quand une release plus récente existe sur GitHub (app/mises_a_jour.py).
+// Rien ne se télécharge : le lien mène à la release. « Plus tard » cache le bandeau jusqu'à la version suivante.
+
+const MAJ_IGNOREE = "aria-maj-ignoree";
+
+function majIgnoree() {
+    try { return localStorage.getItem(MAJ_IGNOREE); } catch { return null; }
+}
+
+function afficherMiseAJour(e) {
+    document.getElementById("version-appli").textContent = `· v${e.version}`;
+    const bandeau = document.getElementById("bandeau-maj");
+    const d = e.derniere;
+    bandeau.hidden = !(e.disponible && d && majIgnoree() !== d.version);
+    if (!bandeau.hidden) {
+        bandeau.querySelector("span").textContent = `✨ Aria - Studio ${d.version} est disponible (tu as la ${e.version})`
+            + (d.date ? ` · publiée le ${new Date(d.date).toLocaleDateString("fr-FR")}` : "");
+        document.getElementById("lien-maj").href = d.url;
+        const notes = document.getElementById("notes-maj");
+        notes.hidden = !d.notes;
+        notes.querySelector("pre").textContent = d.notes;
+    }
+    // Onglet Réglages
+    document.getElementById("active-maj").checked = e.active;
+    const quand = e.verifie_le ? new Date(e.verifie_le).toLocaleString("fr-FR") : "jamais";
+    document.getElementById("etat-maj").textContent = `Version installée : ${e.version} · dépôt ${e.depot} · `
+        + (e.disponible ? `nouvelle version ${d.version} disponible` : e.erreur ? e.erreur
+            : d ? `à jour (dernière release : ${d.version})` : "pas encore vérifié") + ` · vérifié : ${quand}`;
+}
+
+async function chargerMiseAJour(force = false) {
+    try {
+        afficherMiseAJour(await api(force ? "POST" : "GET", force ? "/api/mise-a-jour/verifier" : "/api/mise-a-jour"));
+    } catch {
+        // pas de serveur : la barre d'état le dit déjà
+    }
+}
+
+document.getElementById("plus-tard-maj").addEventListener("click", async () => {
+    const e = await api("GET", "/api/mise-a-jour");
+    try { localStorage.setItem(MAJ_IGNOREE, e.derniere?.version ?? ""); } catch { /* navigation privée */ }
+    document.getElementById("bandeau-maj").hidden = true;
+});
+document.getElementById("verifier-maj").addEventListener("click", () => chargerMiseAJour(true));
+document.getElementById("active-maj").addEventListener("change", async (ev) => {
+    afficherMiseAJour(await api("PUT", "/api/mise-a-jour", { active: ev.target.checked }));
+});
+
+chargerMiseAJour();

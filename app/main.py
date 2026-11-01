@@ -13,8 +13,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (casting, decouvrir, garde, listes, mesures, modeles, optimiseur, personnages, plateau, prompt,
-                 reglages, retouche, rushes, sequences, voix, workflows)
+from app import (casting, decouvrir, garde, listes, mesures, mises_a_jour, modeles, optimiseur, personnages,
+                 plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
 from app.config import CONFIG, ROOT, chemin
@@ -36,7 +36,9 @@ _taches_fond: set[asyncio.Task] = set()
 async def cycle_de_vie(_app: FastAPI):
     telechargeur.demarrer()
     plateau_.demarrer()
+    verification = asyncio.create_task(mises_a_jour.verifier())  # au plus une fois par jour, sans bloquer le démarrage
     yield
+    verification.cancel()
     await plateau_.arreter()
     await telechargeur.arreter()
     await orchestrateur.arreter()
@@ -108,6 +110,26 @@ def etat_direct():
         "garde": {"attente": orchestrateur.garde.attente,
                   "alerte": None if orchestrateur.garde.attente else garde.alerte(orchestrateur.actif)},
     }
+
+
+class DemandeMiseAJour(BaseModel):
+    active: bool
+
+
+@app.get("/api/mise-a-jour")
+async def mise_a_jour():
+    """Version installée et dernière release (GitHub n'est interrogé que si la réponse a plus d'un jour)."""
+    return await mises_a_jour.verifier()
+
+
+@app.post("/api/mise-a-jour/verifier")
+async def verifier_mise_a_jour():
+    return await mises_a_jour.verifier(force=True)
+
+
+@app.put("/api/mise-a-jour")
+def regler_mise_a_jour(d: DemandeMiseAJour):
+    return mises_a_jour.activer(d.active)
 
 
 @app.post("/api/garde/forcer")

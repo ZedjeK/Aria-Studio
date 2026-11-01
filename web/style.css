@@ -2031,3 +2031,36 @@ button.onglet-casting.actif {
 .variante small {
     overflow-wrap: anywhere;
 }
+
+/* Mise à jour disponible (release GitHub plus récente) */
+.bandeau-maj {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 12px 0 0;
+    padding: 10px 14px;
+    border: 1px solid var(--neon);
+    border-radius: 8px;
+    background: rgba(255, 46, 136, 0.08);
+    font-size: 0.9rem;
+}
+
+.bandeau-maj span {
+    flex: 1;
+    min-width: 240px;
+}
+
+.bandeau-maj a {
+    color: var(--neon);
+}
+
+.bandeau-maj details {
+    flex-basis: 100%;
+}
+
+.bandeau-maj pre {
+    white-space: pre-wrap;
+    margin: 6px 0 0;
+    font-size: 0.8rem;
+}
