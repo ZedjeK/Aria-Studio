@@ -54,6 +54,17 @@ def _ecrire_choix(choix: dict):
         + yaml.safe_dump(choix, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
+def lire_choix(cle: str, defaut=None):
+    return _choix().get(cle, defaut)
+
+
+def retenir_choix(cle: str, valeur):
+    """Une entrée d'aria.yaml (l'assistant y note ses licences acceptées et sa fin) ; le reste du fichier est gardé."""
+    choix = _choix()
+    choix[cle] = valeur
+    _ecrire_choix(choix)
+
+
 def favoris() -> dict:
     """Favoris du Casting, par section de config.yaml : {"generation": {"texte_vers_image": "…"}, "llama": {…}}."""
     f = _choix().get("favoris")

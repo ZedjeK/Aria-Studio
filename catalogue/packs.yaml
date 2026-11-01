@@ -1,0 +1,64 @@
+# Packs de l'assistant de premier lancement (app/assistant.py) : ce que l'utilisateur coche selon ce qu'il veut faire.
+# Les fichiers, tailles, SHA-256 et licences viennent des fiches (workflows/*/fiche.yaml, catalogue/llm.yaml) :
+# rien n'est recopié ici. Krea 2 n'y est pas (accès restreint sur Hugging Face, licence pas encore lue).
+#
+# workflows / llm : ce que le pack installe ; moteurs : ceux dont il a besoin (catalogue/moteurs.yaml)
+# favoris : réglés à la fin, packs pris dans l'ordre du fichier (un pack plus bas l'emporte) et seulement si ce
+#           qu'ils désignent est installé
+# testee : la seule carte sur laquelle le pack a été essayé (le banc de palier n'a pas encore fixé de minimum)
+
+format: 1
+
+packs:
+    images:
+        nom: Images
+        usage: Créer des images depuis une idée, ou depuis des références (personnage, style)
+        workflows: [qwen_image_2_1, qwen_image_2_1_edit]
+        moteurs: [comfyui]
+        conseille: true
+        testee: RTX 4080 SUPER 16 Go
+        favoris:
+            generation:
+                texte_vers_image: qwen_image_2_1
+                references: qwen_image_2_1_edit
+                retouche: qwen_image_2_1_edit  # remplacé par le pack Retouche s'il est pris
+
+    retouche:
+        nom: Retouche avancée
+        usage: Retoucher une image avec une consigne et un masque (Qwen-Image-Edit 2511, plus précis)
+        workflows: [qwen_image_edit_2511]
+        moteurs: [comfyui]
+        testee: RTX 4080 SUPER 16 Go
+        favoris:
+            generation:
+                retouche: qwen_image_edit_2511
+
+    video:
+        nom: Vidéo
+        usage: Animer une image, tourner un clip depuis une idée, monter des séquences avec voix (MiniMax H3)
+        workflows: [minimax_h3_i2v, minimax_h3_t2v]
+        moteurs: [comfyui]
+        testee: RTX 4080 SUPER 16 Go
+        favoris:
+            generation:
+                image_vers_video: minimax_h3_i2v
+                texte_vers_video: minimax_h3_t2v
+
+    llm:
+        nom: Réécriture des prompts
+        usage: Un LLM local transforme ton idée en français en prompt détaillé pour le modèle (Ministral 3 14B)
+        llm: [Ministral-3-14B-Instruct-2512-Q4_K_M.gguf]
+        moteurs: [llama]
+        conseille: true
+        testee: RTX 4080 SUPER 16 Go
+        favoris:
+            llama:
+                modele: Ministral-3-14B-Instruct-2512-Q4_K_M.gguf
+
+    bonsai:
+        nom: Bonsai 2 27B
+        usage: Un second LLM, plus gros mais compressé en ternaire, au choix dans l'appli
+        llm: [Ternary-Bonsai-2-27B-PTQ1_0.gguf]
+        moteurs: [llama-prism]
+        facultatif: true
+        testee: RTX 4080 SUPER 16 Go

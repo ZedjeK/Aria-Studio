@@ -15,8 +15,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (casting, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs, optimiseur,
-                 personnages, plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
+from app import (assistant, casting, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs,
+                 optimiseur, personnages, plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
 from app.comfy import ErreurComfy
@@ -209,6 +209,46 @@ async def revenir_moteur(id_moteur: str):
     except moteurs.ErreurMoteur as e:
         raise HTTPException(409, str(e))
     return {"version": (fiche or {}).get("version")}
+
+
+# Assistant de premier lancement (app/assistant.py) : packs, licences, téléchargement, favoris
+
+
+class DemandePacks(BaseModel):
+    packs: list[str]
+
+
+@app.get("/api/assistant")
+def etat_assistant():
+    return assistant.etat()
+
+
+def _assistant(action, *args):
+    try:
+        return action(*args)
+    except assistant.ErreurAssistant as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/assistant/plan")
+def plan_assistant(d: DemandePacks):
+    return _assistant(assistant.plan, d.packs)
+
+
+@app.post("/api/assistant/licences")
+def licences_assistant(d: DemandePacks):
+    """« J'ai lu et j'accepte » pour chaque pack coché (daté dans aria.yaml)."""
+    return _assistant(assistant.accepter, d.packs)
+
+
+@app.post("/api/assistant/telecharger")
+def telecharger_assistant(d: DemandePacks):
+    return _assistant(assistant.telecharger, d.packs, telechargeur)
+
+
+@app.post("/api/assistant/terminer")
+def terminer_assistant(d: DemandePacks):
+    return _assistant(assistant.terminer, d.packs)
 
 
 class DemandeComfyuiExterne(BaseModel):
