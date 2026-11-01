@@ -1,10 +1,10 @@
 """Emplacements des affaires d'Aria : données, modèles et moteurs, décidés une fois au démarrage.
 
 Par défaut, tout vit dans le dossier de l'utilisateur, comme ~/.ollama ou ~/.claude :
-    %USERPROFILE%\\.aria-studio\\aria.yaml   choix de l'utilisateur (dossier des modèles)
-    %USERPROFILE%\\.aria-studio\\data\\      séquences, rushes, réglages, voix, journaux
-    %USERPROFILE%\\.aria-studio\\modeles\\   modèles (ailleurs si l'utilisateur l'a choisi dans aria.yaml)
-    %USERPROFILE%\\.aria-studio\\moteurs\\   ComfyUI portable, llama-server
+    %USERPROFILE%\\.Aria-Studio\\aria.yaml   choix de l'utilisateur (dossier des modèles)
+    %USERPROFILE%\\.Aria-Studio\\data\\      séquences, rushes, réglages, voix, journaux
+    %USERPROFILE%\\.Aria-Studio\\modeles\\   modèles (ailleurs si l'utilisateur l'a choisi dans aria.yaml)
+    %USERPROFILE%\\.Aria-Studio\\moteurs\\   ComfyUI portable, llama-server
 Mode portable : si un dossier data\\ se trouve à côté du code (installation d'origine de Jérémy, clé USB…),
 tout reste à côté du code : aria.yaml, data\\, modeles\\ et services\\.
 
@@ -19,7 +19,7 @@ import yaml
 
 from app.config import ROOT
 
-DEFAUT = Path.home() / ".aria-studio"
+DEFAUT = Path.home() / ".Aria-Studio"  # Windows ignore la casse : .aria-studio désigne le même dossier
 NOMS = {"racine": "Dossier d'Aria", "data": "Données", "modeles": "Modèles", "moteurs": "Moteurs"}
 
 

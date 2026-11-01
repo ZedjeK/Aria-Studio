@@ -301,7 +301,7 @@ document.querySelector("#inventaire tbody").addEventListener("click", async (e) 
 
 chargerModeles();
 
-// Emplacements (app/emplacements.py) : données, modèles et moteurs, dans %USERPROFILE%\.aria-studio par défaut.
+// Emplacements (app/emplacements.py) : données, modèles et moteurs, dans %USERPROFILE%\.Aria-Studio par défaut.
 // 📂 ouvre un dossier dans l'Explorateur ; « Changer… » choisit le dossier des modèles, valable au prochain démarrage.
 
 function afficherEmplacements(e) {

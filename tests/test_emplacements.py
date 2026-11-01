@@ -14,7 +14,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         base = Path(self.tmp.name)
-        self.code, self.maison = base / "code", base / "maison" / ".aria-studio"
+        self.code, self.maison = base / "code", base / "maison" / ".Aria-Studio"
         self.code.mkdir()
         self.patchs = [mock.patch.object(emplacements, "ROOT", self.code),
                        mock.patch.object(emplacements, "DEFAUT", self.maison)]
