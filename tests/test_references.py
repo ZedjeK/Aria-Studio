@@ -82,6 +82,11 @@ class Commandes(unittest.TestCase):
         return self.plateau.commander(idee, idee, None, options.pop("workflow", None), "16:9 (Widescreen)", None, 1,
                                       references=references, mode_reference=mode, **options)
 
+    def test_valeurs_imposees_seulement_les_entrees_du_workflow(self):
+        c = self.plateau.commander("x", "x", None, "qwen_image_2_1", "1:1 (Square)", None, 1,
+                                   imposees={"steps": 10, "megapixels": 0.5, "inconnue": 1})
+        self.assertEqual(c.imposees, {"steps": 10, "megapixels": 0.5})
+
     def test_inspirer_par_defaut_qwen_21_edit(self):
         a, b = self.rush("une pilote de mecha"), self.rush("un dragon de jade")
         c = self.commander("the woman from Picture 1 on the dragon from Picture 2", [a, b])

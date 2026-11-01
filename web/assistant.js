@@ -1,9 +1,10 @@
 // Assistant de premier lancement (app/assistant.py) : ta machine, les moteurs, les packs à cocher, leurs licences,
 // puis le téléchargement par la file habituelle. Il s'ouvre tout seul tant qu'il manque de quoi générer et qu'il
 // n'a pas été terminé ; « Plus tard » le ferme (les bandeaux prennent le relais), Réglages le relance.
+// L'écran de fin récapitule les favoris réglés et propose une image d'essai (peu de steps).
 
 const ASSISTANT = {
-    etape: 0,             // 0 à 4 : Ta machine, Moteurs, Ce que tu veux faire, Licences, Téléchargement
+    etape: 0,             // 0 à 5 : Ta machine, Moteurs, Ce que tu veux faire, Licences, Téléchargement, C'est prêt
     packs: [],
     choisis: new Set(),   // packs à installer (ceux déjà installés n'y sont pas)
     carte: null,
@@ -11,6 +12,7 @@ const ASSISTANT = {
     plan: null,
     taches: [],           // identifiants des téléchargements lancés par l'assistant
     enAttente: [],        // fichiers que la file avait déjà
+    fin: null,            // réponse de /api/assistant/terminer : favoris réglés, pas encore là, essai possible
 };
 
 const ecransAssistant = [...document.querySelectorAll("#assistant .ecran-assistant")];
@@ -25,12 +27,17 @@ async function ouvrirAssistant() {
     ASSISTANT.etape = 0;
     ASSISTANT.taches = [];
     ASSISTANT.enAttente = [];
+    ASSISTANT.fin = null;
     document.getElementById("assistant").hidden = false;
     await afficherEtapeAssistant();
 }
 
 function fermerAssistant() {
     document.getElementById("assistant").hidden = true;
+    if (ASSISTANT.fin) {  // terminé : les listes du Plateau et les moteurs suivent les nouveaux favoris
+        chargerOptionsPlateau();
+        chargerMoteurs();
+    }
 }
 
 async function afficherEtapeAssistant() {
@@ -40,10 +47,11 @@ async function afficherEtapeAssistant() {
         li.classList.toggle("actif", i === n);
         li.classList.toggle("fait", i < n);
     });
-    document.getElementById("precedent-assistant").disabled = n === 0 || n === 4;
+    document.getElementById("precedent-assistant").disabled = n === 0 || n >= 4;
+    document.getElementById("plus-tard-assistant").hidden = n === 5;
     etatAssistant.textContent = "";
-    boutonSuivant.textContent = n === 3 ? "J'accepte et je télécharge →" : n === 4 ? "Terminer" : "Suivant →";
-    await [ecranMachine, ecranMoteurs, ecranPacks, ecranLicences, ecranTelechargement][n]();
+    boutonSuivant.textContent = n === 3 ? "J'accepte et je télécharge →" : n === 4 ? "Terminer" : n === 5 ? "C'est parti !" : "Suivant →";
+    await [ecranMachine, ecranMoteurs, ecranPacks, ecranLicences, ecranTelechargement, ecranFin][n]();
 }
 
 // 1. Ta machine
@@ -189,6 +197,67 @@ async function suivreTelechargements() {
     if (finis.length < taches.length) setTimeout(suivreTelechargements, 1000);
 }
 
+// 6. C'est prêt : les favoris réglés, ce qui n'est pas encore là, et l'essai
+function ecranFin() {
+    const f = ASSISTANT.fin;
+    document.getElementById("recap-assistant").innerHTML = f.regles.map((r) =>
+        `<dt>${echapper(r.usage)}</dt><dd>${echapper(r.nom)} ✓</dd>`).join("")
+        || "<dt>Rien de réglé</dt><dd>aucun pack n'est complet pour l'instant</dd>";
+    const manquants = document.getElementById("manquants-assistant");
+    manquants.hidden = !f.manquants.length;
+    manquants.textContent = `Pas encore là (téléchargement pas fini ou en erreur) : ${f.manquants.map((m) =>
+        `${m.usage} avec ${m.nom}`).join(", ")}. Relance l'assistant une fois les fichiers arrivés.`;
+    document.getElementById("bloc-essai-assistant").hidden = !f.essai;
+    for (const id of ["image-essai-assistant", "erreur-essai-assistant", "barre-essai-assistant"]) {
+        document.getElementById(id).hidden = true;
+    }
+    document.getElementById("suivi-essai-assistant").textContent = "";
+    document.getElementById("essai-assistant").disabled = false;
+    boutonSuivant.disabled = false;
+}
+
+document.getElementById("essai-assistant").addEventListener("click", async (ev) => {
+    const erreur = document.getElementById("erreur-essai-assistant");
+    ev.target.disabled = true;
+    erreur.hidden = true;
+    document.getElementById("image-essai-assistant").hidden = true;
+    try {
+        suivreEssai((await api("POST", "/api/assistant/essai")).id, Date.now());
+    } catch (err) {
+        erreur.textContent = err.message;
+        erreur.hidden = false;
+        ev.target.disabled = false;
+    }
+});
+
+async function suivreEssai(id, debut) {
+    const c = await api("GET", `/api/commandes/${id}`);
+    const suivi = document.getElementById("suivi-essai-assistant");
+    const barre = document.getElementById("barre-essai-assistant");
+    const secondes = Math.round((Date.now() - debut) / 1000);
+    if (["attente", "en_cours"].includes(c.etat)) {
+        barre.hidden = false;
+        barre.firstElementChild.style.width = `${Math.round(100 * c.progression)}%`;
+        suivi.textContent = c.etat === "attente" ? `En file d'attente… ${secondes} s`
+            : `${c.etape || "Finalisation"} · ${Math.round(100 * c.progression)} % · ${secondes} s`;
+        setTimeout(() => suivreEssai(id, debut), 700);
+        return;
+    }
+    barre.hidden = true;
+    document.getElementById("essai-assistant").disabled = false;
+    if (c.etat === "erreur") {
+        suivi.textContent = "";
+        const erreur = document.getElementById("erreur-essai-assistant");
+        erreur.textContent = c.erreur;
+        erreur.hidden = false;
+        return;
+    }
+    suivi.textContent = `Tout tourne ✓ (${secondes} s). L'image est aussi dans tes rushes.`;
+    const image = document.getElementById("image-essai-assistant");
+    image.src = urlImage(c.images[0]);
+    image.hidden = false;
+}
+
 // Navigation
 boutonSuivant.addEventListener("click", async () => {
     boutonSuivant.disabled = true;
@@ -203,9 +272,10 @@ boutonSuivant.addEventListener("click", async () => {
             }
         } else if (ASSISTANT.etape === 4) {
             const installes = ASSISTANT.packs.filter((p) => p.installe).map((p) => p.id);
-            await api("POST", "/api/assistant/terminer", { packs: [...new Set([...installes, ...ASSISTANT.choisis])] });
+            ASSISTANT.fin = await api("POST", "/api/assistant/terminer",
+                { packs: [...new Set([...installes, ...ASSISTANT.choisis])] });
+        } else if (ASSISTANT.etape === 5) {
             fermerAssistant();
-            chargerMoteurs();
             return;
         }
         ASSISTANT.etape += 1;

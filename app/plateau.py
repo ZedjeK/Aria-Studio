@@ -55,6 +55,7 @@ class Commande:
     plans: list[int] = field(default_factory=list)  # … et ses plans (indices), dans l'ordre
     description: str = ""  # essai de voix : qui parle, et comment (la phrase est dans idee, le personnage dans parent)
     voix: str | None = None  # essai de voix : le brouillon produit (data/voix)
+    imposees: dict = field(default_factory=dict)  # valeurs forcées dans le workflow (essai de l'assistant : peu de steps)
     # AS-18 : textes d'origine des rushes utilisés (une image n'est pas lue, sa fiche si).
     textes_origine: list[str] = field(default_factory=list, repr=False)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
@@ -177,7 +178,7 @@ class Plateau:
                   format: str, seed: int | None, nombre: int, parent: str | None = None,
                   modele: str | None = None, loras: list[dict] | None = None,
                   references: list[str] | None = None, mode_reference: str | None = None,
-                  liberte: float = 0.6, dossier: str | None = None) -> Commande:
+                  liberte: float = 0.6, dossier: str | None = None, imposees: dict | None = None) -> Commande:
         references = list(references or [])
         if references:
             workflow = self._valider_references(references, mode_reference, workflow, liberte)
@@ -207,7 +208,7 @@ class Plateau:
             idee, prompt_force, None if prompt_force is not None else llm, workflow, format, seed, nombre,
             parent or (references[0] if references else None), modele, loras,
             references=references, mode_reference=mode_reference, liberte=liberte, textes_origine=textes,
-            dossier=dossier))
+            dossier=dossier, imposees={k: v for k, v in (imposees or {}).items() if k in wf.fiche["entrees"]}))
 
     @staticmethod
     def _valider_references(references: list[str], mode: str | None, workflow: str | None, liberte: float) -> str:
@@ -567,7 +568,7 @@ class Plateau:
             c.progression = 0.0
             debut_image = time.perf_counter()
             valeurs = {"prompt": self._avec_declencheurs(c), "seed": seed, "modele": c.modele, "loras": c.loras,
-                       "prefixe": "aria_plateau"}
+                       "prefixe": "aria_plateau", **c.imposees}
             async with self.orchestrateur.comfyui() as comfy:
                 if c.references and not noms_refs:
                     noms_refs = [await comfy.televerser(chemin_image(r)) for r in c.references]

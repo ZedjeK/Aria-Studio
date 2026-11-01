@@ -153,21 +153,61 @@ def telecharger(ids: list[str], telechargeur) -> dict:
     return {"ajoutes": ajoutes, "deja_en_file": deja}
 
 
+USAGES = {  # favoris de packs.yaml, tels que l'écran de fin les nomme
+    ("generation", "texte_vers_image"): "Créer une image",
+    ("generation", "references"): "Créer depuis des références",
+    ("generation", "retouche"): "Retoucher",
+    ("generation", "image_vers_video"): "Animer une image",
+    ("generation", "texte_vers_video"): "Clip depuis un texte",
+    ("llama", "modele"): "Réécrire tes idées",
+}
+
+# Essai de l'écran de fin : peu de steps et une petite image, juste pour voir toute la chaîne tourner.
+ESSAI = {
+    "idee": "Un chat roux endormi sur un rebord de fenêtre, la nuit, sous la pluie, avec les néons de la ville derrière la vitre",
+    "prompt": ("A ginger cat asleep on a windowsill at night, rain streaking down the glass, blurred neon city lights "
+               "glowing behind the window, cozy warm interior light, photographic"),
+    "imposees": {"steps": 10, "megapixels": 0.5},
+}
+
+
+def _nom(section: str, valeur: str) -> str:
+    if section == "generation":
+        return workflows.obtenir(valeur).fiche["nom"]
+    return (fiches.fiche_llm(valeur) or {}).get("nom", valeur)
+
+
 def terminer(ids: list[str]) -> dict:
-    """Règle les favoris sur ce qui est installé (packs dans l'ordre du catalogue) et note la fin de l'assistant."""
-    regles = {}
+    """Règle les favoris sur ce qui est installé (packs dans l'ordre du catalogue) et note la fin de l'assistant.
+    Renvoie de quoi faire le récapitulatif : chaque usage avec son modèle, réglé ou pas encore là."""
+    regles, manquants = {}, {}  # un pack plus bas l'emporte, s'il est installé ; sinon il est « pas encore là »
     for p in _choisis(ids).values():
         for section, valeurs in (p.get("favoris") or {}).items():
             for cle, valeur in valeurs.items():
                 pret = (not workflows.obtenir(valeur).manquants() if section == "generation"
                         else modeles.destination("llm", valeur).is_file())
-                if pret:
-                    regles[(section, cle)] = valeur
+                (regles if pret else manquants)[(section, cle)] = valeur
     for (section, cle), valeur in regles.items():
         emplacements.retenir_favori(section, cle, valeur)
         CONFIG.setdefault(section, {})[cle] = valeur
     _retenir(termine=datetime.now().isoformat(timespec="seconds"), packs=list(_choisis(ids)))
-    return {"favoris": {f"{s}.{c}": v for (s, c), v in regles.items()}}
+
+    def recap(favoris: dict) -> list[dict]:
+        return [{"usage": USAGES.get(k, f"{k[0]}.{k[1]}"), "nom": _nom(k[0], v)} for k, v in favoris.items()]
+
+    return {"favoris": {f"{s}.{c}": v for (s, c), v in regles.items()},
+            "regles": recap(regles), "manquants": recap(manquants),
+            "essai": ("generation", "texte_vers_image") in regles}
+
+
+def essayer(plateau):
+    """Une image rapide avec le favori « Créer une image » : la réécriture par le LLM si le sien est là."""
+    workflow = CONFIG.get("generation", {}).get("texte_vers_image")
+    if not workflow or workflows.obtenir(workflow).manquants():
+        raise ErreurAssistant("Aucun modèle d'image installé pour l'essai")
+    avec_llm = CONFIG["llama"]["modele"] in modeles.llm_disponibles()
+    return plateau.commander(ESSAI["idee"], None if avec_llm else ESSAI["prompt"], None, workflow, "1:1 (Square)",
+                             None, 1, imposees=ESSAI["imposees"])
 
 
 def etat() -> dict:

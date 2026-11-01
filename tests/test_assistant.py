@@ -34,7 +34,8 @@ PACKS = {"format": 1, "packs": {
 
 class FauxWorkflow:
     def __init__(self, id_, fichiers, licence, modeles_dir):
-        self.id, self.fiche, self.licence, self._dir = id_, {"fichiers": fichiers}, licence, modeles_dir
+        self.id, self.licence, self._dir = id_, licence, modeles_dir
+        self.fiche = {"fichiers": fichiers, "nom": id_.capitalize()}
 
     def manquants(self):
         return [f for f in self.fiche["fichiers"] if not (self._dir / f["dossier"] / f["nom"]).is_file()]
@@ -157,6 +158,24 @@ class Fin(Base):
         self.assertEqual(retenir.call_count, 3)
         self.assertEqual(self.config["generation"]["retouche"], "video")  # le pack plus bas dans le catalogue l'emporte
         self.assertEqual(emplacements.lire_choix("assistant")["packs"], ["images", "video", "llm"])
+        self.assertEqual(r["regles"], [{"usage": "Créer une image", "nom": "Image"}, {"usage": "Retoucher", "nom": "Video"},
+                                       {"usage": "Animer une image", "nom": "Video"}])
+        self.assertEqual(r["manquants"], [{"usage": "Réécrire tes idées", "nom": "petit.gguf"}])
+        self.assertTrue(r["essai"])
+
+    def test_un_pack_plus_bas_pas_installe_garde_le_favori_d_avant(self):
+        for f in (COMMUN, IMAGE):
+            self.poser(f)
+        with mock.patch.object(emplacements, "retenir_favori"):
+            r = assistant.terminer(["images", "video"])
+        self.assertEqual(r["favoris"]["generation.retouche"], "image")
+        self.assertIn({"usage": "Retoucher", "nom": "Video"}, r["manquants"])
+
+    def test_pas_d_essai_sans_image(self):
+        with mock.patch.object(emplacements, "retenir_favori"):
+            self.assertFalse(assistant.terminer(["llm"])["essai"])
+        with self.assertRaisesRegex(assistant.ErreurAssistant, "Aucun modèle d'image"):
+            assistant.essayer(mock.Mock())
 
     def test_s_ouvre_seulement_s_il_manque_de_quoi_generer(self):
         self.assertTrue(assistant.etat()["ouvrir"])  # ComfyUI absent, aucun workflow prêt
@@ -169,6 +188,20 @@ class Fin(Base):
         with mock.patch.object(emplacements, "retenir_favori"):
             assistant.terminer(["images"])
         self.assertFalse(assistant.etat()["ouvrir"])  # terminé : plus jamais tout seul
+
+    def test_essai_avec_ou_sans_llm(self):
+        for f in (COMMUN, IMAGE):
+            self.poser(f)
+        self.config["generation"]["texte_vers_image"] = "image"
+        self.config["llama"]["modele"] = "petit.gguf"
+        plateau = mock.Mock()
+        with mock.patch.object(assistant.modeles, "llm_disponibles", lambda: []):
+            assistant.essayer(plateau)
+        args, options = plateau.commander.call_args
+        self.assertEqual((args[1], args[3], options["imposees"]), (assistant.ESSAI["prompt"], "image", {"steps": 10, "megapixels": 0.5}))
+        with mock.patch.object(assistant.modeles, "llm_disponibles", lambda: ["petit.gguf"]):
+            assistant.essayer(plateau)
+        self.assertIsNone(plateau.commander.call_args.args[1])  # le LLM réécrit l'idée : il est essayé aussi
 
 
 if __name__ == "__main__":

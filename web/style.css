@@ -2268,3 +2268,17 @@ button.onglet-casting.actif {
 .pied-assistant {
     align-items: center;
 }
+
+.essai-assistant {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.essai-assistant img {
+    align-self: center;
+    max-width: 100%;
+    max-height: 320px;
+    border-radius: 8px;
+}

@@ -251,6 +251,12 @@ def terminer_assistant(d: DemandePacks):
     return _assistant(assistant.terminer, d.packs)
 
 
+@app.post("/api/assistant/essai")
+def essai_assistant():
+    """Une image rapide (peu de steps) pour vérifier que toute la chaîne tourne ; suivie par /api/commandes."""
+    return _commander(lambda: _assistant(assistant.essayer, plateau_))
+
+
 class DemandeComfyuiExterne(BaseModel):
     chemin: str | None = None  # None : revenir au ComfyUI d'Aria
 
