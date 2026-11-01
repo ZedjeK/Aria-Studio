@@ -1,0 +1,67 @@
+# Moteurs d'Aria - Studio : versions épinglées, celles testées ensemble (app/moteurs.py).
+# Chaque archive vient d'une release GitHub officielle ; taille et SHA-256 relevés le 2026-11-01 (identiques aux
+# empreintes publiées par GitHub et aux archives qui tournent chez Jérémy). On n'avance une épingle qu'après un Casting.
+#
+# dossier : sous-dossier des moteurs (config.yaml s'y réfère : comfyui, llama/llama-server.exe…)
+# preuve  : fichier dont la présence montre que le moteur est installé
+# racine  : dossier de l'archive dont on prend le contenu (absent : l'archive est à plat)
+# pilote_min : branche minimale du pilote NVIDIA (CUDA 13.x : branche 580, tableau de compatibilité de NVIDIA)
+
+format: 1
+pilote_min: 580
+
+moteurs:
+    comfyui:
+        nom: ComfyUI portable (NVIDIA)
+        role: Génère les images et les vidéos
+        version: v0.42.1
+        dossier: comfyui
+        preuve: ComfyUI/main.py
+        port: comfyui
+        archives:
+            - depot: comfyanonymous/ComfyUI
+              tag: v0.42.1
+              fichier: ComfyUI_windows_portable_nvidia.7z
+              taille: 2018444114
+              sha256: 496afd18790ec685d99ebba2edf200d7371a29fbdd3a992bb0f4f52f244a6874
+              racine: ComfyUI_windows_portable
+
+    llama:
+        nom: llama.cpp officiel (CUDA 13.4)
+        role: Réécrit les prompts (Ministral et la plupart des GGUF)
+        version: b11734
+        dossier: llama
+        preuve: llama-server.exe
+        port: llama
+        archives:
+            - depot: ggml-org/llama.cpp
+              tag: b11734
+              fichier: llama-b11734-bin-win-cuda-13.4-x64.zip
+              taille: 155144809
+              sha256: 16ebb234a4723d5900cff196b5e6ce8c0559202cfe16379c08511f41611e0ad2
+            - depot: ggml-org/llama.cpp
+              tag: b11734
+              fichier: cudart-llama-bin-win-cuda-13.4-x64.zip
+              taille: 423535356
+              sha256: 738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668
+
+    llama-prism:
+        nom: llama.cpp PrismML
+        role: Seulement pour les GGUF ternaires (Bonsai PQ2_0, PTQ1_0)
+        version: prism-b10777-e3de715
+        dossier: llama-prism
+        preuve: llama-server.exe
+        port: llama
+        facultatif: true
+        archives:
+            - depot: PrismML-Eng/llama.cpp
+              tag: prism-b10777-e3de715
+              fichier: llama-prism-b10777-e3de715-bin-win-cuda-13.3-x64.zip
+              taille: 179212635
+              sha256: 071088ef64f2e62dfb488f4d73cc368df945f9c0e8c7019bc94daf9abd0eb4aa
+            # Le runtime CUDA 13.4 du llama.cpp officiel (le même fichier, téléchargé une seule fois)
+            - depot: ggml-org/llama.cpp
+              tag: b11734
+              fichier: cudart-llama-bin-win-cuda-13.4-x64.zip
+              taille: 423535356
+              sha256: 738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668
