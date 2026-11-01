@@ -14,8 +14,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (casting, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, optimiseur, personnages,
-                 plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
+from app import (casting, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs, optimiseur,
+                 personnages, plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
 from app.config import CONFIG, ROOT
@@ -136,7 +136,7 @@ def regler_mise_a_jour(d: DemandeMiseAJour):
 
 class DemandeOuverture(BaseModel):
     dossier: str  # racine, data, modeles ou moteurs
-    sous: str | None = None  # sous-dossier des modèles (« MiniMax-H3/modeles »)
+    sous: str | None = None  # sous-dossier des modèles (« MiniMax-H3/modeles ») ou d'un moteur (« comfyui »)
 
 
 class DemandeDossierModeles(BaseModel):
@@ -151,7 +151,8 @@ def etat_emplacements():
 @app.post("/api/emplacements/ouvrir")
 def ouvrir_emplacement(d: DemandeOuverture):
     """📂 : ouvre le dossier dans l'Explorateur de Windows, sur la machine du serveur."""
-    if d.sous and (d.dossier != "modeles" or d.sous not in modeles.dossiers()):
+    connus = {"modeles": modeles.dossiers(), "moteurs": [m["dossier"] for m in moteurs.catalogue()["moteurs"].values()]}
+    if d.sous and d.sous not in connus.get(d.dossier, []):
         raise HTTPException(400, f"Sous-dossier inconnu : {d.sous}")
     try:
         return {"ouvert": str(emplacements.ouvrir(d.dossier, d.sous))}
@@ -174,6 +175,38 @@ def choisir_dossier_modeles(d: DemandeDossierModeles):
         return emplacements.choisir_modeles(d.chemin)
     except emplacements.ErreurEmplacement as e:
         raise HTTPException(400, str(e))
+
+
+# Moteurs (app/moteurs.py) : ComfyUI portable et llama-server aux versions du catalogue
+
+
+@app.get("/api/moteurs")
+def etat_moteurs():
+    return {"carte": moteurs.carte(), "moteurs": moteurs.etat(), "tache": moteurs.tache()}
+
+
+@app.post("/api/moteurs/annuler")
+def annuler_moteur():
+    return {"annule": moteurs.annuler()}
+
+
+@app.post("/api/moteurs/{id_moteur}/installer")
+async def installer_moteur(id_moteur: str):
+    """Télécharge (si besoin), vérifie et installe ; l'échange final attend que l'orchestrateur ait arrêté le moteur."""
+    try:
+        return moteurs.lancer(id_moteur, verrou=lambda: orchestrateur.sans_moteur(id_moteur))
+    except moteurs.ErreurMoteur as e:
+        raise HTTPException(409, str(e))
+
+
+@app.post("/api/moteurs/{id_moteur}/revenir")
+async def revenir_moteur(id_moteur: str):
+    try:
+        async with orchestrateur.sans_moteur(id_moteur):
+            fiche = moteurs.revenir(id_moteur)
+    except moteurs.ErreurMoteur as e:
+        raise HTTPException(409, str(e))
+    return {"version": (fiche or {}).get("version")}
 
 
 @app.post("/api/garde/forcer")

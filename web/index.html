@@ -40,6 +40,11 @@
             <button id="forcer-garde" type="button" class="petit" title="Elle partira tout de suite, plus lentement">▶ Lancer quand même</button>
             <button id="annuler-garde" type="button" class="petit danger">✕ Annuler</button>
         </div>
+        <!-- Moteurs : ComfyUI ou llama-server absent (app/moteurs.py). -->
+        <div id="bandeau-moteurs" class="bandeau-maj" hidden>
+            <span></span>
+            <button id="voir-moteurs" type="button" class="petit">Installer…</button>
+        </div>
 
         <div class="vue" id="vue-plateau">
             <section class="carte">
@@ -553,6 +558,13 @@
                 <p class="discret">Seuls tes changements sont enregistrés (data/reglages.yaml) : ↺ ramène une valeur à celle d'origine.</p>
                 <button id="optimiser" type="button" class="principal">⚡ Optimiser</button>
             </div>
+            <section class="carte" id="carte-moteurs">
+                <h2>Moteurs</h2>
+                <p id="carte-graphique" class="discret"></p>
+                <ul id="liste-moteurs" class="liste-moteurs"></ul>
+                <p class="discret">Versions épinglées, testées ensemble (catalogue/moteurs.yaml) : téléchargées depuis
+                    leur release GitHub officielle, empreinte SHA-256 vérifiée. L'ancienne version reste à côté.</p>
+            </section>
             <section class="carte" id="carte-emplacements">
                 <h2>Emplacements</h2>
                 <p id="mode-emplacements" class="discret"></p>

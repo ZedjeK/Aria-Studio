@@ -2107,3 +2107,41 @@ button.onglet-casting.actif {
         grid-template-columns: 1fr auto;
     }
 }
+
+/* Moteurs (onglet Réglages) */
+.liste-moteurs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.liste-moteurs li {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 12px;
+    align-items: center;
+    padding: 8px 0;
+    border-top: 1px solid var(--bord);
+}
+
+.actions-moteur {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.suivi-moteur {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.suivi-moteur button {
+    align-self: flex-start;
+}
+
+#carte-graphique.ko {
+    color: var(--ko);
+}

@@ -27,7 +27,10 @@ document.querySelectorAll(".onglet").forEach((bouton) => {
         document.querySelectorAll(".vue").forEach((v) => {
             v.hidden = v.id !== `vue-${bouton.dataset.vue}`;
         });
-        if (bouton.dataset.vue === "reglages") chargerReglages();
+        if (bouton.dataset.vue === "reglages") {
+            chargerReglages();
+            chargerMoteurs();
+        }
         if (bouton.dataset.vue === "montage") preparerMontage();
         if (bouton.dataset.vue === "scenario") preparerScenario();
         if (bouton.dataset.vue === "casting") chargerCasting();
@@ -364,6 +367,107 @@ document.getElementById("garder-modeles").addEventListener("click", async () => 
 });
 
 chargerEmplacements();
+
+// Moteurs (app/moteurs.py) : ComfyUI portable et llama-server aux versions épinglées de catalogue/moteurs.yaml.
+// Rien ne se télécharge sans un clic ; le bandeau prévient quand un moteur obligatoire manque.
+
+const STATUTS_MOTEUR = {
+    absent: ["absent", "ko"], a_jour: ["à jour ✓", ""], different: ["autre version", "ko"], manuel: ["installé à la main", ""],
+};
+let moteursAffiches = [];
+
+function suiviMoteur(t) {
+    const enCours = !t.fini;
+    const pourcent = t.total ? Math.floor((t.fait * 100) / t.total) : null;
+    return `<div class="suivi-moteur">
+        <span class="discret">${echapper(t.etape)}${pourcent !== null ? ` · ${pourcent} %` : ""}</span>
+        ${pourcent !== null && enCours ? `<div class="barre"><div style="width:${pourcent}%"></div></div>` : ""}
+        ${t.erreur ? `<span class="ko">${echapper(t.erreur)}</span>` : ""}
+        ${enCours && t.etape.startsWith("Téléchargement") ? '<button type="button" class="petit" data-annuler-moteur>✕ Annuler</button>' : ""}
+    </div>`;
+}
+
+function afficherMoteurs(e) {
+    const c = e.carte;
+    const ligneCarte = document.getElementById("carte-graphique");
+    ligneCarte.textContent = c.nvidia ? `Carte : ${c.nom} · pilote ${c.pilote}${c.ok ? " ✓" : ""}` : "";
+    if (!c.ok) ligneCarte.textContent += (ligneCarte.textContent ? " · " : "") + c.message;
+    ligneCarte.classList.toggle("ko", !c.ok);
+
+    const t = e.tache;
+    const occupe = t && !t.fini;
+    moteursAffiches = e.moteurs;
+    document.getElementById("liste-moteurs").innerHTML = e.moteurs.map((m) => {
+        const [libelle, classe] = STATUTS_MOTEUR[m.statut];
+        const autre = m.version_installee && m.version_installee !== m.version ? ` · installé : ${echapper(m.version_installee)}` : "";
+        const installer = m.statut === "a_jour" ? ""
+            : `<button type="button" class="petit ${m.statut === "absent" && !m.facultatif ? "principal" : ""}"
+                data-installer="${m.id}" ${occupe ? "disabled" : ""}>${m.statut === "absent" ? "Installer" : "Réinstaller"}${
+                m.a_telecharger ? ` (${taille(m.a_telecharger)})` : ""}</button>`;
+        return `<li>
+            <div>
+                <strong>${echapper(m.nom)}</strong> <span class="badge ${classe}">${libelle}</span>
+                ${m.facultatif ? '<span class="badge">facultatif</span>' : ""}${m.occupe ? '<span class="badge">en marche</span>' : ""}
+                <div class="discret">${echapper(m.role)} · épinglé ${echapper(m.version)}${autre}</div>
+            </div>
+            <div class="actions-moteur">
+                ${installer}
+                ${m.precedente ? `<button type="button" class="petit" data-revenir="${m.id}" ${occupe ? "disabled" : ""}
+                    title="Remet la version précédente (un second clic redonne celle-ci)">↺ Revenir</button>` : ""}
+                ${m.statut !== "absent" ? `<button type="button" class="petit" data-ouvrir="moteurs" data-sous="${echapper(m.dossier)}"
+                    title="Ouvrir le dossier">📂</button>` : ""}
+            </div>
+            ${t && t.id === m.id ? suiviMoteur(t) : ""}
+        </li>`;
+    }).join("");
+
+    const manquants = e.moteurs.filter((m) => m.statut === "absent" && !m.facultatif);
+    const bandeau = document.getElementById("bandeau-moteurs");
+    bandeau.hidden = !manquants.length;
+    bandeau.querySelector("span").textContent = manquants.length
+        ? `⚠ ${manquants.map((m) => m.nom).join(" et ")} : absent${manquants.length > 1 ? "s" : ""}, Aria ne peut pas générer sans.`
+        : "";
+    if (occupe) setTimeout(chargerMoteurs, 1000);
+}
+
+async function chargerMoteurs() {
+    try {
+        afficherMoteurs(await api("GET", "/api/moteurs"));
+    } catch {
+        // pas de serveur : la barre d'état le dit déjà
+    }
+}
+
+document.getElementById("liste-moteurs").addEventListener("click", async (ev) => {
+    const bouton = ev.target.closest("[data-installer], [data-revenir], [data-annuler-moteur]");
+    if (!bouton) return;
+    try {
+        if (bouton.dataset.installer) {
+            const m = moteursAffiches.find((x) => x.id === bouton.dataset.installer);
+            const source = m.a_telecharger
+                ? `Téléchargement : ${taille(m.a_telecharger)} depuis sa release GitHub officielle (empreinte SHA-256 vérifiée).`
+                : "Les archives sont déjà là : rien à télécharger.";
+            if (!confirm(`Installer ${m.nom} ${m.version} ?\n\n${source}\n`
+                + "Le moteur est arrêté le temps de l'échange ; la version actuelle reste à côté (↺ Revenir).")) return;
+            await api("POST", `/api/moteurs/${m.id}/installer`);
+        } else if (bouton.dataset.revenir) {
+            if (!confirm("Remettre la version précédente de ce moteur ?")) return;
+            await api("POST", `/api/moteurs/${bouton.dataset.revenir}/revenir`);
+        } else {
+            await api("POST", "/api/moteurs/annuler");
+        }
+    } catch (err) {
+        alert(err.message);
+    }
+    chargerMoteurs();
+});
+
+document.getElementById("voir-moteurs").addEventListener("click", () => {
+    document.querySelector('.onglet[data-vue="reglages"]').click();
+    document.getElementById("carte-moteurs").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+chargerMoteurs();
 
 // Mise à jour : version installée, et bandeau quand une release plus récente existe sur GitHub (app/mises_a_jour.py).
 // Rien ne se télécharge : le lien mène à la release. « Plus tard » cache le bandeau jusqu'à la version suivante.

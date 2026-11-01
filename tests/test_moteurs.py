@@ -209,6 +209,92 @@ class Telechargement(Base):
             self.assertEqual(self.obtenir(a).read_bytes(), SERVEUR)
 
 
+class TacheDeFond(Base):
+    def setUp(self):
+        super().setUp()
+        self.poser(("serveur.zip", SERVEUR), ("runtime.zip", RUNTIME))
+        self.journal = []
+
+    def verrou(self):
+        test = self
+
+        class Verrou:
+            async def __aenter__(self):
+                test.journal.append(("verrou", (test.dans / "llama.new").is_dir()))  # tout est prêt à côté
+
+            async def __aexit__(self, *_):
+                test.journal.append(("libere", (test.dans / "llama").is_dir()))
+        return Verrou()
+
+    def test_installe_en_arriere_plan_et_echange_sous_verrou(self):
+        async def scenario():
+            t = moteurs.lancer("llama", verrou=self.verrou, dans=self.dans)
+            self.assertEqual((t["nom"], t["fini"]), ("llama", False))
+            with self.assertRaisesRegex(moteurs.ErreurMoteur, "déjà en cours"):
+                moteurs.lancer("comfyui")
+            await moteurs._execution
+            return moteurs.tache()
+
+        t = asyncio.run(scenario())
+        self.assertEqual((t["etape"], t["erreur"], t["fini"]), ("Installé ✓", None, True))
+        self.assertEqual(self.journal, [("verrou", True), ("libere", True)])
+        self.assertTrue((self.dans / "llama" / "llama-server.exe").is_file())
+
+    def test_annuler_un_telechargement_garde_le_part(self):
+        (self.archives / "serveur.zip").unlink()
+
+        class Lent(FauxGitHub):
+            def __call__(self, **options):
+                async def repondre(requete):
+                    return httpx.Response(200, content=self.flux())
+                return VRAI_CLIENT(transport=httpx.MockTransport(repondre), **options)
+
+            async def flux(self):
+                yield self.contenu[:10]
+                await asyncio.sleep(30)  # le reste n'arrive jamais : on annule avant
+                yield self.contenu[10:]
+
+        async def scenario():
+            with mock.patch.object(moteurs.httpx, "AsyncClient", Lent(SERVEUR)):
+                moteurs.lancer("llama", dans=self.dans)
+                for _ in range(300):  # 3 s au plus
+                    if moteurs.tache()["etape"].startswith("Téléchargement"):
+                        break
+                    await asyncio.sleep(0.01)
+                self.assertTrue(moteurs.annuler())
+                await asyncio.gather(moteurs._execution, return_exceptions=True)
+            return moteurs.tache()
+
+        t = asyncio.run(scenario())
+        self.assertIn("Annulé", t["erreur"])
+        self.assertEqual((self.archives / "serveur.zip.part").read_bytes(), SERVEUR[:10])  # reprendra de là
+        self.assertFalse((self.dans / "llama").exists())
+
+    def test_revenir_efface_le_message_installe(self):
+        asyncio.run(self._lancer_et_attendre())
+        self.assertEqual(moteurs.tache()["etape"], "Installé ✓")
+        (self.dans / "llama.prev").mkdir()
+        (self.dans / "llama.prev" / "llama-server.exe").write_text("v1", encoding="utf-8")
+        moteurs.revenir("llama", self.dans)
+        self.assertIsNone(moteurs.tache())
+
+    async def _lancer_et_attendre(self):
+        moteurs.lancer("llama", dans=self.dans)
+        await moteurs._execution
+
+    def test_moteur_etranger_sur_le_port_rien_ne_change(self):
+        async def scenario():
+            with mock.patch.object(moteurs, "occupe", return_value=True):  # ni arrêté par l'orchestrateur, ni à nous
+                moteurs.lancer("llama", verrou=self.verrou, dans=self.dans)
+                await moteurs._execution
+            return moteurs.tache()
+
+        t = asyncio.run(scenario())
+        self.assertIn("tourne encore", t["erreur"])
+        self.assertFalse((self.dans / "llama").exists())
+        self.assertEqual(self.restes(), [])
+
+
 class Carte(Base):
     def test_sans_nvidia(self):
         with mock.patch.dict("sys.modules", {"pynvml": None}):

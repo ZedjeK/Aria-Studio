@@ -14,6 +14,7 @@ catalogue, et rien n'est exécuté pendant l'installation.
 """
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import os
@@ -90,6 +91,7 @@ def etat(dans: Path = MOTEURS, dossier_archives: Path | None = None) -> list[dic
             statut = "a_jour" if fiche.get("version") == m["version"] else "different"
         sortie.append({
             "id": id_moteur, "nom": m["nom"], "role": m["role"], "facultatif": bool(m.get("facultatif")),
+            "dossier": m["dossier"],
             "version": m["version"], "version_installee": (fiche or {}).get("version"), "statut": statut,
             "chemin": str(dossier), "precedente": dossier.with_name(dossier.name + ".prev").is_dir(),
             "a_telecharger": sum(a["taille"] for a in m["archives"] if not _deja_la(a, dossier_archives)),
@@ -149,7 +151,7 @@ async def _telecharger(archive: dict, part: Path, progression=None):
             elif r.status_code != 206:
                 raise ErreurMoteur(f"GitHub a répondu {r.status_code} pour {archive['fichier']}")
             with part.open("ab" if deja else "wb") as f:
-                async for bloc in r.aiter_bytes(BLOC):
+                async for bloc in r.aiter_bytes():  # tels qu'ils arrivent : la progression suit le réseau
                     f.write(bloc)
                     deja += len(bloc)
                     if progression:
@@ -228,10 +230,13 @@ def place_necessaire(id_moteur: str, dossier_archives: Path) -> int:
             + EXPANSION * sum(a["taille"] for a in archives))
 
 
-async def installer(id_moteur: str, dans: Path = MOTEURS, dossier_archives: Path | None = None, progression=None) -> dict:
+async def installer(id_moteur: str, dans: Path = MOTEURS, dossier_archives: Path | None = None, progression=None,
+                    verrou=None) -> dict:
+    """`verrou` : fabrique d'un contexte asynchrone qui arrête le moteur et le garde arrêté le temps de l'échange
+    (l'orchestrateur, depuis l'interface) ; sans lui, un moteur qui tourne est refusé d'emblée."""
     m = _moteur(id_moteur)
     dossier_archives = dossier_archives or dans / "_archives"
-    if occupe(id_moteur):
+    if verrou is None and occupe(id_moteur):
         raise ErreurMoteur(f"{m['nom']} tourne : arrête-le avant de l'installer")
     dans.mkdir(parents=True, exist_ok=True)
     libre, besoin = shutil.disk_usage(dans).free, place_necessaire(id_moteur, dossier_archives)
@@ -259,7 +264,12 @@ async def installer(id_moteur: str, dans: Path = MOTEURS, dossier_archives: Path
         fiche = {"id": id_moteur, "version": m["version"], "installe_le": datetime.now().isoformat(timespec="seconds"),
                  "archives": {a["fichier"]: a["sha256"] for a in m["archives"]}}
         (nouveau / FICHE).write_text(json.dumps(fiche, indent=4, ensure_ascii=False), encoding="utf-8")
-        _echanger(dossier, nouveau)
+        if progression:
+            progression("Mise en place (attend la fin d'une génération en cours)", 0, 0)
+        async with verrou() if verrou else contextlib.nullcontext():
+            if occupe(id_moteur):
+                raise ErreurMoteur(f"{m['nom']} tourne encore (lancé par une autre appli ?) : rien n'a changé")
+            _echanger(dossier, nouveau)
     finally:
         for reste in (nouveau, extrait):
             if reste.exists():
@@ -285,7 +295,55 @@ def revenir(id_moteur: str, dans: Path = MOTEURS) -> dict | None:
         if temporaire.exists() and not dossier.exists():
             temporaire.rename(dossier)
         raise ErreurMoteur(f"{m['nom']} est en cours d'utilisation : rien n'a changé") from e
+    global _tache
+    if _tache and _tache["fini"] and _tache["id"] == id_moteur:
+        _tache = None  # « Installé ✓ » ne vaut plus pour la version qui revient
     return _fiche(dossier)
+
+
+# --- installation en tâche de fond (interface) ----------------------------------------
+
+_tache: dict | None = None  # la dernière installation : id, nom, etape, fait, total, erreur, fini
+_execution: asyncio.Task | None = None
+
+
+def tache() -> dict | None:
+    return dict(_tache) if _tache else None
+
+
+def lancer(id_moteur: str, verrou=None, dans: Path = MOTEURS) -> dict:
+    """Démarre l'installation d'un moteur en arrière-plan ; une seule à la fois."""
+    global _tache, _execution
+    if _execution and not _execution.done():
+        raise ErreurMoteur(f"Une installation est déjà en cours ({_tache['nom']})")
+    m = _moteur(id_moteur)
+    _tache = {"id": id_moteur, "nom": m["nom"], "etape": "Préparation", "fait": 0, "total": 0, "erreur": None, "fini": False}
+    suivi = _tache
+
+    def progression(etape, fait, total):
+        suivi.update(etape=etape, fait=fait, total=total)
+
+    async def executer():
+        try:
+            await installer(id_moteur, dans, progression=progression, verrou=verrou)
+            suivi.update(etape="Installé ✓", fait=0, total=0)
+        except asyncio.CancelledError:
+            suivi["erreur"] = "Annulé : le téléchargement reprendra où il s'est arrêté"
+        except (ErreurMoteur, OSError, httpx.HTTPError) as e:
+            suivi["erreur"] = str(e) or type(e).__name__
+        finally:
+            suivi["fini"] = True
+
+    _execution = asyncio.create_task(executer())
+    return tache()
+
+
+def annuler() -> bool:
+    """Seul un téléchargement s'annule (une extraction en cours va au bout)."""
+    if _execution and not _execution.done() and _tache["etape"].startswith("Téléchargement"):
+        _execution.cancel()
+        return True
+    return False
 
 
 # --- ligne de commande ---------------------------------------------------------------

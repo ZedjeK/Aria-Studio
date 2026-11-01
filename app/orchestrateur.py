@@ -94,3 +94,18 @@ class Orchestrateur:
             await self.llama.arreter()
             await self.comfy.arreter()
             self.actif = None
+
+    @asynccontextmanager
+    async def sans_moteur(self, id_moteur: str):
+        """Arrête notre moteur et le tient arrêté le temps d'un échange de dossiers (app/moteurs.py) ; attend la fin
+        d'une génération en cours. « llama » et « llama-prism » sont tous deux servis par self.llama."""
+        async with self._verrou:
+            if id_moteur == "comfyui":
+                await self.comfy.arreter()
+                if self.actif == "comfyui":
+                    self.actif = None
+            else:
+                await self.llama.arreter()
+                if self.actif == "llama":
+                    self.actif = None
+            yield
