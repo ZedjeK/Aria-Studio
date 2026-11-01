@@ -28,6 +28,7 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
+import psutil
 import yaml
 
 from app import emplacements, modeles
@@ -76,6 +77,11 @@ def etat(dans: Path = MOTEURS, dossier_archives: Path | None = None) -> list[dic
     de l'utilisateur (externe)."""
     dossier_archives = dossier_archives or dans / "_archives"
     sortie = []
+    # Un test par port (llama et llama-prism partagent le leur) : vers un port fermé, Windows attend le délai
+    ports = {}
+    for id_moteur, m in catalogue()["moteurs"].items():
+        if m["port"] not in ports:
+            ports[m["port"]] = occupe(id_moteur)
     for id_moteur, m in catalogue()["moteurs"].items():
         dossier = dans / m["dossier"]
         fiche = _fiche(dossier)
@@ -95,36 +101,39 @@ def etat(dans: Path = MOTEURS, dossier_archives: Path | None = None) -> list[dic
             "chemin": str(externe or dossier), "externe": bool(externe),
             "precedente": dossier.with_name(dossier.name + ".prev").is_dir(),
             "a_telecharger": sum(a["taille"] for a in m["archives"] if not _deja_la(a, dossier_archives)),
-            "occupe": occupe(id_moteur),
+            "occupe": ports[m["port"]],
         })
     return sortie
 
 
 def carte() -> dict:
-    """La carte graphique et son pilote face à ce que demandent les moteurs (CUDA 13 : branche 580 au moins)."""
+    """La carte graphique (nom, pilote, VRAM) et la RAM, face à ce que demandent les moteurs (CUDA 13 : pilote 580+)."""
     minimum = catalogue().get("pilote_min")
+    ram_go = round(psutil.virtual_memory().total / 1024 ** 3)
     try:
         import pynvml
 
         pynvml.nvmlInit()
         try:
-            nom = pynvml.nvmlDeviceGetName(pynvml.nvmlDeviceGetHandleByIndex(0))
+            carte_0 = pynvml.nvmlDeviceGetHandleByIndex(0)
+            nom = pynvml.nvmlDeviceGetName(carte_0)
+            vram = pynvml.nvmlDeviceGetMemoryInfo(carte_0).total
             pilote = pynvml.nvmlSystemGetDriverVersion()
         finally:
             pynvml.nvmlShutdown()
     except Exception:  # pas de carte NVIDIA, ou pas de pilote : NVML ne se charge pas
-        return {"nvidia": False, "nom": None, "pilote": None, "ok": False,
+        return {"nvidia": False, "nom": None, "pilote": None, "vram_go": None, "ram_go": ram_go, "ok": False,
                 "message": "Aucune carte NVIDIA détectée : les moteurs d'Aria demandent une carte NVIDIA (CUDA 13)."}
     nom, pilote = (x.decode() if isinstance(x, bytes) else x for x in (nom, pilote))
     ok = minimum is None or int(pilote.split(".")[0]) >= minimum
-    return {"nvidia": True, "nom": nom, "pilote": pilote, "ok": ok,
+    return {"nvidia": True, "nom": nom, "pilote": pilote, "vram_go": round(vram / 1024 ** 3), "ram_go": ram_go, "ok": ok,
             "message": None if ok else f"Pilote {pilote} trop ancien : installe un pilote NVIDIA {minimum} ou plus récent."}
 
 
 def occupe(id_moteur: str) -> bool:
     port = CONFIG[_moteur(id_moteur)["port"]]["port"]
     with socket.socket() as s:
-        s.settimeout(0.3)
+        s.settimeout(0.1)  # en local, le système accepte tout de suite ; un port fermé, lui, laisse attendre
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 

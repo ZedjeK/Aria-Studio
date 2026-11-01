@@ -46,6 +46,53 @@
             <button id="voir-moteurs" type="button" class="petit">Installer…</button>
         </div>
 
+        <!-- Assistant de premier lancement (web/assistant.js, app/assistant.py) -->
+        <div id="assistant" class="voile" hidden>
+            <div class="fenetre assistant">
+                <div class="ligne entete-assistant">
+                    <h2>Bienvenue dans Aria - Studio</h2>
+                    <button id="plus-tard-assistant" type="button" class="petit" title="Les bandeaux te rappelleront ce qui manque">Plus tard</button>
+                </div>
+                <ol class="etapes-assistant">
+                    <li>Ta machine</li><li>Moteurs</li><li>Ce que tu veux faire</li><li>Licences</li><li>Téléchargement</li>
+                </ol>
+                <section class="ecran-assistant">
+                    <p>Aria génère tes images et tes vidéos sur ta carte graphique : rien ne part dans le cloud. Voyons ta machine.</p>
+                    <dl id="machine-assistant" class="machine-assistant"></dl>
+                    <p id="alerte-machine" class="alerte" hidden></p>
+                    <div class="ligne">
+                        <span class="discret">Les modèles iront dans <code id="dossier-modeles-assistant"></code>
+                            (<span id="libre-assistant"></span> libres).</span>
+                        <button type="button" class="petit" id="changer-modeles-assistant">Changer…</button>
+                    </div>
+                </section>
+                <section class="ecran-assistant" hidden>
+                    <p>Deux moteurs font le travail : ComfyUI pour les images et les vidéos, llama.cpp pour réécrire tes idées
+                        en prompts. Ce sont les versions testées avec Aria, téléchargées depuis leur release GitHub officielle.</p>
+                    <ul class="liste-moteurs"></ul>
+                </section>
+                <section class="ecran-assistant" hidden>
+                    <p>Coche ce que tu veux faire. Tu pourras en ajouter plus tard en relançant l'assistant (onglet Réglages).</p>
+                    <div id="packs-assistant" class="packs-assistant"></div>
+                    <p id="total-assistant" class="discret"></p>
+                </section>
+                <section class="ecran-assistant" hidden>
+                    <p>Chaque modèle a sa licence : lis-la, et coche si tu l'acceptes. Rien n'est téléchargé avant.</p>
+                    <div id="licences-assistant" class="licences-assistant"></div>
+                </section>
+                <section class="ecran-assistant" hidden>
+                    <p id="intro-telechargement-assistant"></p>
+                    <ul id="telechargements-assistant" class="telechargements-assistant"></ul>
+                    <p class="discret">Tu peux fermer cette fenêtre : le téléchargement continue (onglet Modèles, Téléchargements).</p>
+                </section>
+                <div class="ligne pied-assistant">
+                    <button id="precedent-assistant" type="button">← Précédent</button>
+                    <span id="etat-assistant" class="discret"></span>
+                    <button id="suivant-assistant" type="button" class="principal">Suivant →</button>
+                </div>
+            </div>
+        </div>
+
         <div class="vue" id="vue-plateau">
             <section class="carte">
                 <h2>Créer</h2>
@@ -559,7 +606,10 @@
                 <button id="optimiser" type="button" class="principal">⚡ Optimiser</button>
             </div>
             <section class="carte" id="carte-moteurs">
-                <h2>Moteurs</h2>
+                <div class="ligne entete-assistant">
+                    <h2>Moteurs</h2>
+                    <button id="ouvrir-assistant" type="button" class="petit">🧭 Assistant de premier lancement</button>
+                </div>
                 <p id="carte-graphique" class="discret"></p>
                 <ul id="liste-moteurs" class="liste-moteurs"></ul>
                 <p class="discret">Versions épinglées, testées ensemble (catalogue/moteurs.yaml) : téléchargées depuis
@@ -664,5 +714,6 @@
     <script src="/static/montage.js"></script>
     <script src="/static/sequence.js"></script>
     <script src="/static/decoupage.js"></script>
+    <script src="/static/assistant.js"></script>
 </body>
 </html>

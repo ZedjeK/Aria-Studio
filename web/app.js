@@ -339,25 +339,26 @@ document.addEventListener("click", async (ev) => {
     }
 });
 
-document.getElementById("changer-modeles").addEventListener("click", async () => {
+// Aussi appelé par l'assistant de premier lancement (écran « Ta machine »)
+async function changerDossierModeles() {
     let chemin;
     try {
         chemin = (await api("POST", "/api/emplacements/modeles/parcourir")).chemin;
     } catch {
-        chemin = prompt("Chemin complet du nouveau dossier des modèles (ex. D:\IA\Aria-modeles) :");
+        chemin = prompt("Chemin complet du nouveau dossier des modèles (ex. D:\\IA\\Aria-modeles) :");
     }
     if (!chemin) return;
     const actuel = document.getElementById("chemin-modeles").textContent;
-    if (!confirm(`Lire les modèles dans ${chemin} au prochain démarrage d'Aria ?
-
-`
+    if (!confirm(`Lire les modèles dans ${chemin} au prochain démarrage d'Aria ?\n\n`
         + `Rien n'est déplacé : tes modèles actuels restent dans ${actuel}.`)) return;
     try {
         afficherEmplacements(await api("PUT", "/api/emplacements/modeles", { chemin }));
     } catch (err) {
         alert(err.message);
     }
-});
+}
+
+document.getElementById("changer-modeles").addEventListener("click", changerDossierModeles);
 
 document.getElementById("garder-modeles").addEventListener("click", async () => {
     const e = await api("GET", "/api/emplacements");
@@ -399,7 +400,8 @@ function afficherMoteurs(e) {
     const t = e.tache;
     const occupe = t && !t.fini;
     moteursAffiches = e.moteurs;
-    document.getElementById("liste-moteurs").innerHTML = e.moteurs.map((m) => {
+    // La même liste dans Réglages et dans l'assistant de premier lancement (web/assistant.js)
+    const html = e.moteurs.map((m) => {
         const [libelle, classe] = STATUTS_MOTEUR[m.statut];
         const sansV = (v) => String(v).replace(/^v/, "");  // « v0.42.1 » (tag) et « 0.42.1 » (ComfyUI) sont la même
         const autre = m.version_installee && sansV(m.version_installee) !== sansV(m.version)
@@ -432,6 +434,8 @@ function afficherMoteurs(e) {
             ${t && t.id === m.id ? suiviMoteur(t) : ""}
         </li>`;
     }).join("");
+    document.querySelectorAll(".liste-moteurs").forEach((liste) => { liste.innerHTML = html; });
+    document.dispatchEvent(new CustomEvent("moteurs", { detail: e }));
 
     const manquants = e.moteurs.filter((m) => m.statut === "absent" && !m.facultatif);
     const bandeau = document.getElementById("bandeau-moteurs");
@@ -450,9 +454,9 @@ async function chargerMoteurs() {
     }
 }
 
-document.getElementById("liste-moteurs").addEventListener("click", async (ev) => {
+document.addEventListener("click", async (ev) => {
     const bouton = ev.target.closest("[data-installer], [data-revenir], [data-annuler-moteur], [data-comfyui-externe], [data-comfyui-aria]");
-    if (!bouton) return;
+    if (!bouton || !bouton.closest(".liste-moteurs")) return;
     try {
         if ("comfyuiExterne" in bouton.dataset || "comfyuiAria" in bouton.dataset) {
             await choisirComfyui("comfyuiExterne" in bouton.dataset);

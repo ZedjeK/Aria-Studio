@@ -2145,3 +2145,126 @@ button.onglet-casting.actif {
 #carte-graphique.ko {
     color: var(--ko);
 }
+
+/* Assistant de premier lancement (web/assistant.js) */
+.assistant {
+    width: min(780px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.entete-assistant {
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.entete-assistant h2 {
+    margin: 0;
+}
+
+.etapes-assistant {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: etape;
+    font-size: 0.8rem;
+}
+
+.etapes-assistant li {
+    counter-increment: etape;
+    padding: 4px 10px;
+    border: 1px solid var(--bord);
+    border-radius: 999px;
+    color: var(--discret);
+}
+
+.etapes-assistant li::before {
+    content: counter(etape) " · ";
+}
+
+.etapes-assistant li.fait {
+    color: var(--texte);
+}
+
+.etapes-assistant li.actif {
+    border-color: var(--neon);
+    color: var(--neon);
+}
+
+.machine-assistant {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 16px;
+    margin: 0;
+}
+
+.machine-assistant dt {
+    color: var(--discret);
+}
+
+.machine-assistant dd {
+    margin: 0;
+}
+
+.packs-assistant,
+.licences-assistant {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pack-assistant,
+.licence-assistant {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 2px 12px;
+    align-items: start;
+    padding: 10px 12px;
+    border: 1px solid var(--bord);
+    border-radius: 8px;
+}
+
+.pack-assistant:has(input:checked) {
+    border-color: var(--neon);
+}
+
+.pack-assistant input,
+.licence-assistant input {
+    margin-top: 4px;
+}
+
+.licence-assistant {
+    grid-template-columns: 1fr;
+}
+
+.licence-assistant ul {
+    margin: 4px 0;
+    padding-left: 18px;
+}
+
+.telechargements-assistant {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.telechargements-assistant li {
+    padding: 6px 0;
+    border-top: 1px solid var(--bord);
+}
+
+.pied-assistant {
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--bord);
+}
+
+.entete-assistant,
+.pied-assistant {
+    align-items: center;
+}

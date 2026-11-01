@@ -373,10 +373,11 @@ class Carte(Base):
         self.assertEqual((c["nvidia"], c["ok"]), (False, False))
 
     def test_pilote_trop_ancien(self):
-        faux = mock.Mock(nvmlDeviceGetName=lambda h: "RTX", nvmlSystemGetDriverVersion=lambda: "566.36")
+        faux = mock.Mock(nvmlDeviceGetName=lambda h: "RTX", nvmlSystemGetDriverVersion=lambda: "566.36",
+                         nvmlDeviceGetMemoryInfo=lambda h: mock.Mock(total=16 * 1024 ** 3))
         with mock.patch.dict("sys.modules", {"pynvml": faux}):
             c = moteurs.carte()
-        self.assertEqual((c["nvidia"], c["ok"], c["pilote"]), (True, False, "566.36"))
+        self.assertEqual((c["nvidia"], c["ok"], c["pilote"], c["vram_go"]), (True, False, "566.36", 16))
         self.assertIn("580", c["message"])
 
 

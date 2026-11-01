@@ -82,10 +82,10 @@ def _licences(pack: dict) -> list[dict]:
             for l in vues.values()]
 
 
-def packs() -> list[dict]:
+def packs(etat_moteurs: list[dict] | None = None) -> list[dict]:
     """Les packs tels que l'écran « Ce que tu veux faire » les montre."""
     acceptees = _memoire().get("licences", {})
-    etats = {e["id"]: e for e in moteurs.etat()}
+    etats = {e["id"]: e for e in (etat_moteurs if etat_moteurs is not None else moteurs.etat())}
     sortie = []
     for id_pack, p in catalogue().items():
         fichiers = _uniques(_fichiers(p))
@@ -173,7 +173,8 @@ def terminer(ids: list[str]) -> dict:
 def etat() -> dict:
     """S'ouvrir au lancement ? Seulement tant qu'il n'a pas été terminé, et s'il manque de quoi générer."""
     memoire = _memoire()
-    moteur_absent = any(e["statut"] == "absent" and not e["facultatif"] for e in moteurs.etat())
+    etat_moteurs = moteurs.etat()
+    moteur_absent = any(e["statut"] == "absent" and not e["facultatif"] for e in etat_moteurs)
     aucun_workflow = not any(not wf.manquants() for wf in workflows.catalogue())
     return {"ouvrir": not memoire.get("termine") and (moteur_absent or aucun_workflow),
-            "termine": memoire.get("termine"), "packs": packs()}
+            "termine": memoire.get("termine"), "packs": packs(etat_moteurs)}
