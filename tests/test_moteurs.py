@@ -37,7 +37,7 @@ def archive(nom, contenu, **extra):
 CATALOGUE = {"format": 1, "pilote_min": 580, "moteurs": {
     "llama": {"nom": "llama", "role": "LLM", "version": "b2", "dossier": "llama", "preuve": "llama-server.exe",
               "port": "llama", "archives": [archive("serveur.zip", SERVEUR), archive("runtime.zip", RUNTIME)]},
-    "comfyui": {"nom": "ComfyUI", "role": "images", "version": "v1", "dossier": "comfyui", "preuve": "ComfyUI/main.py",
+    "comfyui": {"nom": "ComfyUI", "role": "images", "version": "v0.42.1", "dossier": "comfyui", "preuve": "ComfyUI/main.py",
                 "port": "comfyui", "facultatif": True,
                 "archives": [archive("comfy.zip", COMFY, racine="ComfyUI_portable")]},
 }}
@@ -52,7 +52,8 @@ class Base(unittest.TestCase):
         fichier = Path(self.tmp.name) / "moteurs.yaml"
         fichier.write_text(yaml.safe_dump(CATALOGUE), encoding="utf-8")
         self.patchs = [mock.patch.object(moteurs, "CATALOGUE", fichier),
-                       mock.patch.object(moteurs, "occupe", return_value=False)]
+                       mock.patch.object(moteurs, "occupe", return_value=False),
+                       mock.patch.object(moteurs.emplacements, "comfyui_externe", return_value=None)]
         for p in self.patchs:
             p.start()
 
@@ -293,6 +294,76 @@ class TacheDeFond(Base):
         self.assertIn("tourne encore", t["erreur"])
         self.assertFalse((self.dans / "llama").exists())
         self.assertEqual(self.restes(), [])
+
+
+class ComfyuiExterne(Base):
+    """« J'ai déjà ComfyUI » : un faux ComfyUI portable dans le dossier temporaire."""
+
+    def portable(self, version="0.43.0", nom="ComfyUI_windows_portable"):
+        dossier = Path(self.tmp.name) / nom
+        (dossier / "python_embeded").mkdir(parents=True)
+        (dossier / "python_embeded" / "python.exe").write_text("", encoding="utf-8")
+        (dossier / "ComfyUI").mkdir()
+        (dossier / "ComfyUI" / "main.py").write_text("", encoding="utf-8")
+        (dossier / "ComfyUI" / "comfyui_version.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
+        return dossier
+
+    def test_examiner(self):
+        dossier = self.portable()
+        self.assertEqual(moteurs.examiner_comfyui(dossier), dossier)
+        self.assertEqual(moteurs.examiner_comfyui(dossier / "ComfyUI"), dossier)  # le sous-dossier choisi par erreur
+
+    def test_refus(self):
+        ancien = self.portable("0.41.9", "ancien")
+        with self.assertRaisesRegex(moteurs.ErreurMoteur, "Aria a besoin de la 0.42.1 au moins"):
+            moteurs.examiner_comfyui(ancien)
+        (ancien / "python_embeded" / "python.exe").unlink()
+        with self.assertRaisesRegex(moteurs.ErreurMoteur, "n'est pas un ComfyUI portable"):
+            moteurs.examiner_comfyui(ancien)
+        with self.assertRaisesRegex(moteurs.ErreurMoteur, "chemin complet"):
+            moteurs.examiner_comfyui("ComfyUI")
+        celui_d_aria = self.portable(nom="comfyui")
+        with mock.patch.object(moteurs, "MOTEURS", Path(self.tmp.name)), \
+                self.assertRaisesRegex(moteurs.ErreurMoteur, "déjà le ComfyUI d'Aria"):
+            moteurs.examiner_comfyui(celui_d_aria)
+
+    def test_etat_externe(self):
+        dossier = self.portable("0.43.0")
+        with mock.patch.object(moteurs.emplacements, "comfyui_externe", return_value=dossier):
+            e = self.statut("comfyui")
+        self.assertEqual((e["statut"], e["externe"], e["version_installee"], e["chemin"]),
+                         ("externe", True, "0.43.0", str(dossier)))
+
+    def test_verifier_lance_une_fois_et_compare_les_noeuds(self):
+        dossier, lances = self.portable(), []
+
+        class FauxComfy:
+            def __init__(self, d, port, chemins):
+                self.url = "http://127.0.0.1:1"
+                lances.append(d)
+
+            async def demarrer(self):
+                lances.append("demarre")
+
+            async def arreter(self):
+                lances.append("arrete")
+
+        def object_info(requete):
+            return httpx.Response(200, json={"SaveImage": {}, "MiniMaxH3AddGuide": {}})
+
+        client = lambda **o: VRAI_CLIENT(transport=httpx.MockTransport(object_info), **o)  # noqa: E731
+        with mock.patch.object(moteurs, "ComfyUI", FauxComfy), mock.patch.object(moteurs.httpx, "AsyncClient", client), \
+                mock.patch.object(moteurs, "noeuds_utilises", return_value={"SaveImage", "MiniMaxH3AddGuide", "TextEncodeQwenImage21"}), \
+                mock.patch.object(moteurs.modeles, "ecrire_chemins_comfyui", return_value=Path("chemins.yaml")):
+            self.assertEqual(asyncio.run(moteurs.verifier_comfyui(dossier)), ["TextEncodeQwenImage21"])
+            self.assertEqual(lances, [dossier, "demarre", "arrete"])
+            with mock.patch.object(moteurs, "occupe", return_value=True), \
+                    self.assertRaisesRegex(moteurs.ErreurMoteur, "tourne déjà sur le port"):
+                asyncio.run(moteurs.verifier_comfyui(dossier))
+
+    def test_noeuds_utilises_par_aria(self):
+        noeuds = moteurs.noeuds_utilises()
+        self.assertTrue({"MiniMaxH3AddGuide", "MiniMaxH3ReferenceToVideo", "SaveAudio", "TextEncodeQwenImage21"} <= noeuds)
 
 
 class Carte(Base):

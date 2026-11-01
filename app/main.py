@@ -7,6 +7,7 @@ import threading
 import uuid
 import webbrowser
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -18,7 +19,8 @@ from app import (casting, decouvrir, emplacements, garde, listes, mesures, mises
                  personnages, plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
-from app.config import CONFIG, ROOT
+from app.comfy import ErreurComfy
+from app.config import CONFIG, ROOT, dossier_comfyui_livre
 from app.emplacements import moteur
 from app.orchestrateur import Orchestrateur
 from app.sources import ErreurSource, Fiche, fiche_depuis_url
@@ -207,6 +209,36 @@ async def revenir_moteur(id_moteur: str):
     except moteurs.ErreurMoteur as e:
         raise HTTPException(409, str(e))
     return {"version": (fiche or {}).get("version")}
+
+
+class DemandeComfyuiExterne(BaseModel):
+    chemin: str | None = None  # None : revenir au ComfyUI d'Aria
+
+
+@app.post("/api/moteurs/comfyui/parcourir")
+def parcourir_comfyui():
+    try:
+        return {"chemin": emplacements.parcourir(str(Path.home()), "Dossier de ton ComfyUI portable", doit_exister=True)}
+    except emplacements.ErreurEmplacement as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/moteurs/comfyui/externe")
+async def choisir_comfyui(d: DemandeComfyuiExterne):
+    """« J'ai déjà ComfyUI » : vérifié en le lançant une fois (jusqu'à une minute), puis utilisé tout de suite."""
+    try:
+        dossier = moteurs.examiner_comfyui(d.chemin) if d.chemin else None
+        async with orchestrateur.sans_moteur("comfyui"):
+            if dossier:
+                manquants = await moteurs.verifier_comfyui(dossier)
+                if manquants:
+                    raise moteurs.ErreurMoteur("Il manque à ce ComfyUI des nœuds dont Aria se sert : " + ", ".join(manquants))
+            emplacements.choisir_comfyui(dossier)
+            CONFIG["comfyui"]["dossier"] = str(dossier) if dossier else dossier_comfyui_livre()
+            orchestrateur.comfy.dossier = moteur(CONFIG["comfyui"]["dossier"])
+    except (moteurs.ErreurMoteur, ErreurComfy) as e:
+        raise HTTPException(409, str(e))
+    return {"moteurs": moteurs.etat()}
 
 
 @app.post("/api/garde/forcer")

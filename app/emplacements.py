@@ -66,6 +66,21 @@ def retenir_favori(section: str, cle: str, valeur: str):
     _ecrire_choix(choix)
 
 
+def comfyui_externe() -> Path | None:
+    """ComfyUI portable déjà installé par l'utilisateur, choisi à la place de celui d'Aria (aria.yaml)."""
+    chemin = _choix().get("comfyui")
+    return Path(chemin) if isinstance(chemin, str) and chemin else None
+
+
+def choisir_comfyui(chemin: Path | None):
+    choix = _choix()
+    if chemin:
+        choix["comfyui"] = str(chemin)
+    else:
+        choix.pop("comfyui", None)
+    _ecrire_choix(choix)
+
+
 def _modeles(choix: dict) -> Path:
     return Path(choix["modeles"]) if choix.get("modeles") else _racine() / "modeles"
 
@@ -149,7 +164,8 @@ def choisir_modeles(chemin: str | None) -> dict:
     return etat()
 
 
-def parcourir(depart: str | None = None) -> str | None:
+def parcourir(depart: str | None = None, titre: str = "Dossier des modèles d'Aria - Studio",
+              doit_exister: bool = False) -> str | None:
     """Sélecteur de dossier natif de Windows, ouvert par le serveur local (None si annulé)."""
     try:
         import tkinter
@@ -160,8 +176,8 @@ def parcourir(depart: str | None = None) -> str | None:
     fenetre.withdraw()
     fenetre.attributes("-topmost", True)  # au-dessus du navigateur
     try:
-        choisi = filedialog.askdirectory(parent=fenetre, title="Dossier des modèles d'Aria - Studio",
-                                         initialdir=depart or str(MODELES), mustexist=False)
+        choisi = filedialog.askdirectory(parent=fenetre, title=titre, initialdir=depart or str(MODELES),
+                                         mustexist=doit_exister)
     finally:
         fenetre.destroy()
     return str(Path(choisi)) if choisi else None

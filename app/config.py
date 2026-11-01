@@ -15,7 +15,15 @@ def charger() -> dict:
         config = yaml.safe_load(f) or {}
     for section, valeurs in emplacements.favoris().items():  # les favoris du Casting passent devant
         config.setdefault(section, {}).update(valeurs)
+    if emplacements.comfyui_externe():  # « J'ai déjà ComfyUI » : un chemin absolu, que moteur() garde tel quel
+        config.setdefault("comfyui", {})["dossier"] = str(emplacements.comfyui_externe())
     return config
+
+
+def dossier_comfyui_livre() -> str:
+    """Le ComfyUI d'Aria, celui de config.yaml (relatif au dossier des moteurs)."""
+    with CONFIG_FILE.open(encoding="utf-8") as f:
+        return (yaml.safe_load(f) or {})["comfyui"]["dossier"]
 
 
 def chemin(relatif: str) -> Path:

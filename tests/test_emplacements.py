@@ -110,6 +110,19 @@ class Favoris(Base):
         self.assertEqual(c["generation"]["retouche"], "mon_favori")
         self.assertIn("texte_vers_image", c["generation"])  # le reste de config.yaml est gardé
 
+    def test_comfyui_externe_remplace_celui_d_aria(self):
+        from app import config
+        sien = Path(self.tmp.name) / "D" / "ComfyUI_windows_portable"
+        emplacements.choisir_modeles(str(Path(self.tmp.name) / "ailleurs"))
+        emplacements.choisir_comfyui(sien)
+        self.assertEqual(emplacements.comfyui_externe(), sien)
+        self.assertEqual(config.charger()["comfyui"]["dossier"], str(sien))
+        self.assertEqual(emplacements.moteur(config.charger()["comfyui"]["dossier"]), sien)  # absolu : gardé tel quel
+        emplacements.choisir_comfyui(None)
+        self.assertIsNone(emplacements.comfyui_externe())
+        self.assertEqual(config.charger()["comfyui"]["dossier"], config.dossier_comfyui_livre())
+        self.assertIn("modeles", emplacements._choix())  # le reste d'aria.yaml est gardé
+
     def test_aria_yaml_bizarre_ignore(self):
         self.maison.mkdir(parents=True)
         (self.maison / "aria.yaml").write_text("favoris: [1, 2]", encoding="utf-8")

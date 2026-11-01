@@ -18,6 +18,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -29,6 +30,8 @@ from pathlib import Path
 import httpx
 import yaml
 
+from app import emplacements, modeles
+from app.comfy import ComfyUI
 from app.config import CONFIG, ROOT
 from app.emplacements import MOTEURS
 
@@ -62,14 +65,6 @@ def _fiche(dossier: Path) -> dict | None:
         return None
 
 
-def _archives_uniques(ids) -> list[dict]:
-    vues = {}
-    for i in ids:
-        for a in _moteur(i)["archives"]:
-            vues.setdefault(a["sha256"], a)
-    return list(vues.values())
-
-
 def _deja_la(archive: dict, dossier_archives: Path) -> bool:
     """Présente avec la bonne taille (le SHA-256 est vérifié au moment de s'en servir)."""
     f = dossier_archives / archive["fichier"]
@@ -77,13 +72,17 @@ def _deja_la(archive: dict, dossier_archives: Path) -> bool:
 
 
 def etat(dans: Path = MOTEURS, dossier_archives: Path | None = None) -> list[dict]:
-    """Chaque moteur du catalogue : absent, à jour (version épinglée), différent, ou installé à la main."""
+    """Chaque moteur du catalogue : absent, à jour (version épinglée), différent, installé à la main, ou le ComfyUI
+    de l'utilisateur (externe)."""
     dossier_archives = dossier_archives or dans / "_archives"
     sortie = []
     for id_moteur, m in catalogue()["moteurs"].items():
         dossier = dans / m["dossier"]
         fiche = _fiche(dossier)
-        if not (dossier / m["preuve"]).is_file():
+        externe = emplacements.comfyui_externe() if id_moteur == "comfyui" else None
+        if externe:
+            statut, fiche = "externe", {"version": version_comfyui(externe)}
+        elif not (dossier / m["preuve"]).is_file():
             statut = "absent"
         elif fiche is None:
             statut = "manuel"  # déposé à la main : version inconnue
@@ -93,7 +92,8 @@ def etat(dans: Path = MOTEURS, dossier_archives: Path | None = None) -> list[dic
             "id": id_moteur, "nom": m["nom"], "role": m["role"], "facultatif": bool(m.get("facultatif")),
             "dossier": m["dossier"],
             "version": m["version"], "version_installee": (fiche or {}).get("version"), "statut": statut,
-            "chemin": str(dossier), "precedente": dossier.with_name(dossier.name + ".prev").is_dir(),
+            "chemin": str(externe or dossier), "externe": bool(externe),
+            "precedente": dossier.with_name(dossier.name + ".prev").is_dir(),
             "a_telecharger": sum(a["taille"] for a in m["archives"] if not _deja_la(a, dossier_archives)),
             "occupe": occupe(id_moteur),
         })
@@ -299,6 +299,66 @@ def revenir(id_moteur: str, dans: Path = MOTEURS) -> dict | None:
     if _tache and _tache["fini"] and _tache["id"] == id_moteur:
         _tache = None  # « Installé ✓ » ne vaut plus pour la version qui revient
     return _fiche(dossier)
+
+
+# --- « J'ai déjà ComfyUI » -------------------------------------------------------------
+
+_VERSION_COMFYUI = re.compile(r'__version__\s*=\s*"([^"]+)"')
+_NOEUD = re.compile(r'"class_type":\s*"(\w+)"')
+
+
+def version_comfyui(dossier: Path) -> str | None:
+    try:
+        m = _VERSION_COMFYUI.search((dossier / "ComfyUI" / "comfyui_version.py").read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
+def _numero(version: str | None) -> tuple[int, ...]:
+    return tuple(int(x) for x in re.findall(r"\d+", version or ""))
+
+
+def noeuds_utilises() -> set[str]:
+    """Les nœuds ComfyUI dont Aria se sert : ceux des workflows, et ceux des graphes construits par le code."""
+    noeuds = set()
+    for f in (ROOT / "workflows").glob("*/*.json"):
+        noeuds |= set(_NOEUD.findall(f.read_text(encoding="utf-8")))
+    for f in (ROOT / "app").glob("*.py"):
+        noeuds |= set(_NOEUD.findall(f.read_text(encoding="utf-8")))
+    return noeuds
+
+
+def examiner_comfyui(chemin: str | Path) -> Path:
+    """Un ComfyUI portable (python_embeded + ComfyUI/main.py) au moins aussi récent que celui du catalogue."""
+    dossier = Path(chemin).expanduser()
+    if not dossier.is_absolute():
+        raise ErreurMoteur("Donne le chemin complet du dossier de ComfyUI")
+    if dossier.name == "ComfyUI" and (dossier.parent / "python_embeded").is_dir():
+        dossier = dossier.parent  # le sous-dossier ComfyUI a été choisi : on remonte au dossier portable
+    if not (dossier / "python_embeded" / "python.exe").is_file() or not (dossier / "ComfyUI" / "main.py").is_file():
+        raise ErreurMoteur(f"{dossier} n'est pas un ComfyUI portable (il faut python_embeded et ComfyUI\\main.py) ; "
+                           "ComfyUI Desktop et les installations manuelles ne sont pas pris en charge")
+    if (MOTEURS / _moteur("comfyui")["dossier"]).resolve() == dossier.resolve():
+        raise ErreurMoteur("C'est déjà le ComfyUI d'Aria")
+    version, minimum = version_comfyui(dossier), _moteur("comfyui")["version"]
+    if _numero(version) < _numero(minimum):
+        raise ErreurMoteur(f"ComfyUI {version or 'de version inconnue'} : Aria a besoin de la {minimum.lstrip('v')} au moins")
+    return dossier
+
+
+async def verifier_comfyui(dossier: Path) -> list[str]:
+    """Lance ce ComfyUI une fois (le nôtre doit être arrêté) et renvoie les nœuds d'Aria qui lui manquent."""
+    if occupe("comfyui"):
+        raise ErreurMoteur("Un ComfyUI tourne déjà sur le port d'Aria : arrête-le avant la vérification")
+    comfy = ComfyUI(dossier, CONFIG["comfyui"]["port"], modeles.ecrire_chemins_comfyui())
+    await comfy.demarrer()
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            connus = (await client.get(f"{comfy.url}/object_info")).json()
+    finally:
+        await comfy.arreter()
+    return sorted(noeuds_utilises() - set(connus))
 
 
 # --- installation en tâche de fond (interface) ----------------------------------------

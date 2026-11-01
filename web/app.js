@@ -373,8 +373,10 @@ chargerEmplacements();
 
 const STATUTS_MOTEUR = {
     absent: ["absent", "ko"], a_jour: ["à jour ✓", ""], different: ["autre version", "ko"], manuel: ["installé à la main", ""],
+    externe: ["ton ComfyUI ✓", ""],
 };
 let moteursAffiches = [];
+let verificationComfyui = null;  // « J'ai déjà ComfyUI » : le message pendant la vérification (jusqu'à une minute)
 
 function suiviMoteur(t) {
     const enCours = !t.fini;
@@ -399,24 +401,34 @@ function afficherMoteurs(e) {
     moteursAffiches = e.moteurs;
     document.getElementById("liste-moteurs").innerHTML = e.moteurs.map((m) => {
         const [libelle, classe] = STATUTS_MOTEUR[m.statut];
-        const autre = m.version_installee && m.version_installee !== m.version ? ` · installé : ${echapper(m.version_installee)}` : "";
-        const installer = m.statut === "a_jour" ? ""
+        const sansV = (v) => String(v).replace(/^v/, "");  // « v0.42.1 » (tag) et « 0.42.1 » (ComfyUI) sont la même
+        const autre = m.version_installee && sansV(m.version_installee) !== sansV(m.version)
+            ? ` · installé : ${echapper(m.version_installee)}` : "";
+        const installer = ["a_jour", "externe"].includes(m.statut) ? ""
             : `<button type="button" class="petit ${m.statut === "absent" && !m.facultatif ? "principal" : ""}"
-                data-installer="${m.id}" ${occupe ? "disabled" : ""}>${m.statut === "absent" ? "Installer" : "Réinstaller"}${
+                data-installer="${m.id}" ${occupe || verificationComfyui ? "disabled" : ""}>${m.statut === "absent" ? "Installer" : "Réinstaller"}${
                 m.a_telecharger ? ` (${taille(m.a_telecharger)})` : ""}</button>`;
+        const sien = m.id !== "comfyui" ? ""
+            : m.externe ? `<button type="button" class="petit" data-comfyui-aria ${occupe || verificationComfyui ? "disabled" : ""}
+                title="Reprendre le ComfyUI installé par Aria">Revenir à celui d'Aria</button>`
+            : `<button type="button" class="petit" data-comfyui-externe ${occupe || verificationComfyui ? "disabled" : ""}
+                title="Un ComfyUI portable déjà installé (0.42.1 ou plus récent) : pas de 4 Go en double">Utiliser mon ComfyUI…</button>`;
         return `<li>
             <div>
                 <strong>${echapper(m.nom)}</strong> <span class="badge ${classe}">${libelle}</span>
                 ${m.facultatif ? '<span class="badge">facultatif</span>' : ""}${m.occupe ? '<span class="badge">en marche</span>' : ""}
                 <div class="discret">${echapper(m.role)} · épinglé ${echapper(m.version)}${autre}</div>
+                ${m.externe ? `<div class="discret">Dossier : <code>${echapper(m.chemin)}</code></div>` : ""}
             </div>
             <div class="actions-moteur">
                 ${installer}
-                ${m.precedente ? `<button type="button" class="petit" data-revenir="${m.id}" ${occupe ? "disabled" : ""}
+                ${m.precedente && !m.externe ? `<button type="button" class="petit" data-revenir="${m.id}" ${occupe || verificationComfyui ? "disabled" : ""}
                     title="Remet la version précédente (un second clic redonne celle-ci)">↺ Revenir</button>` : ""}
-                ${m.statut !== "absent" ? `<button type="button" class="petit" data-ouvrir="moteurs" data-sous="${echapper(m.dossier)}"
-                    title="Ouvrir le dossier">📂</button>` : ""}
+                ${sien}
+                ${!["absent", "externe"].includes(m.statut) ? `<button type="button" class="petit" data-ouvrir="moteurs"
+                    data-sous="${echapper(m.dossier)}" title="Ouvrir le dossier">📂</button>` : ""}
             </div>
+            ${m.id === "comfyui" && verificationComfyui ? `<div class="suivi-moteur"><span class="discret">${echapper(verificationComfyui)}</span></div>` : ""}
             ${t && t.id === m.id ? suiviMoteur(t) : ""}
         </li>`;
     }).join("");
@@ -439,10 +451,12 @@ async function chargerMoteurs() {
 }
 
 document.getElementById("liste-moteurs").addEventListener("click", async (ev) => {
-    const bouton = ev.target.closest("[data-installer], [data-revenir], [data-annuler-moteur]");
+    const bouton = ev.target.closest("[data-installer], [data-revenir], [data-annuler-moteur], [data-comfyui-externe], [data-comfyui-aria]");
     if (!bouton) return;
     try {
-        if (bouton.dataset.installer) {
+        if ("comfyuiExterne" in bouton.dataset || "comfyuiAria" in bouton.dataset) {
+            await choisirComfyui("comfyuiExterne" in bouton.dataset);
+        } else if (bouton.dataset.installer) {
             const m = moteursAffiches.find((x) => x.id === bouton.dataset.installer);
             const source = m.a_telecharger
                 ? `Téléchargement : ${taille(m.a_telecharger)} depuis sa release GitHub officielle (empreinte SHA-256 vérifiée).`
@@ -461,6 +475,30 @@ document.getElementById("liste-moteurs").addEventListener("click", async (ev) =>
     }
     chargerMoteurs();
 });
+
+// « J'ai déjà ComfyUI » : un ComfyUI portable choisi par l'utilisateur, lancé une fois pour vérifier ses nœuds.
+async function choisirComfyui(sien) {
+    let chemin = null;
+    if (sien) {
+        try {
+            chemin = (await api("POST", "/api/moteurs/comfyui/parcourir")).chemin;
+        } catch {
+            chemin = prompt("Chemin complet du dossier de ton ComfyUI portable (celui qui contient python_embeded) :");
+        }
+        if (!chemin) return;
+        if (!confirm(`Utiliser le ComfyUI de ${chemin} ?\n\nAria va le lancer une fois pour vérifier qu'il a tous les nœuds `
+            + "dont elle se sert (jusqu'à une minute). Le ComfyUI d'Aria est arrêté pendant ce temps.")) return;
+    } else if (!confirm("Reprendre le ComfyUI installé par Aria ?")) {
+        return;
+    }
+    verificationComfyui = sien ? "Vérification de ton ComfyUI (jusqu'à une minute)…" : "Bascule…";
+    await chargerMoteurs();
+    try {
+        await api("PUT", "/api/moteurs/comfyui/externe", { chemin });
+    } finally {
+        verificationComfyui = null;
+    }
+}
 
 document.getElementById("voir-moteurs").addEventListener("click", () => {
     document.querySelector('.onglet[data-vue="reglages"]').click();
