@@ -2,7 +2,6 @@
 
 import json
 import random
-import re
 import shutil
 import statistics
 import time
@@ -12,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from app import garde, mesures, prompt, reglages, securite, workflows
+from app import emplacements, garde, mesures, prompt, reglages, securite, workflows
 from app.config import CONFIG, ROOT, chemin
 from app.emplacements import DATA
 from app.modeles import DOSSIER as MODELES
@@ -483,15 +482,11 @@ def choisir_favori(id_banc: str, id_workflow: str):
 
 
 def _ecrire_config(section: str, cle: str, valeur: str):
-    """Met à jour <section>.<cle> dans config.yaml sans toucher au reste du fichier (ni aux commentaires)."""
-    fichier = ROOT / "config.yaml"
-    texte = fichier.read_text(encoding="utf-8")
-    motif = re.compile(rf"(^{section}:\n(?:[ \t].*\n|\n)*?[ \t]+{cle}:)[^\n]*", re.MULTILINE)
-    nouveau, n = motif.subn(lambda m: f'{m.group(1)} "{valeur}"', texte, count=1)
-    if n != 1:
+    """Retient le favori dans aria.yaml : config.yaml garde les valeurs livrées, qu'une mise à jour remplace."""
+    if cle not in CONFIG.get(section, {}):
         raise ErreurBanc(f"Entrée {section}.{cle} introuvable dans config.yaml")
-    fichier.write_text(nouveau, encoding="utf-8")
-    CONFIG.setdefault(section, {})[cle] = valeur
+    emplacements.retenir_favori(section, cle, valeur)
+    CONFIG[section][cle] = valeur
 
 
 def utiliser_comme_source(id_banc: str, cle: str, fichier: str) -> str:

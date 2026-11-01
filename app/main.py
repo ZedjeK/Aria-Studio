@@ -1,6 +1,7 @@
 """Serveur FastAPI d'Aria - Studio : sert l'interface web et l'API."""
 
 import asyncio
+import os
 import re
 import threading
 import uuid
@@ -1001,7 +1002,8 @@ def image_source(fichier: str):
 def lancer():
     host = CONFIG["app"]["host"]
     port = CONFIG["app"]["port"]
-    if CONFIG["app"].get("open_browser"):
+    # Le lanceur Aria-Studio.exe ouvre lui-même le navigateur, une fois le serveur prêt.
+    if CONFIG["app"].get("open_browser") and not os.environ.get("ARIA_SANS_NAVIGATEUR"):
         threading.Timer(1.5, webbrowser.open, args=[f"http://{host}:{port}"]).start()
     uvicorn.run(app, host=host, port=port)
 

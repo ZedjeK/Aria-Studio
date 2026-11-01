@@ -95,6 +95,27 @@ class DossierModeles(Base):
         self.assertEqual(emplacements._modeles(emplacements._choix()), self.maison / "modeles")
 
 
+class Favoris(Base):
+    def test_retenus_dans_aria_yaml_avec_le_dossier_des_modeles(self):
+        emplacements.choisir_modeles(str(Path(self.tmp.name) / "ailleurs"))
+        emplacements.retenir_favori("generation", "texte_vers_image", "krea2")
+        emplacements.retenir_favori("llama", "modele", "")
+        self.assertEqual(emplacements.favoris(), {"generation": {"texte_vers_image": "krea2"}, "llama": {"modele": ""}})
+        self.assertEqual(emplacements._choix()["modeles"], str(Path(self.tmp.name) / "ailleurs"))  # rien d'écrasé
+
+    def test_passent_devant_config_yaml(self):
+        from app import config
+        emplacements.retenir_favori("generation", "retouche", "mon_favori")
+        c = config.charger()
+        self.assertEqual(c["generation"]["retouche"], "mon_favori")
+        self.assertIn("texte_vers_image", c["generation"])  # le reste de config.yaml est gardé
+
+    def test_aria_yaml_bizarre_ignore(self):
+        self.maison.mkdir(parents=True)
+        (self.maison / "aria.yaml").write_text("favoris: [1, 2]", encoding="utf-8")
+        self.assertEqual(emplacements.favoris(), {})
+
+
 class Ouvrir(Base):
     def test_dossiers_connus_seulement(self):
         with mock.patch.object(emplacements.os, "startfile", create=True) as startfile:

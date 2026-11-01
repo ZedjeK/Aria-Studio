@@ -1,7 +1,7 @@
 """Emplacements des affaires d'Aria : données, modèles et moteurs, décidés une fois au démarrage.
 
 Par défaut, tout vit dans le dossier de l'utilisateur, comme ~/.ollama ou ~/.claude :
-    %USERPROFILE%\\.Aria-Studio\\aria.yaml   choix de l'utilisateur (dossier des modèles)
+    %USERPROFILE%\\.Aria-Studio\\aria.yaml   choix de l'utilisateur (dossier des modèles, favoris du Casting)
     %USERPROFILE%\\.Aria-Studio\\data\\      séquences, rushes, réglages, voix, journaux
     %USERPROFILE%\\.Aria-Studio\\modeles\\   modèles (ailleurs si l'utilisateur l'a choisi dans aria.yaml)
     %USERPROFILE%\\.Aria-Studio\\moteurs\\   ComfyUI portable, llama-server
@@ -9,6 +9,8 @@ Mode portable : si un dossier data\\ se trouve à côté du code (installation d
 tout reste à côté du code : aria.yaml, data\\, modeles\\ et services\\.
 
 Les modules lisent ces chemins à l'import : un changement de dossier des modèles vaut au prochain démarrage.
+Ce module ne dépend pas d'app.config : c'est config qui lui emprunte les favoris (une mise à jour remplace le code,
+config.yaml compris, sans toucher à aria.yaml).
 """
 
 import os
@@ -17,8 +19,7 @@ from pathlib import Path
 
 import yaml
 
-from app.config import ROOT
-
+ROOT = Path(__file__).resolve().parent.parent  # dossier du code (celui de app\)
 DEFAUT = Path.home() / ".Aria-Studio"  # Windows ignore la casse : .aria-studio désigne le même dossier
 NOMS = {"racine": "Dossier d'Aria", "data": "Données", "modeles": "Modèles", "moteurs": "Moteurs"}
 
@@ -44,6 +45,25 @@ def _choix() -> dict:
         return yaml.safe_load(_fichier_choix().read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError):
         return {}
+
+
+def _ecrire_choix(choix: dict):
+    _fichier_choix().parent.mkdir(parents=True, exist_ok=True)
+    _fichier_choix().write_text(
+        "# Choix de l'utilisateur pour Aria - Studio (onglet Modèles, favoris du Casting) : lu au démarrage.\n"
+        + yaml.safe_dump(choix, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def favoris() -> dict:
+    """Favoris du Casting, par section de config.yaml : {"generation": {"texte_vers_image": "…"}, "llama": {…}}."""
+    f = _choix().get("favoris")
+    return {s: dict(v) for s, v in f.items() if isinstance(v, dict)} if isinstance(f, dict) else {}
+
+
+def retenir_favori(section: str, cle: str, valeur: str):
+    choix = _choix()
+    choix.setdefault("favoris", {}).setdefault(section, {})[cle] = valeur
+    _ecrire_choix(choix)
 
 
 def _modeles(choix: dict) -> Path:
@@ -125,10 +145,7 @@ def choisir_modeles(chemin: str | None) -> dict:
         choix["modeles"] = str(dossier)
     else:
         choix.pop("modeles", None)
-    _fichier_choix().parent.mkdir(parents=True, exist_ok=True)
-    _fichier_choix().write_text(
-        "# Choix de l'utilisateur pour Aria - Studio (onglet Modèles) : lu au démarrage.\n"
-        + yaml.safe_dump(choix, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    _ecrire_choix(choix)
     return etat()
 
 

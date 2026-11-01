@@ -13,3 +13,6 @@ __pycache__/
 # Réglages locaux de Claude Code (serveur de test)
 .claude/
 aria.yaml
+
+# Construction de la version portable (tools/build_portable.py)
+.build_cache/
