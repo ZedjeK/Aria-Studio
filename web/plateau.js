@@ -85,7 +85,8 @@ function remplirSelect(id, valeurs, defaut) {
 // Une ligne par modèle : « workflow::fichier ». Le modèle d'origine d'abord, puis les variantes de la famille.
 const lignesModeles = (tache) => tache.choix.flatMap((w) => w.modeles.map((m) => [
     `${w.id}::${m}`,
-    m === w.origine ? `${w.nom}${w.id === tache.defaut ? " ★" : ""}` : `   ↳ ${w.nom} · ${m.replace(/\.safetensors$/, "")}`,
+    (m === w.origine ? `${w.nom}${w.id === tache.defaut ? " ★" : ""}` : `   ↳ ${w.nom} · ${m.replace(/\.safetensors$/, "")}`)
+        + (m === w.modele_defaut && m !== w.origine ? " (défaut)" : ""),
 ]));
 
 // Les listes sont relues à chaque affichage du Plateau : un modèle déposé dans son dossier y apparaît aussitôt.
@@ -100,7 +101,7 @@ async function chargerOptionsPlateau() {
     remplirModelesCreation();
     const edit = o.workflows.retouche;
     const origineEdit = edit.choix.find((w) => w.id === edit.defaut);
-    remplir("workflow-retouche", lignesModeles(edit), origineEdit && `${origineEdit.id}::${origineEdit.origine}`);
+    remplir("workflow-retouche", lignesModeles(edit), origineEdit && `${origineEdit.id}::${origineEdit.modele_defaut}`);
     const choisi = t2i.choix.find((w) => w.id === choixModele("workflow-creation").workflow);
     remplir("format-creation", o.formats.map((f) => [f, f]), choisi?.format ?? o.formats[0]);
     remplir("nombre-creation", Array.from({ length: o.nombre_max }, (_, i) => [String(i + 1), String(i + 1)]), "1");
@@ -142,7 +143,8 @@ function remplirModelesCreation() {
     if (!optionsPlateau) return;
     const t = listeCreation();
     const origine = t.choix.find((w) => w.id === t.defaut) ?? t.choix[0];
-    remplirSelect("workflow-creation", lignesModeles(t), origine && `${origine.id}::${origine.origine}`);
+    // Présélection : le checkpoint par défaut réglé dans l'onglet Réglages (l'origine tant que rien n'est réglé).
+    remplirSelect("workflow-creation", lignesModeles(t), origine && `${origine.id}::${origine.modele_defaut}`);
     afficherLoras("loras-creation", "workflow-creation");
     const variation = referencesActives().length > 0 && modeReference === "variation";
     const format = document.getElementById("format-creation");

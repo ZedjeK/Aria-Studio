@@ -64,7 +64,7 @@ CONSIGNE_SEQUENCE = ("(This is one shot of a sequence: the character's face, age
                      "quotes, nobody speaks.)")
 # Ce qui, s'il change, oblige à retourner le plan (et ceux qui en dépendent).
 CONTENU_PLAN = ("idee", "prompt", "duree", "enchainement", "rush", "seed", "ambiance")
-CONTENU_SEQUENCE = ("qualite", "format", "casting")
+CONTENU_SEQUENCE = ("qualite", "format", "casting", "modele")  # un autre checkpoint : des plans qui ne se ressemblent plus
 
 
 class ErreurSequence(ValueError):
@@ -321,16 +321,25 @@ def _valider(donnees: dict, pour_tourner: bool = False) -> dict:
                       "ambiance": bool(p.get("ambiance", True)),  # décochée : un plan qui se passe ailleurs
                       "clip": p.get("clip"), "prompt_final": p.get("prompt_final"), "a_jour": p.get("a_jour", False)})
 
+    modele = donnees.get("modele") or None  # None : creer() prend le défaut des réglages, modifier() garde l'ancien
+    if modele and modele not in _workflow().variantes():
+        raise ErreurSequence(f"Checkpoint absent de modeles/{_workflow().famille}/modeles : {modele}")
     s = {"titre": titre, "qualite": qualite, "format": format_, "casting": casting, "plans": plans,
-         "llm": donnees.get("llm") or None}
+         "llm": donnees.get("llm") or None, "modele": modele}
     # AS-18 : tout le texte de la séquence, avec les textes d'origine des rushes, clips et voix qu'elle utilise.
     securite.verifier(ambiance, contrainte, *(p["idee"] for p in plans), *(p["prompt"] or "" for p in plans),
                       *_textes(s))
     return s
 
 
+def _workflow() -> "workflows.Workflow":
+    """Le workflow de tous les plans (image vers vidéo) : sa famille donne les checkpoints proposés."""
+    return workflows.obtenir(CONFIG.get("generation", {}).get("image_vers_video"))
+
+
 def creer(donnees: dict) -> dict:
     s = _valider(donnees)
+    s["modele"] = s["modele"] or _workflow().choisi(None)  # la séquence garde son checkpoint, même si le défaut change
     for p in s["plans"]:
         p.update(clip=None, prompt_final=None, a_jour=False)
     s.update(id=f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}", date=datetime.now().isoformat(timespec="seconds"),
@@ -344,7 +353,9 @@ def modifier(id_sequence: str, donnees: dict) -> dict:
     change) n'est plus « à jour » : il sera retourné, ses anciens clips restent dans les Bobines."""
     ancienne = lire(id_sequence)
     ancienne["casting"] = {**CASTING_DEFAUT, **ancienne["casting"]}
+    ancienne["modele"] = ancienne.get("modele") or _workflow().modele_origine  # tournée avant le choix du checkpoint
     s = _valider(donnees)
+    s["modele"] = s["modele"] or ancienne["modele"]
     tout_change = any(s[c] != ancienne[c] for c in CONTENU_SEQUENCE)
     if ancienne.get("contrainte_en", {}).get("fr") == s["casting"]["contrainte"]:
         s["contrainte_en"] = ancienne["contrainte_en"]  # traduction encore valable
@@ -420,6 +431,7 @@ def graphe_plan(s: dict, k: int, prompt_plan: str, seed: int, fichiers: dict) ->
     q = plateau.QUALITES_VIDEO[s["qualite"]]
     wf = workflows.obtenir(CONFIG.get("generation", {}).get("image_vers_video"))
     valeurs = {"prompt": prompt_plan, "seed": seed, "duree": p["duree"], "megapixels": q["megapixels"],
+               "modele": s.get("modele"),
                "steps": steps_plan(s, p), "prefixe": "aria_sequence"}
     if p["enchainement"] == "rush":
         valeurs["image"] = fichiers["rush"]
@@ -825,7 +837,7 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
             "enchainement": plan["enchainement"], "idee": plan["idee"], "prompt": prompt_plan, "llm": s["llm"],
             "workflow": CONFIG.get("generation", {}).get("image_vers_video"), "qualite": s["qualite"],
             "duree": plan["duree"], "megapixels": plateau.QUALITES_VIDEO[s["qualite"]]["megapixels"],
-            "steps": steps_plan(s, plan), "voix": ref_voix,
+            "steps": steps_plan(s, plan), "voix": ref_voix, "modele": _workflow().choisi(s.get("modele")),
             "seed": seed, "parent": plan["rush"], "dossier": s["dossier"],
             "duree_s": round(time.perf_counter() - debut, 2)})
         plan["a_jour"] = True

@@ -34,6 +34,8 @@ async function preparerSequence() {
     if (!optionsMontage) await preparerMontage();
     const v = optionsMontage.video;
     remplirSelect("qualite-sequence", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.megapixels} MP`]), "rapide");
+    const ck = checkpointsVideo();
+    remplirSelect("modele-sequence", ck.lignes, ck.defaut);
     remplirSelect("format-sequence", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     remplirSelect("llm-sequence", optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]),
                   optionsMontage.llm.defaut);
@@ -75,6 +77,8 @@ function afficherSequence(s) {
     alerte.textContent = s.alerte ?? "";
     alerte.hidden = !s.alerte;
     document.getElementById("qualite-sequence").value = s.qualite;
+    // Une nouvelle séquence prend le défaut des réglages ; une séquence existante garde le sien.
+    document.getElementById("modele-sequence").value = s.modele ?? checkpointsVideo().defaut ?? "";
     document.getElementById("format-sequence").value = s.format;
     if (s.llm) document.getElementById("llm-sequence").value = s.llm;
     document.getElementById("supprimer-sequence").disabled = !s.id;
@@ -233,6 +237,7 @@ document.querySelector(".onglets-casting").addEventListener("click", (e) => {
     document.querySelectorAll(".volet-casting").forEach((v) => { v.hidden = v.dataset.voletCasting !== onglet; });
 });
 [["voix-sequence", (v) => { sequenceCourante.casting.voix = v || null; majEcouteVoix(); }],
+ ["modele-sequence", (v) => { sequenceCourante.modele = v || null; }],
  ["qualite-sequence", (v) => { sequenceCourante.qualite = v; }],
  ["format-sequence", (v) => { sequenceCourante.format = v; }]].forEach(([id, poser]) => {
     document.getElementById(id).addEventListener("change", (e) => {
@@ -358,6 +363,7 @@ document.getElementById("ajouter-plan").addEventListener("click", () => {
 function corpsSequence() {
     const s = sequenceCourante;
     return { titre: s.titre.trim(), qualite: s.qualite, format: s.format, llm: s.llm || null,
+             modele: s.modele ?? (document.getElementById("modele-sequence").value || null),
              casting: { personnage: s.casting.personnage, voix: s.casting.voix, ambiance: s.casting.ambiance,
                         contrainte: s.casting.contrainte ?? "", reference_partout: s.casting.reference_partout !== false },
              plans: s.plans.map((p) => ({ ...p })) };

@@ -99,6 +99,24 @@ def llm_au_choix() -> list[dict]:
                     for f in presents if f not in favoris]
 
 
+_CHARGEMENT_RATE = re.compile(r"UNETLoader|CheckpointLoader|state_dict|size mismatch|unexpected key|missing key|"
+                              r"deserializ|could not detect model type|header too large", re.I)
+
+
+def expliquer_erreur(c: "Commande", message: str) -> str:
+    """Un checkpoint déposé qui n'est pas de la bonne architecture fait échouer ComfyUI au chargement : on le dit
+    clairement plutôt que de montrer l'erreur brute."""
+    try:
+        wf = workflows.obtenir(c.workflow)
+        modele = wf.choisi(c.modele)
+    except workflows.ErreurWorkflow:
+        return message
+    if modele != wf.modele_origine and _CHARGEMENT_RATE.search(message):
+        return (f"Le checkpoint « {modele} » ne se charge pas dans {wf.fiche['nom']} : il n'est sans doute pas de la "
+                f"même architecture. Reviens au modèle d'origine ({wf.modele_origine}). Détail : {message[:200]}")
+    return message
+
+
 def _dimensions_png(donnees: bytes) -> tuple[int, int]:
     return struct.unpack(">II", donnees[16:24])
 
@@ -130,12 +148,14 @@ class Plateau:
                     "defaut": CONFIG.get("generation", {}).get(tache),
                     "choix": [{"id": wf.id, "nom": wf.fiche["nom"], "famille": wf.famille,
                                "origine": wf.modele_origine, "modeles": wf.variantes(),
+                               "modele_defaut": wf.choisi(None),  # réglé dans l'onglet Réglages
                                "loras": modeles.loras(wf.famille),
                                "format": reglages.valeurs_workflow(wf).get("ratio"),  # réglable (onglet Réglages)
                                "references": wf.accepte_references(), "variation": wf.accepte_variation()}
                               for wf in prets if wf.fiche["tache"] == tache],
                 }
-                for tache in ("texte_vers_image", "retouche", "texte_vers_video")  # vidéo : modèle cible du Scénario
+                # vidéo : modèle cible du Scénario, et checkpoints proposés dans le Montage
+                for tache in ("texte_vers_image", "retouche", "image_vers_video", "texte_vers_video")
             },
             "references_defaut": CONFIG.get("generation", {}).get("references"),
             "video": {
@@ -213,8 +233,9 @@ class Plateau:
 
     def commander_clip(self, idee: str, prompt_force: str | None, llm: str | None, mode: str,
                        source: str | None, qualite: str, duree: int, format: str, seed: int | None,
-                       nombre: int, dossier: str | None = None) -> Commande:
-        """Montage : un clip H3 (avec le son), en animant un rush ou à partir d'un texte."""
+                       nombre: int, dossier: str | None = None, modele: str | None = None) -> Commande:
+        """Montage : un clip H3 (avec le son), en animant un rush ou à partir d'un texte.
+        `modele` : un checkpoint de la famille ; None = le modèle par défaut des réglages."""
         if mode not in MODES_VIDEO:
             raise ErreurPlateau(f"Mode inconnu : {mode}")
         if qualite not in QUALITES_VIDEO:
@@ -231,6 +252,7 @@ class Plateau:
         wf = workflows.obtenir(workflow)
         if wf.manquants():
             raise ErreurPlateau(f"Workflow vidéo incomplet : {workflow}")
+        self._valider_modele(wf, modele)
         textes = textes_origine([source] if mode == "animer" else [])
         if prompt_force is None:
             if not idee.strip():
@@ -241,8 +263,8 @@ class Plateau:
             securite.verifier(idee, prompt_force, *textes)
         return self._mettre_en_file(Commande(
             idee, prompt_force, None if prompt_force is not None else llm, workflow, format, seed, nombre,
-            source if mode == "animer" else None, type="clip", mode_video=mode, qualite=qualite, duree=duree,
-            textes_origine=textes, dossier=dossier))
+            source if mode == "animer" else None, modele, type="clip", mode_video=mode, qualite=qualite,
+            duree=duree, textes_origine=textes, dossier=dossier))
 
     def commander_sequence(self, id_sequence: str, plans: list[int] | None = None) -> Commande:
         """Montage, mode Séquence : tourne les plans demandés (et ceux qui en dépendent), puis assemble le film."""
@@ -262,7 +284,8 @@ class Plateau:
         if workflows.obtenir(workflow).manquants():
             raise ErreurPlateau(f"Workflow vidéo incomplet : {workflow}")
         return self._mettre_en_file(Commande(
-            s["titre"], None, s["llm"], workflow, s["format"], None, 1, type="sequence", qualite=s["qualite"],
+            s["titre"], None, s["llm"], workflow, s["format"], None, 1, modele=s.get("modele"), type="sequence",
+            qualite=s["qualite"],
             sequence=id_sequence, plans=indices, dossier=s["dossier"]))
 
     def commander_voix(self, phrase: str, description: str, personnage: str | None, seed: int | None) -> Commande:
@@ -374,7 +397,7 @@ class Plateau:
                 await self._executer(commande)
                 commande.etat = "termine"
             except Exception as e:
-                commande.etat, commande.erreur = "erreur", str(e) or repr(e)
+                commande.etat, commande.erreur = "erreur", expliquer_erreur(commande, str(e) or repr(e))
             finally:
                 commande.etape = ""
 
@@ -458,7 +481,7 @@ class Plateau:
             "prompt": c.prompt,
             "llm": c.llm,
             "workflow": c.workflow,
-            "modele": c.modele or wf.modele_origine,
+            "modele": wf.choisi(c.modele),
             "loras": c.loras,
             "format": c.format,
             "seed": seed,
@@ -491,7 +514,7 @@ class Plateau:
             c.progression = 0.0
             debut_clip = time.perf_counter()
             valeurs = {"prompt": c.prompt, "seed": seed, "duree": c.duree, "megapixels": q["megapixels"],
-                       "steps": q["steps"], "prefixe": "aria_montage"}
+                       "steps": q["steps"], "modele": c.modele, "prefixe": "aria_montage"}
             async with self.orchestrateur.comfyui() as comfy:
                 if c.mode_video == "animer":
                     source = source or await comfy.televerser(chemin_image(c.parent))
@@ -516,6 +539,7 @@ class Plateau:
                 "duree": c.duree,
                 "megapixels": q["megapixels"],
                 "steps": q["steps"],
+                "modele": wf.choisi(c.modele),
                 "format": c.format if c.mode_video == "texte" else "image source",
                 "seed": seed,
                 "parent": c.parent,
@@ -561,7 +585,7 @@ class Plateau:
                 "prompt": c.prompt,
                 "llm": c.llm,
                 "workflow": c.workflow,
-                "modele": c.modele or wf.modele_origine,
+                "modele": wf.choisi(c.modele),
                 "loras": c.loras,
                 "format": c.format,
                 "seed": seed,

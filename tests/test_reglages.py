@@ -37,7 +37,9 @@ class AvecFichierTemporaire(unittest.TestCase):
 
 class Workflows(AvecFichierTemporaire):
     def test_reglages_proposes_selon_le_graphe(self):
-        cles = {wf.id: set(reglages.params_workflow(wf)) for wf in workflows.catalogue()}
+        # « modele » (le checkpoint par défaut) partout : toutes les fiches livrées ont l'entrée modele.
+        cles = {wf.id: set(reglages.params_workflow(wf)) - {"modele"} for wf in workflows.catalogue()}
+        self.assertTrue(all("modele" in reglages.params_workflow(wf) for wf in workflows.catalogue()))
         self.assertEqual(cles["krea2_turbo"], {"steps", "cfg", "sampler", "scheduler", "megapixels", "ratio", "mots_max"})
         self.assertEqual(cles["qwen_image_edit_2511"], {"steps", "cfg", "sampler", "scheduler", "shift"})
         self.assertEqual(cles["qwen_image_2_1_edit"], {"steps", "cfg", "sampler", "scheduler"})
@@ -64,7 +66,8 @@ class Workflows(AvecFichierTemporaire):
     def test_valeurs_d_origine(self):
         wf = workflows.obtenir("qwen_image_edit_2511")
         self.assertEqual(reglages.valeurs_workflow(wf),
-                         {"steps": 4, "cfg": 1.0, "sampler": "euler", "scheduler": "simple", "shift": 3.1})
+                         {"steps": 4, "cfg": 1.0, "sampler": "euler", "scheduler": "simple", "shift": 3.1,
+                          "modele": "qwen_image_edit_2511_int8_convrot.safetensors"})
 
     def test_preparer_applique_les_reglages(self):
         reglages.modifier_workflow("qwen_image_edit_2511",

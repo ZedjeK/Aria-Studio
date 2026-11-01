@@ -44,8 +44,8 @@ async function chargerReglages() {
 
 const formatValeur = (p, v) => p.type === "booleen" ? (v ? "oui" : "non") : String(v);
 
-function champReglage(p) {
-    const id = `reglage-${p.cle}`;
+function champReglage(p, prefixe = "reglage") {
+    const id = `${prefixe}-${p.cle}`;
     let saisie;
     if (p.type === "booleen") {
         saisie = `<label class="case"><input id="${id}" type="checkbox" data-cle="${p.cle}" ${p.valeur ? "checked" : ""}> activée</label>`;
@@ -125,8 +125,27 @@ function majBoutonLlm() {
 function afficherWorkflow() {
     const w = workflowAffiche();
     if (!w) return;
-    document.getElementById("params-workflow").innerHTML = w.params.map(champReglage).join("");
+    document.getElementById("params-workflow").innerHTML = w.params.map((p) => champReglage(p)).join("");
+    afficherVariantes(w);
     majBoutonWorkflow();
+}
+
+// Checkpoints de la famille : chacun ses réglages (un checkpoint « Turbo » intègre déjà la LoRA du workflow).
+function afficherVariantes(w) {
+    const bloc = document.getElementById("variantes-workflow");
+    bloc.hidden = !w.variantes.length;
+    bloc.querySelector(".liste-variantes").innerHTML = w.variantes.map((v, i) => `
+        <details class="variante" data-variante="${echapper(v.fichier)}" ${v.params.some((p) => p.modifie) ? "open" : ""}>
+            <summary>${echapper(v.fichier.replace(/\.safetensors$/, ""))}
+                ${v.origine ? '<span class="badge">origine</span>' : ""}
+                ${v.connue ? "" : "<span class=\"badge ko\" title=\"Déposé à la main : ni source ni licence connues. Passe par l'onglet Modèles (lien Civitai ou Hugging Face) pour les avoir.\">source inconnue</span>"}
+                ${v.params.some((p) => p.modifie) ? '<span class="badge">réglé</span>' : ""}</summary>
+            <div class="params">${v.params.map((p) => champReglage(p, `variante-${i}`)).join("")}</div>
+            <div class="ligne pied-reglages">
+                <span class="discret etat-variante"></span>
+                <button type="button" class="petit" data-enregistrer-variante>Enregistrer</button>
+            </div>
+        </details>`).join("");
 }
 
 function majBoutonWorkflow() {
@@ -183,7 +202,7 @@ document.getElementById("enregistrer-workflow").addEventListener("click", () => 
 // ↺ : retour immédiat à la valeur d'origine (les autres saisies en cours sont abandonnées).
 document.getElementById("vue-reglages").addEventListener("click", (e) => {
     const bouton = e.target.closest(".restaurer");
-    if (!bouton) return;
+    if (!bouton || bouton.closest("#variantes-workflow")) return;  // un checkpoint : son propre enregistrement
     if (bouton.dataset.restaurerConsigne) {
         enregistrerReglages(urlLlm(), { consignes: { [bouton.dataset.restaurerConsigne]: null } }, "etat-llm");
     } else if (bouton.closest("#params-llm")) {
@@ -284,4 +303,23 @@ document.getElementById("appliquer-optimiser").addEventListener("click", async (
     await chargerReglages();
     await optimiser();
     etat.textContent = `${choisies.length} réglage${choisies.length > 1 ? "s" : ""} appliqué${choisies.length > 1 ? "s" : ""} ✓ (↺ pour revenir en arrière)`;
+});
+
+// Réglages d'un checkpoint : enregistrés à part (PUT …/variantes/<fichier>).
+document.getElementById("variantes-workflow").addEventListener("click", async (e) => {
+    const bloc = e.target.closest(".variante");
+    if (!bloc) return;
+    const v = workflowAffiche().variantes.find((x) => x.fichier === bloc.dataset.variante);
+    const restaurer = e.target.closest(".restaurer");
+    if (!restaurer && !e.target.closest("[data-enregistrer-variante]")) return;
+    const valeurs = restaurer ? { [restaurer.dataset.restaurer]: null } : changementsParams(bloc.querySelector(".params"), v.params);
+    const etat = bloc.querySelector(".etat-variante");
+    try {
+        await api("PUT", `${urlWorkflow()}/variantes/${encodeURIComponent(v.fichier)}`, { valeurs });
+        await chargerReglages();
+        document.getElementById("etat-workflow").textContent = `${v.fichier} : enregistré ✓`;
+    } catch (err) {
+        etat.textContent = err.message;
+        etat.classList.add("ko");
+    }
 });

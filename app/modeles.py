@@ -123,6 +123,11 @@ def cle(chemin_fichier: Path) -> str:
     return chemin_fichier.relative_to(DOSSIER).as_posix()
 
 
+def connu(dossier: str, nom: str) -> bool:
+    """Le fichier a-t-il été téléchargé par Aria (source et licence au registre), ou déposé à la main ?"""
+    return f"{dossier}/{nom}" in charger_registre()
+
+
 def charger_registre() -> dict[str, dict]:
     if not REGISTRE.is_file():
         return {}

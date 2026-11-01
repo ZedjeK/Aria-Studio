@@ -96,11 +96,16 @@ class Workflow:
         entrees = self.fiche["entrees"]
         # Ordre de priorité : valeurs de l'appel > réglages de Jérémy (data/reglages.yaml) > défauts de la fiche.
         regle = reglages.valeurs_workflow(self)
+        if valeurs.get("modele") is None:  # rien de choisi : le modèle par défaut des réglages, pas l'origine
+            valeurs = {k: v for k, v in valeurs.items() if k != "modele"}
         tout = {**self.fiche.get("defauts", {}), **{k: v for k, v in regle.items() if k in entrees}, **valeurs}
         if tout.get("modele") is None:
             tout.pop("modele", None)  # le modèle d'origine, déjà dans api.json
         elif tout["modele"] not in self.variantes():
             raise ErreurWorkflow(f"Modèle absent de {self.famille}/modeles : {tout['modele']}")
+        variante = reglages.valeurs_variante(self, tout.get("modele") or self.modele_origine)
+        if variante.get("steps") and "steps" in entrees:
+            tout["steps"] = variante["steps"]  # ce checkpoint impose les siens (réglage par variante)
         choix_loras = tout.pop("loras", None) or []
         references = tout.pop("references", None) or []  # images 2 et 3 (déjà téléversées) ; l'image 1 = « image »
         format_sortie = tout.pop("format_sortie", None)  # S'inspirer : format choisi au lieu de celui de l'image 1
@@ -114,6 +119,8 @@ class Workflow:
             noeud, entree = entrees[cle]
             api[noeud]["inputs"][entree] = valeur
         reglages.appliquer_noeuds(self, api, regle)
+        if not variante.get("lora_workflow", True):
+            self._retirer_loras_workflow(api)
         if references or format_sortie:
             self._brancher_references(api, references, format_sortie)
         if variation:
@@ -177,6 +184,21 @@ class Workflow:
                                   "inputs": {"pixels": ["aria_var_echelle", 0], "vae": [vae, 0]}}
         api[ks]["inputs"]["latent_image"] = ["aria_var_latent", 0]
         api[ks]["inputs"]["denoise"] = denoise
+
+    def choisi(self, modele: str | None) -> str:
+        """Le checkpoint réellement utilisé : celui demandé, sinon le défaut des réglages."""
+        return modele or reglages.valeurs_workflow(self).get("modele") or self.modele_origine
+
+    @staticmethod
+    def _retirer_loras_workflow(api: dict):
+        """Court-circuite les LoRAs livrées avec le workflow (un checkpoint qui intègre déjà le Turbo) : ce qui lisait
+        une LoRA lit directement le modèle qu'elle recevait."""
+        for nid in [n for n, v in api.items() if v.get("class_type") == "LoraLoaderModelOnly"]:
+            source = api.pop(nid)["inputs"]["model"]
+            for noeud in api.values():
+                for entree, valeur in noeud["inputs"].items():
+                    if valeur == [nid, 0]:
+                        noeud["inputs"][entree] = source
 
     def _inserer_loras(self, api: dict, choix: list[dict]):
         """Chaîne des LoraLoaderModelOnly juste après le chargeur du modèle de diffusion :

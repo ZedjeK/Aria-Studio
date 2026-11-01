@@ -477,6 +477,15 @@ def regler_workflow(id_workflow: str, demande: DemandeReglagesWorkflow):
         raise HTTPException(400, str(e))
 
 
+@app.put("/api/reglages/workflows/{id_workflow}/variantes/{fichier}")
+def regler_variante(id_workflow: str, fichier: str, demande: DemandeReglagesWorkflow):
+    """Réglages propres à un checkpoint : LoRA du workflow gardée ou non, steps imposés."""
+    try:
+        return reglages.modifier_variante(id_workflow, fichier, demande.valeurs)
+    except (reglages.ErreurReglages, workflows.ErreurWorkflow) as e:
+        raise HTTPException(400, str(e))
+
+
 # Plateau : créations et rushes
 
 class DemandeCreation(BaseModel):
@@ -632,13 +641,14 @@ class DemandeClip(BaseModel):
     seed: int | None = None
     nombre: int = 1
     dossier: str | None = None
+    modele: str | None = None  # checkpoint de la famille ; absent = le modèle par défaut des réglages
 
 
 @app.post("/api/clips")
 def tourner_clip(d: DemandeClip):
     return _commander(lambda: plateau_.commander_clip(
         d.idee, d.prompt, d.llm, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
-        rushes.valider_dossier(d.dossier)))
+        rushes.valider_dossier(d.dossier), d.modele))
 
 
 # Montage, mode Séquence
@@ -652,6 +662,7 @@ class DemandeSequence(BaseModel):
     casting: dict = {}
     plans: list[dict] = []  # [{id, idee, prompt, duree, enchainement, rush, seed, ambiance}]
     llm: str | None = None
+    modele: str | None = None  # checkpoint ; absent = défaut des réglages (création) ou celui déjà choisi
 
 
 class DemandeTournageSequence(BaseModel):

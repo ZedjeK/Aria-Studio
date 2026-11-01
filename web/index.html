@@ -193,6 +193,7 @@
                                   placeholder="Ton idée, en français. Les répliques entre guillemets : elle lève les yeux et murmure « On décolle ce soir. »"></textarea>
                     </div>
                     <div class="options-creation">
+                        <label title="Checkpoint de MiniMax H3 (dépose les tiens dans modeles/MiniMax-H3/modeles ; défaut et réglages dans l'onglet Réglages)">Modèle <select id="modele-montage"></select></label>
                         <label>Qualité <select id="qualite-montage"></select></label>
                         <label>Durée <select id="duree-montage"></select></label>
                         <label id="bloc-format-montage" hidden>Format <select id="format-montage"></select></label>
@@ -272,6 +273,7 @@
                                 <p id="erreur-voix" class="ko" hidden></p>
                             </div>
                             <div class="options-creation">
+                                <label title="Tous les plans de la séquence sont tournés avec ce checkpoint">Modèle <select id="modele-sequence"></select></label>
                                 <label>Qualité <select id="qualite-sequence"></select></label>
                                 <label id="bloc-format-sequence" hidden>Format <select id="format-sequence"></select></label>
                                 <label>LLM <select id="llm-sequence"></select></label>
@@ -565,6 +567,12 @@
                     <h2>Workflows</h2>
                     <label class="cible-reglages">Workflow <select id="workflow-reglages"></select></label>
                     <div id="params-workflow" class="params"></div>
+                    <div id="variantes-workflow" hidden>
+                        <h3 class="titre-bloc">Checkpoints de la famille</h3>
+                        <p class="discret">Les réglages propres à chacun. Un checkpoint « Turbo » ou « Lightning » intègre
+                            souvent déjà la LoRA du workflow : décoche-la pour lui.</p>
+                        <div class="liste-variantes"></div>
+                    </div>
                     <p id="source-samplers" class="discret"></p>
                     <div class="ligne pied-reglages">
                         <span id="etat-workflow" class="discret"></span>

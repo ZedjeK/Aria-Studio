@@ -2014,3 +2014,20 @@ button.onglet-casting.actif {
     margin: 6px 0;
     font-size: 0.8rem;
 }
+
+/* Réglages : checkpoints de la famille d'un workflow */
+.variante {
+    border: 1px solid var(--bord);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.variante summary {
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.variante small {
+    overflow-wrap: anywhere;
+}

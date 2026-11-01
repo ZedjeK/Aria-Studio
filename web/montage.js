@@ -31,9 +31,24 @@ for (const conteneur of [document.querySelector("#bobines-montage [data-role=vig
     conteneur.addEventListener("mouseout", (e) => { if (e.target.tagName === "VIDEO") e.target.pause(); });
 }
 
+// Checkpoints de MiniMax H3 (image et texte vers vidéo partagent la famille) : [[fichier, libellé]] et le défaut
+// réglé dans l'onglet Réglages.
+function checkpointsVideo() {
+    const t = optionsMontage.workflows.image_vers_video;
+    const w = t.choix.find((x) => x.id === t.defaut) ?? t.choix[0];
+    if (!w) return { lignes: [], defaut: null };
+    return {
+        lignes: w.modeles.map((m) => [m, `${m.replace(/\.safetensors$/, "")}${m === w.origine ? " (origine)" : ""}`
+                                          + `${m === w.modele_defaut ? " ★" : ""}`]),
+        defaut: w.modele_defaut,
+    };
+}
+
 async function preparerMontage() {
     optionsMontage = await api("GET", "/api/plateau/options");
     const v = optionsMontage.video;
+    const ck = checkpointsVideo();
+    remplirSelect("modele-montage", ck.lignes, ck.defaut);
     remplirSelect("qualite-montage", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.megapixels} MP · ${q.steps} steps`]),
         v.defaut_qualite);
     remplirSelect("duree-montage", v.durees.map((d) => [String(d), `${d} s`]), "5");
@@ -175,6 +190,7 @@ function reglagesMontage() {
         mode: modeMontage,
         source: modeMontage === "animer" ? sourceMontage : null,
         qualite: document.getElementById("qualite-montage").value,
+        modele: document.getElementById("modele-montage").value || null,
         duree: Number(document.getElementById("duree-montage").value),
         format: document.getElementById("format-montage").value,
         nombre: Number(document.getElementById("nombre-montage").value),

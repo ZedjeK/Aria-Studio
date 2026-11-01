@@ -7,7 +7,9 @@ fichier) revient aux valeurs d'origine. Chaque valeur est contrôlée avant d'ê
     llm:
         <fichier.gguf>: {temperature_reecriture: 0.5, contexte: 8192, consignes: {peaufinage: "…"}}
     workflows:
-        <id>: {steps: 30, cfg: 1.0, sampler: euler, scheduler: simple, shift: 3.1, megapixels: 1, …}
+        <id>: {steps: 30, cfg: 1.0, sampler: euler, scheduler: simple, shift: 3.1, megapixels: 1, …,
+               modele: <checkpoint par défaut, dans modeles/<Famille>/modeles>,
+               variantes: {<checkpoint>: {lora_workflow: false, steps: 6}}}
 """
 
 import json
@@ -258,12 +260,65 @@ def params_workflow(wf) -> dict[str, Param]:
                             choix=tuple(FORMATS)))
     if "mots_max" in (profil := wf.fiche.get("profil_prompt") or {}):
         params.append(Param("mots_max", "Prompt : mots conseillés", "entier", int(profil["mots_max"]), 20, 1000, 10))
+    if "modele" in entrees:
+        params.append(Param("modele", "Modèle par défaut", "choix", wf.modele_origine, choix=tuple(wf.variantes()),
+                            aide=f"Checkpoint utilisé partout (Plateau, Montage, séquences) quand rien d'autre n'est "
+                                 f"choisi. Dépose les tiens dans modeles/{wf.famille}/modeles"))
     return {p.cle: p for p in params}
 
 
 def valeurs_workflow(wf) -> dict:
+    """Réglages de Jérémy, sinon d'origine. Un choix qui n'est plus proposé (checkpoint supprimé du dossier, sampler
+    disparu) revient à la valeur d'origine au lieu de faire échouer la génération."""
     propres = lire()["workflows"].get(wf.id, {})
-    return {cle: propres.get(cle, p.defaut) for cle, p in params_workflow(wf).items()}
+    valeurs = {}
+    for cle, p in params_workflow(wf).items():
+        valeur = propres.get(cle, p.defaut)
+        valeurs[cle] = p.defaut if p.type == "choix" and valeur not in p.choix else valeur
+    return valeurs
+
+
+# Réglages propres à un checkpoint (une variante de la famille) : certains intègrent déjà l'accélération que le
+# workflow ajoute par une LoRA (Turbo, Lightning), ou demandent d'autres steps.
+
+def loras_du_workflow(wf) -> list[str]:
+    """Nœuds LoraLoaderModelOnly livrés dans le graphe du workflow (ex. le Turbo de H3), pas ceux choisis par Jérémy."""
+    return [nid for nid, n in wf.api.items() if n.get("class_type") == "LoraLoaderModelOnly"]
+
+
+def params_variante(wf) -> dict[str, Param]:
+    params = []
+    if noms := [wf.api[n]["inputs"]["lora_name"] for n in loras_du_workflow(wf)]:
+        params.append(Param("lora_workflow", "LoRA du workflow", "booleen", True,
+                            aide=f"{', '.join(noms)} : décoche-la si ce checkpoint l'intègre déjà (Turbo, Lightning…)"))
+    if "steps" in wf.fiche["entrees"]:
+        params.append(Param("steps", "Steps imposés", "entier", 0, 0, 150, 1,
+                            aide="0 = ceux du réglage (et de la qualité du Montage). Sinon, ce nombre partout"))
+    return {p.cle: p for p in params}
+
+
+def valeurs_variante(wf, fichier: str) -> dict:
+    propres = (lire()["workflows"].get(wf.id, {}).get("variantes") or {}).get(fichier, {})
+    return {cle: propres.get(cle, p.defaut) for cle, p in params_variante(wf).items()}
+
+
+def modifier_variante(id_workflow: str, fichier: str, changements: dict) -> dict:
+    from app import workflows
+    wf = workflows.obtenir(id_workflow)
+    if fichier not in wf.variantes():
+        raise ErreurReglages(f"Checkpoint absent de modeles/{wf.famille}/modeles : {fichier}")
+    donnees = lire()
+    donnees = {"llm": dict(donnees["llm"]), "workflows": {k: dict(v) for k, v in donnees["workflows"].items()}}
+    section = donnees["workflows"].setdefault(wf.id, {})
+    variantes = {k: dict(v) for k, v in (section.get("variantes") or {}).items()}
+    _appliquer(variantes.setdefault(fichier, {}), params_variante(wf), changements)
+    variantes = {k: v for k, v in variantes.items() if v}
+    if variantes:
+        section["variantes"] = variantes
+    else:
+        section.pop("variantes", None)
+    _ecrire(donnees)
+    return valeurs_variante(wf, fichier)
 
 
 def appliquer_noeuds(wf, api: dict, valeurs: dict):
@@ -311,7 +366,12 @@ def etat() -> dict:
         "defaut_llm": CONFIG["llama"]["modele"],
         "clause_mineurs": prompt.CLAUSE_MINEURS,
         "workflows": [{"id": wf.id, "nom": wf.fiche["nom"], "tache": wf.fiche["tache"],
-                       "params": [p.public(valeurs_workflow(wf)[cle]) for cle, p in params_workflow(wf).items()]}
+                       "params": [p.public(valeurs_workflow(wf)[cle]) for cle, p in params_workflow(wf).items()],
+                       "variantes": [{"fichier": f, "origine": f == wf.modele_origine,
+                                      "connue": f == wf.modele_origine or modeles.connu(f"{wf.famille}/modeles", f),
+                                      "params": [p.public(valeurs_variante(wf, f)[cle])
+                                                 for cle, p in params_variante(wf).items()]}
+                                     for f in wf.variantes()] if "modele" in wf.fiche["entrees"] else []}
                       for wf in workflows.catalogue()],
         "samplers_de_comfyui": FICHIER_SAMPLERS.is_file(),
     }
