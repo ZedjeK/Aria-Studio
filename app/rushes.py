@@ -13,9 +13,9 @@ import re
 from datetime import datetime
 
 from app import plateau
-from app.config import ROOT
+from app.emplacements import DATA
 
-FICHIER_DOSSIERS = ROOT / "data" / "dossiers.json"
+FICHIER_DOSSIERS = DATA / "dossiers.json"
 VUES = ("tous", "non_ranges", "archives", "corbeille")
 GENRES = ("images", "clips")  # Rushes du Plateau, Bobines du Montage : mêmes dossiers, chacun son onglet
 ACTIONS = ("corbeille", "restaurer", "archiver", "desarchiver", "ranger")

@@ -301,6 +301,70 @@ document.querySelector("#inventaire tbody").addEventListener("click", async (e) 
 
 chargerModeles();
 
+// Emplacements (app/emplacements.py) : données, modèles et moteurs, dans %USERPROFILE%\.aria-studio par défaut.
+// 📂 ouvre un dossier dans l'Explorateur ; « Changer… » choisit le dossier des modèles, valable au prochain démarrage.
+
+function afficherEmplacements(e) {
+    const m = e.dossiers.modeles;
+    document.getElementById("chemin-modeles").textContent = m.chemin;
+    const prochain = document.getElementById("prochain-modeles");
+    prochain.hidden = !e.redemarrage;
+    prochain.querySelector("span").textContent = `Au prochain démarrage d'Aria, les modèles seront lus dans ${e.modeles_prochain}`
+        + ` (rien n'a été déplacé : tes fichiers actuels restent dans ${m.chemin}).`;
+    document.getElementById("mode-emplacements").textContent = e.portable
+        ? "Mode portable : tout reste à côté du programme (un dossier data se trouve à côté de lui)."
+        : "Tout est rangé dans ton dossier d'utilisateur ; seul le dossier des modèles peut aller ailleurs (onglet Modèles).";
+    document.getElementById("liste-emplacements").innerHTML = Object.entries(e.dossiers).map(([cle, d]) => `<li>
+        <strong>${echapper(d.nom)}</strong>
+        <code>${echapper(d.chemin)}</code>
+        <span class="discret">${d.libre_go !== null ? `${d.libre_go} Go libres` : ""}</span>
+        <button type="button" class="petit" data-ouvrir="${cle}">📂 Ouvrir</button>
+    </li>`).join("");
+}
+
+async function chargerEmplacements() {
+    afficherEmplacements(await api("GET", "/api/emplacements"));
+}
+
+document.addEventListener("click", async (ev) => {
+    const bouton = ev.target.closest("[data-ouvrir]");
+    if (!bouton) return;
+    try {
+        await api("POST", "/api/emplacements/ouvrir", { dossier: bouton.dataset.ouvrir, sous: bouton.dataset.sous || null });
+    } catch (err) {
+        alert(err.message);
+    }
+});
+
+document.getElementById("changer-modeles").addEventListener("click", async () => {
+    let chemin;
+    try {
+        chemin = (await api("POST", "/api/emplacements/modeles/parcourir")).chemin;
+    } catch {
+        chemin = prompt("Chemin complet du nouveau dossier des modèles (ex. D:\IA\Aria-modeles) :");
+    }
+    if (!chemin) return;
+    const actuel = document.getElementById("chemin-modeles").textContent;
+    if (!confirm(`Lire les modèles dans ${chemin} au prochain démarrage d'Aria ?
+
+`
+        + `Rien n'est déplacé : tes modèles actuels restent dans ${actuel}.`)) return;
+    try {
+        afficherEmplacements(await api("PUT", "/api/emplacements/modeles", { chemin }));
+    } catch (err) {
+        alert(err.message);
+    }
+});
+
+document.getElementById("garder-modeles").addEventListener("click", async () => {
+    const e = await api("GET", "/api/emplacements");
+    const actuel = e.dossiers.modeles.chemin;
+    afficherEmplacements(await api("PUT", "/api/emplacements/modeles",
+        { chemin: actuel === e.modeles_defaut ? null : actuel }));
+});
+
+chargerEmplacements();
+
 // Mise à jour : version installée, et bandeau quand une release plus récente existe sur GitHub (app/mises_a_jour.py).
 // Rien ne se télécharge : le lien mène à la release. « Plus tard » cache le bandeau jusqu'à la version suivante.
 

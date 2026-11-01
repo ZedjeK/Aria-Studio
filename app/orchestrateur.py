@@ -16,7 +16,8 @@ from contextlib import asynccontextmanager
 from app import modeles, reglages
 from app.comfy import ComfyUI
 from app.garde import Garde
-from app.config import CONFIG, chemin
+from app.config import CONFIG
+from app.emplacements import moteur
 from app.llm import Llama
 from app.modeles import DOSSIER as MODELES
 
@@ -24,12 +25,12 @@ from app.modeles import DOSSIER as MODELES
 class Orchestrateur:
     def __init__(self):
         self.comfy = ComfyUI(
-            chemin(CONFIG["comfyui"]["dossier"]),
+            moteur(CONFIG["comfyui"]["dossier"]),
             CONFIG["comfyui"]["port"],
             modeles.CHEMINS_COMFYUI,
         )
         self.llama = Llama(
-            chemin(CONFIG["llama"]["server"]),
+            moteur(CONFIG["llama"]["server"]),
             CONFIG["llama"]["port"],
             CONFIG["llama"]["contexte"],
             CONFIG["llama"]["reflexion"],
@@ -74,7 +75,7 @@ class Orchestrateur:
                 await self.garde.attendre("Llama")
             # Ne redémarre que si le modèle, son serveur ou ses réglages de lancement changent.
             regle = reglages.valeurs_llm(nom)
-            await self.llama.demarrer(fichier, chemin(specifique) if specifique else None,
+            await self.llama.demarrer(fichier, moteur(specifique) if specifique else None,
                                       contexte=regle["contexte"], reflexion=regle["reflexion"])
             self.actif = "llama"
             yield self.llama

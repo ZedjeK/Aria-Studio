@@ -14,11 +14,12 @@ import yaml
 
 from app import garde, mesures, prompt, reglages, securite, workflows
 from app.config import CONFIG, ROOT, chemin
+from app.emplacements import DATA
 from app.modeles import DOSSIER as MODELES
 from app.orchestrateur import Orchestrateur
 from app.telechargement import Telechargeur
 
-DOSSIER = ROOT / "data" / "bancs"
+DOSSIER = DATA / "bancs"
 SOURCES = ROOT / "casting" / "sources"
 GO = 2**30
 TEMOIN = "temoin"  # candidat du Casting LLM qui envoie l'idée brute, sans LLM

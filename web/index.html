@@ -501,6 +501,15 @@
 
                 <section class="carte">
                     <h2>Modèles installés <span id="espace" class="discret"></span></h2>
+                    <div class="ligne emplacement-modeles">
+                        <span class="discret">Dossier : <code id="chemin-modeles"></code></span>
+                        <button type="button" class="petit" data-ouvrir="modeles">📂 Ouvrir</button>
+                        <button type="button" class="petit" id="changer-modeles">Changer…</button>
+                    </div>
+                    <p id="prochain-modeles" class="avertissement-dossier" hidden>
+                        <span></span>
+                        <button type="button" class="petit" id="garder-modeles">Garder le dossier actuel</button>
+                    </p>
                     <table id="inventaire">
                         <thead>
                             <tr><th>Dossier</th><th>Fichier</th><th>Taille</th><th>Origine</th><th></th></tr>
@@ -544,6 +553,11 @@
                 <p class="discret">Seuls tes changements sont enregistrés (data/reglages.yaml) : ↺ ramène une valeur à celle d'origine.</p>
                 <button id="optimiser" type="button" class="principal">⚡ Optimiser</button>
             </div>
+            <section class="carte" id="carte-emplacements">
+                <h2>Emplacements</h2>
+                <p id="mode-emplacements" class="discret"></p>
+                <ul id="liste-emplacements" class="liste-emplacements"></ul>
+            </section>
             <section class="carte" id="carte-maj">
                 <h2>Mises à jour</h2>
                 <p id="etat-maj" class="discret"></p>
@@ -583,7 +597,11 @@
                     <label class="cible-reglages">Workflow <select id="workflow-reglages"></select></label>
                     <div id="params-workflow" class="params"></div>
                     <div id="variantes-workflow" hidden>
-                        <h3 class="titre-bloc">Checkpoints de la famille</h3>
+                        <div class="ligne">
+                            <h3 class="titre-bloc">Checkpoints de la famille</h3>
+                            <button type="button" class="petit" data-ouvrir="modeles" id="ouvrir-variantes"
+                                    title="Dépose ici d'autres checkpoints de la famille (.safetensors)">📂 Ouvrir le dossier</button>
+                        </div>
                         <p class="discret">Les réglages propres à chacun. Un checkpoint « Turbo » ou « Lightning » intègre
                             souvent déjà la LoRA du workflow : décoche-la pour lui.</p>
                         <div class="liste-variantes"></div>

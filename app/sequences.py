@@ -31,9 +31,10 @@ import uuid
 from datetime import datetime
 
 from app import plateau, prompt, reglages, rushes, securite, voix, workflows
-from app.config import CONFIG, ROOT
+from app.config import CONFIG
+from app.emplacements import DATA
 
-DOSSIER = ROOT / "data" / "sequences"
+DOSSIER = DATA / "sequences"
 PLANS_MAX = 12  # environ 2 min de film
 GUIDE = 39  # images du plan précédent ancrées en « prolonger » (grille 17k+5 du modèle)
 IPS = 24

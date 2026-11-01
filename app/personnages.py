@@ -8,9 +8,9 @@ import json
 import re
 
 from app import listes
-from app.config import ROOT
+from app.emplacements import DATA
 
-FICHIER = ROOT / "data" / "personnages.json"
+FICHIER = DATA / "personnages.json"
 _NOM = re.compile(r"[\w][\w .'’-]{0,39}")
 
 # Origines d'avant la simplification à 17 (2026-10-20) : un personnage enregistré est converti à la lecture.

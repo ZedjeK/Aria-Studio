@@ -15,9 +15,10 @@ import psutil
 import yaml
 
 from app import fiches, mesures, modeles, reglages, workflows
-from app.config import CONFIG, ROOT
+from app.config import CONFIG
+from app.emplacements import MODELES
 
-FICHIER_LLM = ROOT / "modeles" / "llm" / "recommandations.yaml"
+FICHIER_LLM = MODELES / "llm" / "recommandations.yaml"
 GO = 2**30
 SURCOUT_LLM_GO = 1.5  # contexte 4096 + tampons de calcul, au-delà du poids du GGUF (comme Découvrir)
 

@@ -4,14 +4,14 @@ app:
     open_browser: true
 
 comfyui:
-    # ComfyUI portable dédié au projet.
-    dossier: services/comfyui
+    # ComfyUI portable dédié au projet, dans le dossier des moteurs (app/emplacements.py).
+    dossier: comfyui
     port: 8195
 
 modeles:
     # Tous les modèles : <Famille>/modeles et <Famille>/loras, _base/<type>, llm (GGUF).
-    # Les dossiers sont déclarés à ComfyUI automatiquement à chaque démarrage (data/comfyui_chemins.yaml).
-    dossier: modeles
+    # Le dossier se choisit dans l'onglet Modèles (aria.yaml, app/emplacements.py) ; ses sous-dossiers sont
+    # déclarés à ComfyUI automatiquement à chaque démarrage (data/comfyui_chemins.yaml).
     # Base Civitai (« baseModel ») -> famille : sert à proposer le dossier d'une LoRA ou d'une variante.
     familles_civitai:
         "Krea 2": Krea2
@@ -19,7 +19,8 @@ modeles:
         "Qwen (édition)": Qwen-Edit2511
 
 llama:
-    server: services/llama/llama-server.exe
+    # Chemins relatifs au dossier des moteurs (app/emplacements.py).
+    server: llama/llama-server.exe
     port: 8095
     # GGUF par défaut, dans modeles/llm : présélectionné dans le sélecteur de l'appli.
     modele: "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf"
@@ -32,7 +33,7 @@ llama:
     contexte: 4096
     # Serveurs particuliers pour les GGUF que le llama.cpp officiel ne sait pas lire.
     serveurs_specifiques:
-        Ternary-Bonsai-2-27B-PTQ1_0.gguf: services/llama-prism/llama-server.exe
+        Ternary-Bonsai-2-27B-PTQ1_0.gguf: llama-prism/llama-server.exe
     # Réflexion (« thinking ») des modèles qui la proposent : coupée pour la réécriture de prompts.
     reflexion: false
 

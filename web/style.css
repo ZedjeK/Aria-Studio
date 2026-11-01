@@ -2064,3 +2064,46 @@ button.onglet-casting.actif {
     margin: 6px 0 0;
     font-size: 0.8rem;
 }
+
+/* Emplacements : dossier des modèles (onglet Modèles) et dossiers d'Aria (onglet Réglages) */
+.emplacement-modeles {
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.emplacement-modeles code,
+.liste-emplacements code {
+    word-break: break-all;
+}
+
+.avertissement-dossier {
+    color: #ffc857;
+    font-size: 0.85rem;
+    margin: 0 0 10px;
+}
+
+.avertissement-dossier[hidden] {
+    display: none;
+}
+
+.liste-emplacements {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.liste-emplacements li {
+    display: grid;
+    grid-template-columns: 9em 1fr auto auto;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 0;
+    border-top: 1px solid var(--bord);
+}
+
+@media (max-width: 700px) {
+    .liste-emplacements li {
+        grid-template-columns: 1fr auto;
+    }
+}

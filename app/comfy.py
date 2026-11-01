@@ -10,9 +10,9 @@ from typing import Callable
 import httpx
 import websockets
 
-from app.config import ROOT
+from app.emplacements import DATA
 
-LOGS = ROOT / "data" / "logs"
+LOGS = DATA / "logs"
 # Fichiers téléversés dans input/ : images, vidéos (LoadVideo) et sons (LoadAudio, voix de référence).
 TYPES_MIME = {"mp4": "video/mp4", "flac": "audio/flac", "wav": "audio/wav", "mp3": "audio/mpeg", "ogg": "audio/ogg"}
 

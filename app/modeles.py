@@ -15,11 +15,12 @@ from pathlib import Path
 
 import yaml
 
-from app.config import CONFIG, ROOT, chemin
+from app.config import ROOT
+from app.emplacements import DATA, MODELES
 
-DOSSIER = chemin(CONFIG["modeles"]["dossier"])
-REGISTRE = ROOT / "data" / "modeles.json"
-CHEMINS_COMFYUI = ROOT / "data" / "comfyui_chemins.yaml"
+DOSSIER = MODELES
+REGISTRE = DATA / "modeles.json"
+CHEMINS_COMFYUI = DATA / "comfyui_chemins.yaml"
 TYPES_BASE = ["checkpoints", "diffusion_models", "text_encoders", "vae", "loras",
               "clip_vision", "controlnet", "upscale_models", "model_patches", "audio_encoders",
               "latent_upscale_models"]
@@ -61,7 +62,7 @@ def llm_disponibles() -> list[str]:
 
 # LoRAs : mots déclencheurs et force retenus d'une utilisation à l'autre (data/loras.json),
 # à défaut ceux fournis par la source au téléchargement (registre).
-MEMOIRE_LORAS = ROOT / "data" / "loras.json"
+MEMOIRE_LORAS = DATA / "loras.json"
 
 
 def _memoire_loras() -> dict:

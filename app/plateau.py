@@ -11,10 +11,11 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from app import modeles, prompt, reglages, retouche, securite, workflows
-from app.config import CONFIG, ROOT
+from app.config import CONFIG
+from app.emplacements import DATA
 from app.orchestrateur import Orchestrateur
 
-DOSSIER = ROOT / "data" / "creations"
+DOSSIER = DATA / "creations"
 
 FORMATS = workflows.FORMATS
 NOMBRE_MAX = 4

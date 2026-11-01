@@ -7,9 +7,9 @@ from pathlib import Path
 
 import httpx
 
-from app.config import ROOT
+from app.emplacements import DATA
 
-LOGS = ROOT / "data" / "logs"
+LOGS = DATA / "logs"
 
 
 class ErreurLlama(RuntimeError):

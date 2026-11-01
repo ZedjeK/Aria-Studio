@@ -12,3 +12,4 @@ __pycache__/
 
 # Réglages locaux de Claude Code (serveur de test)
 .claude/
+aria.yaml

@@ -18,10 +18,11 @@ from pathlib import Path
 
 import yaml
 
-from app.config import CONFIG, ROOT
+from app.config import CONFIG
+from app.emplacements import DATA
 
-FICHIER = ROOT / "data" / "reglages.yaml"
-FICHIER_SAMPLERS = ROOT / "data" / "comfyui_samplers.json"
+FICHIER = DATA / "reglages.yaml"
+FICHIER_SAMPLERS = DATA / "comfyui_samplers.json"
 LONGUEUR_CONSIGNE = 4000
 CONSIGNES = ("reecriture", "retouche", "peaufinage", "precisions", "references", "video", "decoupage")
 
@@ -365,7 +366,7 @@ def etat() -> dict:
         "llm": llms,
         "defaut_llm": CONFIG["llama"]["modele"],
         "clause_mineurs": prompt.CLAUSE_MINEURS,
-        "workflows": [{"id": wf.id, "nom": wf.fiche["nom"], "tache": wf.fiche["tache"],
+        "workflows": [{"id": wf.id, "nom": wf.fiche["nom"], "tache": wf.fiche["tache"], "famille": wf.famille,
                        "params": [p.public(valeurs_workflow(wf)[cle]) for cle, p in params_workflow(wf).items()],
                        "variantes": [{"fichier": f, "origine": f == wf.modele_origine,
                                       "connue": f == wf.modele_origine or modeles.connu(f"{wf.famille}/modeles", f),

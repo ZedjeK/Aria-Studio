@@ -13,9 +13,10 @@ from datetime import datetime, timedelta
 import httpx
 
 from app import VERSION
-from app.config import CONFIG, ROOT
+from app.config import CONFIG
+from app.emplacements import DATA
 
-FICHIER = ROOT / "data" / "mise_a_jour.json"
+FICHIER = DATA / "mise_a_jour.json"
 DELAI = timedelta(days=1)
 API = "https://api.github.com"
 _VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")

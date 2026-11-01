@@ -13,11 +13,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (casting, decouvrir, garde, listes, mesures, mises_a_jour, modeles, optimiseur, personnages,
+from app import (casting, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, optimiseur, personnages,
                  plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
-from app.config import CONFIG, ROOT, chemin
+from app.config import CONFIG, ROOT
+from app.emplacements import moteur
 from app.orchestrateur import Orchestrateur
 from app.sources import ErreurSource, Fiche, fiche_depuis_url
 from app.telechargement import ErreurTelechargement, Telechargeur
@@ -132,6 +133,48 @@ def regler_mise_a_jour(d: DemandeMiseAJour):
     return mises_a_jour.activer(d.active)
 
 
+class DemandeOuverture(BaseModel):
+    dossier: str  # racine, data, modeles ou moteurs
+    sous: str | None = None  # sous-dossier des modèles (« MiniMax-H3/modeles »)
+
+
+class DemandeDossierModeles(BaseModel):
+    chemin: str | None = None  # None : revenir au dossier par défaut
+
+
+@app.get("/api/emplacements")
+def etat_emplacements():
+    return emplacements.etat()
+
+
+@app.post("/api/emplacements/ouvrir")
+def ouvrir_emplacement(d: DemandeOuverture):
+    """📂 : ouvre le dossier dans l'Explorateur de Windows, sur la machine du serveur."""
+    if d.sous and (d.dossier != "modeles" or d.sous not in modeles.dossiers()):
+        raise HTTPException(400, f"Sous-dossier inconnu : {d.sous}")
+    try:
+        return {"ouvert": str(emplacements.ouvrir(d.dossier, d.sous))}
+    except emplacements.ErreurEmplacement as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/emplacements/modeles/parcourir")
+def parcourir_modeles():
+    """Sélecteur de dossier natif ; rien n'est enregistré tant que l'interface n'a pas confirmé."""
+    try:
+        return {"chemin": emplacements.parcourir()}
+    except emplacements.ErreurEmplacement as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/emplacements/modeles")
+def choisir_dossier_modeles(d: DemandeDossierModeles):
+    try:
+        return emplacements.choisir_modeles(d.chemin)
+    except emplacements.ErreurEmplacement as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/garde/forcer")
 def forcer_garde():
     """« Lancer quand même » : la demande qui attend la carte part, lentement s'il le faut."""
@@ -145,8 +188,8 @@ def annuler_garde():
 
 @app.get("/api/sante")
 def sante():
-    comfy = chemin(CONFIG["comfyui"]["dossier"])
-    llama = chemin(CONFIG["llama"]["server"])
+    comfy = moteur(CONFIG["comfyui"]["dossier"])
+    llama = moteur(CONFIG["llama"]["server"])
     return {
         "serveur": "ok",
         "comfyui": {

@@ -26,9 +26,10 @@ from datetime import datetime, timedelta
 from io import BytesIO
 
 from app import plateau, reglages, securite, workflows
-from app.config import CONFIG, ROOT
+from app.config import CONFIG
+from app.emplacements import DATA
 
-DOSSIER = ROOT / "data" / "voix"
+DOSSIER = DATA / "voix"
 PREFIXE = "voix:"  # valeur du casting d'une séquence : « voix:<id> »
 _ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
 
