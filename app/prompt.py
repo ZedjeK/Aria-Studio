@@ -151,6 +151,7 @@ def demande_specialiste(s: dict, texte: str, image: bytes | None = None) -> tupl
     parametres = dict(s.get("echantillonnage") or {})
     parametres.setdefault("temperature", 1.0)
     parametres["max_tokens"] = s["max_tokens"]
+    parametres["budget_reflexion"] = 0  # son max_tokens compte déjà sa réflexion
     return [{"role": "system", "content": systeme}, {"role": "user", "content": contenu}], parametres
 
 

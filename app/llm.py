@@ -16,6 +16,11 @@ class ErreurLlama(RuntimeError):
     pass
 
 
+# Réflexion active : max_tokens borne la réponse, et la réflexion a ce budget en plus. Sans lui, le Bonsai 2 Heretic
+# passait ses 512 tokens à réfléchir et rendait une réponse vide (1 600 tokens en tout pour un prompt vidéo, mesuré).
+BUDGET_REFLEXION = 4096
+
+
 @dataclass
 class Reponse:
     texte: str
@@ -124,9 +129,12 @@ class Llama:
 
     async def generer(
         self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 512, seed: int | None = None,
-        **echantillonnage,
+        budget_reflexion: int = BUDGET_REFLEXION, **echantillonnage,
     ) -> Reponse:
-        """`echantillonnage` : top_p, top_k, min_p, presence_penalty… (absents : défauts de llama-server)."""
+        """`echantillonnage` : top_p, top_k, min_p, presence_penalty… (absents : défauts de llama-server).
+        `budget_reflexion` : tokens de réflexion ajoutés à `max_tokens` quand elle est active (0 : déjà comptés)."""
+        if self.reflexion_active:
+            max_tokens += budget_reflexion
         corps = {"messages": messages, "temperature": temperature, "max_tokens": max_tokens, **echantillonnage}
         if seed is not None:
             corps["seed"] = seed
@@ -140,8 +148,19 @@ class Llama:
             raise ErreurLlama(f"Génération refusée ({r.status_code}) : {r.text[:300]}")
         donnees = r.json()
         timings = donnees.get("timings", {})
+        choix = donnees["choices"][0]
+        texte = (choix["message"].get("content") or "").strip()
+        if not texte:
+            # Jamais en silence : un prompt vide partirait tel quel vers ComfyUI.
+            if choix.get("finish_reason") != "length":
+                raise ErreurLlama("Le LLM a rendu une réponse vide")
+            if self.reflexion_active:
+                raise ErreurLlama(f"Le LLM a passé ses {max_tokens} tokens à réfléchir sans répondre : coupe sa "
+                                  "Réflexion ou augmente sa longueur maximale dans Réglages")
+            raise ErreurLlama(f"Le LLM a atteint sa limite de {max_tokens} tokens sans répondre : augmente sa "
+                              "longueur maximale dans Réglages")
         return Reponse(
-            texte=donnees["choices"][0]["message"]["content"].strip(),
+            texte=texte,
             tokens_entree=donnees["usage"]["prompt_tokens"],
             tokens_sortie=donnees["usage"]["completion_tokens"],
             lecture_tps=round(timings.get("prompt_per_second", 0.0), 1),

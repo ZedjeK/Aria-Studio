@@ -21,6 +21,8 @@ from app.emplacements import moteur
 from app.llm import Llama
 from app.modeles import DOSSIER as MODELES
 
+CONTEXTE_REFLEXION = 8192  # contexte minimal d'un LLM qui réfléchit
+
 
 class Orchestrateur:
     def __init__(self):
@@ -76,6 +78,8 @@ class Orchestrateur:
             # Ne redémarre que si le modèle, son serveur ou ses réglages de lancement changent.
             regle = reglages.valeurs_llm(nom)
             contexte, reflexion, vision = regle["contexte"], regle["reflexion"], None
+            if reflexion:  # consigne + réflexion (llm.BUDGET_REFLEXION) + réponse doivent tenir ensemble
+                contexte = max(contexte, CONTEXTE_REFLEXION)
             if specialiste := fiches.specialiste(nom):
                 # Un LLM spécialisé a ses réglages d'entraînement : réflexion, contexte assez grand, vision.
                 contexte, reflexion = max(contexte, specialiste["contexte"]), specialiste["reflexion"]
