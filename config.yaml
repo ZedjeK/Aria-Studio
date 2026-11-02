@@ -31,8 +31,9 @@ llama:
     # GGUF envoyés d'office à PrismML (en plus de la détection).
     serveurs_specifiques:
         Ternary-Bonsai-2-27B-PTQ1_0.gguf: llama-prism/llama-server.exe
-    # Réflexion (« thinking ») des modèles qui la proposent : coupée pour la réécriture de prompts.
-    reflexion: false
+    # Réflexion (« thinking ») des modèles qui la proposent : active pour tous (choix de Jérémy, 2026-11-02), avec son
+    # propre budget en plus de la longueur de réponse (app/llm.py). Se coupe par LLM dans Réglages.
+    reflexion: true
 
 garde_vram:
     # Avant de donner la carte à ComfyUI ou à Llama (nos moteurs déjà libérés) : au-delà de cette VRAM occupée,

@@ -135,7 +135,7 @@ class FauxOrchestrateur:
 class Llm(AvecFichierTemporaire):
     def test_valeurs_d_origine(self):
         v = reglages.valeurs_llm(LLM)
-        self.assertEqual((v["temperature_reecriture"], v["contexte"], v["reflexion"]), (0.7, 4096, False))
+        self.assertEqual((v["temperature_reecriture"], v["contexte"], v["reflexion"]), (0.7, 4096, True))
 
     def test_temperatures_et_longueur_appliquees(self):
         reglages.modifier_llm(LLM, {"temperature_reecriture": 0.4, "temperature_peaufinage": 0.1, "max_tokens": 256})
