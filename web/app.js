@@ -19,6 +19,34 @@ async function api(methode, url, corps) {
     return donnees;
 }
 
+// ✕ Annuler sous une barre de progression (Plateau, Montage, Séquence) : arrête la commande suivie par ce bloc.
+function suivreAnnulable(bloc, idCommande) {
+    bloc.dataset.commande = idCommande;
+    const bouton = bloc.querySelector(".annuler-commande");
+    bouton.disabled = false;
+    bouton.textContent = "✕ Annuler";
+}
+
+document.addEventListener("click", async (e) => {
+    const bouton = e.target.closest(".annuler-commande");
+    const bloc = bouton?.closest("[data-commande]");
+    if (!bloc) return;
+    bouton.disabled = true;
+    bouton.textContent = "Annulation…";
+    try {
+        await api("POST", `/api/commandes/${bloc.dataset.commande}/annuler`);
+    } catch {
+        suivreAnnulable(bloc, bloc.dataset.commande);  // déjà finie, ou serveur injoignable : le suivi le dira
+    }
+});
+
+// Message d'une commande annulée : ce qui était déjà produit reste (galerie, bobines).
+function messageAnnulation(c, nom, feminin = false) {
+    const n = c.images.length;
+    const accord = (feminin ? "e" : "") + (n > 1 ? "s" : "");
+    return n ? `Annulé : ${n} ${nom}${n > 1 ? "s" : ""} déjà produit${accord}, gardé${accord}.` : "Annulé.";
+}
+
 // Onglets
 
 document.querySelectorAll(".onglet").forEach((bouton) => {

@@ -445,6 +445,11 @@ body.large main {
     }
 }
 
+.suivi-commande {
+    align-items: center;
+    justify-content: space-between;
+}
+
 #progression-creation,
 #erreur-creation,
 #resultat-creation {

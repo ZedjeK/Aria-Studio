@@ -59,7 +59,8 @@ class Commande:
     # AS-18 : textes d'origine des rushes utilisés (une image n'est pas lue, sa fiche si).
     textes_origine: list[str] = field(default_factory=list, repr=False)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
-    etat: str = "attente"  # attente, en_cours, termine, erreur
+    etat: str = "attente"  # attente, en_cours, termine, erreur, annule
+    annulee: bool = False  # ✕ Annuler demandé (la commande en cours s'arrête au plus vite)
     etape: str = ""
     progression: float = 0.0  # avancement des steps de la génération en cours
     images: list[str] = field(default_factory=list)
@@ -130,6 +131,7 @@ class Plateau:
         self.commandes: dict[str, Commande] = {}
         self._file: asyncio.Queue[Commande] = asyncio.Queue()
         self._boucle_tache: asyncio.Task | None = None
+        self._courante: tuple[Commande, asyncio.Task] | None = None  # la commande en cours et sa tâche
 
     def demarrer(self):
         self._boucle_tache = asyncio.create_task(self._boucle())
@@ -395,16 +397,41 @@ class Plateau:
         self._file.put_nowait(commande)
         return commande
 
+    def annuler(self, id_commande: str) -> Commande:
+        """✕ Annuler : une commande en attente ne partira pas ; celle en cours s'arrête (réécriture, attente de la
+        carte ou génération : ComfyUI interrompt la sienne). Ce qui est déjà enregistré (images, clips) reste."""
+        c = self.commandes.get(id_commande)
+        if c is None:
+            raise ErreurPlateau("Commande inconnue")
+        if c.etat not in ("attente", "en_cours"):
+            return c  # déjà finie
+        c.annulee = True
+        if self._courante and self._courante[0] is c:
+            c.etape = "Annulation…"
+            self._courante[1].cancel()
+        else:
+            c.etat = "annule"  # la boucle la sautera
+        return c
+
     async def _boucle(self):
         while True:
             commande = await self._file.get()
+            if commande.annulee:
+                continue
+            tache = asyncio.create_task(self._executer(commande))
+            self._courante = (commande, tache)
             try:
-                await self._executer(commande)
+                await tache
                 commande.etat = "termine"
+            except asyncio.CancelledError:
+                if not commande.annulee:
+                    raise  # c'est le Plateau qui s'arrête
+                commande.etat = "annule"
             except Exception as e:
                 commande.etat, commande.erreur = "erreur", expliquer_erreur(commande, str(e) or repr(e))
             finally:
                 commande.etape = ""
+                self._courante = None
 
     async def _executer(self, c: Commande):
         c.etat = "en_cours"

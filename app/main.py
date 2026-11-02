@@ -845,6 +845,15 @@ def suivre_commande(id_commande: str):
     return commande.to_dict()
 
 
+@app.post("/api/commandes/{id_commande}/annuler")
+def annuler_commande(id_commande: str):
+    """✕ Annuler sous une barre de progression (Plateau, Montage, Séquence)."""
+    try:
+        return plateau_.annuler(id_commande).to_dict()
+    except plateau.ErreurPlateau as e:
+        raise HTTPException(404, str(e))
+
+
 @app.get("/api/creations")
 def galerie(vue: str = "tous", dossier: str | None = None, limite: int = 500, genre: str = "images"):
     """Rushes (genre images) ou Bobines (genre clips) d'une vue ou d'un dossier."""

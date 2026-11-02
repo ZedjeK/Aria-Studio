@@ -226,6 +226,7 @@ async function tourner(corps) {
     dernierMontage = corps;
     document.querySelectorAll("#form-montage button, #retourner").forEach((b) => { b.disabled = true; });
     document.getElementById("progression-montage").hidden = false;
+    suivreAnnulable(document.getElementById("progression-montage"), commandeMontage.id);
     suivreMontage(Date.now(), estimationSecondes());
 }
 
@@ -258,10 +259,11 @@ async function suivreMontage(debut, estimation) {
     }
     bloc.hidden = true;
     document.querySelectorAll("#form-montage button, #retourner").forEach((b) => { b.disabled = false; });
-    if (c.etat === "erreur") {
+    if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-montage");
-        erreur.textContent = c.erreur;
+        erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "clip") : c.erreur;
         erreur.hidden = false;
+        if (c.images.length) bobines.charger();
         return;
     }
     document.getElementById("clips-montage").innerHTML = c.images.map((id) =>

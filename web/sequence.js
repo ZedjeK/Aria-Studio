@@ -420,7 +420,9 @@ async function tournerSequence(plans = null) {
         return;
     }
     bloquerSequence(true);
+    document.getElementById("erreur-sequence").hidden = true;  // message d'un tournage précédent (erreur, annulation)
     document.getElementById("progression-sequence").hidden = false;
+    suivreAnnulable(document.getElementById("progression-sequence"), commandeSequence.id);  // après le blocage
     suivreSequence(Date.now(), estimation);
 }
 
@@ -449,9 +451,9 @@ async function suivreSequence(debut, estimation) {
     afficherSequence(s);  // les plans tournés avant une erreur sont gardés
     bloquerSequence(false);
     bobines.charger();
-    if (c.etat === "erreur") {
+    if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-sequence");
-        erreur.textContent = c.erreur;
+        erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "plan") : c.erreur;
         erreur.hidden = false;
     } else {
         document.getElementById("film-sequence").scrollIntoView({ behavior: "smooth", block: "center" });

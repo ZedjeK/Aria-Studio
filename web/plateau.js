@@ -306,6 +306,7 @@ async function lancerCommande(corps, url = "/api/creations", erreur = document.g
     document.getElementById("erreur-creation").hidden = true;
     document.querySelectorAll("#form-creation button, #regenerer").forEach((b) => { b.disabled = true; });
     document.getElementById("progression-creation").hidden = false;
+    suivreAnnulable(document.getElementById("progression-creation"), commandeEnCours.id);
     suivreCommande(Date.now());
     return true;
 }
@@ -325,10 +326,13 @@ async function suivreCommande(debut) {
     }
     bloc.hidden = true;
     document.querySelectorAll("#form-creation button, #regenerer").forEach((b) => { b.disabled = false; });
-    if (c.etat === "erreur") {
+    if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-creation");
-        erreur.textContent = c.erreur;
+        erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "image", true) : c.erreur;
         erreur.hidden = false;
+        if (!c.images.length) return;
+        afficherResultat(c.images, c.prompt ?? "", c.type);
+        chargerGalerie();
         return;
     }
     derniereCommande = c;

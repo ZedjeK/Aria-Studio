@@ -145,35 +145,52 @@ class ComfyUI:
             if r.status_code != 200:
                 raise ErreurComfy(f"Workflow refusé : {r.text}")
             prompt_id = r.json()["prompt_id"]
+            try:
+                return await self._suivre(ws, client, prompt_id, progression)
+            except asyncio.CancelledError:
+                await self._interrompre(prompt_id)  # ✕ Annuler : sans ça, ComfyUI finirait pour rien
+                raise
 
-            async for message in ws:
-                if isinstance(message, bytes):
-                    continue  # aperçus binaires
-                evenement = json.loads(message)
-                donnees = evenement.get("data", {})
-                if donnees.get("prompt_id") not in (None, prompt_id):
-                    continue
-                if evenement["type"] == "progress" and progression:
-                    progression(donnees["value"], donnees["max"])
-                elif evenement["type"] == "execution_error":
-                    raise ErreurComfy(f"{donnees.get('node_type')} : {donnees.get('exception_message')}")
-                elif evenement["type"] == "execution_interrupted":
-                    raise ErreurComfy("Exécution interrompue")
-                elif evenement["type"] == "executing" and donnees.get("node") is None and donnees.get("prompt_id") == prompt_id:
-                    break
+    async def _interrompre(self, prompt_id: str):
+        """Retire le prompt de la file s'il attend, l'arrête s'il tourne (ce ComfyUI ne sert qu'Aria)."""
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                await client.post(f"{self.url}/queue", json={"delete": [prompt_id]})
+                await client.post(f"{self.url}/interrupt", json={"prompt_id": prompt_id})
+        except httpx.HTTPError:
+            pass  # ComfyUI déjà arrêté : rien à interrompre
 
-            r = await client.get(f"{self.url}/history/{prompt_id}")
-            r.raise_for_status()
-            sorties = r.json()[prompt_id]["outputs"]
+    async def _suivre(self, ws, client: httpx.AsyncClient, prompt_id: str,
+                      progression: Callable[[int, int], None] | None) -> list[tuple[str, bytes]]:
+        """Suit l'exécution jusqu'au bout, puis rapatrie les fichiers produits."""
+        async for message in ws:
+            if isinstance(message, bytes):
+                continue  # aperçus binaires
+            evenement = json.loads(message)
+            donnees = evenement.get("data", {})
+            if donnees.get("prompt_id") not in (None, prompt_id):
+                continue
+            if evenement["type"] == "progress" and progression:
+                progression(donnees["value"], donnees["max"])
+            elif evenement["type"] == "execution_error":
+                raise ErreurComfy(f"{donnees.get('node_type')} : {donnees.get('exception_message')}")
+            elif evenement["type"] == "execution_interrupted":
+                raise ErreurComfy("Exécution interrompue")
+            elif evenement["type"] == "executing" and donnees.get("node") is None and donnees.get("prompt_id") == prompt_id:
+                break
 
-            # Les images arrivent sous « images », les vidéos selon la version de ComfyUI (« images » + animated,
-            # « videos », « gifs ») : on prend tout fichier de sortie, jamais les aperçus temporaires.
-            fichiers = []
-            for sortie in sorties.values():
-                for valeur in sortie.values():
-                    for f in valeur if isinstance(valeur, list) else []:
-                        if isinstance(f, dict) and "filename" in f and f.get("type", "output") == "output":
-                            r = await client.get(f"{self.url}/view", params=f, timeout=300)
-                            r.raise_for_status()
-                            fichiers.append((f["filename"], r.content))
-            return fichiers
+        r = await client.get(f"{self.url}/history/{prompt_id}")
+        r.raise_for_status()
+        sorties = r.json()[prompt_id]["outputs"]
+
+        # Les images arrivent sous « images », les vidéos selon la version de ComfyUI (« images » + animated,
+        # « videos », « gifs ») : on prend tout fichier de sortie, jamais les aperçus temporaires.
+        fichiers = []
+        for sortie in sorties.values():
+            for valeur in sortie.values():
+                for f in valeur if isinstance(valeur, list) else []:
+                    if isinstance(f, dict) and "filename" in f and f.get("type", "output") == "output":
+                        r = await client.get(f"{self.url}/view", params=f, timeout=300)
+                        r.raise_for_status()
+                        fichiers.append((f["filename"], r.content))
+        return fichiers
