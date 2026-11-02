@@ -92,7 +92,7 @@ class RechercherCivitai(unittest.TestCase):
          "modelVersions": [{"id": 21, "baseModel": "Qwen", "files": [{"name": "jib.safetensors", "sizeKB": 1, "primary": True}]}]},
     ], "metadata": {}}
 
-    def chercher(self, installes):
+    def chercher(self, installes, adulte=False):
         vus = []
 
         def repondre(requete):
@@ -104,7 +104,7 @@ class RechercherCivitai(unittest.TestCase):
         with mock.patch.object(decouvrir.httpx, "AsyncClient", client), \
                 mock.patch.object(decouvrir.workflows, "familles", lambda: FAMILLES), \
                 mock.patch.object(decouvrir.modeles, "empreintes_installees", lambda: installes):
-            return asyncio.run(decouvrir.chercher_civitai("", "video", None, "telechargements", None)), vus[0]
+            return asyncio.run(decouvrir.chercher_civitai("", "video", None, "telechargements", None, adulte)), vus[0]
 
     def test_compatibles_seulement_et_dossier_deduit(self):
         r, url = self.chercher(set())
@@ -117,6 +117,22 @@ class RechercherCivitai(unittest.TestCase):
     def test_installe_d_apres_le_fichier_principal(self):
         self.assertFalse(self.chercher({"bb" * 32})[0]["resultats"][0]["installe"])  # l'encodeur qu'on a déjà ne compte pas
         self.assertTrue(self.chercher({"aa" * 32})[0]["resultats"][0]["installe"])
+
+    def test_modeles_adultes_seulement_si_demandes(self):
+        """L'API de Civitai cache presque tous les modèles NSFW si on ne les demande pas."""
+        self.assertNotIn("nsfw", self.chercher(set())[1].params)
+        self.assertEqual(self.chercher(set(), adulte=True)[1].params["nsfw"], "true")
+
+    def test_liens_civitai_red_acceptes(self):
+        from app.sources import Fiche, fiche_depuis_url
+
+        async def fiche(url):
+            return Fiche(source="civitai", nom="m.safetensors", taille=1, sha256=None, url=url, page=url,
+                         dossier=None, licence=None, jeton_requis=False)
+
+        with mock.patch.object(civitai, "fiche", fiche):
+            for lien in ("https://civitai.red/models/2877206", "https://civitai.com/models/2877206"):
+                self.assertEqual(asyncio.run(fiche_depuis_url(lien)).nom, "m.safetensors")
 
     def test_pas_de_llm_sur_civitai(self):
         with self.assertRaises(decouvrir.ErreurDecouvrir):

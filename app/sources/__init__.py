@@ -36,7 +36,7 @@ async def fiche_depuis_url(url: str) -> Fiche:
     hote = urlparse(url.strip()).hostname or ""
     if hote.endswith("huggingface.co"):
         fiche = await huggingface.fiche(url)
-    elif hote.endswith("civitai.com"):
+    elif hote.endswith(("civitai.com", "civitai.red")):  # même base, même API (vérifié le 2026-11-02)
         fiche = await civitai.fiche(url)
     else:
         raise ErreurSource("Lien non reconnu : seuls Hugging Face et Civitai sont pris en charge")

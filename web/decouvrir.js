@@ -22,7 +22,8 @@ function preparerDecouvrir() {
     preparationDecouvrir ??= (async () => {
         try {
             document.getElementById("nsfw-decouvrir").checked = localStorage.getItem("aria-nsfw") === "oui";
-        } catch { /* stockage indisponible : aperçus floutés par défaut */ }
+            document.getElementById("adulte-decouvrir").checked = localStorage.getItem("aria-adulte") === "oui";
+        } catch { /* stockage indisponible : aperçus floutés et modèles adultes exclus par défaut */ }
         dossiersDecouvrir = (await api("GET", "/api/modeles")).dossiers;
         jetonsDecouvrir = await api("GET", "/api/jetons");
         await majTypes();
@@ -82,6 +83,14 @@ document.getElementById("nsfw-decouvrir").addEventListener("change", (e) => {
     document.querySelectorAll(".vignette-decouvrir.nsfw").forEach((v) => v.classList.toggle("floue", !e.target.checked));
 });
 
+// 🔞 Modèles adultes : Civitai ne renvoie les modèles NSFW que si on les demande (les aperçus restent floutés
+// tant que « Aperçus NSFW » n'est pas cochée). Hugging Face n'a pas ce filtre.
+document.getElementById("adulte-decouvrir").addEventListener("change", (e) => {
+    try {
+        localStorage.setItem("aria-adulte", e.target.checked ? "oui" : "non");
+    } catch { /* tant pis : le choix ne sera pas retenu */ }
+});
+
 document.getElementById("form-decouvrir").addEventListener("submit", (e) => {
     e.preventDefault();
     chercher(false);
@@ -95,6 +104,7 @@ async function chercher(suite) {
         texte: valeur("texte-decouvrir"), tri: valeur("tri-decouvrir"),
     });
     if (typeDecouvrir !== "llm" && valeur("famille-decouvrir")) params.set("famille", valeur("famille-decouvrir"));
+    if (document.getElementById("adulte-decouvrir").checked) params.set("adulte", "true");
     if (suite && curseurDecouvrir) params.set("curseur", curseurDecouvrir);
     message.textContent = "Recherche…";
     try {

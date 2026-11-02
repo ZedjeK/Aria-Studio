@@ -64,7 +64,10 @@ def _apercu(version: dict) -> dict | None:
     return {"url": url, "nsfw": (image.get("nsfwLevel") or 1) >= 4}
 
 
-async def chercher_civitai(texte: str, type_: str, famille: str | None, tri: str, curseur: str | None) -> dict:
+async def chercher_civitai(texte: str, type_: str, famille: str | None, tri: str, curseur: str | None,
+                           adulte: bool = False) -> dict:
+    """`adulte` : inclure les modèles NSFW, que l'API de Civitai cache presque tous par défaut (1 sur 100 sans le
+    demander, 57 en le demandant, sur les LoRA Krea 2 le 2026-11-02)."""
     if _type(type_) == "llm":
         raise ErreurDecouvrir("Les LLM se cherchent sur Hugging Face")
     infos = workflows.familles()
@@ -79,6 +82,8 @@ async def chercher_civitai(texte: str, type_: str, famille: str | None, tri: str
         params.append(("query", texte.strip()))
     if curseur:
         params.append(("cursor", curseur))
+    if adulte:
+        params.append(("nsfw", "true"))
     async with httpx.AsyncClient(timeout=30, headers=civitai.entetes()) as client:
         r = await client.get(f"{CIVITAI}/models", params=params)
     if r.status_code != 200:

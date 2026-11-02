@@ -1,4 +1,4 @@
-"""Fiches Civitai : https://civitai.com/models/<id>[?modelVersionId=<version>]."""
+"""Fiches Civitai : https://civitai.com/models/<id>[?modelVersionId=<version>] (ou civitai.red : la même base)."""
 
 from urllib.parse import parse_qs, urlparse
 

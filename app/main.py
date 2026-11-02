@@ -1131,10 +1131,10 @@ def supprimer_dossier(nom: str):
 
 @app.get("/api/decouvrir")
 async def decouvrir_modeles(source: str, type: str, texte: str = "", famille: str | None = None,
-                   tri: str = "telechargements", curseur: str | None = None):
+                   tri: str = "telechargements", curseur: str | None = None, adulte: bool = False):
     try:
         if source == "civitai":
-            return await decouvrir.chercher_civitai(texte, type, famille, tri, curseur)
+            return await decouvrir.chercher_civitai(texte, type, famille, tri, curseur, adulte)
         if source == "huggingface":
             return await decouvrir.chercher_hf(texte, type, tri, famille)
     except decouvrir.ErreurDecouvrir as e:
