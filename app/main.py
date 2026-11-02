@@ -1150,6 +1150,12 @@ async def decouvrir_fichiers_hf(depot: str, type: str = "llm", famille: str | No
         raise HTTPException(400, str(e))
 
 
+@app.get("/api/jetons")
+def jetons_presents():
+    """Les clés d'accès sont-elles définies ? (Présence seulement : leur valeur ne quitte jamais l'environnement.)"""
+    return {"civitai": bool(os.environ.get("CIVITAI_TOKEN")), "huggingface": bool(os.environ.get("HF_TOKEN"))}
+
+
 @app.get("/api/decouvrir/familles")
 def decouvrir_familles(type: str):
     try:

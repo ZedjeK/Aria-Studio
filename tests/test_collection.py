@@ -159,6 +159,24 @@ class Empreintes(Base):
         self.assertEqual(modeles.empreinte(f), hashlib.sha256(b"abcd").hexdigest())
         self.assertIn(hashlib.sha256(b"abcd").hexdigest(), modeles.empreintes_installees())
 
+    def test_doublon_refuse_meme_sous_un_autre_nom(self):
+        """Civitai nomme un même fichier « …_int8 » ou « …_3281858 » selon son API : l'empreinte tranche."""
+        from app.sources import Fiche
+        from app.telechargement import ErreurTelechargement, Telechargeur
+        f = self.poser("MiniMax-H3/modeles", "dasiwa_int8.safetensors", b"dasiwa")
+        sha = modeles.empreinte(f)
+        self.assertEqual(modeles.cle_par_empreinte(sha.upper()), "MiniMax-H3/modeles/dasiwa_int8.safetensors")
+        fiche = Fiche(source="civitai", nom="dasiwa_3281858.safetensors", taille=6, sha256=sha,
+                      url="https://civitai.com/api/download/models/1", page="p", dossier="MiniMax-H3/modeles",
+                      licence=None, jeton_requis=False)
+        with self.assertRaisesRegex(ErreurTelechargement, "Déjà installé sous un autre nom : MiniMax-H3/modeles/dasiwa_int8"):
+            Telechargeur().ajouter(fiche, "MiniMax-H3/modeles")
+        fiche.sha256, fiche.jeton_requis = "0" * 64, True
+        with self.assertRaisesRegex(ErreurTelechargement, "CIVITAI_TOKEN"):  # dit quoi faire, sans parler de licence
+            Telechargeur().ajouter(fiche, "MiniMax-H3/modeles")
+        f.unlink()
+        self.assertIsNone(modeles.cle_par_empreinte(sha))  # fichier supprimé depuis : plus un doublon
+
     def test_l_inventaire_ignore_ce_qui_n_est_pas_un_modele(self):
         self.poser("llm", "petit.gguf")
         self.poser("llm", "recommandations.yaml")

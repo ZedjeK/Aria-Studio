@@ -194,6 +194,15 @@ def empreinte(fichier: Path) -> str:
     return h.hexdigest()
 
 
+def cle_par_empreinte(sha256: str) -> str | None:
+    """Le fichier installé qui a cette empreinte (registre, ou cache des empreintes calculées), s'il y en a un."""
+    sha256 = sha256.lower()
+    connus = {i["sha256"].lower(): c for c, i in charger_registre().items() if i.get("sha256")}
+    connus.update({e["sha256"].lower(): c for c, e in _empreintes().items()})
+    cle_ = connus.get(sha256)
+    return cle_ if cle_ and (DOSSIER / cle_).is_file() else None
+
+
 def empreintes_installees() -> set[str]:
     """Les SHA-256 connus des fichiers installés (registre et cache) : « déjà installé ✓ » dans Rechercher."""
     connues = {i["sha256"].lower() for i in charger_registre().values() if i.get("sha256")}

@@ -13,6 +13,7 @@ let typeDecouvrir = "image";
 let dossiersDecouvrir = [];
 let curseurDecouvrir = null;
 let preparationDecouvrir = null;  // une seule préparation, attendue par tous (onglet ouvert, « Chercher des LoRA »…)
+let jetonsDecouvrir = { civitai: true, huggingface: true };  // présence des clés d'accès (jamais leur valeur)
 const versionsCivitai = {};  // id du modèle -> versions, renvoyées avec les résultats de recherche
 
 const valeur = (id) => document.getElementById(id).value;
@@ -23,6 +24,7 @@ function preparerDecouvrir() {
             document.getElementById("nsfw-decouvrir").checked = localStorage.getItem("aria-nsfw") === "oui";
         } catch { /* stockage indisponible : aperçus floutés par défaut */ }
         dossiersDecouvrir = (await api("GET", "/api/modeles")).dossiers;
+        jetonsDecouvrir = await api("GET", "/api/jetons");
         await majTypes();
     })();
     return preparationDecouvrir;
@@ -36,7 +38,7 @@ async function majTypes() {
     source.querySelector('option[value="civitai"]').disabled = llm;
     if (llm) source.value = "huggingface";
     document.getElementById("bloc-famille-decouvrir").hidden = llm;
-    document.getElementById("aide-decouvrir").textContent = AIDES_DECOUVRIR[typeDecouvrir];
+    majAide();
     const familles = llm ? [] : await api("GET", `/api/decouvrir/familles?type=${typeDecouvrir}`);
     const select = document.getElementById("famille-decouvrir");
     const garde = select.value;
@@ -45,6 +47,14 @@ async function majTypes() {
             ? ` (${f.nature === "video" ? "vidéo" : "image"})` : ""}</option>`).join("");
     if (familles.some((f) => f.famille === garde)) select.value = garde;
 }
+
+function majAide() {
+    const sansCle = valeur("source-decouvrir") === "civitai" && !jetonsDecouvrir.civitai;
+    document.getElementById("aide-decouvrir").textContent = AIDES_DECOUVRIR[typeDecouvrir] + (sansCle
+        ? " ⚠ Pas de clé Civitai (variable CIVITAI_TOKEN) : beaucoup de modèles refuseront le téléchargement."
+        : "");
+}
+document.getElementById("source-decouvrir").addEventListener("change", majAide);
 
 document.getElementById("types-decouvrir").addEventListener("click", async (e) => {
     const type = e.target.closest("[data-type]")?.dataset.type;

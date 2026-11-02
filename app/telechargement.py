@@ -21,6 +21,15 @@ class ErreurTelechargement(RuntimeError):
     pass
 
 
+# Ce qu'il faut faire quand une source refuse l'accès (jamais le jeton lui-même : il reste dans l'environnement).
+ACCES_REFUSE = {
+    "civitai": ("Civitai demande une clé d'API pour ce modèle : crée-la sur civitai.com (Account settings, API Keys), "
+                "enregistre-la dans la variable d'environnement Windows CIVITAI_TOKEN, puis relance Aria"),
+    "huggingface": ("Hugging Face refuse l'accès : accepte les conditions sur la page du modèle, et enregistre ton "
+                    "jeton dans la variable d'environnement Windows HF_TOKEN, puis relance Aria"),
+}
+
+
 class _Annule(Exception):
     pass
 
@@ -87,10 +96,13 @@ class Telechargeur:
 
     def ajouter(self, fiche: Fiche, dossier: str) -> Tache:
         if fiche.jeton_requis:
-            raise ErreurTelechargement("Ce modèle est protégé : ajoute ton jeton d'accès dans l'environnement")
+            raise ErreurTelechargement(ACCES_REFUSE.get(fiche.source, "Ce modèle est protégé : ajoute ton jeton d'accès"))
         dest = modeles.destination(dossier, fiche.nom)
         if dest.exists():
             raise ErreurTelechargement(f"Déjà présent : {modeles.cle(dest)}")
+        # Le même fichier sous un autre nom (Civitai nomme un fichier différemment selon son API) : même empreinte.
+        if fiche.sha256 and (deja := modeles.cle_par_empreinte(fiche.sha256)):
+            raise ErreurTelechargement(f"Déjà installé sous un autre nom : {deja}")
         if any(t.etat in ("attente", "en_cours", "pause", "verification") and t.fiche.url == fiche.url for t in self.taches.values()):
             raise ErreurTelechargement("Ce fichier est déjà dans la file")
         part = dest.with_name(dest.name + ".part")
@@ -180,7 +192,7 @@ class Telechargeur:
             en_tetes["Range"] = f"bytes={tache.recu}-"
         async with client.stream("GET", tache.fiche.url, headers=en_tetes) as r:
             if r.status_code in (401, 403):
-                raise ErreurTelechargement("Accès refusé : jeton manquant, ou licence à accepter sur la page du modèle")
+                raise ErreurTelechargement(ACCES_REFUSE.get(tache.fiche.source, "Accès refusé par la source"))
             if tache.recu and r.status_code == 200:
                 # Le serveur ignore la reprise : on repart de zéro.
                 tache.recu = 0

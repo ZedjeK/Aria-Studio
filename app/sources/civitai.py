@@ -51,11 +51,18 @@ async def fiche(url: str) -> Fiche:
             raise ErreurSource(f"Version Civitai introuvable : {id_version}")
         r.raise_for_status()
         version = r.json()
-
-    fichiers = version.get("files") or []
-    f = next((f for f in fichiers if f.get("primary")), fichiers[0] if fichiers else None)
-    if f is None:
-        raise ErreurSource("Cette version ne contient aucun fichier")
+        fichiers = version.get("files") or []
+        f = next((f for f in fichiers if f.get("primary")), fichiers[0] if fichiers else None)
+        if f is None:
+            raise ErreurSource("Cette version ne contient aucun fichier")
+        # Beaucoup de modèles ne se téléchargent qu'avec une clé d'API : un HEAD le dit avant la mise en file
+        # (401 sans clé, redirection vers le fichier sinon). Rien n'est téléchargé.
+        protege = version.get("availability") == "EarlyAccess"
+        if not os.environ.get("CIVITAI_TOKEN"):
+            try:
+                protege = protege or (await client.head(f["downloadUrl"])).status_code in (401, 403)
+            except httpx.HTTPError:
+                pass  # réseau capricieux : le téléchargement le dira
 
     type_civitai = version.get("model", {}).get("type")
     base = version.get("baseModel")
@@ -68,7 +75,7 @@ async def fiche(url: str) -> Fiche:
         page=f"https://civitai.com/models/{version['modelId']}?modelVersionId={version['id']}",
         dossier=TYPES.get(type_civitai) or _dossier_famille(type_civitai, base, version.get("model", {}).get("name", "")),
         licence=None,  # Civitai n'expose pas de licence nommée : voir la page du modèle
-        jeton_requis=version.get("availability") == "EarlyAccess" and not os.environ.get("CIVITAI_TOKEN"),
+        jeton_requis=protege and not os.environ.get("CIVITAI_TOKEN"),
         mots_declencheurs=[m.strip() for m in version.get("trainedWords") or [] if m.strip()],
         base=base,
     )
