@@ -94,10 +94,11 @@ def collection() -> dict:
 # Usages : un onglet par façon de créer
 
 def _fichiers_llm(fiche: dict) -> list[dict]:
-    """Ce qu'il faut télécharger pour un LLM du catalogue : le GGUF, et pour un spécialiste sa consigne et sa vision."""
+    """Ce qu'il faut télécharger pour un LLM du catalogue : le GGUF et sa vision, et pour un spécialiste sa consigne
+    et sa vision."""
     s = fiche.get("specialiste") or {}
     return [{"nom": fiche["id"], "url": fiche["url"], "taille": fiche["taille"], "sha256": fiche["sha256"]}] \
-        + [s[k] for k in ("consigne", "vision") if s.get(k)]
+        + ([fiche["vision"]] if fiche.get("vision") else []) + [s[k] for k in ("consigne", "vision") if s.get(k)]
 
 
 def _specialiste(fiche: dict, choisi: str | None) -> dict:

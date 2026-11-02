@@ -9,9 +9,13 @@ réécriture des workflows qu'il sert, il reçoit sa propre consigne (livrée av
 """
 
 import base64
+import io
 import json
 import re
 import time
+from dataclasses import dataclass
+
+from PIL import Image
 
 from app import fiches, reglages, securite
 from app.config import CONFIG
@@ -125,6 +129,63 @@ CONSIGNES_DEFAUT = {"reecriture": CONSIGNE, "retouche": CONSIGNE_RETOUCHE, "peau
                     "video": CONSIGNE_VIDEO, "decoupage": CONSIGNE_DECOUPAGE}
 
 
+# Images montrées au LLM (Montage « animer », plan de séquence parti d'un rush, retouche, références du Plateau) :
+# il les voit s'il a un projecteur de vision (reglages.projecteur_llm), sinon il lit ce qu'en dit leur fiche. Sans
+# l'un ni l'autre, il réécrivait à l'aveugle : « the man » pour un chat roux (essai du 2026-11-02).
+
+PIXELS_VUE = 1024 * 1024  # au-delà, l'image est réduite : ≈ 600 tokens de vision (Bonsai 2, mesuré)
+
+
+@dataclass
+class Vue:
+    png: bytes
+    texte: str | None = None  # ce que montre l'image d'après sa fiche (None : image importée)
+
+    @classmethod
+    def depuis(cls, image: bytes, texte: str | None = None) -> "Vue":
+        with Image.open(io.BytesIO(image)) as im:
+            if im.width * im.height > PIXELS_VUE:
+                f = (PIXELS_VUE / (im.width * im.height)) ** 0.5
+                sortie = io.BytesIO()
+                im.convert("RGB").resize((round(im.width * f), round(im.height * f)),
+                                         Image.Resampling.LANCZOS).save(sortie, "PNG")
+                image = sortie.getvalue()
+        return cls(image, texte)
+
+
+NOTES_VUES = {
+    "animer": "The picture is the first frame of the clip: keep its subjects (their gender, looks, clothing), setting "
+              "and visual style (a painting stays a painting). Describe what happens from there, without "
+              "re-describing the picture.",
+    "variation": "The picture is the starting image, partly redrawn: keep its subjects (their gender, looks, "
+                 "clothing), setting and visual style unless the idea changes them.",
+    "retouche": "The picture is the image to edit: name what is really in it (subjects and their gender, objects, "
+                "setting) so that the instruction fits it.",
+    "references": "The pictures are the reference pictures, in order (Picture 1, Picture 2…): take from each what "
+                  "the idea asks for, as it really looks.",
+}
+
+
+def _image_url(png: bytes) -> dict:
+    return {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png).decode()}}
+
+
+def montrer(texte: str, vues: list[Vue] | None, usage: str, voit: bool) -> str | list[dict]:
+    """Le message de l'utilisateur, avec les images si le LLM les voit, sinon ce qu'en disent leurs fiches."""
+    if not vues:
+        return texte
+    note = NOTES_VUES[usage]
+    if voit:
+        return [*map(_image_url, (v.png for v in vues)), {"type": "text", "text": f"{texte}\n\n({note})"}]
+    connues = [(i, v.texte) for i, v in enumerate(vues, 1) if v.texte]
+    if not connues:
+        return texte  # images importées, sans fiche : à l'aveugle
+    if len(vues) == 1:
+        return f"{texte}\n\n(You cannot see the picture; it was created from this prompt: {connues[0][1]}\n{note})"
+    lignes = "\n".join(f"Picture {i}: {t}" for i, t in connues)
+    return f"{texte}\n\n(You cannot see the pictures; they were created from these prompts:\n{lignes}\n{note})"
+
+
 # LLM spécialisés
 
 def generaliste(modele: str | None) -> str | None:
@@ -145,9 +206,7 @@ def demande_specialiste(s: dict, texte: str, image: bytes | None = None) -> tupl
     if not chemin.is_file():
         raise ErreurLlama(f"Consigne du LLM spécialisé absente ({chemin.name}) : réinstalle-le depuis l'onglet Modèles")
     systeme = f"{chemin.read_text(encoding='utf-8').strip()}\n\n{CLAUSE_MINEURS}"
-    contenu = texte if image is None else [
-        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(image).decode()}},
-        {"type": "text", "text": texte}]
+    contenu = texte if image is None else [_image_url(image), {"type": "text", "text": texte}]
     parametres = dict(s.get("echantillonnage") or {})
     parametres.setdefault("temperature", 1.0)
     parametres["max_tokens"] = s["max_tokens"]
@@ -193,18 +252,20 @@ def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
 
 async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, modele: str | None = None,
                                regles: list[str] | None = None, workflow: str | None = None,
-                               image: bytes | None = None) -> str:
-    """`workflow` et `image` : un LLM spécialisé dans la retouche de ce workflow voit l'image source."""
+                               vue: Vue | None = None) -> str:
+    """`vue` : l'image à retoucher. Un LLM spécialisé dans la retouche de ce workflow la voit avec sa propre consigne ;
+    un autre la voit s'il a sa vision, sinon il lit sa fiche."""
     securite.verifier(instruction)
-    if image is not None and (s := specialiste_pour(modele, "retouche", workflow)):
-        texte = (await _par_specialiste(orchestrateur, modele, s, instruction, image))[0]
+    if vue is not None and (s := specialiste_pour(modele, "retouche", workflow)):
+        texte = (await _par_specialiste(orchestrateur, modele, s, instruction, vue.png))[0]
         securite.verifier(instruction, texte)
         return texte
     modele = generaliste(modele)
     regle = reglages.valeurs_llm(modele)
     async with orchestrateur.llm(modele) as llama:
+        contenu = montrer(instruction, [vue] if vue else None, "retouche", voit=_voit(llama))
         reponse = await llama.generer(
-            [{"role": "system", "content": consigne("retouche", modele, regles=regles)}, {"role": "user", "content": instruction}],
+            [{"role": "system", "content": consigne("retouche", modele, regles=regles)}, {"role": "user", "content": contenu}],
             temperature=regle["temperature_retouche"], max_tokens=200, **reglages.echantillonnage(modele),
         )
     texte = nettoyer_markdown(reponse.texte)
@@ -253,6 +314,11 @@ async def traduire_precisions(orchestrateur: Orchestrateur, precisions: str, mod
     return reponse.texte
 
 
+def _voit(llama) -> bool:
+    """Le LLM chargé a-t-il sa vision (projecteur d'images) ?"""
+    return getattr(llama, "vision", None) is not None
+
+
 def nettoyer_markdown(texte: str) -> str:
     """Prompt vidéo en prose simple : Llama glisse parfois **gras**, *bruitages* ou titres, que H3 n'a pas à lire."""
     texte = re.sub(r"\*{1,2}([^*]+?)\*{1,2}", r"\1", texte)
@@ -267,11 +333,12 @@ def messages(idee: str, modele: str | None = None, regles: list[str] | None = No
 
 async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None = None, references: int = 0,
                    video: str | None = None, duree: int = 5, regles: list[str] | None = None,
-                   workflow: str | None = None) -> dict:
+                   workflow: str | None = None, vues: list[Vue] | None = None) -> dict:
     """`references` : nombre d'images de référence (S'inspirer) ; la consigne dédiée les fait citer par numéro.
     `video` : animer ou texte (Montage) ; consigne vidéo, répliques gardées mot pour mot.
     `regles` : celles du modèle cible (workflows.regles_prompt).
-    `workflow` : le modèle cible ; un LLM spécialisé pour lui réécrit avec sa propre consigne."""
+    `workflow` : le modèle cible ; un LLM spécialisé pour lui réécrit avec sa propre consigne.
+    `vues` : l'image à animer, les références ou l'image de départ d'une variation, montrées au LLM."""
     securite.verifier(idee)
     s = None if video or references else specialiste_pour(modele, "creation", workflow)
     if s:
@@ -291,7 +358,9 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
                     {"role": "user", "content": f"{idee}\n\n(Reference pictures: {references})"}]
     else:
         echanges = messages(idee, modele, regles)
+    usage = "animer" if video else "references" if references else "variation"
     async with orchestrateur.llm(modele) as llama:
+        echanges[-1]["content"] = montrer(echanges[-1]["content"], vues, usage, voit=_voit(llama))
         debut = time.perf_counter()
         reponse = await llama.generer(echanges, temperature=regle["temperature_reecriture"],
                                       max_tokens=regle["max_tokens"], **reglages.echantillonnage(modele))

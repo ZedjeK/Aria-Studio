@@ -21,6 +21,9 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 - **Réglages** : par LLM, par modèle et par checkpoint, avec un bouton *Optimiser* qui part des recommandations
   officielles et de ta carte. Le moteur de chaque LLM (llama.cpp officiel ou PrismML pour les GGUF ternaires, Bonsai 2
   et ses dérivés) se choisit tout seul d'après le fichier, et peut s'imposer à la main.
+- **Vision des LLM** : avec son projecteur d'images (`mmproj`, livré avec Bonsai 2 et valable pour ses dérivés), le LLM
+  voit l'image qu'il anime, qu'il retouche ou qu'il prend en référence avant de réécrire. Sans projecteur, il lit le
+  prompt qui a créé l'image.
 - **Modèles**, en cinq sous-onglets :
   - **Rechercher** : modèles image, modèles vidéo, LoRA ou LLM, sur Civitai et Hugging Face. Seuls les modèles qui
     vont dans un workflow d'Aria sont montrés, leur dossier est choisi pour toi, et ce que tu as déjà porte

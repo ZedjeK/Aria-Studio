@@ -21,7 +21,7 @@ from app.emplacements import moteur
 from app.llm import Llama
 from app.modeles import DOSSIER as MODELES
 
-CONTEXTE_REFLEXION = 8192  # contexte minimal d'un LLM qui réfléchit
+CONTEXTE_REFLEXION = 8192  # contexte minimal d'un LLM qui réfléchit ou qui voit
 
 
 class Orchestrateur:
@@ -77,13 +77,18 @@ class Orchestrateur:
                 await self.garde.attendre("Llama")
             # Ne redémarre que si le modèle, son serveur ou ses réglages de lancement changent.
             regle = reglages.valeurs_llm(nom)
-            contexte, reflexion, vision = regle["contexte"], regle["reflexion"], None
-            if reflexion:  # consigne + réflexion (llm.BUDGET_REFLEXION) + réponse doivent tenir ensemble
+            contexte, reflexion = regle["contexte"], regle["reflexion"]
+            # Vision chargée d'office quand le LLM en a une : pas de redémarrage entre une réécriture avec image
+            # (Montage, retouche, références) et une sans.
+            projecteur = reglages.projecteur_llm(nom)[0]
+            vision = MODELES / "llm" / projecteur if projecteur else None
+            if reflexion or vision:  # consigne + images (≈ 600 tokens chacune) + réflexion + réponse
                 contexte = max(contexte, CONTEXTE_REFLEXION)
             if specialiste := fiches.specialiste(nom):
                 # Un LLM spécialisé a ses réglages d'entraînement : réflexion, contexte assez grand, vision.
                 contexte, reflexion = max(contexte, specialiste["contexte"]), specialiste["reflexion"]
-                vision = MODELES / "llm" / specialiste["vision"]["nom"] if specialiste.get("vision") else None
+                if specialiste.get("vision"):
+                    vision = MODELES / "llm" / specialiste["vision"]["nom"]
             await self.llama.demarrer(fichier, serveur, contexte=contexte, reflexion=reflexion, vision=vision)
             self.actif = "llama"
             yield self.llama

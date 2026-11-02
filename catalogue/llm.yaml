@@ -47,6 +47,13 @@ llm:
     taille: 5946648928
     sha256: 53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3
     serveur: llama-prism  # format ternaire : le fork PrismML de llama.cpp (services/llama-prism)
+    # Projecteur d'images (--mmproj) : il voit l'image à animer, à retoucher ou prise en référence. Sert aussi ses
+    # dérivés (Heretic, essayé le 2026-11-02 : app/reglages.projecteur_llm).
+    vision:
+        nom: Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf
+        url: https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf
+        taille: 629246976
+        sha256: 6807ede61d570bb86ba34b756a0fa109edc33668604de867c6ea6d8f1d631903
     licence:
         id: apache-2.0
         nom: Apache 2.0
@@ -56,7 +63,7 @@ llm:
         territoires_exclus: []
         verifiee: 2026-10-26
     materiel:
-        vram_estimee_go: 7.0  # poids du GGUF + 1,5 Go (contexte et tampons, comme Découvrir et l'Optimiser) : une estimation, pas un minimum
+        vram_estimee_go: 7.6  # poids du GGUF et de sa vision + 1,5 Go (contexte et tampons, comme Découvrir et l'Optimiser) : une estimation, pas un minimum
         vram_min_go: null
         vram_confort_go: null
         mesure: null

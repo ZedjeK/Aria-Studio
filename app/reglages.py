@@ -13,6 +13,7 @@ fichier) revient aux valeurs d'origine. Chaque valeur est contrôlée avant d'ê
 """
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -157,7 +158,38 @@ def params_llm() -> dict[str, Param]:
         Param("moteur", "Moteur", "choix", "auto", choix=tuple(MOTEURS_LLM), libelles=tuple(MOTEURS_LLM.items()),
               aide="Automatique : d'après le format du GGUF. PrismML lit les formats ternaires de Bonsai 2 et ses "
                    "dérivés ; changer redémarre llama-server"),
+        Param("vision", "Vision (projecteur d'images)", "choix", "auto", choix=("auto", "aucune", *projecteurs()),
+              libelles=tuple(VISIONS.items()),
+              aide="Le LLM voit l'image à animer, à retoucher ou prise en référence. Automatique : le projecteur "
+                   "(mmproj) de la même famille, dans modeles/llm. Environ 0,6 Go de VRAM en plus"),
     ]}
+
+
+# Vision : un projecteur « <famille>-mmproj-….gguf » (ou « <famille>.mmproj-… ») sert tout GGUF dont le nom commence
+# par <famille> : Ternary-Bonsai-2-27B-mmproj-Q8_0 voit pour Bonsai 2 et ses dérivés (Heretic, essayé le 2026-11-02).
+VISIONS = {"auto": "Automatique", "aucune": "Aucune (aveugle)"}
+_MMPROJ = re.compile(r"[-._]mmproj", re.IGNORECASE)
+
+
+def projecteurs() -> list[str]:
+    """Projecteurs d'images de modeles/llm, du plus léger au plus lourd (Q8_0 avant BF16)."""
+    from app import modeles  # import tardif : modeles → workflows → reglages
+    trouves = [f for f in modeles.fichiers("llm", {".gguf"}) if _MMPROJ.search(f)]
+    return sorted(trouves, key=lambda f: (modeles.DOSSIER / "llm" / f).stat().st_size)
+
+
+def projecteur_llm(modele: str | None) -> tuple[str | None, str]:
+    """(projecteur, raison) : le choix de Réglages l'emporte ; en automatique, le plus léger de la même famille."""
+    nom = nom_llm(modele)
+    choisi, presents = valeurs_llm(nom)["vision"], projecteurs()
+    if choisi == "aucune":
+        return None, "coupée à la main"
+    if choisi in presents:
+        return choisi, "choisi à la main"
+    for p in presents:  # un choix dont le fichier a disparu revient à l'automatique
+        if nom.lower().startswith(_MMPROJ.split(p)[0].lower()):
+            return p, "projecteur de la même famille"
+    return None, "aucun projecteur de sa famille dans modeles/llm"
 
 
 # Moteurs d'un LLM (catalogue/moteurs.yaml) : le llama.cpp officiel, ou le fork PrismML pour les formats ternaires.
@@ -389,9 +421,13 @@ def etat() -> dict:
         valeurs = valeurs_llm(fichier)
         params = [p.public(valeurs[cle]) for cle, p in params_llm().items()]
         en_service, raison = moteur_llm(fichier)
-        for p in params:
-            if p["cle"] == "moteur":  # ce que l'automatique choisirait, ou ce qui tourne
+        projecteur, pourquoi = projecteur_llm(fichier)
+        for p in params:  # ce que l'automatique choisirait, ou ce qui tourne
+            if p["cle"] == "moteur":
                 p["aide"] = f"En service : {MOTEURS_LLM[en_service]}, {raison}. " + p["aide"]
+            elif p["cle"] == "vision":
+                p["aide"] = (f"En service : {projecteur}, {pourquoi}. " if projecteur
+                             else f"Aveugle : {pourquoi}. ") + p["aide"]
         llms.append({
             "fichier": fichier, "nom": favoris.get(fichier, fichier.removesuffix(".gguf")),
             "params": params,

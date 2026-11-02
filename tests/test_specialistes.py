@@ -143,7 +143,7 @@ class Chemin(unittest.TestCase):
         llama = FauxLlama('{"rewritten_prompt": "Change the sky to a warm sunset; keep everything else."}')
         orch = FauxOrchestrateur(llama)
         texte = asyncio.run(prompt.traduire_instruction(orch, "coucher de soleil", "pe-edit.gguf", None,
-                                                        "qwen_image_2_1_edit", b"PNG"))
+                                                        "qwen_image_2_1_edit", prompt.Vue(b"PNG")))
         self.assertEqual(texte, "Change the sky to a warm sunset; keep everything else.")
         self.assertEqual(orch.charges, ["pe-edit.gguf"])
         asyncio.run(prompt.traduire_instruction(orch, "coucher de soleil", "pe-edit.gguf", None, "qwen_image_2_1_edit"))

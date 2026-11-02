@@ -125,7 +125,7 @@ USAGES_SPECIALISTE = ("creation", "retouche")  # la réécriture d'une idée, ou
 def _probleme_fichier(nom: str, f) -> list[str]:
     if not (isinstance(f, dict) and all(str(f.get(c) or "").strip() for c in ("nom", "url", "sha256"))
             and _nombre(f.get("taille"))):
-        return [f"specialiste.{nom} : {{nom, url, taille, sha256}}"]
+        return [f"{nom} : {{nom, url, taille, sha256}}"]
     return []
 
 
@@ -138,9 +138,9 @@ def problemes_specialiste(s) -> list[str]:
     p = [] if isinstance(s.get("workflows"), list) and s["workflows"] else ["specialiste.workflows : la liste des workflows servis"]
     if s.get("usage") not in USAGES_SPECIALISTE:
         p.append(f"specialiste.usage : {', '.join(USAGES_SPECIALISTE)}")
-    p += _probleme_fichier("consigne", s.get("consigne"))
+    p += _probleme_fichier("specialiste.consigne", s.get("consigne"))
     if "vision" in s:
-        p += _probleme_fichier("vision", s["vision"])
+        p += _probleme_fichier("specialiste.vision", s["vision"])
     if s.get("sortie") not in ("json", "texte") or (s.get("sortie") == "json" and not s.get("cle")):
         p.append("specialiste.sortie : json (avec cle) ou texte")
     if not (isinstance(s.get("max_tokens"), int) and isinstance(s.get("contexte"), int) and s["max_tokens"] < s["contexte"]):
@@ -158,6 +158,8 @@ def problemes_llm(fiche: dict) -> list[str]:
         p.append("taille : en octets")
     if fiche.get("serveur") not in SERVEURS_LLM:
         p.append(f"serveur : {', '.join(SERVEURS_LLM)}")
+    if "vision" in fiche:  # projecteur d'images d'un LLM généraliste
+        p += _probleme_fichier("vision", fiche["vision"])
     return p + problemes_licence(fiche.get("licence")) + problemes_materiel(fiche.get("materiel")) \
         + problemes_specialiste(fiche.get("specialiste"))
 

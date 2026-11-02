@@ -53,6 +53,8 @@ def _fichiers(pack: dict) -> list[dict]:
         llm = fiches.fiche_llm(g)
         sortie.append({"dossier": "llm", "nom": llm["id"], "url": llm["url"], "taille": llm["taille"],
                        "sha256": llm["sha256"], "licence": llm["licence"]["nom"]})
+        if llm.get("vision"):  # son projecteur d'images : il voit l'image à animer ou à retoucher
+            sortie.append({"dossier": "llm", **llm["vision"], "licence": llm["licence"]["nom"]})
     return sortie
 
 

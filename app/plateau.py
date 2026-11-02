@@ -475,7 +475,7 @@ class Plateau:
             c.etape = "Traduction de la consigne"
             traduction = await prompt.traduire_instruction(
                 self.orchestrateur, c.idee, c.llm, workflows.regles_prompt(c.workflow), c.workflow,
-                retouche.png(source) if c.type == "retouche" else None)  # un spécialiste de retouche voit l'image
+                vue(c.parent) if c.type == "retouche" else None)  # le LLM voit l'image à retoucher, ou lit sa fiche
             c.prompt = traduction if c.type == "retouche" else f"{CONSIGNE_AGRANDISSEMENT} {traduction}"
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
 
@@ -532,8 +532,8 @@ class Plateau:
         if c.prompt is None:
             c.etape = "Réécriture du prompt"
             c.prompt = (await prompt.reecrire(self.orchestrateur, c.idee, c.llm, video=c.mode_video,
-                                              regles=workflows.regles_prompt(c.workflow),
-                                              duree=c.duree))["prompt"]
+                                              regles=workflows.regles_prompt(c.workflow), duree=c.duree,
+                                              vues=[vue(c.parent)] if c.mode_video == "animer" else None))["prompt"]
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
         duree_reecriture = time.perf_counter() - debut
 
@@ -586,8 +586,8 @@ class Plateau:
             c.etape = "Réécriture du prompt"
             nombre_refs = len(c.references) if c.mode_reference == "inspirer" else 0
             c.prompt = (await prompt.reecrire(self.orchestrateur, c.idee, c.llm, nombre_refs,
-                                              regles=workflows.regles_prompt(c.workflow),
-                                              workflow=c.workflow))["prompt"]
+                                              regles=workflows.regles_prompt(c.workflow), workflow=c.workflow,
+                                              vues=[vue(r) for r in c.references] or None))["prompt"]
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
         duree_reecriture = time.perf_counter() - debut
 
@@ -700,6 +700,27 @@ def liste(limite: int = 200) -> list[dict]:
 def chemin_image(id_creation: str):
     _verifier_id(id_creation)
     return DOSSIER / f"{id_creation}.png"
+
+
+def description(f: dict, profondeur: int = 3) -> str | None:
+    """Ce que montre une image d'après sa fiche : le prompt d'une création ou d'un clip ; pour une retouche, celui de
+    l'image d'origine et la retouche. None pour une image importée (rien d'écrit sur elle)."""
+    if f.get("type") in ("creation", "clip"):
+        return f.get("prompt") or None
+    if f.get("type") in ("retouche", "agrandissement") and f.get("parent") and profondeur:
+        try:
+            origine = description(fiche(f["parent"]), profondeur - 1)
+        except (OSError, ValueError):
+            return None  # image d'origine supprimée
+        if origine:
+            retouche_ = f.get("prompt") if f["type"] == "retouche" else "outpainted to a wider view"
+            return f"{origine} Then edited: {retouche_}"
+    return None
+
+
+def vue(id_creation: str) -> prompt.Vue:
+    """Une image de la galerie pour le LLM : ses pixels (il la voit s'il a sa vision), sinon sa description."""
+    return prompt.Vue.depuis(chemin_image(id_creation).read_bytes(), description(fiche(id_creation)))
 
 
 def chemin_video(id_creation: str):

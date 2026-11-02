@@ -797,8 +797,9 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
         else:
             c.etape = f"Plan {k + 1} · réécriture ({rang}/{total})"
             mode = "animer" if plan["enchainement"] == "rush" else "texte"
+            vues = [plateau.vue(plan["rush"])] if mode == "animer" and plan["rush"] else None  # le rush qu'il anime
             reecrit = (await prompt.reecrire(p_.orchestrateur, idee_pour_llm(s, k), s["llm"], video=mode,
-                                             duree=plan["duree"], regles=regles))["prompt"]
+                                             duree=plan["duree"], regles=regles, vues=vues))["prompt"]
             source = " ".join([plan["idee"], s["casting"]["ambiance"], s["casting"].get("contrainte", "")])
             reecrit, _ = sans_repliques_inventees(source, reecrit)
             plan["prompt_final"] = garder_repliques(plan["idee"], reecrit)
