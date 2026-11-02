@@ -20,7 +20,8 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 - **Casting** : des bancs pour comparer les modèles d'image et les LLM sur les mêmes idées, et choisir tes favoris.
 - **Réglages** : par LLM, par modèle et par checkpoint, avec un bouton *Optimiser* qui part des recommandations
   officielles et de ta carte. Le moteur de chaque LLM (llama.cpp officiel ou PrismML pour les GGUF ternaires, Bonsai 2
-  et ses dérivés) se choisit tout seul d'après le fichier, et peut s'imposer à la main.
+  et ses dérivés) se choisit tout seul d'après le fichier, et peut s'imposer à la main. La réflexion des LLM est
+  activée par défaut : la réécriture est plus lente, mais plus soignée. Elle se coupe LLM par LLM.
 - **Vision des LLM** : avec son projecteur d'images (`mmproj`, livré avec Bonsai 2 et valable pour ses dérivés), le LLM
   voit l'image qu'il anime, qu'il retouche ou qu'il prend en référence avant de réécrire. Sans projecteur, il lit le
   prompt qui a créé l'image.
@@ -36,6 +37,8 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
     entraîné pour lui écrire ses prompts (le « prompt enhancer » de Qwen-Image 2.1, par exemple), Aria le propose
     🎯 : il réécrit avec sa propre consigne officielle. Les autres LLM reçoivent les règles du modèle cible,
     tirées de ses guides officiels.
+- **✕ Annuler** : une création, un clip ou une séquence en cours s'arrête d'un clic, où qu'elle en soit ; ce qui
+  est déjà produit reste.
 - **Garde-VRAM** : une génération attend que les autres applis rendent la carte graphique au lieu de planter.
 
 ## Configuration requise
