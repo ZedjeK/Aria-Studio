@@ -55,7 +55,8 @@ async function preparerMontage() {
     remplirSelect("format-montage", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     remplirSelect("nombre-montage", Array.from({ length: v.nombre_max }, (_, i) => [String(i + 1), String(i + 1)]), "1");
     const llms = optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]);
-    remplirSelect("llm-montage", llms, optionsMontage.llm.defaut);
+    remplirSelect("llm-montage", llms, llmDuWorkflow(optionsMontage.video.workflows[modeMontage]
+        ?? optionsMontage.video.workflows.animer, optionsMontage));
     rendreSource();
     majEstimation();
     await bobines.charger();
@@ -80,9 +81,19 @@ function majEstimation() {
 
 // Mode et source
 
+// Animer ou texte : le LLM du workflow vidéo de ce mode (onglet Modèles, Vidéo) ; la séquence découpe avec celui
+// du texte vers vidéo.
+function suivreLlmMontage() {
+    if (!optionsMontage) return;
+    const w = optionsMontage.video.workflows;
+    if (w[modeMontage]) document.getElementById("llm-montage").value = llmDuWorkflow(w[modeMontage], optionsMontage);
+    document.getElementById("llm-sequence").value = llmDuWorkflow(w.texte, optionsMontage);
+}
+
 document.querySelectorAll('input[name="mode-montage"]').forEach((radio) => {
     radio.addEventListener("change", () => {
         modeMontage = radio.value;
+        suivreLlmMontage();
         document.getElementById("bloc-source-montage").hidden = modeMontage !== "animer";
         document.getElementById("bloc-format-montage").hidden = modeMontage !== "texte";
         // Séquence : le formulaire du clip seul s'efface au profit du panneau de la séquence (sequence.js).

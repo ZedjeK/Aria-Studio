@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from app import fiches, modeles, reglages, securite
-from app.config import ROOT
+from app import emplacements, fiches, modeles, reglages, securite
+from app.config import CONFIG, ROOT
 
 DOSSIER = ROOT / "workflows"
 # Valeurs acceptées par le nœud ResolutionSelector de ComfyUI (comfy_extras/nodes_resolution.py).
@@ -272,6 +272,34 @@ def famille_civitai(base: str | None, nom_modele: str = "", infos: dict | None =
         if f["nom_contient"] is None or f["nom_contient"].lower() in nom_modele.lower():
             return nom
     return None
+
+
+# LLM par workflow : celui qui réécrit les prompts de ce modèle (onglets d'usage de Modèles), retenu dans aria.yaml.
+CLE_LLM = "llm_par_workflow"
+
+
+def llms_choisis() -> dict[str, str]:
+    choix = emplacements.lire_choix(CLE_LLM, {})
+    return {k: v for k, v in choix.items() if isinstance(v, str)} if isinstance(choix, dict) else {}
+
+
+def llm_de(id_workflow: str | None) -> str:
+    """Le LLM de ce workflow s'il est choisi et installé, sinon le LLM par défaut (config.yaml, favori du Casting)."""
+    choisi = llms_choisis().get(id_workflow) if id_workflow else None
+    return choisi if choisi and choisi in modeles.llm_disponibles() else CONFIG["llama"]["modele"]
+
+
+def choisir_llm(id_workflow: str, llm: str | None):
+    """Retient le LLM d'un workflow ; None le ramène au LLM par défaut."""
+    obtenir(id_workflow)  # le workflow doit exister
+    if llm is not None and llm not in modeles.llm_disponibles():
+        raise ErreurWorkflow(f"GGUF absent de modeles/llm : {llm}")
+    choix = llms_choisis()
+    if llm is None:
+        choix.pop(id_workflow, None)
+    else:
+        choix[id_workflow] = llm
+    emplacements.retenir_choix(CLE_LLM, choix)
 
 
 def erreurs() -> list[str]:

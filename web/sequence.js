@@ -38,7 +38,7 @@ async function preparerSequence() {
     remplirSelect("modele-sequence", ck.lignes, ck.defaut);
     remplirSelect("format-sequence", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     remplirSelect("llm-sequence", optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]),
-                  optionsMontage.llm.defaut);
+                  llmDuWorkflow(optionsMontage.video.workflows.texte, optionsMontage));
     document.getElementById("phrase-voix").placeholder = v.voix.phrase_defaut;
     document.getElementById("lancer-essai-voix").textContent = `🎙️ Tourner l'essai (≈ ${enMinutes(v.voix.estimation_s)})`;
     await chargerVoix();

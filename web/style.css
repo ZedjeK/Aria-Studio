@@ -2405,3 +2405,31 @@ details.groupe-collection summary h2 {
     margin-bottom: 8px;
     overflow-wrap: anywhere;
 }
+
+/* ⏻ Quitter, au bout de la barre des onglets */
+button.quitter-appli {
+    align-self: center;
+    color: var(--discret);
+}
+
+button.quitter-appli:hover {
+    border-color: var(--ko);
+    color: var(--ko);
+}
+
+/* Onglets d'usage : le LLM qui réécrit pour ce workflow */
+.reecriture-workflow {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border-left: 2px solid var(--neon);
+    background: var(--fond);
+}
+
+.reecriture-workflow h3 {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+}
+
+.reecriture-workflow p {
+    margin: 6px 0 0;
+}

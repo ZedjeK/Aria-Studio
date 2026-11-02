@@ -129,12 +129,60 @@ async function suivreSources() {
 
 // Onglets d'usage : Texte → image, Image → image, Vidéo
 
+let llmsUsages = { defaut: null, choix: [] };  // LLM installés, pour le bloc « Réécriture du prompt »
+
 async function chargerUsages() {
-    const u = await api("GET", "/api/usages");
-    for (const [id, usage] of Object.entries(u)) {
+    const { llm, ...usages } = await api("GET", "/api/usages");
+    llmsUsages = llm;
+    for (const [id, usage] of Object.entries(usages)) {
         document.querySelector(`.usage[data-usage="${id}"]`).innerHTML = rendreUsage(id, usage);
     }
 }
+
+const STYLES_PROMPT = { prose: "de la prose descriptive", instruction: "une consigne d'édition", brief_video: "un brief vidéo" };
+
+// Le LLM qui réécrit les idées pour ce workflow, et ce que le workflow attend de lui (profil de sa fiche).
+function blocReecriture(wf) {
+    const r = wf.reecriture;
+    const nomDefaut = llmsUsages.choix.find((m) => m.fichier === llmsUsages.defaut)?.nom ?? llmsUsages.defaut;
+    const options = [`<option value="" ${r.llm ? "" : "selected"}>LLM par défaut (${echapper(nomDefaut)})</option>`]
+        .concat(llmsUsages.choix.map((m) => `<option value="${echapper(m.fichier)}" ${m.fichier === r.llm ? "selected" : ""}>
+            ${echapper(m.nom)}${m.favori ? " ★" : ""}</option>`)).join("");
+    const attentes = [`${STYLES_PROMPT[r.style] ?? r.style} en ${r.langue === "en" ? "anglais" : echapper(r.langue)}`,
+        r.mots_max ? `${r.mots_max} mots au plus` : "", r.regles ? `${r.regles} règle${r.regles > 1 ? "s" : ""} propres` : ""]
+        .filter(Boolean).join(" · ");
+    return `<div class="reecriture-workflow">
+        <h3>✍️ Réécriture du prompt</h3>
+        <label>LLM <select data-llm-workflow="${wf.id}">${options}</select></label>
+        <p class="discret">Ce modèle attend ${attentes}. Le Plateau, le Montage et le Scénario partent de ce LLM ;
+            tu peux toujours en choisir un autre pour une création.</p>
+    </div>`;
+}
+
+document.getElementById("vue-modeles").addEventListener("change", async (e) => {
+    const id = e.target.dataset.llmWorkflow;
+    if (!id) return;
+    e.target.disabled = true;
+    try {
+        await api("PUT", "/api/usages/llm", { workflow: id, llm: e.target.value || null });
+        await chargerUsages();
+        // Les sélecteurs LLM du Plateau, du Montage et du Scénario suivent le nouveau choix.
+        const o = await api("GET", "/api/plateau/options");
+        if (optionsPlateau) {
+            optionsPlateau.llm = o.llm;
+            suivreLlmDuWorkflow();
+            const prompt = document.getElementById("workflow-prompt");
+            if (prompt.value) document.getElementById("llm-prompt").value = llmDuWorkflow(prompt.value);
+        }
+        if (optionsMontage) {
+            optionsMontage.llm = o.llm;
+            suivreLlmMontage();
+        }
+    } catch (err) {
+        alert(err.message);
+        e.target.disabled = false;
+    }
+});
 
 function rendreUsage(id, u) {
     const nomDe = (wid) => u.workflows.find((w) => w.id === wid)?.nom ?? wid ?? "—";
@@ -171,6 +219,7 @@ function carteWorkflow(wf, idUsage, u) {
         <p class="discret">Famille ${echapper(wf.famille)} · ${taille(wf.taille)} · ${vram}${capacites ? ` · ${capacites}` : ""}</p>
         <p class="discret licence-fiche">${resumeLicence(wf.licence_fiche)}</p>
         ${wf.manquants.length ? `<p class="discret">Manquants : ${wf.manquants.map((f) => echapper(`${f.dossier}/${f.nom}`)).join(", ")}</p>` : ""}
+        ${blocReecriture(wf)}
         <div class="colonnes-workflow">
             <div>
                 <h3>Checkpoints <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.famille)}/modeles">📂</button></h3>

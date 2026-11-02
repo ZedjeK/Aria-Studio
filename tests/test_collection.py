@@ -206,6 +206,48 @@ class Sources(Base):
             collection._identification.update(etat="repos")
 
 
+class LlmParWorkflow(unittest.TestCase):
+    """Le LLM d'un workflow : retenu dans un aria.yaml temporaire, repris par le Plateau quand rien n'est demandé."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.installes = ["defaut.gguf", "bonsai.gguf"]
+        self.patchs = [mock.patch.object(workflows.emplacements, "_fichier_choix", lambda: Path(self.tmp.name) / "aria.yaml"),
+                       mock.patch.object(workflows.modeles, "llm_disponibles", lambda: self.installes),
+                       mock.patch.dict(workflows.CONFIG["llama"], {"modele": "defaut.gguf"})]
+        for p in self.patchs:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patchs:
+            p.stop()
+        self.tmp.cleanup()
+
+    def test_choisi_sinon_par_defaut(self):
+        self.assertEqual(workflows.llm_de("minimax_h3_i2v"), "defaut.gguf")
+        workflows.choisir_llm("minimax_h3_i2v", "bonsai.gguf")
+        self.assertEqual((workflows.llm_de("minimax_h3_i2v"), workflows.llm_de("qwen_image_2_1")), ("bonsai.gguf", "defaut.gguf"))
+        self.assertEqual(workflows.llm_de(None), "defaut.gguf")
+        self.installes.remove("bonsai.gguf")  # le GGUF a disparu : retour au LLM par défaut
+        self.assertEqual(workflows.llm_de("minimax_h3_i2v"), "defaut.gguf")
+
+    def test_retour_au_defaut_et_refus(self):
+        workflows.choisir_llm("minimax_h3_i2v", "bonsai.gguf")
+        workflows.choisir_llm("minimax_h3_i2v", None)
+        self.assertEqual(workflows.llms_choisis(), {})
+        with self.assertRaisesRegex(workflows.ErreurWorkflow, "GGUF absent"):
+            workflows.choisir_llm("minimax_h3_i2v", "absent.gguf")
+        with self.assertRaises(workflows.ErreurWorkflow):
+            workflows.choisir_llm("inconnu", "bonsai.gguf")
+
+    def test_le_plateau_prend_le_llm_du_workflow(self):
+        from app.plateau import Plateau
+        workflows.choisir_llm("minimax_h3_i2v", "bonsai.gguf")
+        self.assertEqual(Plateau._valider_llm(None, "minimax_h3_i2v"), "bonsai.gguf")
+        self.assertEqual(Plateau._valider_llm("defaut.gguf", "minimax_h3_i2v"), "defaut.gguf")  # choix d'une création
+        self.assertEqual(Plateau._valider_llm(None), "defaut.gguf")
+
+
 class FauxWorkflow:
     def __init__(self, id_, tache, references=0, manquants=()):
         self.id, self._references, self._manquants = id_, references, list(manquants)

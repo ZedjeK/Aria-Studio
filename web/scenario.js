@@ -53,7 +53,7 @@ async function chargerModelesPrompt() {
         + (t2v?.choix.length ? `<optgroup label="🎞️ Vidéo">${options(t2v)}</optgroup>` : "");
     remplirSelect("duree-prompt", optionsPlateau.video.durees.map((d) => [String(d), `${d} s`]), "5");
     const llm = document.getElementById("llm-prompt");
-    const gardeLlm = llm.value || optionsPlateau.llm.defaut;
+    const gardeLlm = llm.value || llmDuWorkflow(select.value);
     llm.innerHTML = optionsPlateau.llm.choix.map((m) =>
         `<option value="${echapper(m.fichier)}" ${m.fichier === gardeLlm ? "selected" : ""}>${echapper(m.nom)}${m.favori ? " ★" : ""}</option>`).join("");
     majCible();
@@ -614,6 +614,7 @@ document.getElementById("etiquettes-prompt").addEventListener("click", (e) => {
 });
 
 document.getElementById("workflow-prompt").addEventListener("change", () => {
+    document.getElementById("llm-prompt").value = llmDuWorkflow(document.getElementById("workflow-prompt").value);
     majCible();
     planifierAssemblage();
 });

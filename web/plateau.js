@@ -71,9 +71,20 @@ document.getElementById("workflow-creation").addEventListener("change", () => {
     // Changer de modèle propose son format par défaut (réglable dans l'onglet Réglages).
     const w = tousWorkflows().find((x) => x.id === choixModele("workflow-creation").workflow);
     if (w?.format) document.getElementById("format-creation").value = w.format;
+    suivreLlmDuWorkflow();
 });
-document.getElementById("workflow-retouche").addEventListener("change",
-    () => afficherLoras("loras-retouche", "workflow-retouche"));
+document.getElementById("workflow-retouche").addEventListener("change", () => {
+    afficherLoras("loras-retouche", "workflow-retouche");
+    suivreLlmDuWorkflow();
+});
+
+// Le LLM qui réécrit pour un workflow (onglets d'usage de Modèles), sinon le LLM par défaut.
+const llmDuWorkflow = (id, o = optionsPlateau) => o?.llm.par_workflow?.[id] ?? o?.llm.defaut;
+
+function suivreLlmDuWorkflow() {
+    document.getElementById("llm-creation").value = llmDuWorkflow(choixModele("workflow-creation").workflow);
+    document.getElementById("llm-retouche").value = llmDuWorkflow(choixModele("workflow-retouche").workflow);
+}
 
 function remplirSelect(id, valeurs, defaut) {
     const select = document.getElementById(id);
@@ -95,8 +106,9 @@ async function chargerOptionsPlateau() {
     optionsPlateau = o;
     const remplir = remplirSelect;
     const llms = o.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]);
-    remplir("llm-creation", llms, o.llm.defaut);
-    remplir("llm-retouche", llms, o.llm.defaut);
+    // Au premier remplissage, le LLM du workflow choisi (ou du favori) ; ensuite le choix en cours est gardé.
+    remplir("llm-creation", llms, llmDuWorkflow(choixModele("workflow-creation").workflow || o.workflows.texte_vers_image.defaut));
+    remplir("llm-retouche", llms, llmDuWorkflow(choixModele("workflow-retouche").workflow || o.workflows.retouche.defaut));
     const t2i = o.workflows.texte_vers_image;
     remplirModelesCreation();
     const edit = o.workflows.retouche;

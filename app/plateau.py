@@ -171,7 +171,8 @@ class Plateau:
                 "voix": voix.options(),
             },
             "references_max": workflows.REFERENCES_MAX,
-            "llm": {"defaut": CONFIG["llama"]["modele"], "choix": llm_au_choix()},
+            "llm": {"defaut": CONFIG["llama"]["modele"], "choix": llm_au_choix(),
+                    "par_workflow": {wf.id: workflows.llm_de(wf.id) for wf in prets}},
         }
 
     def commander(self, idee: str, prompt_force: str | None, llm: str | None, workflow: str | None,
@@ -199,7 +200,7 @@ class Plateau:
         if prompt_force is None:
             if not idee.strip():
                 raise ErreurPlateau("Écris ton idée")
-            llm = self._valider_llm(llm)
+            llm = self._valider_llm(llm, workflow)
             securite.verifier(idee, *textes)  # refus immédiat, avant même la file
         else:
             securite.verifier(idee, prompt_force, *textes)
@@ -259,7 +260,7 @@ class Plateau:
         if prompt_force is None:
             if not idee.strip():
                 raise ErreurPlateau("Écris ton idée")
-            llm = self._valider_llm(llm)
+            llm = self._valider_llm(llm, workflow)
             securite.verifier(idee, *textes)
         else:
             securite.verifier(idee, prompt_force, *textes)
@@ -314,7 +315,7 @@ class Plateau:
         self._valider_modele(workflows.obtenir(workflow), modele)
         loras = self._valider_loras(workflows.obtenir(workflow), loras, instruction, textes)
         return self._mettre_en_file(Commande(
-            instruction, None if reecrire else instruction, self._valider_llm(llm) if reecrire else None,
+            instruction, None if reecrire else instruction, self._valider_llm(llm, workflow) if reecrire else None,
             workflow, "retouche", seed, 1, source, modele, loras,
             type="retouche", masque=masque, fondu=max(0, min(fondu, 128)), textes_origine=textes,
         ))
@@ -340,15 +341,16 @@ class Plateau:
         self._valider_modele(workflows.obtenir(workflow), modele)
         loras = self._valider_loras(workflows.obtenir(workflow), loras, precision, textes)
         return self._mettre_en_file(Commande(
-            precision, consigne, self._valider_llm(llm) if consigne is None else None,
+            precision, consigne, self._valider_llm(llm, workflow) if consigne is None else None,
             workflow, "agrandi", seed, 1, source, modele, loras,
             type="agrandissement", fondu=max(0, min(fondu, 128)),
             largeur=largeur, hauteur=hauteur, ancrage=ancrage, textes_origine=textes,
         ))
 
     @staticmethod
-    def _valider_llm(llm: str | None) -> str:
-        llm = llm or CONFIG["llama"]["modele"]
+    def _valider_llm(llm: str | None, workflow: str | None = None) -> str:
+        """Le LLM demandé, sinon celui du workflow (onglets d'usage de Modèles), sinon le LLM par défaut."""
+        llm = llm or workflows.llm_de(workflow)
         if llm not in modeles.llm_disponibles():
             raise ErreurPlateau(f"GGUF absent de modeles/llm : {llm}")
         return llm

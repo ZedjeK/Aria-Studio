@@ -421,14 +421,25 @@ def liste_usages():
     return collection.usages()
 
 
-class DemandeFavori(BaseModel):
+class DemandeFavoriUsage(BaseModel):
     cle: str  # texte_vers_image, retouche, references, image_vers_video, texte_vers_video
     workflow: str
 
 
 @app.put("/api/usages/favori")
-def favori_usage(d: DemandeFavori):
+def favori_usage(d: DemandeFavoriUsage):
     return _collection(collection.definir_favori, d.cle, d.workflow)
+
+
+class DemandeLlmWorkflow(BaseModel):
+    workflow: str
+    llm: str | None = None  # None : le LLM par défaut
+
+
+@app.put("/api/usages/llm")
+def llm_usage(d: DemandeLlmWorkflow):
+    """Le LLM qui réécrit les prompts d'un workflow, repris par le Plateau, le Montage et le Scénario."""
+    return _collection(collection.definir_llm, d.workflow, d.llm)
 
 
 @app.post("/api/workflows/{id_workflow}/telecharger")
@@ -605,7 +616,8 @@ async def peaufiner_prompt(demande: DemandePeaufinage):
         mots_max = reglages.valeurs_workflow(workflows.obtenir(demande.workflow)).get("mots_max") \
             if demande.workflow else None
         duree = demande.duree if listes.est_video(demande.workflow) else None
-        return await prompt.peaufiner(orchestrateur, demande.prompt, demande.llm, mots_max, duree,
+        llm = demande.llm or (workflows.llm_de(demande.workflow) if demande.workflow else None)
+        return await prompt.peaufiner(orchestrateur, demande.prompt, llm, mots_max, duree,
                                       workflows.regles_prompt(demande.workflow))
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
@@ -1164,13 +1176,28 @@ def image_source(fichier: str):
     return FileResponse(image)
 
 
+@app.post("/api/quitter")
+async def quitter():
+    """Bouton ⏻ : arrête le serveur ; cycle_de_vie coupe alors ComfyUI et Llama (ceux qu'Aria a lancés, jamais un
+    autre programme). Un téléchargement en cours garde son .part et reprendra au prochain lancement."""
+    if serveur is None:
+        raise HTTPException(409, "Aria a été lancée autrement que par son lanceur : ferme la fenêtre de son serveur")
+    asyncio.get_running_loop().call_later(0.5, setattr, serveur, "should_exit", True)  # la réponse part d'abord
+    return {"quitte": True}
+
+
+serveur: uvicorn.Server | None = None  # posé par lancer() : /api/quitter lui demande de s'arrêter
+
+
 def lancer():
+    global serveur
     host = CONFIG["app"]["host"]
     port = CONFIG["app"]["port"]
     # Le lanceur Aria-Studio.exe ouvre lui-même le navigateur, une fois le serveur prêt.
     if CONFIG["app"].get("open_browser") and not os.environ.get("ARIA_SANS_NAVIGATEUR"):
         threading.Timer(1.5, webbrowser.open, args=[f"http://{host}:{port}"]).start()
-    uvicorn.run(app, host=host, port=port)
+    serveur = uvicorn.Server(uvicorn.Config(app, host=host, port=port))
+    serveur.run()
 
 
 if __name__ == "__main__":

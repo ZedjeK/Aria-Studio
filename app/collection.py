@@ -12,7 +12,7 @@ import copy
 
 import httpx
 
-from app import assistant, emplacements, fiches, modeles, workflows
+from app import assistant, emplacements, fiches, modeles, plateau, reglages, workflows
 from app.config import CONFIG
 from app.sources import Fiche, civitai
 
@@ -93,10 +93,22 @@ def collection() -> dict:
 
 # Usages : un onglet par façon de créer
 
+def _reecriture(wf) -> dict:
+    """Ce que le workflow attend du LLM (profil de sa fiche, longueur réglable) et le LLM qui réécrit pour lui."""
+    profil = wf.profil
+    return {
+        "llm": workflows.llms_choisis().get(wf.id),  # None : le LLM par défaut
+        "effectif": workflows.llm_de(wf.id),
+        "style": profil["style"], "langue": profil["langue"],
+        "mots_max": reglages.valeurs_workflow(wf).get("mots_max") or profil.get("mots_max"),
+        "regles": len(profil.get("regles") or []),
+    }
+
+
 def usages() -> dict:
     catalogue = workflows.catalogue()
     generation = CONFIG.get("generation", {})
-    sortie = {}
+    sortie = {"llm": {"defaut": CONFIG["llama"]["modele"], "choix": plateau.llm_au_choix()}}
     for id_usage, u in USAGES.items():
         liste = []
         for wf in catalogue:
@@ -105,7 +117,8 @@ def usages() -> dict:
             possibles = [c for c in u["favoris"] if c == wf.fiche["tache"] or (c == "references" and wf.accepte_references())]
             liste.append({**wf.resume(), "modele_defaut": wf.choisi(None), "possibles": possibles,
                           "favori_pour": [c for c in possibles if generation.get(c) == wf.id],
-                          "references": wf.accepte_references(), "variation": wf.accepte_variation()})
+                          "references": wf.accepte_references(), "variation": wf.accepte_variation(),
+                          "reecriture": _reecriture(wf)})
         sortie[id_usage] = {
             "nom": u["nom"], "workflows": liste,
             "favoris": [{"cle": c, "libelle": l, "valeur": generation.get(c)} for c, l in u["favoris"].items()],
@@ -133,6 +146,15 @@ def definir_favori(cle: str, id_workflow: str) -> dict:
         raise ErreurCollection(f"{wf.fiche['nom']} n'est pas complet : télécharge d'abord ce qui manque")
     emplacements.retenir_favori("generation", cle, id_workflow)
     CONFIG.setdefault("generation", {})[cle] = id_workflow
+    return usages()
+
+
+def definir_llm(id_workflow: str, llm: str | None) -> dict:
+    """Le LLM qui réécrit les prompts de ce workflow (None : le LLM par défaut)."""
+    try:
+        workflows.choisir_llm(id_workflow, llm)
+    except workflows.ErreurWorkflow as e:
+        raise ErreurCollection(str(e)) from e
     return usages()
 
 

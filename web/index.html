@@ -26,7 +26,17 @@
             </div>
             <!-- État en direct des moteurs, visible depuis tous les onglets. -->
             <div id="etat-direct" class="etat-direct" title="État en direct"></div>
+            <button id="quitter-appli" type="button" class="petit quitter-appli"
+                    title="Quitter Aria : arrête son serveur, ComfyUI et Llama">⏻ Quitter</button>
         </nav>
+        <!-- Après ⏻ Quitter : le serveur est arrêté, l'onglet peut être fermé. -->
+        <div id="voile-quitte" class="voile" hidden>
+            <div class="fenetre">
+                <h2>Aria est fermée 👋</h2>
+                <p>Son serveur, ComfyUI et Llama sont arrêtés : la carte graphique est libre. Tu peux fermer cet onglet.</p>
+                <p class="discret">Pour la relancer : le raccourci « Aria - Studio » du Bureau.</p>
+            </div>
+        </div>
         <!-- Mise à jour : une release plus récente existe sur GitHub (rien ne s'installe tout seul). -->
         <div id="bandeau-maj" class="bandeau-maj" hidden>
             <span></span>

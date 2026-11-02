@@ -27,7 +27,8 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
   - **Ma collection** : ce que tu as, d'où ça vient, et quels workflows l'utilisent. « Retrouver les sources »
     retrouve la page Civitai d'un fichier déposé à la main, grâce à son empreinte SHA-256 et seulement sur un clic.
   - **Texte → image**, **Image → image**, **Vidéo** : les workflows de chaque usage, avec leur favori, leurs
-    checkpoints, leurs LoRA, et un bouton pour télécharger ce qui leur manque.
+    checkpoints, leurs LoRA, le LLM qui réécrit pour chacun (le Plateau, le Montage et le Scénario le prennent
+    tout seuls), et un bouton pour télécharger ce qui leur manque.
 - **Garde-VRAM** : une génération attend que les autres applis rendent la carte graphique au lieu de planter.
 
 ## Configuration requise
@@ -59,6 +60,8 @@ garde libres.
    ```
 
 2. Décompresse le zip où tu veux, puis double-clique sur `Aria-Studio.exe`. L'interface s'ouvre dans ton navigateur.
+   Pour fermer Aria, clique sur **⏻ Quitter**, au bout de la barre des onglets : son serveur, ComfyUI et Llama
+   s'arrêtent.
 3. Le lanceur n'est pas signé : Windows SmartScreen peut afficher « Windows a protégé votre ordinateur ». Clique sur
    *Informations complémentaires*, puis sur *Exécuter quand même*.
 4. Au premier lancement, l'**assistant** te guide :

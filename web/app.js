@@ -90,7 +90,23 @@ const enDuree = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60).pa
 });
 
 majEtatDirect();
-setInterval(majEtatDirect, 3000);
+const suiviEtat = setInterval(majEtatDirect, 3000);
+
+// ⏻ Quitter : arrête le serveur d'Aria, qui coupe ComfyUI et Llama en partant (app/main.py, /api/quitter).
+document.getElementById("quitter-appli").addEventListener("click", async () => {
+    const taches = await api("GET", "/api/telechargements").catch(() => []);
+    const actifs = taches.filter((t) => ["attente", "en_cours", "pause", "verification"].includes(t.etat)).length;
+    if (!confirm("Quitter Aria ? Son serveur, ComfyUI et Llama s'arrêtent, et une génération en cours est perdue."
+        + (actifs ? `\n\n${actifs} téléchargement(s) en cours : ils reprendront au prochain lancement.` : ""))) return;
+    try {
+        await api("POST", "/api/quitter");
+    } catch (err) {
+        alert(err.message);
+        return;
+    }
+    clearInterval(suiviEtat);
+    document.getElementById("voile-quitte").hidden = false;
+});
 
 // Modèles : fiche et confirmation
 
