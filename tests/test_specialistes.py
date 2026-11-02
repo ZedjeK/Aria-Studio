@@ -128,6 +128,15 @@ class Chemin(unittest.TestCase):
         self.assertEqual(orch.charges[-1], "general.gguf")
         self.assertIn("Picture 1", llama.appels[-1][0][0]["content"])
 
+    def test_generaliste_markdown_nettoye_et_genre_dans_la_consigne(self):
+        llama = FauxLlama('A cyberpunk alley, a **"Ramen 24h"** sign above *her* katana.')
+        r = asyncio.run(prompt.reecrire(FauxOrchestrateur(llama), "une samouraï androïde", "general.gguf",
+                                        workflow="qwen_image_2_1"))
+        self.assertEqual(r["prompt"], 'A cyberpunk alley, a "Ramen 24h" sign above her katana.')
+        self.assertIn("« une samouraï »", llama.appels[0][0][0]["content"])
+        for nom in ("reecriture", "references", "video", "decoupage"):
+            self.assertIn("never switch it", prompt.consigne(nom), nom)
+
     def test_retouche_par_le_specialiste_qui_voit_l_image(self):
         llama = FauxLlama('{"rewritten_prompt": "Change the sky to a warm sunset; keep everything else."}')
         orch = FauxOrchestrateur(llama)

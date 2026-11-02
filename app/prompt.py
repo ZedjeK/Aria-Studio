@@ -26,10 +26,11 @@ The user describes an image idea, often in French. Rewrite it as ONE English pro
 
 Rules:
 1. Stay faithful: keep every subject, action, color, attribute and spatial relation from the idea. Do not add new characters or objects the idea does not imply.
-2. Make it visual: precise subject description, setting, lighting, mood, composition and camera or medium (photo, illustration, painting...). Choose them to serve the idea.
-3. If the idea asks for written text in the image, keep that text exactly, in quotes. Otherwise mention no text.
-4. 40 to 120 words, plain prose, no lists, no headings, no quotes around the whole prompt.
-5. Output only the prompt: no preamble, no explanation, no translation notes."""
+2. Keep each character's gender. In French, the article and the agreements give it (« une samouraï », « une androïde » are women; « un pilote » is a man): write she/her or he/his accordingly, never switch it.
+3. Make it visual: precise subject description, setting, lighting, mood, composition and camera or medium (photo, illustration, painting...). Choose them to serve the idea.
+4. If the idea asks for written text in the image, keep that text exactly, in quotes. Otherwise mention no text.
+5. 40 to 120 words, plain prose, no lists, no headings, no markdown (no asterisks), no quotes around the whole prompt.
+6. Output only the prompt: no preamble, no explanation, no translation notes."""
 
 
 CONSIGNE_RETOUCHE = """You translate image-editing instructions for an instruction-based image editing model.
@@ -70,9 +71,10 @@ Rules:
 1. Refer to the references by their number: "the woman from Picture 1", "the dragon from Picture 2". Do not re-describe what the references already show (face, hair, clothes, colors): the model sees them.
 2. Ask explicitly to keep the identity (face, hair) and outfit of the characters from the references, unless the user asks to change them, but NOT their pose, seat, props or background: the characters take the new pose and place described by the user.
 3. Describe what is new, as the user asks: scene, pose, action, setting, lighting, framing, style. Add nothing the user did not imply.
-4. If the user asks for written text in the image, keep that text exactly, in quotes.
-5. 1 to 4 sentences, at most 90 words, plain prose.
-6. Output only the instruction: no preamble, no explanation."""
+4. Keep each character's gender. In French, the article and the agreements give it (« une samouraï », « une androïde » are women; « un pilote » is a man): write she/her or he/his accordingly, never switch it.
+5. If the user asks for written text in the image, keep that text exactly, in quotes.
+6. 1 to 4 sentences, at most 90 words, plain prose, no markdown.
+7. Output only the instruction: no preamble, no explanation."""
 
 CONSIGNE_VIDEO = """You write prompts for an audio-video generation model: it creates the picture AND the sound together.
 The user describes, often in French, a short video clip. Rewrite it as ONE English prompt.
@@ -83,8 +85,9 @@ Rules:
 3. Sounds: name concrete sounds tied to the action (footsteps, rain, wind...). Mention music only if the user asks for it, separately from the sounds.
 4. If the clip animates a provided image, describe only what moves (motion, camera, sounds), not what the image already shows.
 5. Fit the clip duration: few actions, at most one or two short lines of dialogue.
-6. 40 to 110 words, plain prose, no lists, no headings.
-7. Output only the prompt: no preamble, no explanation."""
+6. Keep each character's gender. In French, the article and the agreements give it (« une samouraï », « une androïde » are women; « un pilote » is a man): write she/her or he/his accordingly, never switch it.
+7. 40 to 110 words, plain prose, no lists, no headings.
+8. Output only the prompt: no preamble, no explanation."""
 
 # Scénario, mode Séquence : tout le découpage en un seul appel, pour que Llama voie l'histoire entière.
 # Règles tirées des essais du mode Séquence (2026-10-21) : une seule prise par plan, transition progressive,
@@ -103,7 +106,7 @@ Rules for every shot:
 - continue: the same take goes on from the last image of the previous shot: same place, same light, same framing at first. Begin with "Continuous shot, same scene."
 - cut: a new angle or a new moment of the story.
 - transition: ONE continuous camera movement travelling from the last image of the previous shot to the given arrival; the scene changes progressively over the whole clip, never all at once at the end.
-6. Character: {regle_personnage}
+6. Character: {regle_personnage} Keep each character's gender. In French, the article and the agreements give it (« une samouraï », « une androïde » are women; « un pilote » is a man): write she/her or he/his accordingly, never switch it.
 7. Keep the look of the setting (place, light, style) unless a shot's note says otherwise.
 
 Answer with exactly one block per shot, in order, and nothing else:
@@ -203,8 +206,9 @@ async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, m
             [{"role": "system", "content": consigne("retouche", modele, regles=regles)}, {"role": "user", "content": instruction}],
             temperature=regle["temperature_retouche"], max_tokens=200, **reglages.echantillonnage(modele),
         )
-    securite.verifier(instruction, reponse.texte)
-    return reponse.texte
+    texte = nettoyer_markdown(reponse.texte)
+    securite.verifier(instruction, texte)
+    return texte
 
 
 async def peaufiner(orchestrateur: Orchestrateur, assemble: str, modele: str | None = None,
@@ -228,10 +232,11 @@ async def peaufiner(orchestrateur: Orchestrateur, assemble: str, modele: str | N
             temperature=regle["temperature_peaufinage"], max_tokens=regle["max_tokens"],
             **reglages.echantillonnage(modele))
         duree = time.perf_counter() - debut
+    texte = nettoyer_markdown(reponse.texte)
     # Ensemble : un mineur de l'original reste un mineur, même si le LLM l'a reformulé.
-    securite.verifier(assemble, reponse.texte)
-    return {"prompt": reponse.texte, "modele": llama.modele.name if llama.modele else modele,
-            "duree_s": round(duree, 2), "mots": len(reponse.texte.split())}
+    securite.verifier(assemble, texte)
+    return {"prompt": texte, "modele": llama.modele.name if llama.modele else modele,
+            "duree_s": round(duree, 2), "mots": len(texte.split())}
 
 
 async def traduire_precisions(orchestrateur: Orchestrateur, precisions: str, modele: str | None = None) -> str:
@@ -290,7 +295,7 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
         reponse = await llama.generer(echanges, temperature=regle["temperature_reecriture"],
                                       max_tokens=regle["max_tokens"], **reglages.echantillonnage(modele))
         duree = time.perf_counter() - debut
-    texte = nettoyer_markdown(reponse.texte) if video else reponse.texte
+    texte = nettoyer_markdown(reponse.texte)  # **gras**, *italique*, titres : ni ComfyUI ni H3 n'en veulent
     # Idée et prompt ensemble : le LLM peut avoir ajouté un terme sensible à une idée avec un mineur.
     securite.verifier(idee, texte)
     return {

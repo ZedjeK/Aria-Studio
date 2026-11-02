@@ -303,7 +303,7 @@ class BancLLM(Banc):
                                                       temperature=regle["temperature_reecriture"],
                                                       max_tokens=regle["max_tokens"],
                                                       **reglages.echantillonnage(candidat))
-                        texte = reponse.texte
+                        texte = prompt.nettoyer_markdown(reponse.texte)
                     duree = time.perf_counter() - debut
                 securite.verifier(p["prompt"], texte)
                 g = self._generation(cle, p, seed, texte)
