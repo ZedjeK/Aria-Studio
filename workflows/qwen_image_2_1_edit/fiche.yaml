@@ -62,7 +62,16 @@ materiel:
 profil_prompt:
     style: instruction
     langue: en
-    regles: []
+    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
+    # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
+    regles:
+    - 'Lead with the operation (what changes and where), then say explicitly what stays unchanged.'
+    - 'Keep identity unless the user targets it: the face and recognizable accessories of a person, the exact design of a product, and the rendering medium (photo, anime, illustration, painting).'
+    - 'Anchor every detail on what the image shows; never invent a detail you cannot see.'
+    - 'Written text: give the exact characters in double quotes and keep the typography and language already in the image.'
+    - 'If the canvas is extended outward, call it outpainting explicitly.'
+    regles_sources:
+    - 'https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I (system_prompt.txt)'
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
 recommandations:
     valeurs:

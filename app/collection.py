@@ -93,15 +93,39 @@ def collection() -> dict:
 
 # Usages : un onglet par façon de créer
 
+def _fichiers_llm(fiche: dict) -> list[dict]:
+    """Ce qu'il faut télécharger pour un LLM du catalogue : le GGUF, et pour un spécialiste sa consigne et sa vision."""
+    s = fiche.get("specialiste") or {}
+    return [{"nom": fiche["id"], "url": fiche["url"], "taille": fiche["taille"], "sha256": fiche["sha256"]}] \
+        + [s[k] for k in ("consigne", "vision") if s.get(k)]
+
+
+def _specialiste(fiche: dict, choisi: str | None) -> dict:
+    fichiers = _fichiers_llm(fiche)
+    manquants = [f for f in fichiers if not modeles.destination("llm", f["nom"]).is_file()]
+    return {"fichier": fiche["id"], "nom": fiche["nom"], "page": fiche["page"], "usage": fiche["specialiste"]["usage"],
+            "taille": sum(f["taille"] for f in fichiers), "a_telecharger": sum(f["taille"] for f in manquants),
+            "installe": not manquants, "choisi": fiche["id"] == choisi, "vision": bool(fiche["specialiste"].get("vision")),
+            "licence": {"nom": fiche["licence"]["nom"], "url": fiche["licence"]["url"], "resume": fiche["licence"]["resume"]}}
+
+
 def _reecriture(wf) -> dict:
-    """Ce que le workflow attend du LLM (profil de sa fiche, longueur réglable) et le LLM qui réécrit pour lui."""
+    """Ce que le workflow attend du LLM (profil de sa fiche, longueur réglable), le LLM qui réécrit pour lui, et les
+    LLM entraînés pour ce modèle (installables, ou connus sans GGUF)."""
     profil = wf.profil
+    choisi = workflows.llms_choisis().get(wf.id)
+    s = fiches.specialiste(choisi)
+    noms = {w.id: w.fiche["nom"] for w in workflows.catalogue()}
     return {
-        "llm": workflows.llms_choisis().get(wf.id),  # None : le LLM par défaut
+        "llm": choisi,  # None : le LLM par défaut
         "effectif": workflows.llm_de(wf.id),
         "style": profil["style"], "langue": profil["langue"],
         "mots_max": reglages.valeurs_workflow(wf).get("mots_max") or profil.get("mots_max"),
         "regles": len(profil.get("regles") or []),
+        "specialistes": [_specialiste(f, choisi) for f in fiches.specialistes(wf.id)],
+        "a_venir": [{"nom": a["nom"], "page": a["page"], "raison": a["raison"]} for a in fiches.a_venir(wf.id)],
+        # Un spécialiste choisi pour un autre modèle : Aria passera au LLM par défaut pour ce workflow.
+        "ailleurs": [noms.get(i, i) for i in s["workflows"]] if s and wf.id not in s["workflows"] else None,
     }
 
 
@@ -156,6 +180,26 @@ def definir_llm(id_workflow: str, llm: str | None) -> dict:
     except workflows.ErreurWorkflow as e:
         raise ErreurCollection(str(e)) from e
     return usages()
+
+
+def installer_llm(fichier: str, telechargeur) -> dict:
+    """Met en file un LLM du catalogue (le clic, après lecture de sa licence, vaut accord) : son GGUF, et pour un
+    spécialiste sa consigne officielle et son projecteur d'images, chacun vérifié par son SHA-256."""
+    fiche = fiches.fiche_llm(fichier)
+    if fiche is None:
+        raise ErreurCollection(f"LLM inconnu du catalogue : {fichier}")
+    ajoutes = []
+    for f in _fichiers_llm(fiche):
+        if modeles.destination("llm", f["nom"]).is_file():
+            continue
+        source = Fiche(source="huggingface", nom=f["nom"], taille=f["taille"], sha256=f["sha256"], url=f["url"],
+                       page=fiche["page"], dossier="llm", licence=fiche["licence"]["nom"], jeton_requis=False)
+        try:
+            ajoutes.append(telechargeur.ajouter(source, "llm").id)
+        except Exception as e:  # déjà dans la file, place insuffisante : dit tel quel
+            if "déjà dans la file" not in str(e):
+                raise ErreurCollection(f"{f['nom']} : {e}") from e
+    return {"ajoutes": ajoutes}
 
 
 def telecharger_manquants(id_workflow: str, telechargeur) -> dict:

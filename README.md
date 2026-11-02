@@ -28,7 +28,10 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
     retrouve la page Civitai d'un fichier déposé à la main, grâce à son empreinte SHA-256 et seulement sur un clic.
   - **Texte → image**, **Image → image**, **Vidéo** : les workflows de chaque usage, avec leur favori, leurs
     checkpoints, leurs LoRA, le LLM qui réécrit pour chacun (le Plateau, le Montage et le Scénario le prennent
-    tout seuls), et un bouton pour télécharger ce qui leur manque.
+    tout seuls), et un bouton pour télécharger ce qui leur manque. Quand l'auteur d'un modèle publie un LLM
+    entraîné pour lui écrire ses prompts (le « prompt enhancer » de Qwen-Image 2.1, par exemple), Aria le propose
+    🎯 : il réécrit avec sa propre consigne officielle. Les autres LLM reçoivent les règles du modèle cible,
+    tirées de ses guides officiels.
 - **Garde-VRAM** : une génération attend que les autres applis rendent la carte graphique au lieu de planter.
 
 ## Configuration requise

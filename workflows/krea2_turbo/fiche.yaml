@@ -71,7 +71,15 @@ profil_prompt:
     style: prose
     langue: en
     mots_max: 120  # valeur de départ, à affiner au banc
-    regles: []
+    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
+    # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
+    regles:
+    - 'Group each subject with its own attributes and action, with grounded phrasing for poses, interactions and spatial layout.'
+    - 'Do not invent highly specific clothing, colours, materials or details the idea does not support; if the idea is already detailed, polish it rather than expand it.'
+    - 'Keep the medium the user asks for (photo, illustration, painting, sketch, 3D render).'
+    - 'If the idea asks for no written words, end the prompt with: "No text, no letters, no logos, no watermark."'
+    regles_sources:
+    - 'template ComfyUI image_krea2_turbo_t2i (consigne de son affineur de prompt)'
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
 recommandations:
     resolution_native_mp: 4.2  # 2048 × 2048

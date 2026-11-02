@@ -60,7 +60,8 @@ def fichiers(dossier: str, extensions: set[str]) -> list[str]:
 
 
 def llm_disponibles() -> list[str]:
-    return fichiers("llm", {".gguf"})
+    """Les GGUF de modeles/llm, sans les projecteurs d'images (mmproj) : ce ne sont pas des LLM."""
+    return [f for f in fichiers("llm", {".gguf"}) if "mmproj" not in f.lower()]
 
 
 # LoRAs : mots déclencheurs et force retenus d'une utilisation à l'autre (data/loras.json),

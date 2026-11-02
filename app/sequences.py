@@ -671,7 +671,8 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
 
     wf = workflows.obtenir(CONFIG.get("generation", {}).get("texte_vers_video"))
     mots_max = reglages.valeurs_workflow(wf).get("mots_max") or 110
-    llm = llm or workflows.llm_de(wf.id)  # le LLM de ce workflow (onglet Modèles), sinon celui par défaut
+    # Le LLM de ce workflow (onglet Modèles), sinon celui par défaut ; un spécialiste ne fait pas de découpage.
+    llm = prompt.generaliste(llm or workflows.llm_de(wf.id))
     regle_personnage = prompt.REGLE_AVEC_REFERENCE if reference else prompt.REGLE_SANS_REFERENCE
     systeme = prompt.consigne("decoupage", llm, mots_max, wf.profil.get("regles"))
     systeme = (systeme.replace("{regle_personnage}", regle_personnage) if "{regle_personnage}" in systeme

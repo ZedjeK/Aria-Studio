@@ -35,6 +35,7 @@ class Llama:
         self.reflexion_active = reflexion
         self.url = f"http://127.0.0.1:{port}"
         self.modele: Path | None = None
+        self.vision: Path | None = None
         self.process: subprocess.Popen | None = None
         self._serveur_actif: Path | None = None
         self._log = None
@@ -48,16 +49,17 @@ class Llama:
             return False
 
     async def demarrer(self, modele: Path, serveur: Path | None = None, timeout: float = 120,
-                       contexte: int | None = None, reflexion: bool | None = None):
+                       contexte: int | None = None, reflexion: bool | None = None, vision: Path | None = None):
         """`serveur` : binaire llama-server particulier (fork) ; par défaut celui du constructeur.
-        `contexte` et `reflexion` : réglages propres au GGUF ; par défaut ceux du constructeur."""
+        `contexte` et `reflexion` : réglages propres au GGUF ; par défaut ceux du constructeur.
+        `vision` : projecteur d'images (mmproj) d'un LLM qui doit voir une image (spécialiste de retouche)."""
         serveur = serveur or self.serveur
         contexte = contexte or self.contexte
         reflexion = self.reflexion if reflexion is None else reflexion
         if self.process is not None and self.process.poll() is None:
             # Ne redémarre que si quelque chose change (modèle, serveur ou réglages de lancement).
-            actuel = (self.modele, self._serveur_actif, self.contexte_actif, self.reflexion_active)
-            if actuel == (modele, serveur, contexte, reflexion):
+            actuel = (self.modele, self._serveur_actif, self.contexte_actif, self.reflexion_active, self.vision)
+            if actuel == (modele, serveur, contexte, reflexion, vision):
                 return
             await self.arreter()
         if not modele.is_file():
@@ -75,6 +77,10 @@ class Llama:
         ]
         if not reflexion:
             arguments += ["--reasoning-budget", "0"]
+        if vision is not None:
+            if not vision.is_file():
+                raise ErreurLlama(f"Projecteur d'images introuvable : {vision}")
+            arguments += ["--mmproj", str(vision)]
         self.process = subprocess.Popen(
             arguments,
             cwd=serveur.parent,
@@ -86,6 +92,7 @@ class Llama:
         self._serveur_actif = serveur
         self.contexte_actif = contexte
         self.reflexion_active = reflexion
+        self.vision = vision
         fin = asyncio.get_running_loop().time() + timeout
         while asyncio.get_running_loop().time() < fin:
             if self.process.poll() is not None:

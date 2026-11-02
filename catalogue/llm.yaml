@@ -80,3 +80,94 @@ llm:
         -   cle: presence_penalty
             valeur: 1.5
             note: Mode instruct, réglages de la fiche (évite les répétitions)
+
+# LLM spécialisés : entraînés par l'auteur d'un modèle d'image pour lui écrire ses prompts. Ils gardent leur propre
+# consigne (livrée avec eux, téléchargée et vérifiée comme le GGUF) et ne servent qu'à la réécriture des workflows
+# listés ; pour tout le reste (découpage, peaufinage, traduction), Aria passe au LLM par défaut. Le filtre AS-18
+# contrôle leur prompt comme celui de n'importe quel LLM. Fiches relevées le 2026-11-02 (API Hugging Face).
+# GGUF : conversions communautaires (prithivMLmods) des modèles officiels de Qwen ; le SHA-256 vérifie le fichier,
+# pas sa fidélité à l'original (à juger au Casting).
+
+-   id: Qwen-Image-2.1-PE-T2I.Q5_K_M.gguf
+    nom: Qwen-Image 2.1 PE (création)
+    page: https://huggingface.co/Qwen/Qwen-Image-2.1-PE-T2I
+    url: https://huggingface.co/prithivMLmods/Qwen-Image-2.1-PE-T2I-GGUF/resolve/main/Qwen-Image-2.1-PE-T2I.Q5_K_M.gguf
+    taille: 6467969664
+    sha256: 749f5652fd6e8b760ca860091f7a5bffa254a7954203ae5c9bcdf5f93197702f
+    serveur: llama  # architecture qwen35, connue de llama.cpp b11734
+    licence:
+        id: qwen-research
+        nom: Qwen Research License
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1-PE-T2I/blob/main/LICENSE
+        resume: "Usage non commercial seulement (recherche ou évaluation) ; un usage commercial demande une licence séparée de Qwen."
+        commercial: false
+        territoires_exclus: []
+        verifiee: 2026-11-02
+    materiel:
+        vram_estimee_go: 7.5  # poids du GGUF + 1,5 Go : une estimation, pas un minimum
+        vram_min_go: null
+        vram_confort_go: null
+        mesure: null
+        cartes_verifiees: []
+    specialiste:
+        workflows: [qwen_image_2_1]
+        usage: creation  # remplace la réécriture d'une idée (pas les références, ni la vidéo)
+        consigne:  # system_prompt.txt du modèle officiel
+            nom: Qwen-Image-2.1-PE-T2I.consigne.txt
+            url: https://huggingface.co/Qwen/Qwen-Image-2.1-PE-T2I/resolve/main/system_prompt.txt
+            taille: 10045
+            sha256: a77c9a06c59b120741141d9514b95682bb8761d02bec49ca61def7b2b3d9fb99
+        reflexion: true  # entraîné avec un bloc <think> : sans lui, il perd en qualité (fiche officielle)
+        sortie: json
+        cle: rewritten_prompt
+        contexte: 16384
+        max_tokens: 8192  # réflexion + prompt ; l'officiel monte à 16256, le template ComfyUI se limite à 4096
+        echantillonnage: {temperature: 1.0, top_p: 0.95, top_k: 20, min_p: 0.0, presence_penalty: 1.5}
+
+-   id: Qwen-Image-2.1-PE-I2I.Q5_K_M.gguf
+    nom: Qwen-Image 2.1 PE (retouche)
+    page: https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I
+    url: https://huggingface.co/prithivMLmods/Qwen-Image-2.1-PE-I2I-GGUF/resolve/main/Qwen-Image-2.1-PE-I2I.Q5_K_M.gguf
+    taille: 6467969664
+    sha256: cb71f71fe5fe5938570d65a7c403fbcb1a9065dff9dd9a021f58aec42785b84e
+    serveur: llama
+    licence:
+        id: qwen-research
+        nom: Qwen Research License
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I/blob/main/LICENSE
+        resume: "Usage non commercial seulement (recherche ou évaluation) ; un usage commercial demande une licence séparée de Qwen."
+        commercial: false
+        territoires_exclus: []
+        verifiee: 2026-11-02
+    materiel:
+        vram_estimee_go: 8.4  # poids du GGUF et de sa vision (mmproj) + 1,5 Go : une estimation
+        vram_min_go: null
+        vram_confort_go: null
+        mesure: null
+        cartes_verifiees: []
+    specialiste:
+        workflows: [qwen_image_2_1_edit]
+        usage: retouche  # remplace la traduction d'une consigne de retouche ; il voit l'image source
+        consigne:
+            nom: Qwen-Image-2.1-PE-I2I.consigne.txt
+            url: https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I/resolve/main/system_prompt.txt
+            taille: 18344
+            sha256: e378fea686a1431581ba4c654d332ae96adad633f144ae738ec8ce9c4fd66439
+        vision:  # projecteur d'images pour llama-server (--mmproj) : le modèle doit voir l'image à retoucher
+            nom: Qwen-Image-2.1-PE-I2I.mmproj-bf16.gguf
+            url: https://huggingface.co/prithivMLmods/Qwen-Image-2.1-PE-I2I-GGUF/resolve/main/Qwen-Image-2.1-PE-I2I.mmproj-bf16.gguf
+            taille: 921704608
+            sha256: 8dedb71dbc3092dc47de9108ad373d68a12854e2527d59bd9399601738f3bce1
+        reflexion: true
+        sortie: json
+        cle: rewritten_prompt
+        contexte: 16384
+        max_tokens: 8192
+        echantillonnage: {temperature: 1.0, top_p: 0.95, top_k: 20, min_p: 0.0, presence_penalty: 1.5}
+
+# Spécialistes connus mais pas encore utilisables : pas de GGUF pour llama.cpp (affichés dans l'onglet Modèles).
+a_venir:
+-   nom: MiniMax H3 Prompt Rewriter (lightx2v)
+    page: https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA
+    workflows: [minimax_h3_i2v, minimax_h3_t2v]
+    raison: "Publié pour vLLM (safetensors) : aucun GGUF pour llama.cpp au 2026-11-02."

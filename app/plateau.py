@@ -10,7 +10,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
-from app import modeles, prompt, reglages, retouche, securite, workflows
+from app import fiches, modeles, prompt, reglages, retouche, securite, workflows
 from app.config import CONFIG
 from app.emplacements import DATA
 from app.orchestrateur import Orchestrateur
@@ -97,7 +97,8 @@ def llm_au_choix() -> list[dict]:
     favoris = {m["fichier"]: m["nom"] for m in CONFIG["llama"].get("modeles_au_choix", [])}
     presents = modeles.llm_disponibles()
     choix = [{"fichier": f, "nom": nom, "favori": True} for f, nom in favoris.items() if f in presents]
-    return choix + [{"fichier": f, "nom": f.removesuffix(".gguf"), "favori": False}
+    return choix + [{"fichier": f, "nom": (fiches.fiche_llm(f) or {}).get("nom") or f.removesuffix(".gguf"),
+                     "favori": False, "specialiste": bool(fiches.specialiste(f))}
                     for f in presents if f not in favoris]
 
 
@@ -445,8 +446,9 @@ class Plateau:
         source = retouche.ouvrir(chemin_image(c.parent).read_bytes())
         if c.prompt is None:
             c.etape = "Traduction de la consigne"
-            traduction = await prompt.traduire_instruction(self.orchestrateur, c.idee, c.llm,
-                                                            workflows.regles_prompt(c.workflow))
+            traduction = await prompt.traduire_instruction(
+                self.orchestrateur, c.idee, c.llm, workflows.regles_prompt(c.workflow), c.workflow,
+                retouche.png(source) if c.type == "retouche" else None)  # un spécialiste de retouche voit l'image
             c.prompt = traduction if c.type == "retouche" else f"{CONSIGNE_AGRANDISSEMENT} {traduction}"
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
 
@@ -557,7 +559,8 @@ class Plateau:
             c.etape = "Réécriture du prompt"
             nombre_refs = len(c.references) if c.mode_reference == "inspirer" else 0
             c.prompt = (await prompt.reecrire(self.orchestrateur, c.idee, c.llm, nombre_refs,
-                                              regles=workflows.regles_prompt(c.workflow)))["prompt"]
+                                              regles=workflows.regles_prompt(c.workflow),
+                                              workflow=c.workflow))["prompt"]
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
         duree_reecriture = time.perf_counter() - debut
 

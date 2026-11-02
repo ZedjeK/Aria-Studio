@@ -2,12 +2,21 @@
 
 Les consignes et les températures se règlent par GGUF dans l'onglet Réglages (data/reglages.yaml).
 La clause de protection des mineurs, elle, n'est pas modifiable : le code l'ajoute à chaque consigne.
+
+Un LLM spécialisé (catalogue/llm.yaml, bloc « specialiste ») a été entraîné pour un modèle cible : pour la
+réécriture des workflows qu'il sert, il reçoit sa propre consigne (livrée avec lui), avec sa réflexion et son
+échantillonnage, et sa sortie JSON est lue ici. Pour tout le reste, Aria passe au LLM par défaut.
 """
 
+import base64
+import json
 import re
 import time
 
-from app import reglages, securite
+from app import fiches, reglages, securite
+from app.config import CONFIG
+from app.llm import ErreurLlama
+from app.modeles import DOSSIER as MODELES
 from app.orchestrateur import Orchestrateur
 
 CLAUSE_MINEURS = """Non-negotiable rule: never make a character younger than described. If a character is a child or a teenager, show them fully clothed in a wholesome, non-suggestive scene."""
@@ -113,6 +122,60 @@ CONSIGNES_DEFAUT = {"reecriture": CONSIGNE, "retouche": CONSIGNE_RETOUCHE, "peau
                     "video": CONSIGNE_VIDEO, "decoupage": CONSIGNE_DECOUPAGE}
 
 
+# LLM spécialisés
+
+def generaliste(modele: str | None) -> str | None:
+    """Un LLM spécialisé ne fait que sa réécriture : pour une autre tâche, c'est le LLM par défaut."""
+    return CONFIG["llama"]["modele"] if fiches.specialiste(modele) else modele
+
+
+def specialiste_pour(modele: str | None, usage: str, workflow: str | None) -> dict | None:
+    """Le bloc « specialiste » de ce GGUF s'il sert cet usage (creation, retouche) pour ce workflow."""
+    s = fiches.specialiste(modele)
+    return s if s and s["usage"] == usage and workflow in s["workflows"] else None
+
+
+def demande_specialiste(s: dict, texte: str, image: bytes | None = None) -> tuple[list[dict], dict]:
+    """Messages et paramètres d'un LLM spécialisé : sa consigne officielle (plus la clause verrouillée), l'image à
+    retoucher s'il la voit, et l'échantillonnage de son entraînement."""
+    chemin = MODELES / "llm" / s["consigne"]["nom"]
+    if not chemin.is_file():
+        raise ErreurLlama(f"Consigne du LLM spécialisé absente ({chemin.name}) : réinstalle-le depuis l'onglet Modèles")
+    systeme = f"{chemin.read_text(encoding='utf-8').strip()}\n\n{CLAUSE_MINEURS}"
+    contenu = texte if image is None else [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(image).decode()}},
+        {"type": "text", "text": texte}]
+    parametres = dict(s.get("echantillonnage") or {})
+    parametres.setdefault("temperature", 1.0)
+    parametres["max_tokens"] = s["max_tokens"]
+    return [{"role": "system", "content": systeme}, {"role": "user", "content": contenu}], parametres
+
+
+def lire_specialiste(texte: str, s: dict) -> str:
+    """Retire la réflexion (<think>…</think>) puis lit la sortie : le texte, ou la clé du JSON."""
+    texte = texte.rpartition("</think>")[2].strip()
+    if s["sortie"] == "texte":
+        valeur = texte
+    else:
+        try:
+            valeur = json.loads(texte[texte.find("{"):texte.rfind("}") + 1])[s["cle"]]
+        except (ValueError, KeyError, TypeError):
+            valeur = None
+    if not isinstance(valeur, str) or not valeur.strip():
+        raise ErreurLlama("Réponse du LLM spécialisé illisible : réflexion trop longue, ou sortie hors format")
+    return valeur.strip()
+
+
+async def _par_specialiste(orchestrateur: Orchestrateur, modele: str, s: dict, texte: str,
+                           image: bytes | None = None):
+    messages_, parametres = demande_specialiste(s, texte, image)
+    async with orchestrateur.llm(modele) as llama:
+        debut = time.perf_counter()
+        reponse = await llama.generer(messages_, **parametres)
+        duree = time.perf_counter() - debut
+    return lire_specialiste(reponse.texte, s), reponse, duree, llama
+
+
 def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
              regles: list[str] | None = None) -> str:
     """Consigne du GGUF (réglée ou d'origine), puis les règles propres au modèle cible (profil_prompt.regles de sa
@@ -125,8 +188,15 @@ def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
 
 
 async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, modele: str | None = None,
-                               regles: list[str] | None = None) -> str:
+                               regles: list[str] | None = None, workflow: str | None = None,
+                               image: bytes | None = None) -> str:
+    """`workflow` et `image` : un LLM spécialisé dans la retouche de ce workflow voit l'image source."""
     securite.verifier(instruction)
+    if image is not None and (s := specialiste_pour(modele, "retouche", workflow)):
+        texte = (await _par_specialiste(orchestrateur, modele, s, instruction, image))[0]
+        securite.verifier(instruction, texte)
+        return texte
+    modele = generaliste(modele)
     regle = reglages.valeurs_llm(modele)
     async with orchestrateur.llm(modele) as llama:
         reponse = await llama.generer(
@@ -143,6 +213,7 @@ async def peaufiner(orchestrateur: Orchestrateur, assemble: str, modele: str | N
     """Rend fluide un prompt assemblé par l'onglet Scénario, sans rien retirer ni ajouter.
     `duree_video` : la cible est un modèle vidéo ; la consigne vidéo garde les répliques mot pour mot."""
     securite.verifier(assemble)
+    modele = generaliste(modele)
     regle = reglages.valeurs_llm(modele)
     if duree_video:
         echanges = [{"role": "system", "content": consigne("video", modele, regles=regles)},
@@ -165,6 +236,7 @@ async def peaufiner(orchestrateur: Orchestrateur, assemble: str, modele: str | N
 
 async def traduire_precisions(orchestrateur: Orchestrateur, precisions: str, modele: str | None = None) -> str:
     securite.verifier(precisions)
+    modele = generaliste(modele)
     regle = reglages.valeurs_llm(modele)
     async with orchestrateur.llm(modele) as llama:
         reponse = await llama.generer(
@@ -188,11 +260,21 @@ def messages(idee: str, modele: str | None = None, regles: list[str] | None = No
 
 
 async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None = None, references: int = 0,
-                   video: str | None = None, duree: int = 5, regles: list[str] | None = None) -> dict:
+                   video: str | None = None, duree: int = 5, regles: list[str] | None = None,
+                   workflow: str | None = None) -> dict:
     """`references` : nombre d'images de référence (S'inspirer) ; la consigne dédiée les fait citer par numéro.
     `video` : animer ou texte (Montage) ; consigne vidéo, répliques gardées mot pour mot.
-    `regles` : celles du modèle cible (workflows.regles_prompt)."""
+    `regles` : celles du modèle cible (workflows.regles_prompt).
+    `workflow` : le modèle cible ; un LLM spécialisé pour lui réécrit avec sa propre consigne."""
     securite.verifier(idee)
+    s = None if video or references else specialiste_pour(modele, "creation", workflow)
+    if s:
+        texte, reponse, duree_s, llama = await _par_specialiste(orchestrateur, modele, s, idee)
+        securite.verifier(idee, texte)
+        return {"idee": idee, "prompt": texte, "modele": llama.modele.name if llama.modele else modele,
+                "duree_s": round(duree_s, 2), "tokens_sortie": reponse.tokens_sortie,
+                "ecriture_tps": reponse.ecriture_tps}
+    modele = generaliste(modele)
     regle = reglages.valeurs_llm(modele)
     if video:
         cadre = "animate the provided image" if video == "animer" else "from text only"

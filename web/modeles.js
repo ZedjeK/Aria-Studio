@@ -147,15 +147,40 @@ function blocReecriture(wf) {
     const nomDefaut = llmsUsages.choix.find((m) => m.fichier === llmsUsages.defaut)?.nom ?? llmsUsages.defaut;
     const options = [`<option value="" ${r.llm ? "" : "selected"}>LLM par défaut (${echapper(nomDefaut)})</option>`]
         .concat(llmsUsages.choix.map((m) => `<option value="${echapper(m.fichier)}" ${m.fichier === r.llm ? "selected" : ""}>
-            ${echapper(m.nom)}${m.favori ? " ★" : ""}</option>`)).join("");
+            ${m.specialiste ? "🎯 " : ""}${echapper(m.nom)}${m.favori ? " ★" : ""}</option>`)).join("");
     const attentes = [`${STYLES_PROMPT[r.style] ?? r.style} en ${r.langue === "en" ? "anglais" : echapper(r.langue)}`,
         r.mots_max ? `${r.mots_max} mots au plus` : "", r.regles ? `${r.regles} règle${r.regles > 1 ? "s" : ""} propres` : ""]
         .filter(Boolean).join(" · ");
+    const choisi = r.specialistes.find((s) => s.choisi);
     return `<div class="reecriture-workflow">
         <h3>✍️ Réécriture du prompt</h3>
         <label>LLM <select data-llm-workflow="${wf.id}">${options}</select></label>
-        <p class="discret">Ce modèle attend ${attentes}. Le Plateau, le Montage et le Scénario partent de ce LLM ;
+        <p class="discret">${choisi
+            ? `${echapper(choisi.nom)} réécrit avec sa propre consigne officielle (réflexion, puis un prompt détaillé) : les règles du modèle ne lui sont pas données.`
+            : `Ce modèle attend ${attentes}.`} Le Plateau, le Montage et le Scénario partent de ce LLM ;
             tu peux toujours en choisir un autre pour une création.</p>
+        ${r.ailleurs ? `<p class="alerte">Ce LLM est entraîné pour ${echapper(r.ailleurs.join(", "))} : pour ce workflow,
+            Aria passera au LLM par défaut.</p>` : ""}
+        ${r.specialistes.map((s) => encartSpecialiste(s, wf.id)).join("")}
+        ${r.a_venir.map((a) => `<p class="discret">🕓 <a href="${echapper(a.page)}" target="_blank" rel="noopener">${echapper(a.nom)}</a>
+            est entraîné pour ce modèle : ${echapper(a.raison)}</p>`).join("")}
+    </div>`;
+}
+
+// Un LLM entraîné pour ce modèle par son auteur : à installer, à utiliser, ou déjà en place.
+function encartSpecialiste(s, idWorkflow) {
+    const usage = s.usage === "retouche" ? "les consignes de retouche (il voit l'image)" : "les idées";
+    const lien = `<a href="${echapper(s.page)}" target="_blank" rel="noopener">${echapper(s.nom)}</a>`;
+    if (s.choisi) return "";
+    const action = s.installe
+        ? `<button type="button" class="petit principal" data-utiliser-llm="${echapper(s.fichier)}" data-workflow="${idWorkflow}">Utiliser pour ce workflow</button>`
+        : `<button type="button" class="petit principal" data-installer-llm="${echapper(s.fichier)}" data-taille="${s.a_telecharger}"
+               data-licence="${echapper(s.licence.nom)}">⬇ Installer (${taille(s.a_telecharger)})</button>`;
+    return `<div class="specialiste">
+        <p>🎯 Un LLM entraîné pour ce modèle existe : ${lien}. Il réécrit ${usage} comme son auteur l'a prévu.</p>
+        <p class="discret"><a href="${echapper(s.licence.url)}" target="_blank" rel="noopener">${echapper(s.licence.nom)}</a> ·
+            ${echapper(s.licence.resume)}</p>
+        ${action}
     </div>`;
 }
 
@@ -164,25 +189,34 @@ document.getElementById("vue-modeles").addEventListener("change", async (e) => {
     if (!id) return;
     e.target.disabled = true;
     try {
-        await api("PUT", "/api/usages/llm", { workflow: id, llm: e.target.value || null });
-        await chargerUsages();
-        // Les sélecteurs LLM du Plateau, du Montage et du Scénario suivent le nouveau choix.
-        const o = await api("GET", "/api/plateau/options");
-        if (optionsPlateau) {
-            optionsPlateau.llm = o.llm;
-            suivreLlmDuWorkflow();
-            const prompt = document.getElementById("workflow-prompt");
-            if (prompt.value) document.getElementById("llm-prompt").value = llmDuWorkflow(prompt.value);
-        }
-        if (optionsMontage) {
-            optionsMontage.llm = o.llm;
-            suivreLlmMontage();
-        }
+        await choisirLlm(id, e.target.value || null);
     } catch (err) {
         alert(err.message);
         e.target.disabled = false;
     }
 });
+
+// Le LLM d'un workflow change : l'onglet se redessine, et les sélecteurs LLM du Plateau, du Montage et du Scénario
+// suivent (listes rechargées d'abord : un LLM qui vient d'arriver doit y figurer).
+async function choisirLlm(idWorkflow, llm) {
+    await api("PUT", "/api/usages/llm", { workflow: idWorkflow, llm });
+    await chargerUsages();
+    if (optionsPlateau) {
+        await chargerOptionsPlateau();
+        suivreLlmDuWorkflow();
+        const cible = document.getElementById("workflow-prompt");
+        const liste = document.getElementById("llm-prompt");
+        if (cible.value) {
+            liste.innerHTML = optionsPlateau.llm.choix.map((m) =>
+                `<option value="${echapper(m.fichier)}">${echapper(m.nom)}${m.favori ? " ★" : ""}</option>`).join("");
+            liste.value = llmDuWorkflow(cible.value);
+        }
+    }
+    if (optionsMontage) {
+        optionsMontage.llm = (await api("GET", "/api/plateau/options")).llm;
+        suivreLlmMontage();
+    }
+}
 
 function rendreUsage(id, u) {
     const nomDe = (wid) => u.workflows.find((w) => w.id === wid)?.nom ?? wid ?? "—";
@@ -242,13 +276,24 @@ function carteWorkflow(wf, idUsage, u) {
 // Actions de l'onglet Modèles : favori, téléchargement d'un workflow, recherche préfiltrée, suppression
 
 document.getElementById("vue-modeles").addEventListener("click", async (e) => {
-    const cible = e.target.closest("[data-favori], [data-telecharger-wf], [data-chercher], [data-supprimer]");
+    const cible = e.target.closest("[data-favori], [data-telecharger-wf], [data-chercher], [data-supprimer], "
+        + "[data-installer-llm], [data-utiliser-llm]");
     if (!cible) return;
     try {
         if (cible.dataset.favori) {
             cible.disabled = true;
             await api("PUT", "/api/usages/favori", { cle: cible.dataset.favori, workflow: cible.dataset.workflow });
             await chargerUsages();
+        } else if (cible.dataset.installerLlm) {
+            if (!confirm(`Télécharger ce LLM (${taille(Number(cible.dataset.taille))}) ? `
+                + `En cliquant sur OK, tu acceptes la licence ${cible.dataset.licence}.`)) return;
+            cible.disabled = true;
+            await api("POST", `/api/llm/${encodeURIComponent(cible.dataset.installerLlm)}/installer`);
+            document.getElementById("panneau-telechargements").hidden = false;
+            chargerTelechargements();
+        } else if (cible.dataset.utiliserLlm) {
+            cible.disabled = true;
+            await choisirLlm(cible.dataset.workflow, cible.dataset.utiliserLlm);
         } else if (cible.dataset.telechargerWf) {
             if (!confirm(`Télécharger ce qui manque (${taille(Number(cible.dataset.taille))}) ? `
                 + `En cliquant sur OK, tu acceptes la licence ${cible.dataset.licence}.`)) return;

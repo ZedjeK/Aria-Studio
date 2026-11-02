@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from app import emplacements, garde, mesures, prompt, reglages, securite, workflows
+from app import emplacements, fiches, garde, mesures, prompt, reglages, securite, workflows
 from app.config import CONFIG, ROOT, chemin
 from app.emplacements import DATA
 from app.modeles import DOSSIER as MODELES
@@ -190,15 +190,19 @@ class BancLLM(Banc):
 
     def __init__(self):
         self.tache = "reecriture"
+        id_rendu = CONFIG.get("generation", {}).get("texte_vers_image")
+        if not id_rendu:
+            raise ErreurBanc("Choisis d'abord un favori texte vers image dans le Casting")
         self.candidats = list(CONFIG["casting"]["candidats_llm"])
         absents = [c for c in self.candidats if c != TEMOIN and not (MODELES / "llm" / c).is_file()]
         if absents:
             raise ErreurBanc(f"GGUF absents de modeles/llm : {', '.join(absents)}")
+        # Le LLM entraîné pour le workflow de rendu, s'il est installé, entre au banc face aux généralistes.
+        self.candidats += [f["id"] for f in fiches.specialistes(id_rendu)
+                           if f["specialiste"]["usage"] == "creation" and f["id"] not in self.candidats
+                           and (MODELES / "llm" / f["id"]).is_file()]
         if len(self.candidats) < 2:
             raise ErreurBanc("Il faut au moins deux candidats à comparer")
-        id_rendu = CONFIG.get("generation", {}).get("texte_vers_image")
-        if not id_rendu:
-            raise ErreurBanc("Choisis d'abord un favori texte vers image dans le Casting")
         self.rendu = workflows.obtenir(id_rendu)
         if self.rendu.manquants():
             raise ErreurBanc(f"Workflow de rendu incomplet : {id_rendu}")
@@ -282,6 +286,7 @@ class BancLLM(Banc):
         self.courant = f"Modèle {self._lettre(cle)} · chargement"
         debut = time.perf_counter()
         regle = reglages.valeurs_llm(candidat)  # le banc mesure le GGUF tel qu'il est réglé
+        specialiste = prompt.specialiste_pour(candidat, "creation", self.rendu.id)  # sa consigne, pas celle d'Aria
         async with orchestrateur.llm(candidat) as llama:
             chargement = time.perf_counter() - debut
             for p in self.prompts:
@@ -289,13 +294,19 @@ class BancLLM(Banc):
                 securite.verifier(p["prompt"])
                 with mesures.Sondeur(llama.process.pid) as sondeur:
                     debut = time.perf_counter()
-                    reponse = await llama.generer(prompt.messages(p["prompt"], candidat), seed=seed,
-                                                  temperature=regle["temperature_reecriture"],
-                                                  max_tokens=regle["max_tokens"],
-                                                  **reglages.echantillonnage(candidat))
+                    if specialiste:
+                        messages, parametres = prompt.demande_specialiste(specialiste, p["prompt"])
+                        reponse = await llama.generer(messages, seed=seed, **parametres)
+                        texte = prompt.lire_specialiste(reponse.texte, specialiste)
+                    else:
+                        reponse = await llama.generer(prompt.messages(p["prompt"], candidat), seed=seed,
+                                                      temperature=regle["temperature_reecriture"],
+                                                      max_tokens=regle["max_tokens"],
+                                                      **reglages.echantillonnage(candidat))
+                        texte = reponse.texte
                     duree = time.perf_counter() - debut
-                securite.verifier(p["prompt"], reponse.texte)
-                g = self._generation(cle, p, seed, reponse.texte)
+                securite.verifier(p["prompt"], texte)
+                g = self._generation(cle, p, seed, texte)
                 g.update({"duree_s": round(duree, 2), "ecriture_tps": reponse.ecriture_tps,
                           "pic_vram_go": _go(sondeur.pic_vram)})
                 res["generations"].append(g)

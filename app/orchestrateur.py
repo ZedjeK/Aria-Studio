@@ -13,7 +13,7 @@ aient rendu la carte.
 import asyncio
 from contextlib import asynccontextmanager
 
-from app import modeles, reglages
+from app import fiches, modeles, reglages
 from app.comfy import ComfyUI
 from app.garde import Garde
 from app.config import CONFIG
@@ -75,8 +75,13 @@ class Orchestrateur:
                 await self.garde.attendre("Llama")
             # Ne redémarre que si le modèle, son serveur ou ses réglages de lancement changent.
             regle = reglages.valeurs_llm(nom)
+            contexte, reflexion, vision = regle["contexte"], regle["reflexion"], None
+            if specialiste := fiches.specialiste(nom):
+                # Un LLM spécialisé a ses réglages d'entraînement : réflexion, contexte assez grand, vision.
+                contexte, reflexion = max(contexte, specialiste["contexte"]), specialiste["reflexion"]
+                vision = MODELES / "llm" / specialiste["vision"]["nom"] if specialiste.get("vision") else None
             await self.llama.demarrer(fichier, moteur(specifique) if specifique else None,
-                                      contexte=regle["contexte"], reflexion=regle["reflexion"])
+                                      contexte=contexte, reflexion=reflexion, vision=vision)
             self.actif = "llama"
             yield self.llama
 

@@ -85,6 +85,9 @@ function majEstimation() {
 // du texte vers vidéo.
 function suivreLlmMontage() {
     if (!optionsMontage) return;
+    const llms = optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]);
+    remplirSelect("llm-montage", llms, optionsMontage.llm.defaut);  // un LLM qui vient d'arriver y figure
+    remplirSelect("llm-sequence", llms, optionsMontage.llm.defaut);
     const w = optionsMontage.video.workflows;
     if (w[modeMontage]) document.getElementById("llm-montage").value = llmDuWorkflow(w[modeMontage], optionsMontage);
     document.getElementById("llm-sequence").value = llmDuWorkflow(w.texte, optionsMontage);

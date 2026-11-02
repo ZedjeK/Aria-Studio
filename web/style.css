@@ -2433,3 +2433,13 @@ button.quitter-appli:hover {
 .reecriture-workflow p {
     margin: 6px 0 0;
 }
+
+.reecriture-workflow .specialiste {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--bord);
+}
+
+.reecriture-workflow .specialiste p {
+    margin: 0 0 6px;
+}

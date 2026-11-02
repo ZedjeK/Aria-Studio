@@ -137,7 +137,12 @@ class ReglesDuProfil(unittest.TestCase):
         self.assertIn("No camera terms.", prompt.messages("une pomme", None, ["No camera terms."])[0]["content"])
 
     def test_lues_dans_la_fiche_du_modele_cible(self):
-        self.assertEqual(workflows.regles_prompt("qwen_image_2_1"), [])  # fiches livrées : aucune règle en plus
+        # Fiches livrées : des règles condensées des guides officiels, chacune avec sa source.
+        for wf in workflows.catalogue():
+            with self.subTest(workflow=wf.id):
+                self.assertTrue(wf.profil["regles"])
+                self.assertTrue(wf.profil.get("regles_sources"))
+        self.assertIn("lighting", " ".join(workflows.regles_prompt("qwen_image_2_1")))
         self.assertEqual(workflows.regles_prompt(None), [])
         self.assertEqual(workflows.regles_prompt("inconnu"), [])
         wf = workflows.obtenir("qwen_image_2_1")

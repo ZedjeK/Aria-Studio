@@ -119,6 +119,37 @@ def problemes_workflow(fiche: dict) -> list[str]:
         + problemes_hugging_face(fiche.get("hugging_face"))
 
 
+USAGES_SPECIALISTE = ("creation", "retouche")  # la réécriture d'une idée, ou la consigne de retouche (voit l'image)
+
+
+def _probleme_fichier(nom: str, f) -> list[str]:
+    if not (isinstance(f, dict) and all(str(f.get(c) or "").strip() for c in ("nom", "url", "sha256"))
+            and _nombre(f.get("taille"))):
+        return [f"specialiste.{nom} : {{nom, url, taille, sha256}}"]
+    return []
+
+
+def problemes_specialiste(s) -> list[str]:
+    """Un LLM entraîné pour un modèle cible : sa consigne livrée avec lui, sa réflexion, sa sortie, son échantillonnage."""
+    if s is None:
+        return []
+    if not isinstance(s, dict):
+        return ["specialiste : un bloc (workflows, usage, consigne, reflexion, sortie…)"]
+    p = [] if isinstance(s.get("workflows"), list) and s["workflows"] else ["specialiste.workflows : la liste des workflows servis"]
+    if s.get("usage") not in USAGES_SPECIALISTE:
+        p.append(f"specialiste.usage : {', '.join(USAGES_SPECIALISTE)}")
+    p += _probleme_fichier("consigne", s.get("consigne"))
+    if "vision" in s:
+        p += _probleme_fichier("vision", s["vision"])
+    if s.get("sortie") not in ("json", "texte") or (s.get("sortie") == "json" and not s.get("cle")):
+        p.append("specialiste.sortie : json (avec cle) ou texte")
+    if not (isinstance(s.get("max_tokens"), int) and isinstance(s.get("contexte"), int) and s["max_tokens"] < s["contexte"]):
+        p.append("specialiste : max_tokens et contexte entiers, max_tokens < contexte")
+    if not isinstance(s.get("echantillonnage", {}), dict):
+        p.append("specialiste.echantillonnage : un bloc")
+    return p
+
+
 def problemes_llm(fiche: dict) -> list[str]:
     p = [f"{c} manquant" for c in ("id", "nom", "url", "page", "sha256") if not str(fiche.get(c) or "").strip()]
     if not str(fiche.get("id", "")).endswith(".gguf"):
@@ -127,7 +158,8 @@ def problemes_llm(fiche: dict) -> list[str]:
         p.append("taille : en octets")
     if fiche.get("serveur") not in SERVEURS_LLM:
         p.append(f"serveur : {', '.join(SERVEURS_LLM)}")
-    return p + problemes_licence(fiche.get("licence")) + problemes_materiel(fiche.get("materiel"))
+    return p + problemes_licence(fiche.get("licence")) + problemes_materiel(fiche.get("materiel")) \
+        + problemes_specialiste(fiche.get("specialiste"))
 
 
 def catalogue_llm() -> list[dict]:
@@ -144,3 +176,19 @@ def catalogue_llm() -> list[dict]:
 
 def fiche_llm(fichier: str) -> dict | None:
     return next((f for f in catalogue_llm() if f["id"] == fichier), None)
+
+
+def specialiste(fichier: str | None) -> dict | None:
+    """Le bloc « specialiste » d'un GGUF du catalogue, ou None (LLM généraliste, ou inconnu du catalogue)."""
+    return (fiche_llm(fichier) or {}).get("specialiste") if fichier else None
+
+
+def specialistes(id_workflow: str) -> list[dict]:
+    """Les fiches des LLM entraînés pour ce workflow."""
+    return [f for f in catalogue_llm() if id_workflow in (f.get("specialiste") or {}).get("workflows", [])]
+
+
+def a_venir(id_workflow: str) -> list[dict]:
+    """Spécialistes connus pour ce workflow mais pas encore utilisables (pas de GGUF)."""
+    donnees = yaml.safe_load(CATALOGUE_LLM.read_text(encoding="utf-8")) or {}
+    return [a for a in donnees.get("a_venir") or [] if id_workflow in a.get("workflows", [])]

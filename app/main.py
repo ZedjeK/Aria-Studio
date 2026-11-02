@@ -442,6 +442,12 @@ def llm_usage(d: DemandeLlmWorkflow):
     return _collection(collection.definir_llm, d.workflow, d.llm)
 
 
+@app.post("/api/llm/{fichier}/installer")
+def installer_llm(fichier: str):
+    """Télécharge un LLM du catalogue (un spécialiste avec sa consigne et sa vision) : le clic vaut accord."""
+    return _collection(collection.installer_llm, fichier, telechargeur)
+
+
 @app.post("/api/workflows/{id_workflow}/telecharger")
 def telecharger_workflow(id_workflow: str):
     """Met en file ce qui manque à un workflow (le clic, après lecture de sa licence, vaut accord)."""

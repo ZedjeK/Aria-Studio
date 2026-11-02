@@ -68,7 +68,19 @@ profil_prompt:
     style: prose
     langue: en
     mots_max: 200  # valeur de départ, à affiner au banc
-    regles: []
+    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
+    # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
+    regles:
+    - 'Open with one sentence naming the medium, the style, the subject and the background or palette ("A vertical realistic photograph of ...").'
+    - 'Place each element in the frame with positional phrases (upper-left, across the top, lower third, far right, behind), reaching the edges and corners, not only the centre.'
+    - 'Give the lighting its own sentence: source, direction, quality, shadows and highlights.'
+    - 'End with one sentence on the whole frame: balance, palette, style and mood.'
+    - 'Name colours with a modifier (deep navy, warm terracotta, off-white) and give materials (brushed metal, coarse linen, frosted glass).'
+    - 'People: build, posture, gaze, expression, hair, and each garment with its colour and material; age as a life stage, never a number of years.'
+    - 'Text in the image: only if asked, exact characters in straight double quotes with position, weight and colour; never invent signage.'
+    - 'No quality boosters (masterpiece, 8K, highly detailed); never write an aspect ratio or a resolution in the prompt.'
+    regles_sources:
+    - 'https://huggingface.co/Qwen/Qwen-Image-2.1-PE-T2I (system_prompt.txt)'
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
 recommandations:
     resolution_native_mp: 4.2  # 2048 × 2048, « native 2K »
