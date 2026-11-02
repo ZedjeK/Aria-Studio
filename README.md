@@ -7,7 +7,7 @@ cloud.
 Sous le capot : [FastAPI](https://fastapi.tiangolo.com/) pour l'interface, [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cpp) pour le LLM.
 
-> **Préversion.** Aria n'a été testée que sur une seule machine : Windows 11, RTX 4080 SUPER 16 Go, 64 Go de RAM.
+> **Testée sur une seule machine.** Aria n'a été essayée que sous Windows 11, avec une RTX 4080 SUPER 16 Go et 64 Go de RAM.
 > Les retours sur d'autres cartes sont les bienvenus (onglet *Issues*).
 
 ## Ce que ça fait
@@ -65,9 +65,6 @@ garde libres.
    6. **C'est prêt** : les modèles réglés par défaut, et une image d'essai pour vérifier que tout tourne.
 
    Tu peux le relancer à tout moment depuis l'onglet Réglages pour ajouter un pack.
-
-> La version 0.9.0 ne contient pas encore l'assistant (il arrive avec la 1.0.0) : avec elle, installe ComfyUI
-> portable et llama.cpp toi-même dans le dossier `moteurs` décrit plus bas.
 
 ### Tu as déjà ComfyUI ?
 
