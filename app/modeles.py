@@ -8,6 +8,7 @@ Rangement :
 Les familles sont celles déclarées par les fiches de workflow ; déposer un fichier au bon endroit suffit.
 """
 
+import hashlib
 import json
 import shutil
 from datetime import datetime
@@ -25,6 +26,8 @@ TYPES_BASE = ["checkpoints", "diffusion_models", "text_encoders", "vae", "loras"
               "clip_vision", "controlnet", "upscale_models", "model_patches", "audio_encoders",
               "latent_upscale_models"]
 EXTENSIONS_IMAGE = {".safetensors"}  # jamais de .ckpt/.pt : ils peuvent exécuter du code au chargement
+EXTENSIONS_MODELES = EXTENSIONS_IMAGE | {".gguf"}  # l'inventaire ignore le reste (recommandations.yaml…)
+EMPREINTES = DATA / "empreintes.json"  # SHA-256 déjà calculés : {clé: {taille, date, sha256}}
 
 
 class ErreurModele(ValueError):
@@ -142,7 +145,8 @@ def _sauver_registre(registre: dict[str, dict]):
     temporaire.replace(REGISTRE)
 
 
-def enregistrer(fichier: Path, fiche: dict, sha256: str):
+def enregistrer(fichier: Path, fiche: dict, sha256: str, **en_plus):
+    """Inscrit un fichier au registre : téléchargé par Aria, ou retrouvé (en_plus : retrouve=True, nom_modele…)."""
     registre = charger_registre()
     registre[cle(fichier)] = {
         "source": fiche["source"],
@@ -154,8 +158,45 @@ def enregistrer(fichier: Path, fiche: dict, sha256: str):
         "taille": fichier.stat().st_size,
         "sha256": sha256,
         "date": datetime.now().isoformat(timespec="seconds"),
+        **en_plus,
     }
     _sauver_registre(registre)
+
+
+def _empreintes() -> dict:
+    try:
+        return json.loads(EMPREINTES.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def empreinte_connue(fichier: Path) -> str | None:
+    """Le SHA-256 déjà calculé de ce fichier, s'il n'a pas changé depuis (même taille, même date)."""
+    e = _empreintes().get(cle(fichier))
+    s = fichier.stat()
+    return e["sha256"] if e and e.get("taille") == s.st_size and e.get("date") == s.st_mtime else None
+
+
+def empreinte(fichier: Path) -> str:
+    """SHA-256 du fichier (long : une trentaine de secondes pour 13 Go), gardé pour la fois suivante."""
+    if connue := empreinte_connue(fichier):
+        return connue
+    s = fichier.stat()
+    h = hashlib.sha256()
+    with fichier.open("rb") as f:
+        while bloc := f.read(16 << 20):
+            h.update(bloc)
+    toutes = _empreintes()
+    toutes[cle(fichier)] = {"taille": s.st_size, "date": s.st_mtime, "sha256": h.hexdigest()}
+    EMPREINTES.parent.mkdir(parents=True, exist_ok=True)
+    EMPREINTES.write_text(json.dumps(toutes, indent=4), encoding="utf-8")
+    return h.hexdigest()
+
+
+def empreintes_installees() -> set[str]:
+    """Les SHA-256 connus des fichiers installés (registre et cache) : « déjà installé ✓ » dans Rechercher."""
+    connues = {i["sha256"].lower() for i in charger_registre().values() if i.get("sha256")}
+    return connues | {e["sha256"].lower() for e in _empreintes().values()}
 
 
 def inventaire() -> list[dict]:
@@ -166,7 +207,7 @@ def inventaire() -> list[dict]:
         if not racine.is_dir():
             continue
         for fichier in sorted(racine.rglob("*")):
-            if not fichier.is_file() or fichier.suffix == ".part":
+            if not fichier.is_file() or fichier.suffix.lower() not in EXTENSIONS_MODELES:
                 continue
             c = cle(fichier)
             modeles.append({

@@ -3,6 +3,10 @@ id: minimax_h3_i2v
 nom: MiniMax H3 · image vers vidéo
 tache: image_vers_video
 famille: MiniMax-H3
+civitai:
+    bases: ["MiniMax H3"]
+hugging_face:
+    bases: [MiniMaxAI/MiniMax-H3]
 origine: template ComfyUI video_minimax_h3_i2v (v0.42.1), Turbo 8 steps branché, format de l'image source
 licence:
     id: minimax-h3-community-license-agreement

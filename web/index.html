@@ -541,63 +541,39 @@
         </div>
 
         <div class="vue" id="vue-modeles" hidden>
+            <!-- Onglet Modèles (web/modeles.js, web/decouvrir.js) : chercher, ce que j'ai, et un onglet par usage -->
             <div class="sous-onglets">
-                <button class="sous-onglet actif" type="button" data-sous="installes">Installés</button>
-                <button class="sous-onglet" type="button" data-sous="decouvrir">Découvrir</button>
+                <button class="sous-onglet" type="button" data-sous="rechercher">🔎 Rechercher</button>
+                <button class="sous-onglet actif" type="button" data-sous="collection">📦 Ma collection</button>
+                <button class="sous-onglet" type="button" data-sous="texte_vers_image">🖼️ Texte → image</button>
+                <button class="sous-onglet" type="button" data-sous="image_vers_image">🎨 Image → image</button>
+                <button class="sous-onglet" type="button" data-sous="video">🎬 Vidéo</button>
+                <button id="badge-telechargements" class="badge-telechargements" type="button"
+                        title="Téléchargements : la file, pause et reprise">⬇ Téléchargements <span></span></button>
             </div>
-            <div id="modeles-installes">
-                <section class="carte">
-                    <h2>Workflows</h2>
-                    <ul id="workflows" class="liste"></ul>
-                </section>
 
-                <section class="carte">
-                    <h2>Ajouter un modèle</h2>
-                    <form id="form-fiche" class="ligne">
-                        <input id="url-modele" type="url" required
-                               placeholder="Lien Hugging Face (fichier) ou Civitai (modèle)">
-                        <button type="submit">Préparer</button>
-                    </form>
-                    <p id="erreur-fiche" class="ko" hidden></p>
-                    <div id="fiche" hidden></div>
-                </section>
+            <section class="carte" id="panneau-telechargements" hidden>
+                <h2>Téléchargements</h2>
+                <ul id="telechargements" class="liste"></ul>
+            </section>
 
+            <div class="panneau-modeles" data-panneau="rechercher" hidden>
                 <section class="carte">
-                    <h2>Téléchargements</h2>
-                    <ul id="telechargements" class="liste"></ul>
-                </section>
-
-                <section class="carte">
-                    <h2>Modèles installés <span id="espace" class="discret"></span></h2>
-                    <div class="ligne emplacement-modeles">
-                        <span class="discret">Dossier : <code id="chemin-modeles"></code></span>
-                        <button type="button" class="petit" data-ouvrir="modeles">📂 Ouvrir</button>
-                        <button type="button" class="petit" id="changer-modeles">Changer…</button>
+                    <div class="choix-type" id="types-decouvrir">
+                        <button type="button" data-type="image" class="actif">🖼️ Modèles image</button>
+                        <button type="button" data-type="video">🎬 Modèles vidéo</button>
+                        <button type="button" data-type="lora">🧩 LoRA</button>
+                        <button type="button" data-type="llm">💬 LLM</button>
                     </div>
-                    <p id="prochain-modeles" class="avertissement-dossier" hidden>
-                        <span></span>
-                        <button type="button" class="petit" id="garder-modeles">Garder le dossier actuel</button>
-                    </p>
-                    <table id="inventaire">
-                        <thead>
-                            <tr><th>Dossier</th><th>Fichier</th><th>Taille</th><th>Origine</th><th></th></tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </section>
-            </div>
-            <div id="modeles-decouvrir" hidden>
-                <section class="carte">
                     <form id="form-decouvrir" class="options-creation">
-                        <label class="recherche">Rechercher <input id="texte-decouvrir" type="search" placeholder="anime, réaliste, qwen…"></label>
+                        <label class="recherche">Rechercher <input id="texte-decouvrir" type="search" placeholder="réaliste, anime, turbo…"></label>
                         <label>Source
                             <select id="source-decouvrir">
                                 <option value="civitai">Civitai</option>
                                 <option value="huggingface">Hugging Face</option>
                             </select>
                         </label>
-                        <label>Type <select id="type-decouvrir"></select></label>
-                        <label>Famille <select id="famille-decouvrir"></select></label>
+                        <label id="bloc-famille-decouvrir">Famille <select id="famille-decouvrir"></select></label>
                         <label>Tri
                             <select id="tri-decouvrir">
                                 <option value="telechargements">Téléchargements</option>
@@ -609,10 +585,52 @@
                         <label class="case"><input type="checkbox" id="nsfw-decouvrir"> Aperçus NSFW</label>
                         <button type="submit" class="principal">Chercher</button>
                     </form>
+                    <p id="aide-decouvrir" class="discret"></p>
                     <p id="message-decouvrir" class="discret"></p>
+                    <details class="lien-modele">
+                        <summary>🔗 Coller un lien Civitai ou Hugging Face</summary>
+                        <form id="form-fiche" class="ligne">
+                            <input id="url-modele" type="url" required
+                                   placeholder="Lien Hugging Face (fichier) ou Civitai (modèle)">
+                            <button type="submit">Préparer</button>
+                        </form>
+                        <p id="erreur-fiche" class="ko" hidden></p>
+                        <div id="fiche" hidden></div>
+                    </details>
                 </section>
                 <div id="resultats-decouvrir" class="resultats"></div>
                 <button id="plus-decouvrir" type="button" hidden>Plus de résultats</button>
+            </div>
+
+            <div class="panneau-modeles" data-panneau="collection">
+                <section class="carte">
+                    <div class="ligne entete-collection">
+                        <h2>Ma collection <span id="espace" class="discret"></span></h2>
+                        <button type="button" id="retrouver-sources" class="petit"
+                                title="Envoie l'empreinte SHA-256 de chaque fichier déposé à la main à Civitai, pour retrouver sa page">🔍 Retrouver les sources</button>
+                    </div>
+                    <div class="ligne emplacement-modeles">
+                        <span class="discret">Dossier : <code id="chemin-modeles"></code></span>
+                        <button type="button" class="petit" data-ouvrir="modeles">📂 Ouvrir</button>
+                        <button type="button" class="petit" id="changer-modeles">Changer…</button>
+                    </div>
+                    <p id="prochain-modeles" class="avertissement-dossier" hidden>
+                        <span></span>
+                        <button type="button" class="petit" id="garder-modeles">Garder le dossier actuel</button>
+                    </p>
+                    <p id="suivi-sources" class="discret" hidden></p>
+                </section>
+                <div id="groupes-collection"></div>
+            </div>
+
+            <div class="panneau-modeles" data-panneau="texte_vers_image" hidden>
+                <div class="usage" data-usage="texte_vers_image"></div>
+            </div>
+            <div class="panneau-modeles" data-panneau="image_vers_image" hidden>
+                <div class="usage" data-usage="image_vers_image"></div>
+            </div>
+            <div class="panneau-modeles" data-panneau="video" hidden>
+                <div class="usage" data-usage="video"></div>
             </div>
         </div>
 
@@ -725,6 +743,7 @@
     <script src="/static/casting.js"></script>
     <script src="/static/plateau.js"></script>
     <script src="/static/decouvrir.js"></script>
+    <script src="/static/modeles.js"></script>
     <script src="/static/scenario.js"></script>
     <script src="/static/reglages.js"></script>
     <script src="/static/montage.js"></script>

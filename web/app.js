@@ -38,22 +38,7 @@ document.querySelectorAll(".onglet").forEach((bouton) => {
             chargerOptionsPlateau();
             chargerGalerie();
         }
-        if (bouton.dataset.vue === "modeles") {
-            chargerWorkflows();
-            chargerModeles();
-            chargerTelechargements();
-        }
-    });
-});
-
-// Modèles : sous-onglets « Installés » et « Découvrir » (Civitai, Hugging Face)
-
-document.querySelectorAll(".sous-onglet").forEach((bouton) => {
-    bouton.addEventListener("click", () => {
-        document.querySelectorAll(".sous-onglet").forEach((b) => b.classList.toggle("actif", b === bouton));
-        document.getElementById("modeles-installes").hidden = bouton.dataset.sous !== "installes";
-        document.getElementById("modeles-decouvrir").hidden = bouton.dataset.sous !== "decouvrir";
-        if (bouton.dataset.sous === "decouvrir") preparerDecouvrir();
+        if (bouton.dataset.vue === "modeles") ouvrirModeles();  // web/modeles.js
     });
 });
 
@@ -193,6 +178,10 @@ let suivi = null;
 
 async function chargerTelechargements() {
     const taches = await api("GET", "/api/telechargements");
+    const actifs = taches.filter((t) => ACTIFS.includes(t.etat)).length;
+    const badge = document.getElementById("badge-telechargements");
+    badge.querySelector("span").textContent = actifs ? `(${actifs})` : "";
+    badge.classList.toggle("actif", actifs > 0);
     const liste = document.getElementById("telechargements");
     if (!taches.length) {
         liste.innerHTML = '<li class="discret">Aucun téléchargement.</li>';
@@ -221,8 +210,8 @@ async function chargerTelechargements() {
     } else if (!enCours && suivi) {
         clearInterval(suivi);
         suivi = null;
-        chargerModeles();
-        chargerWorkflows();
+        chargerModeles();  // la collection et les onglets d'usage voient les fichiers arrivés
+        chargerUsages();
     }
 }
 
@@ -233,12 +222,7 @@ document.getElementById("telechargements").addEventListener("click", async (e) =
     chargerTelechargements();
 });
 
-// Modèles : workflows du catalogue
-
-const TACHES = { texte_vers_image: "texte vers image", retouche: "retouche",
-                 image_vers_video: "image vers vidéo", texte_vers_video: "texte vers vidéo" };
-
-// Licence d'une fiche (app/fiches.py) : ce qu'il faut savoir avant de télécharger le modèle.
+// Licence d'une fiche (app/fiches.py) : ce qu'il faut savoir avant de télécharger le modèle (onglets d'usage).
 function resumeLicence(l) {
     const usage = l.commercial === true ? "usage commercial permis" : l.commercial === false
         ? "non commercial" : "usage commercial : à lire";
@@ -247,62 +231,6 @@ function resumeLicence(l) {
     return `<a href="${echapper(l.url)}" target="_blank" rel="noopener">${echapper(l.nom)}</a> · ${usage}${echapper(pays)}
         <br>${echapper(l.resume)}`;
 }
-
-async function chargerWorkflows() {
-    const [liste, erreurs] = await Promise.all([api("GET", "/api/workflows"), api("GET", "/api/workflows/erreurs")]);
-    const vram = (wf) => wf.vram_min_go
-        ? `VRAM mesurée : ${wf.vram_min_go} Go minimum, ${wf.vram_confort_go} Go de confort`
-        : `VRAM estimée ${wf.vram_estimee_go} Go (pas encore mesurée)`;
-    document.getElementById("workflows").innerHTML = liste.map((wf) => `<li>
-        <div class="ligne"><strong style="flex:1">${echapper(wf.nom)}</strong>
-        ${wf.pret
-            ? '<span class="ok">prêt</span>'
-            : `<span class="ko">il manque ${taille(wf.a_telecharger)}</span>`}</div>
-        <span class="discret">${TACHES[wf.tache] ?? echapper(wf.tache)} · ${taille(wf.taille)} · ${vram(wf)}</span>
-        <span class="discret licence-fiche"><br>${resumeLicence(wf.licence_fiche)}</span>
-        ${wf.manquants.length
-            ? `<span class="discret"><br>${wf.manquants.map((f) => `${echapper(f.dossier)}/${echapper(f.nom)}`).join("<br>")}</span>`
-            : ""}
-    </li>`).join("") + erreurs.map((e) => `<li class="ko">Fiche écartée : ${echapper(e)}</li>`).join("");
-}
-
-// Modèles : inventaire
-
-async function chargerModeles() {
-    const donnees = await api("GET", "/api/modeles");
-    dossiers = donnees.dossiers;
-    document.getElementById("espace").textContent = `· ${taille(donnees.espace_libre)} libres`;
-    const corps = document.querySelector("#inventaire tbody");
-    if (!donnees.modeles.length) {
-        corps.innerHTML = '<tr><td colspan="5" class="discret">Aucun modèle pour l\'instant.</td></tr>';
-        return;
-    }
-    corps.innerHTML = donnees.modeles.map((m) => `<tr>
-        <td>${echapper(m.dossier)}</td>
-        <td>${echapper(m.nom)}</td>
-        <td>${taille(m.taille)}</td>
-        <td>${m.suivi
-            ? `<a href="${echapper(m.infos.page)}" target="_blank" rel="noopener">${echapper(m.infos.source)}</a>`
-            : '<span class="discret">non suivi</span>'}</td>
-        <td>${m.suivi
-            ? `<button class="petit" data-supprimer="${echapper(m.cle)}" data-taille="${m.taille}">Supprimer</button>`
-            : ""}</td>
-    </tr>`).join("");
-}
-
-document.querySelector("#inventaire tbody").addEventListener("click", async (e) => {
-    const cle = e.target.dataset.supprimer;
-    if (!cle) return;
-    if (!confirm(`Supprimer définitivement ${cle} (${taille(Number(e.target.dataset.taille))}) ?`)) return;
-    try {
-        await api("DELETE", `/api/modeles/${cle.split("/").map(encodeURIComponent).join("/")}`);
-    } catch (err) {
-        alert(err.message);
-    }
-    chargerModeles();
-});
-
-chargerModeles();
 
 // Emplacements (app/emplacements.py) : données, modèles et moteurs, dans %USERPROFILE%\.Aria-Studio par défaut.
 // 📂 ouvre un dossier dans l'Explorateur ; « Changer… » choisit le dossier des modèles, valable au prochain démarrage.

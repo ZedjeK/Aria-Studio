@@ -1,38 +1,69 @@
-// Decouvrir : recherche sur Civitai et Hugging Face, téléchargement direct dans le bon dossier.
+// Rechercher (onglet Modèles, app/decouvrir.py) : modèles image, modèles vidéo, LoRA et LLM sur Civitai et Hugging
+// Face. Seuls les modèles des familles d'Aria sont montrés (bases Civitai et dépôts d'origine HF de leurs fiches) ;
+// le dossier de destination en est déduit, et ce que tu as déjà porte « installé ✓ ».
 
-const TYPES_DECOUVRIR = {
-    civitai: [["lora", "LoRA"], ["modele", "Modèle d'image"]],
-    huggingface: [["llm", "LLM (GGUF)"], ["modele", "Modèle d'image"]],
+const AIDES_DECOUVRIR = {
+    image: "Checkpoints qui vont dans un de tes workflows d'image : le dossier de leur famille est choisi pour toi.",
+    video: "Checkpoints pour tes workflows vidéo (MiniMax H3) : le dossier de leur famille est choisi pour toi.",
+    lora: "LoRA pour une famille d'Aria : choisis la famille pour ne voir que les siennes.",
+    llm: "GGUF pour llama.cpp (Hugging Face), avec un verdict : tient-il dans ta VRAM ?",
 };
 const VERDICTS_VRAM = { tient: "✓ tient en VRAM", juste: "~ juste", deborde: "✗ déborde (plus lent)" };
+let typeDecouvrir = "image";
 let dossiersDecouvrir = [];
 let curseurDecouvrir = null;
-let decouvrirPret = false;
+let preparationDecouvrir = null;  // une seule préparation, attendue par tous (onglet ouvert, « Chercher des LoRA »…)
 const versionsCivitai = {};  // id du modèle -> versions, renvoyées avec les résultats de recherche
 
 const valeur = (id) => document.getElementById(id).value;
 
-async function preparerDecouvrir() {
-    if (decouvrirPret) return;
-    decouvrirPret = true;
-    try {
-        document.getElementById("nsfw-decouvrir").checked = localStorage.getItem("aria-nsfw") === "oui";
-    } catch { /* stockage indisponible : aperçus floutés par défaut */ }
-    dossiersDecouvrir = (await api("GET", "/api/modeles")).dossiers;
-    const familles = [...new Set(Object.values(optionsPlateau?.workflows ?? {})
-        .flatMap((t) => t.choix.map((w) => w.famille)))].sort();
-    document.getElementById("famille-decouvrir").innerHTML = '<option value="">Toutes</option>'
-        + familles.map((f) => `<option value="${echapper(f)}">${echapper(f)}</option>`).join("");
-    majTypes();
+function preparerDecouvrir() {
+    preparationDecouvrir ??= (async () => {
+        try {
+            document.getElementById("nsfw-decouvrir").checked = localStorage.getItem("aria-nsfw") === "oui";
+        } catch { /* stockage indisponible : aperçus floutés par défaut */ }
+        dossiersDecouvrir = (await api("GET", "/api/modeles")).dossiers;
+        await majTypes();
+    })();
+    return preparationDecouvrir;
 }
 
-function majTypes() {
-    const source = valeur("source-decouvrir");
-    document.getElementById("type-decouvrir").innerHTML = TYPES_DECOUVRIR[source]
-        .map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
-    document.getElementById("famille-decouvrir").disabled = source !== "civitai";
+// Les pastilles de type : la source et les familles proposées en dépendent.
+async function majTypes() {
+    document.querySelectorAll("#types-decouvrir button").forEach((b) => b.classList.toggle("actif", b.dataset.type === typeDecouvrir));
+    const llm = typeDecouvrir === "llm";
+    const source = document.getElementById("source-decouvrir");
+    source.querySelector('option[value="civitai"]').disabled = llm;
+    if (llm) source.value = "huggingface";
+    document.getElementById("bloc-famille-decouvrir").hidden = llm;
+    document.getElementById("aide-decouvrir").textContent = AIDES_DECOUVRIR[typeDecouvrir];
+    const familles = llm ? [] : await api("GET", `/api/decouvrir/familles?type=${typeDecouvrir}`);
+    const select = document.getElementById("famille-decouvrir");
+    const garde = select.value;
+    select.innerHTML = '<option value="">Toutes</option>'
+        + familles.map((f) => `<option value="${echapper(f.famille)}">${echapper(f.famille)}${typeDecouvrir === "lora"
+            ? ` (${f.nature === "video" ? "vidéo" : "image"})` : ""}</option>`).join("");
+    if (familles.some((f) => f.famille === garde)) select.value = garde;
 }
-document.getElementById("source-decouvrir").addEventListener("change", majTypes);
+
+document.getElementById("types-decouvrir").addEventListener("click", async (e) => {
+    const type = e.target.closest("[data-type]")?.dataset.type;
+    if (!type || type === typeDecouvrir) return;
+    typeDecouvrir = type;
+    await majTypes();
+    document.getElementById("resultats-decouvrir").innerHTML = "";
+    document.getElementById("plus-decouvrir").hidden = true;
+    document.getElementById("message-decouvrir").textContent = "";
+});
+
+// Depuis un onglet d'usage : « Chercher des LoRA pour cette famille », « Chercher des checkpoints ».
+async function chercherDepuis(type, famille) {
+    await preparerDecouvrir();
+    typeDecouvrir = type;
+    await majTypes();
+    document.getElementById("famille-decouvrir").value = famille || "";
+    chercher(false);
+}
 
 document.getElementById("nsfw-decouvrir").addEventListener("change", (e) => {
     try {
@@ -50,10 +81,10 @@ document.getElementById("plus-decouvrir").addEventListener("click", () => cherch
 async function chercher(suite) {
     const message = document.getElementById("message-decouvrir");
     const params = new URLSearchParams({
-        source: valeur("source-decouvrir"), type: valeur("type-decouvrir"),
+        source: valeur("source-decouvrir"), type: typeDecouvrir,
         texte: valeur("texte-decouvrir"), tri: valeur("tri-decouvrir"),
     });
-    if (valeur("source-decouvrir") === "civitai" && valeur("famille-decouvrir")) params.set("famille", valeur("famille-decouvrir"));
+    if (typeDecouvrir !== "llm" && valeur("famille-decouvrir")) params.set("famille", valeur("famille-decouvrir"));
     if (suite && curseurDecouvrir) params.set("curseur", curseurDecouvrir);
     message.textContent = "Recherche…";
     try {
@@ -63,7 +94,7 @@ async function chercher(suite) {
         const conteneur = document.getElementById("resultats-decouvrir");
         const cartes = r.resultats.map(carte).join("");
         conteneur.innerHTML = suite ? conteneur.innerHTML + cartes : cartes;
-        message.textContent = r.resultats.length || suite ? "" : "Aucun résultat.";
+        message.textContent = r.resultats.length || suite ? "" : "Aucun résultat pour une famille d'Aria.";
         document.getElementById("plus-decouvrir").hidden = !curseurDecouvrir;
     } catch (err) {
         message.textContent = err.message;
@@ -80,13 +111,14 @@ function carte(r) {
         ? `<div class="vignette-decouvrir ${r.apercu.nsfw ? "nsfw" : ""} ${r.apercu.nsfw && !voirNsfw ? "floue" : ""}">
                <img src="${echapper(r.apercu.url)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>`
         : "";
-    const base = r.versions?.[0]?.base;
-    return `<article class="resultat" data-source="${r.source}" data-id="${echapper(String(r.id))}" data-type="${echapper(r.type)}">
+    return `<article class="resultat" data-source="${r.source}" data-id="${echapper(String(r.id))}"
+                     data-type="${echapper(r.type)}" data-famille="${echapper(r.famille ?? "")}">
         ${apercu}
         <div class="corps">
             <h3><a href="${echapper(r.page)}" target="_blank" rel="noopener">${echapper(r.nom)}</a></h3>
             <span class="stats">par ${echapper(r.auteur ?? "?")} · ↓ ${nombre(r.telechargements)} · ♥ ${nombre(r.appreciations)}</span>
-            <div>${base ? `<span class="badge">${echapper(base)}</span>` : ""}
+            <div>${r.installe ? '<span class="badge ok">installé ✓</span>' : ""}
+                ${r.famille ? `<span class="badge" title="Famille d'Aria où il ira">${echapper(r.famille)}</span>` : ""}
                 ${r.protege ? '<span class="badge">accès protégé</span>' : ""}</div>
             <button type="button" class="petit" data-voir="1">Voir les fichiers</button>
             <div class="fichiers-decouvrir" hidden></div>
@@ -94,8 +126,10 @@ function carte(r) {
     </article>`;
 }
 
+// Le dossier proposé d'abord ; un LLM ne va que dans llm, un modèle de diffusion jamais.
 function choixDossier(propose) {
-    return `<select>${propose ? "" : '<option value="">— dossier —</option>'}${dossiersDecouvrir.map((d) =>
+    const possibles = dossiersDecouvrir.filter((d) => (typeDecouvrir === "llm") === (d === "llm"));
+    return `<select>${propose ? "" : '<option value="">— dossier —</option>'}${possibles.map((d) =>
         `<option value="${echapper(d)}" ${d === propose ? "selected" : ""}>${echapper(d)}</option>`).join("")}</select>`;
 }
 
@@ -103,9 +137,9 @@ function ligneFichier(f) {
     const vram = f.vram ? `<span class="vram-${f.vram}">${VERDICTS_VRAM[f.vram]}</span>` : "";
     return `<div class="fichier-decouvrir" data-lien="${echapper(f.lien)}">
         <span class="nom">${echapper(f.nom)} · ${taille(f.taille)} ${vram}</span>
-        <span></span>
+        <span>${f.installe ? '<span class="ok">installé ✓</span>' : ""}</span>
         ${choixDossier(f.dossier)}
-        <button type="button" class="petit principal" data-telecharger="1">Télécharger</button>
+        <button type="button" class="petit principal" data-telecharger="1" ${f.installe ? "disabled" : ""}>Télécharger</button>
     </div>`;
 }
 
@@ -116,12 +150,15 @@ async function voirFichiers(article) {
     zone.dataset.charge = "1";
     try {
         if (article.dataset.source === "huggingface") {
-            const r = await api("GET", `/api/decouvrir/hf/fichiers?${new URLSearchParams({
-                depot: article.dataset.id, type: article.dataset.type })}`);
-            zone.innerHTML = (r.fichiers.length
-                ? `<span class="discret">VRAM disponible pour le LLM : ~${r.vram_libre_go} / ${r.vram_totale_go} Go</span>`
+            const params = new URLSearchParams({ depot: article.dataset.id, type: article.dataset.type });
+            const famille = article.dataset.famille || valeur("famille-decouvrir");
+            if (famille && article.dataset.type !== "llm") params.set("famille", famille);
+            const r = await api("GET", `/api/decouvrir/hf/fichiers?${params}`);
+            zone.innerHTML = r.fichiers.length
+                ? (article.dataset.type === "llm"
+                    ? `<span class="discret">VRAM disponible pour le LLM : ~${r.vram_libre_go} / ${r.vram_totale_go} Go</span>` : "")
                   + r.fichiers.map(ligneFichier).join("")
-                : '<span class="discret">Aucun fichier .safetensors ou .gguf.</span>');
+                : `<span class="discret">Aucun fichier ${article.dataset.type === "llm" ? ".gguf" : ".safetensors"}.</span>`;
         } else {
             const versions = versionsCivitai[article.dataset.id] ?? [];
             zone.innerHTML = versions.map((v) => `
@@ -152,7 +189,8 @@ document.getElementById("resultats-decouvrir").addEventListener("click", async (
             const t = await api("POST", "/api/decouvrir/telecharger", { lien: ligne.dataset.lien, dossier });
             e.target.textContent = "En file ✓";
             document.getElementById("message-decouvrir").textContent =
-                `${t.nom} (${taille(t.taille)}) ajouté à la file : suivi dans l'onglet Modèles.`;
+                `${t.nom} (${taille(t.taille)}) ajouté à la file : suivi sous ⬇ Téléchargements.`;
+            chargerTelechargements();
         } catch (err) {
             e.target.disabled = false;
             alert(err.message);

@@ -3,6 +3,10 @@ id: qwen_image_2_1_edit
 nom: Qwen-Image 2.1 Edit
 tache: retouche
 famille: Qwen-Image2.1
+civitai:
+    bases: ["Qwen 2.1"]
+hugging_face:
+    bases: [Qwen/Qwen-Image-2.1]
 origine: template ComfyUI image_qwen_image_2_1_image_edit (v0.42.1), améliorateur de prompt et 2e image retirés
 licence:
     id: qwen-research

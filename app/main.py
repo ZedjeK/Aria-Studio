@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, casting, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs,
+from app import (assistant, casting, collection, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs,
                  optimiseur, personnages, plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
@@ -389,6 +389,52 @@ def liste_workflows():
 def erreurs_workflows():
     """Fiches écartées du catalogue (ajoutées à la main, format incomplet) et pourquoi."""
     return workflows.erreurs()
+
+
+# Onglet Modèles : Ma collection, usages (Texte → image, Image → image, Vidéo), sources retrouvées (app/collection.py)
+
+def _collection(action, *args):
+    try:
+        return action(*args)
+    except collection.ErreurCollection as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/collection")
+def ma_collection():
+    return collection.collection()
+
+
+@app.post("/api/collection/sources")
+async def retrouver_sources():
+    """Seulement sur un clic : l'empreinte de chaque fichier déposé à la main est demandée à Civitai."""
+    return _collection(collection.lancer_identification)
+
+
+@app.get("/api/collection/sources")
+def suivi_sources():
+    return collection.identification()
+
+
+@app.get("/api/usages")
+def liste_usages():
+    return collection.usages()
+
+
+class DemandeFavori(BaseModel):
+    cle: str  # texte_vers_image, retouche, references, image_vers_video, texte_vers_video
+    workflow: str
+
+
+@app.put("/api/usages/favori")
+def favori_usage(d: DemandeFavori):
+    return _collection(collection.definir_favori, d.cle, d.workflow)
+
+
+@app.post("/api/workflows/{id_workflow}/telecharger")
+def telecharger_workflow(id_workflow: str):
+    """Met en file ce qui manque à un workflow (le clic, après lecture de sa licence, vaut accord)."""
+    return _collection(collection.telecharger_manquants, id_workflow, telechargeur)
 
 
 class DemandeBanc(BaseModel):
@@ -1072,16 +1118,24 @@ async def decouvrir_modeles(source: str, type: str, texte: str = "", famille: st
         if source == "civitai":
             return await decouvrir.chercher_civitai(texte, type, famille, tri, curseur)
         if source == "huggingface":
-            return await decouvrir.chercher_hf(texte, type, tri)
+            return await decouvrir.chercher_hf(texte, type, tri, famille)
     except decouvrir.ErreurDecouvrir as e:
         raise HTTPException(400, str(e))
     raise HTTPException(400, f"Source inconnue : {source}")
 
 
 @app.get("/api/decouvrir/hf/fichiers")
-async def decouvrir_fichiers_hf(depot: str, type: str = "llm"):
+async def decouvrir_fichiers_hf(depot: str, type: str = "llm", famille: str | None = None):
     try:
-        return await decouvrir.fichiers_hf(depot, type)
+        return await decouvrir.fichiers_hf(depot, type, famille)
+    except decouvrir.ErreurDecouvrir as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/decouvrir/familles")
+def decouvrir_familles(type: str):
+    try:
+        return decouvrir.familles(type)
     except decouvrir.ErreurDecouvrir as e:
         raise HTTPException(400, str(e))
 

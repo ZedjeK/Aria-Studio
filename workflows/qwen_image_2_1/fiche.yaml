@@ -3,6 +3,10 @@ id: qwen_image_2_1
 nom: Qwen-Image 2.1
 tache: texte_vers_image
 famille: Qwen-Image2.1
+civitai:
+    bases: ["Qwen 2.1"]
+hugging_face:
+    bases: [Qwen/Qwen-Image-2.1]
 origine: template ComfyUI image_qwen_image_2_1_t2i (v0.42.1), améliorateur de prompt retiré
 licence:
     id: qwen-research

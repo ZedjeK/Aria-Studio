@@ -5,7 +5,6 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
-from app.config import CONFIG
 from app.sources import ErreurSource, Fiche
 
 API = "https://civitai.com/api/v1"
@@ -75,17 +74,44 @@ async def fiche(url: str) -> Fiche:
     )
 
 
-def _dossier_famille(type_civitai: str | None, base: str | None, nom_modele: str) -> str | None:
-    """Propose <Famille>/loras ou <Famille>/modeles d'après la base Civitai ; à confirmer avant téléchargement."""
-    familles = CONFIG.get("modeles", {}).get("familles_civitai", {})
-    famille = familles.get(base)
-    if famille is None and base == "Qwen":
-        # « Qwen » regroupe génération et retouche : le nom tranche souvent.
-        famille = familles.get("Qwen (édition)") if "edit" in nom_modele.lower() else None
+TYPES_LORA = ("LORA", "LoCon", "DoRA")
+
+
+def _dossier_famille(type_civitai: str | None, base: str | None, nom_modele: str,
+                     familles: dict | None = None) -> str | None:
+    """Propose <Famille>/loras ou <Famille>/modeles d'après la base Civitai (bloc civitai des fiches de workflow) ;
+    à confirmer avant téléchargement."""
+    from app import workflows  # workflows importe modeles, qui ne doit pas dépendre des sources
+
+    famille = workflows.famille_civitai(base, nom_modele, familles)
     if famille is None:
         return None
-    if type_civitai in ("LORA", "LoCon", "DoRA"):
+    if type_civitai in TYPES_LORA:
         return f"{famille}/loras"
     if type_civitai == "Checkpoint":
         return f"{famille}/modeles"
     return None
+
+
+async def par_empreinte(sha256: str) -> dict | None:
+    """La version Civitai d'un fichier, retrouvée par son SHA-256 (None : Civitai ne le connaît pas)."""
+    async with httpx.AsyncClient(timeout=20, headers=entetes()) as client:
+        r = await client.get(f"{API}/model-versions/by-hash/{sha256}")
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    version = r.json()
+    fichier = next((f for f in version.get("files") or []
+                    if (f.get("hashes") or {}).get("SHA256", "").lower() == sha256.lower()), None)
+    modele = version.get("model") or {}
+    return {
+        "source": "civitai",
+        "page": f"https://civitai.com/models/{version['modelId']}?modelVersionId={version['id']}",
+        "url": (fichier or {}).get("downloadUrl") or f"https://civitai.com/api/download/models/{version['id']}",
+        "licence": None,
+        "mots_declencheurs": [m.strip() for m in version.get("trainedWords") or [] if m.strip()],
+        "base": version.get("baseModel"),
+        "nom_modele": modele.get("name"),
+        "version": version.get("name"),
+        "type": modele.get("type"),
+    }

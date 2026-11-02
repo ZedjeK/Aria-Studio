@@ -1323,7 +1323,7 @@ button.sous-onglet.actif {
     color: var(--texte);
 }
 
-#modeles-decouvrir .carte + .resultats {
+.panneau-modeles .carte + .resultats {
     margin-top: 16px;
 }
 
@@ -2281,4 +2281,127 @@ button.onglet-casting.actif {
     max-width: 100%;
     max-height: 320px;
     border-radius: 8px;
+}
+
+/* Onglet Modèles : sous-onglets Rechercher, Ma collection, Texte → image, Image → image, Vidéo (web/modeles.js) */
+
+.sous-onglets {
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+button.badge-telechargements {
+    margin-left: auto;
+    padding: 4px 12px;
+    border-radius: 999px;
+    color: var(--discret);
+}
+
+#panneau-telechargements {
+    margin-bottom: 16px;
+}
+
+.choix-type {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.choix-type button {
+    border-radius: 999px;
+}
+
+.lien-modele {
+    margin-top: 8px;
+}
+
+.lien-modele summary {
+    cursor: pointer;
+    color: var(--discret);
+}
+
+.lien-modele form {
+    margin-top: 8px;
+}
+
+.entete-collection {
+    justify-content: space-between;
+    align-items: center;
+}
+
+.groupe-collection {
+    margin-top: 16px;
+}
+
+.groupe-collection .ligne:first-child {
+    justify-content: space-between;
+    align-items: center;
+}
+
+details.groupe-collection summary {
+    cursor: pointer;
+}
+
+details.groupe-collection summary h2 {
+    display: inline;
+}
+
+.liste.collection .ligne {
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.nom-collection {
+    flex: 1;
+    min-width: 200px;
+    overflow-wrap: anywhere;
+}
+
+.badge.ok {
+    border-color: var(--ok);
+    color: var(--ok);
+}
+
+.usage .carte + .carte,
+.workflow-usage {
+    margin-top: 16px;
+}
+
+.workflow-usage .ligne:first-child {
+    align-items: center;
+    gap: 12px;
+}
+
+.workflow-usage h2 {
+    flex: 1;
+}
+
+.favoris-workflow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 0 8px;
+}
+
+.favori {
+    color: var(--neon);
+}
+
+.colonnes-workflow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.colonnes-workflow h3 {
+    margin: 0 0 4px;
+    font-size: 0.95rem;
+}
+
+.colonnes-workflow .liste {
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
 }

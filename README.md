@@ -20,8 +20,14 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 - **Casting** : des bancs pour comparer les modèles d'image et les LLM sur les mêmes idées, et choisir tes favoris.
 - **Réglages** : par LLM, par modèle et par checkpoint, avec un bouton *Optimiser* qui part des recommandations
   officielles et de ta carte.
-- **Modèles** : ajout depuis Hugging Face ou Civitai, avec la source et la licence de chaque fichier gardées au
-  registre ; checkpoints et LoRA par famille.
+- **Modèles**, en cinq sous-onglets :
+  - **Rechercher** : modèles image, modèles vidéo, LoRA ou LLM, sur Civitai et Hugging Face. Seuls les modèles qui
+    vont dans un workflow d'Aria sont montrés, leur dossier est choisi pour toi, et ce que tu as déjà porte
+    « installé ✓ ».
+  - **Ma collection** : ce que tu as, d'où ça vient, et quels workflows l'utilisent. « Retrouver les sources »
+    retrouve la page Civitai d'un fichier déposé à la main, grâce à son empreinte SHA-256 et seulement sur un clic.
+  - **Texte → image**, **Image → image**, **Vidéo** : les workflows de chaque usage, avec leur favori, leurs
+    checkpoints, leurs LoRA, et un bouton pour télécharger ce qui leur manque.
 - **Garde-VRAM** : une génération attend que les autres applis rendent la carte graphique au lieu de planter.
 
 ## Configuration requise

@@ -9,6 +9,10 @@ Une fiche de workflow (workflows/<id>/fiche.yaml) et une fiche de LLM (catalogue
 Une fiche de workflow a en plus :
     profil_prompt  style (prose, instruction, brief_video), langue, mots_max (facultatif), negatif, regles (ajoutées
                    à la consigne de Llama quand ce modèle est la cible), conseils et sources (documentation)
+    civitai        facultatif : bases (valeurs « baseModel » de Civitai qui vont dans cette famille), nom_contient
+                   (facultatif : la base ne suffit pas, le nom du modèle doit contenir ce mot, ex. « edit »)
+    hugging_face   facultatif : bases (dépôts d'origine, ex. Qwen/Qwen-Image-2.1 : Rechercher filtre les dérivés par
+                   leur tag « base_model »)
 
 Pourquoi des minimums mesurés à part : sur la carte de 16 Go de Jérémy, le pic de VRAM relevé par le Casting tombe
 toujours entre 15,7 et 15,9 Go, quel que soit le modèle (ComfyUI occupe la carte disponible) : il mesure la carte,
@@ -83,12 +87,36 @@ def problemes_profil(profil) -> list[str]:
     return p
 
 
+def _bases_valides(bloc) -> bool:
+    return (isinstance(bloc, dict) and isinstance(bloc.get("bases"), list) and bool(bloc["bases"])
+            and all(isinstance(b, str) and b.strip() for b in bloc["bases"]))
+
+
+def problemes_civitai(civitai) -> list[str]:
+    if civitai is None:
+        return []
+    if not _bases_valides(civitai):
+        return ["civitai.bases : la liste des « baseModel » de Civitai de cette famille"]
+    if "nom_contient" in civitai and not (isinstance(civitai["nom_contient"], str) and civitai["nom_contient"].strip()):
+        return ["civitai.nom_contient : un mot (ou retire la clé)"]
+    return []
+
+
+def problemes_hugging_face(hf) -> list[str]:
+    if hf is None:
+        return []
+    if not _bases_valides(hf) or any("/" not in b for b in hf["bases"]):
+        return ["hugging_face.bases : la liste des dépôts d'origine (organisation/dépôt)"]
+    return []
+
+
 def problemes_workflow(fiche: dict) -> list[str]:
     if fiche.get("format") != FORMAT:
         return [f"format : {FORMAT} attendu (fiche d'un ancien format)"]
     p = [f"{c} manquant" for c in ("id", "nom", "tache", "famille", "fichiers", "entrees") if not fiche.get(c)]
     return p + problemes_licence(fiche.get("licence")) + problemes_materiel(fiche.get("materiel")) \
-        + problemes_profil(fiche.get("profil_prompt"))
+        + problemes_profil(fiche.get("profil_prompt")) + problemes_civitai(fiche.get("civitai")) \
+        + problemes_hugging_face(fiche.get("hugging_face"))
 
 
 def problemes_llm(fiche: dict) -> list[str]:

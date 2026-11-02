@@ -8,15 +8,9 @@ comfyui:
     dossier: comfyui
     port: 8195
 
-modeles:
-    # Tous les modèles : <Famille>/modeles et <Famille>/loras, _base/<type>, llm (GGUF).
-    # Le dossier se choisit dans l'onglet Modèles (aria.yaml, app/emplacements.py) ; ses sous-dossiers sont
-    # déclarés à ComfyUI automatiquement à chaque démarrage (data/comfyui_chemins.yaml).
-    # Base Civitai (« baseModel ») -> famille : sert à proposer le dossier d'une LoRA ou d'une variante.
-    familles_civitai:
-        "Krea 2": Krea2
-        "Qwen 2.1": Qwen-Image2.1
-        "Qwen (édition)": Qwen-Edit2511
+# Modèles : <Famille>/modeles et <Famille>/loras, _base/<type>, llm (GGUF). Le dossier se choisit dans l'onglet
+# Modèles (aria.yaml, app/emplacements.py) ; ses sous-dossiers sont déclarés à ComfyUI à chaque démarrage. La base
+# Civitai d'une famille (pour ranger une LoRA ou une variante) est dans le bloc « civitai » des fiches de workflow.
 
 llama:
     # Chemins relatifs au dossier des moteurs (app/emplacements.py).

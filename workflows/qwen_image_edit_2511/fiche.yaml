@@ -3,6 +3,11 @@ id: qwen_image_edit_2511
 nom: Qwen-Image-Edit 2511 Lightning
 tache: retouche
 famille: Qwen-Edit2511
+civitai:
+    bases: ["Qwen"]  # « Qwen » regroupe génération et retouche : le nom tranche
+    nom_contient: edit
+hugging_face:
+    bases: [Qwen/Qwen-Image-Edit-2511]
 origine: template ComfyUI image_qwen_image_edit_2511_int8 (v0.42.1), Lightning 4 steps activé, FluxKontextImageScale (recadrage) remplacé par ImageScaleToTotalPixels (proportions conservées)
 licence:
     id: apache-2.0

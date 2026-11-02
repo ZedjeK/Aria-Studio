@@ -3,6 +3,10 @@ id: krea2_turbo
 nom: Krea 2 Turbo
 tache: texte_vers_image
 famille: Krea2
+civitai:
+    bases: ["Krea 2"]
+hugging_face:
+    bases: [krea/Krea-2-Turbo, krea/Krea-2-Raw]
 origine: template ComfyUI image_krea2_turbo_t2i_int8 (v0.42.1), LoRA de style et affineur de prompt retirés
 licence:
     id: krea-2-community-license

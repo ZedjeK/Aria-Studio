@@ -242,6 +242,38 @@ def catalogue() -> list[Workflow]:
     return valides
 
 
+# Familles : ce que les fiches en disent, pour ranger et chercher un modèle (onglet Modèles).
+NATURES = {"texte_vers_image": "image", "retouche": "image", "image_vers_video": "video", "texte_vers_video": "video"}
+
+
+def familles() -> dict[str, dict]:
+    """{famille: {nature (image ou video), bases et nom_contient Civitai, hf (dépôts d'origine), workflows}}
+    d'après les fiches."""
+    sortie = {}
+    for wf in catalogue():
+        f = sortie.setdefault(wf.famille, {"nature": "image", "bases": [], "nom_contient": None, "hf": [],
+                                           "workflows": []})
+        if NATURES.get(wf.fiche["tache"]) == "video":
+            f["nature"] = "video"
+        civitai = wf.fiche.get("civitai") or {}
+        f["bases"] += [b for b in civitai.get("bases", []) if b not in f["bases"]]
+        f["nom_contient"] = civitai.get("nom_contient") or f["nom_contient"]
+        f["hf"] += [b for b in (wf.fiche.get("hugging_face") or {}).get("bases", []) if b not in f["hf"]]
+        f["workflows"].append(wf.id)
+    return sortie
+
+
+def famille_civitai(base: str | None, nom_modele: str = "", infos: dict | None = None) -> str | None:
+    """La famille d'Aria où va un modèle Civitai de cette base ; une famille qui exige un mot dans le nom passe
+    avant celle qui n'en exige pas (« Qwen » + « edit » : la retouche)."""
+    candidates = [(nom, f) for nom, f in (infos or familles()).items() if base and base in f["bases"]]
+    candidates.sort(key=lambda c: c[1]["nom_contient"] is None)
+    for nom, f in candidates:
+        if f["nom_contient"] is None or f["nom_contient"].lower() in nom_modele.lower():
+            return nom
+    return None
+
+
 def erreurs() -> list[str]:
     """Pourquoi certaines fiches sont écartées du catalogue."""
     sortie = []
