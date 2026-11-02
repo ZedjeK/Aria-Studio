@@ -9,6 +9,10 @@ from app.sources import ErreurSource, Fiche
 
 API = "https://civitai.com/api/v1"
 
+# civitai.com ne montre plus que le tout public : les modèles adultes s'ouvrent sur civitai.red (même base, mêmes ids).
+# nsfwLevel est un masque : 1 PG, 2 PG-13, 4 R, 8 X, 16 XXX (le drapeau « nsfw » du modèle reste souvent à false).
+NIVEAUX_ADULTES = 4 | 8 | 16
+
 # Les checkpoints et LoRAs dépendent d'une famille (<Famille>/modeles, <Famille>/loras) : dossier à choisir.
 TYPES = {
     "VAE": "_base/vae",
@@ -19,6 +23,12 @@ TYPES = {
 
 def entetes() -> dict:
     return cles.entetes("civitai")  # clé saisie dans Réglages (coffre Windows), sinon CIVITAI_TOKEN
+
+
+def page(id_modele, id_version=None, niveau: int | None = 0) -> str:
+    """La page du modèle, sur civitai.red s'il a du contenu au-delà de PG-13."""
+    site = "https://civitai.red" if (niveau or 0) & NIVEAUX_ADULTES else "https://civitai.com"
+    return f"{site}/models/{id_modele}" + (f"?modelVersionId={id_version}" if id_version else "")
 
 
 def _analyser(url: str) -> tuple[str | None, str | None]:
@@ -71,7 +81,7 @@ async def fiche(url: str) -> Fiche:
         taille=round(f["sizeKB"] * 1024),
         sha256=(f.get("hashes") or {}).get("SHA256", "").lower() or None,
         url=f["downloadUrl"],
-        page=f"https://civitai.com/models/{version['modelId']}?modelVersionId={version['id']}",
+        page=page(version["modelId"], version["id"], version.get("nsfwLevel")),
         dossier=TYPES.get(type_civitai) or _dossier_famille(type_civitai, base, version.get("model", {}).get("name", "")),
         licence=None,  # Civitai n'expose pas de licence nommée : voir la page du modèle
         jeton_requis=protege and not cles.cle("civitai"),
@@ -112,7 +122,7 @@ async def par_empreinte(sha256: str) -> dict | None:
     modele = version.get("model") or {}
     return {
         "source": "civitai",
-        "page": f"https://civitai.com/models/{version['modelId']}?modelVersionId={version['id']}",
+        "page": page(version["modelId"], version["id"], version.get("nsfwLevel")),
         "url": (fichier or {}).get("downloadUrl") or f"https://civitai.com/api/download/models/{version['id']}",
         "licence": None,
         "mots_declencheurs": [m.strip() for m in version.get("trainedWords") or [] if m.strip()],

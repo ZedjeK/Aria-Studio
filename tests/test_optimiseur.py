@@ -25,6 +25,8 @@ class Optimiseur(unittest.TestCase):
                        mock.patch.object(reglages, "FICHIER_SAMPLERS", d / "samplers.json"),
                        mock.patch.object(reglages, "_cache", None),
                        mock.patch.object(modeles, "llm_disponibles", return_value=[LLM, BONSAI]),
+                       # Les LLM simulés n'ont pas à être sur le disque.
+                       mock.patch.object(optimiseur.os.path, "getsize", return_value=6 * GO),
                        mock.patch.object(optimiseur.mesures, "nom_gpu", return_value="GPU de test")]
         for p in self.patchs:
             p.start()

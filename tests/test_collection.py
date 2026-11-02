@@ -134,6 +134,16 @@ class RechercherCivitai(unittest.TestCase):
             for lien in ("https://civitai.red/models/2877206", "https://civitai.com/models/2877206"):
                 self.assertEqual(asyncio.run(fiche_depuis_url(lien)).nom, "m.safetensors")
 
+    def test_pages_adultes_sur_civitai_red(self):
+        """civitai.com ne montre plus que le tout public ; le drapeau « nsfw » ne suffit pas (false pour Muse, niveau 31)."""
+        self.assertEqual(civitai.page(2741166, niveau=31), "https://civitai.red/models/2741166")
+        self.assertEqual(civitai.page(2741166, 3189679, 26), "https://civitai.red/models/2741166?modelVersionId=3189679")
+        self.assertEqual(civitai.page(9, niveau=3), "https://civitai.com/models/9")  # PG et PG-13 seulement
+        self.assertEqual(civitai.page(9, niveau=None), "https://civitai.com/models/9")
+        self.assertEqual(self.chercher(set())[0]["resultats"][0]["page"], "https://civitai.com/models/1")
+        self.REPONSE = {**self.REPONSE, "items": [{**self.REPONSE["items"][0], "nsfwLevel": 31}]}
+        self.assertEqual(self.chercher(set())[0]["resultats"][0]["page"], "https://civitai.red/models/1")
+
     def test_pas_de_llm_sur_civitai(self):
         with self.assertRaises(decouvrir.ErreurDecouvrir):
             asyncio.run(decouvrir.chercher_civitai("", "llm", None, "telechargements", None))

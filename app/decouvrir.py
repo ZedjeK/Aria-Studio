@@ -132,7 +132,7 @@ async def chercher_civitai(texte: str, type_: str, famille: str | None, tri: str
                             if f["principal"] or len(v["fichiers"]) == 1),
             "telechargements": (m.get("stats") or {}).get("downloadCount", 0),
             "appreciations": (m.get("stats") or {}).get("thumbsUpCount", 0),
-            "page": f"https://civitai.com/models/{m['id']}",
+            "page": civitai.page(m["id"], niveau=m.get("nsfwLevel")),
             "apercu": versions[0]["apercu"],
             "versions": versions,
         })

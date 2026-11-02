@@ -57,7 +57,8 @@ class Workflows(AvecFichierTemporaire):
     def test_optimiser_propose_le_sampler_officiel_de_h3(self):
         from app import optimiseur
         reglages.modifier_workflow("minimax_h3_i2v", {"sampler": "euler"})
-        with mock.patch.object(optimiseur, "profil_materiel", return_value={"vram_libre_go": 14}):
+        with mock.patch.object(optimiseur, "profil_materiel", return_value={"vram_libre_go": 14}), \
+                mock.patch.object(optimiseur.os.path, "getsize", return_value=6 * 2**30):  # LLM simulé, absent du disque
             r = optimiseur.propositions()
         h3 = {(p["cible"], p["cle"]): p for p in r["propositions"] if p["cible"].startswith("minimax_h3")}
         self.assertEqual(h3[("minimax_h3_i2v", "sampler")]["propose"], "res_multistep")
