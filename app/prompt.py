@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from PIL import Image
 
-from app import fiches, reglages, securite
+from app import fiches, modeles, reglages, securite
 from app.config import CONFIG
 from app.llm import ErreurLlama
 from app.modeles import DOSSIER as MODELES
@@ -190,7 +190,7 @@ def montrer(texte: str, vues: list[Vue] | None, usage: str, voit: bool) -> str |
 
 def generaliste(modele: str | None) -> str | None:
     """Un LLM spécialisé ne fait que sa réécriture : pour une autre tâche, c'est le LLM par défaut."""
-    return CONFIG["llama"]["modele"] if fiches.specialiste(modele) else modele
+    return modeles.llm_defaut() if fiches.specialiste(modele) else modele
 
 
 def specialiste_pour(modele: str | None, usage: str, workflow: str | None) -> dict | None:

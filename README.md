@@ -141,10 +141,19 @@ Il faut Python 3.11. `run.ps1` prépare le `.venv`, installe `requirements.txt` 
 .\run.ps1
 ```
 
-Les tests :
+Les tests tournent dans un dossier utilisateur jetable : ils ne touchent jamais ton `%USERPROFILE%\.Aria-Studio`
+(modèles installés, réglages, créations), et leur résultat ne dépend pas de ce qui est installé :
 
 ```powershell
-.venv\Scripts\python.exe -m unittest discover -s tests
+.venv\Scripts\python.exe tools\tester.py
+```
+
+Le banc de palier mesure la VRAM que chaque modèle demande vraiment, en simulant des cartes de 12 et 8 Go sur une
+carte de 16 Go (une bonne heure de GPU, serveur d'Aria arrêté). `--ecrire` reporte ensuite les mesures dans les
+fiches :
+
+```powershell
+.venv\Scripts\python.exe -m app.paliers
 ```
 
 Construire la version portable (Python embarqué, dépendances du `.venv`, lanceur compilé avec le `csc.exe` de

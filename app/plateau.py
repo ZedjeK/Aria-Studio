@@ -174,7 +174,7 @@ class Plateau:
                 "voix": voix.options(),
             },
             "references_max": workflows.REFERENCES_MAX,
-            "llm": {"defaut": CONFIG["llama"]["modele"], "choix": llm_au_choix(),
+            "llm": {"defaut": modeles.llm_defaut(), "choix": llm_au_choix(),
                     "par_workflow": {wf.id: workflows.llm_de(wf.id) for wf in prets}},
         }
 

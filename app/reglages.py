@@ -131,7 +131,8 @@ def _appliquer(section: dict, params: dict[str, Param], changements: dict):
 # LLM
 
 def nom_llm(modele: str | None) -> str:
-    return modele or CONFIG["llama"]["modele"]
+    from app import modeles  # import tardif : modeles → workflows → reglages
+    return modele or modeles.llm_defaut()
 
 
 def params_llm() -> dict[str, Param]:
@@ -437,7 +438,11 @@ def etat() -> dict:
         })
     return {
         "llm": llms,
-        "defaut_llm": CONFIG["llama"]["modele"],
+        "defaut_llm": modeles.llm_defaut(),
+        # Le GGUF par défaut de config.yaml a disparu : on dit lequel le remplace.
+        "note_defaut": None if modeles.llm_defaut() == CONFIG["llama"]["modele"] else
+        f"{CONFIG['llama']['modele']} n'est plus dans modeles/llm : {modeles.llm_defaut()} le remplace comme LLM "
+        "par défaut (workflows sans LLM choisi, Scénario, traductions).",
         "clause_mineurs": prompt.CLAUSE_MINEURS,
         "workflows": [{"id": wf.id, "nom": wf.fiche["nom"], "tache": wf.fiche["tache"], "famille": wf.famille,
                        "params": [p.public(valeurs_workflow(wf)[cle]) for cle, p in params_workflow(wf).items()],

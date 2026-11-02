@@ -34,6 +34,9 @@ async function chargerReglages() {
         .filter((w) => w.tache === tache)
         .map((w) => `<option value="${echapper(w.id)}" ${w.id === gardeWf ? "selected" : ""}>${echapper(w.nom)}</option>`)
         .join("")}</optgroup>`).join("");
+    const note = document.getElementById("note-llm-defaut");
+    note.textContent = etatReglages.note_defaut ?? "";
+    note.hidden = !etatReglages.note_defaut;
     document.getElementById("clause-reglages").textContent = etatReglages.clause_mineurs;
     document.getElementById("source-samplers").textContent = etatReglages.samplers_de_comfyui
         ? "Samplers et schedulers : liste annoncée par ComfyUI."

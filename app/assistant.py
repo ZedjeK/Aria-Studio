@@ -207,7 +207,7 @@ def essayer(plateau):
     workflow = CONFIG.get("generation", {}).get("texte_vers_image")
     if not workflow or workflows.obtenir(workflow).manquants():
         raise ErreurAssistant("Aucun modèle d'image installé pour l'essai")
-    avec_llm = CONFIG["llama"]["modele"] in modeles.llm_disponibles()
+    avec_llm = modeles.llm_defaut() in modeles.llm_disponibles()
     return plateau.commander(ESSAI["idee"], None if avec_llm else ESSAI["prompt"], None, workflow, "1:1 (Square)",
                              None, 1, imposees=ESSAI["imposees"])
 

@@ -286,7 +286,7 @@ def llms_choisis() -> dict[str, str]:
 def llm_de(id_workflow: str | None) -> str:
     """Le LLM de ce workflow s'il est choisi et installé, sinon le LLM par défaut (config.yaml, favori du Casting)."""
     choisi = llms_choisis().get(id_workflow) if id_workflow else None
-    return choisi if choisi and choisi in modeles.llm_disponibles() else CONFIG["llama"]["modele"]
+    return choisi if choisi and choisi in modeles.llm_disponibles() else modeles.llm_defaut()
 
 
 def choisir_llm(id_workflow: str, llm: str | None):

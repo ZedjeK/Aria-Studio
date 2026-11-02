@@ -551,7 +551,7 @@ class DemandeReecriture(BaseModel):
 @app.get("/api/llm/modeles")
 def modeles_llm():
     """Tous les GGUF de modeles/llm (favoris d'abord), et celui présélectionné."""
-    return {"defaut": CONFIG["llama"]["modele"], "choix": [{**m, "present": True} for m in plateau.llm_au_choix()]}
+    return {"defaut": modeles.llm_defaut(), "choix": [{**m, "present": True} for m in plateau.llm_au_choix()]}
 
 
 @app.post("/api/prompt/reecrire")

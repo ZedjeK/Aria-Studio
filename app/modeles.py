@@ -16,7 +16,8 @@ from pathlib import Path
 
 import yaml
 
-from app.config import ROOT
+from app import fiches
+from app.config import CONFIG, ROOT
 from app.emplacements import DATA, MODELES
 
 DOSSIER = MODELES
@@ -62,6 +63,17 @@ def fichiers(dossier: str, extensions: set[str]) -> list[str]:
 def llm_disponibles() -> list[str]:
     """Les GGUF de modeles/llm, sans les projecteurs d'images (mmproj) : ce ne sont pas des LLM."""
     return [f for f in fichiers("llm", {".gguf"}) if "mmproj" not in f.lower()]
+
+
+def llm_defaut() -> str:
+    """Le LLM par défaut : celui de config.yaml s'il est installé, sinon le premier favori installé (modeles_au_choix),
+    sinon le premier GGUF installé qui n'est pas un spécialiste. Sans ce repli, supprimer le GGUF de config.yaml
+    (Ministral, le 2026-11-02) faisait échouer toute réécriture sans LLM choisi. Rien d'installé : celui de config.yaml,
+    et l'erreur dit qu'il manque."""
+    llama, presents = CONFIG["llama"], llm_disponibles()
+    candidats = [llama["modele"], *(m["fichier"] for m in llama.get("modeles_au_choix", [])),
+                 *(f for f in presents if not fiches.specialiste(f))]
+    return next((f for f in candidats if f in presents), llama["modele"])
 
 
 # LoRAs : mots déclencheurs et force retenus d'une utilisation à l'autre (data/loras.json),

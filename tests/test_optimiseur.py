@@ -108,7 +108,7 @@ class Optimiseur(unittest.TestCase):
                 params[r["cle"]].valider(r["valeur"])
                 self.assertTrue(r.get("source", "").startswith("https://"), (wf.id, r["cle"]))
         params = reglages.params_llm()
-        for fichier, reco in yaml.safe_load(optimiseur.FICHIER_LLM.read_text(encoding="utf-8")).items():
+        for fichier, reco in optimiseur._recommandations_llm().items():  # celles du catalogue, livré avec Aria
             self.assertTrue(reco["source"].startswith("https://"), fichier)
             for r in reco["valeurs"]:
                 params[r["cle"]].valider(r["valeur"])

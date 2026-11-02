@@ -64,7 +64,7 @@ def collection() -> dict:
     catalogue = workflows.catalogue()
     infos = workflows.familles()
     utilise = _utilisations(catalogue)
-    llm_defaut = CONFIG["llama"]["modele"]
+    llm_defaut = modeles.llm_defaut()
     groupes = {g: [] for g in GROUPES}
     for m in modeles.inventaire():
         groupe, famille = _groupe(m["dossier"], infos)
@@ -133,7 +133,7 @@ def _reecriture(wf) -> dict:
 def usages() -> dict:
     catalogue = workflows.catalogue()
     generation = CONFIG.get("generation", {})
-    sortie = {"llm": {"defaut": CONFIG["llama"]["modele"], "choix": plateau.llm_au_choix()}}
+    sortie = {"llm": {"defaut": modeles.llm_defaut(), "choix": plateau.llm_au_choix()}}
     for id_usage, u in USAGES.items():
         liste = []
         for wf in catalogue:

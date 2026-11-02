@@ -24,6 +24,26 @@ from app.modeles import DOSSIER as MODELES
 CONTEXTE_REFLEXION = 8192  # contexte minimal d'un LLM qui réfléchit ou qui voit
 
 
+def lancement_llm(nom: str) -> dict:
+    """Comment Aria lance ce GGUF : serveur (moteur), contexte, réflexion et vision, d'après ses réglages. Le banc de
+    palier s'en sert aussi, pour mesurer le LLM tel qu'Aria le fait tourner."""
+    regle = reglages.valeurs_llm(nom)
+    contexte, reflexion = regle["contexte"], regle["reflexion"]
+    # Vision chargée d'office quand le LLM en a une : pas de redémarrage entre une réécriture avec image
+    # (Montage, retouche, références) et une sans.
+    projecteur = reglages.projecteur_llm(nom)[0]
+    vision = MODELES / "llm" / projecteur if projecteur else None
+    if reflexion or vision:  # consigne + images (≈ 600 tokens chacune) + réflexion + réponse
+        contexte = max(contexte, CONTEXTE_REFLEXION)
+    if specialiste := fiches.specialiste(nom):
+        # Un LLM spécialisé a ses réglages d'entraînement : réflexion, contexte assez grand, vision.
+        contexte, reflexion = max(contexte, specialiste["contexte"]), specialiste["reflexion"]
+        if specialiste.get("vision"):
+            vision = MODELES / "llm" / specialiste["vision"]["nom"]
+    return {"serveur": moteur(reglages.serveur_llm(reglages.moteur_llm(nom)[0])), "contexte": contexte,
+            "reflexion": reflexion, "vision": vision}
+
+
 class Orchestrateur:
     def __init__(self):
         self.comfy = ComfyUI(
@@ -67,29 +87,14 @@ class Orchestrateur:
     @asynccontextmanager
     async def llm(self, modele: str | None = None):
         """`modele` : nom de fichier dans modeles/llm (par défaut celui de config.yaml)."""
-        nom = modele or CONFIG["llama"]["modele"]
-        fichier = MODELES / "llm" / nom
-        serveur = moteur(reglages.serveur_llm(reglages.moteur_llm(nom)[0]))
+        nom = modele or modeles.llm_defaut()
         async with self._verrou:
             if self.actif == "comfyui" and await self.comfy.est_pret():
                 await self.comfy.liberer_vram()
             if self.actif != "llama":
                 await self.garde.attendre("Llama")
             # Ne redémarre que si le modèle, son serveur ou ses réglages de lancement changent.
-            regle = reglages.valeurs_llm(nom)
-            contexte, reflexion = regle["contexte"], regle["reflexion"]
-            # Vision chargée d'office quand le LLM en a une : pas de redémarrage entre une réécriture avec image
-            # (Montage, retouche, références) et une sans.
-            projecteur = reglages.projecteur_llm(nom)[0]
-            vision = MODELES / "llm" / projecteur if projecteur else None
-            if reflexion or vision:  # consigne + images (≈ 600 tokens chacune) + réflexion + réponse
-                contexte = max(contexte, CONTEXTE_REFLEXION)
-            if specialiste := fiches.specialiste(nom):
-                # Un LLM spécialisé a ses réglages d'entraînement : réflexion, contexte assez grand, vision.
-                contexte, reflexion = max(contexte, specialiste["contexte"]), specialiste["reflexion"]
-                if specialiste.get("vision"):
-                    vision = MODELES / "llm" / specialiste["vision"]["nom"]
-            await self.llama.demarrer(fichier, serveur, contexte=contexte, reflexion=reflexion, vision=vision)
+            await self.llama.demarrer(MODELES / "llm" / nom, **lancement_llm(nom))
             self.actif = "llama"
             yield self.llama
 

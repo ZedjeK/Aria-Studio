@@ -23,7 +23,7 @@ class Base(unittest.TestCase):
         self.figer()
 
     def tearDown(self):
-        for p in self.patchs:
+        for p in reversed(self.patchs):  # figer() empile : on dépile, sinon RACINE garde la valeur d'un essai
             p.stop()
         self.tmp.cleanup()
 
