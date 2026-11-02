@@ -193,10 +193,10 @@ class BancLLM(Banc):
         id_rendu = CONFIG.get("generation", {}).get("texte_vers_image")
         if not id_rendu:
             raise ErreurBanc("Choisis d'abord un favori texte vers image dans le Casting")
-        self.candidats = list(CONFIG["casting"]["candidats_llm"])
-        absents = [c for c in self.candidats if c != TEMOIN and not (MODELES / "llm" / c).is_file()]
-        if absents:
-            raise ErreurBanc(f"GGUF absents de modeles/llm : {', '.join(absents)}")
+        # Les candidats de config.yaml qui ne sont plus dans modeles/llm sont écartés (un GGUF supprimé depuis le
+        # Labo) : le banc compare ce qui est là.
+        self.candidats = [c for c in CONFIG["casting"]["candidats_llm"]
+                          if c == TEMOIN or (MODELES / "llm" / c).is_file()]
         # Le LLM entraîné pour le workflow de rendu, s'il est installé, entre au banc face aux généralistes.
         self.candidats += [f["id"] for f in fiches.specialistes(id_rendu)
                            if f["specialiste"]["usage"] == "creation" and f["id"] not in self.candidats
