@@ -25,7 +25,10 @@ llama:
         - nom: Bonsai 2 27B
           fichier: Ternary-Bonsai-2-27B-PTQ1_0.gguf
     contexte: 4096
-    # Serveurs particuliers pour les GGUF que le llama.cpp officiel ne sait pas lire.
+    # Fork PrismML de llama.cpp, pour les formats ternaires (Bonsai 2 et ses dérivés). Aria le choisit seule quand un
+    # GGUF a des tenseurs d'un type que l'officiel ne connaît pas (app/gguf.py) ; Réglages permet de l'imposer.
+    serveur_prism: llama-prism/llama-server.exe
+    # GGUF envoyés d'office à PrismML (en plus de la détection).
     serveurs_specifiques:
         Ternary-Bonsai-2-27B-PTQ1_0.gguf: llama-prism/llama-server.exe
     # Réflexion (« thinking ») des modèles qui la proposent : coupée pour la réécriture de prompts.

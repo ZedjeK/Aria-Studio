@@ -48,6 +48,7 @@ class Param:
     pas: float | None = None
     choix: tuple = ()
     aide: str = ""
+    libelles: tuple = ()  # (valeur, libellé affiché) des choix qui ne parlent pas d'eux-mêmes
 
     def valider(self, valeur):
         if self.type == "booleen":
@@ -73,7 +74,7 @@ class Param:
     def public(self, valeur) -> dict:
         return {"cle": self.cle, "libelle": self.libelle, "type": self.type, "defaut": self.defaut,
                 "valeur": valeur, "modifie": valeur != self.defaut, "min": self.min, "max": self.max,
-                "pas": self.pas, "choix": list(self.choix), "aide": self.aide}
+                "pas": self.pas, "choix": list(self.choix), "aide": self.aide, "libelles": dict(self.libelles)}
 
 
 # Fichier
@@ -153,7 +154,38 @@ def params_llm() -> dict[str, Param]:
               aide="Plus grand = plus de VRAM ; changer redémarre llama-server"),
         Param("reflexion", "Réflexion (thinking)", "booleen", bool(llama["reflexion"]),
               aide="Pour les modèles qui la proposent ; plus lent"),
+        Param("moteur", "Moteur", "choix", "auto", choix=tuple(MOTEURS_LLM), libelles=tuple(MOTEURS_LLM.items()),
+              aide="Automatique : d'après le format du GGUF. PrismML lit les formats ternaires de Bonsai 2 et ses "
+                   "dérivés ; changer redémarre llama-server"),
     ]}
+
+
+# Moteurs d'un LLM (catalogue/moteurs.yaml) : le llama.cpp officiel, ou le fork PrismML pour les formats ternaires.
+MOTEURS_LLM = {"auto": "Automatique", "llama": "llama.cpp officiel", "llama-prism": "PrismML (ternaire)"}
+
+
+def serveur_llm(moteur: str) -> str:
+    """Chemin de llama-server de ce moteur, relatif au dossier des moteurs."""
+    return CONFIG["llama"]["server"] if moteur == "llama" else CONFIG["llama"]["serveur_prism"]
+
+
+def moteur_llm(modele: str | None) -> tuple[str, str]:
+    """(moteur, raison) : le choix de Réglages l'emporte ; en automatique, un GGUF nommé dans config.yaml, sinon les
+    types de ses tenseurs (un type que l'officiel ne connaît pas vient d'un fork : PrismML)."""
+    from app import gguf, modeles  # import tardif : modeles → workflows → reglages
+    nom = nom_llm(modele)
+    choisi = valeurs_llm(nom)["moteur"]
+    if choisi != "auto":
+        return choisi, "choisi à la main"
+    if nom in CONFIG["llama"].get("serveurs_specifiques", {}):
+        return "llama-prism", "désigné dans config.yaml"
+    try:
+        inconnus = gguf.types_inconnus(modeles.DOSSIER / "llm" / nom)
+    except (OSError, gguf.ErreurGguf) as e:
+        return "llama", f"en-tête illisible ({e}) : moteur officiel"
+    if inconnus:
+        return "llama-prism", f"format hors llama.cpp officiel (type {', '.join(map(str, inconnus))})"
+    return "llama", "format standard"
 
 
 def valeurs_llm(modele: str | None) -> dict:
@@ -355,9 +387,14 @@ def etat() -> dict:
     llms = []
     for fichier in modeles.llm_disponibles():
         valeurs = valeurs_llm(fichier)
+        params = [p.public(valeurs[cle]) for cle, p in params_llm().items()]
+        en_service, raison = moteur_llm(fichier)
+        for p in params:
+            if p["cle"] == "moteur":  # ce que l'automatique choisirait, ou ce qui tourne
+                p["aide"] = f"En service : {MOTEURS_LLM[en_service]}, {raison}. " + p["aide"]
         llms.append({
             "fichier": fichier, "nom": favoris.get(fichier, fichier.removesuffix(".gguf")),
-            "params": [p.public(valeurs[cle]) for cle, p in params_llm().items()],
+            "params": params,
             "consignes": [{"cle": nom, "defaut": prompt.CONSIGNES_DEFAUT[nom],
                            "valeur": consigne_llm(fichier, nom) or prompt.CONSIGNES_DEFAUT[nom],
                            "modifie": consigne_llm(fichier, nom) is not None} for nom in CONSIGNES],

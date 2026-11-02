@@ -42,7 +42,7 @@ async function chargerReglages() {
     afficherWorkflow();
 }
 
-const formatValeur = (p, v) => p.type === "booleen" ? (v ? "oui" : "non") : String(v);
+const formatValeur = (p, v) => p.type === "booleen" ? (v ? "oui" : "non") : String(p.libelles?.[v] ?? v);
 
 function champReglage(p, prefixe = "reglage") {
     const id = `${prefixe}-${p.cle}`;
@@ -51,7 +51,7 @@ function champReglage(p, prefixe = "reglage") {
         saisie = `<label class="case"><input id="${id}" type="checkbox" data-cle="${p.cle}" ${p.valeur ? "checked" : ""}> activée</label>`;
     } else if (p.type === "choix") {
         saisie = `<select id="${id}" data-cle="${p.cle}">${p.choix.map((c) =>
-            `<option value="${echapper(c)}" ${c === p.valeur ? "selected" : ""}>${echapper(c)}</option>`).join("")}</select>`;
+            `<option value="${echapper(c)}" ${c === p.valeur ? "selected" : ""}>${echapper(formatValeur(p, c))}</option>`).join("")}</select>`;
     } else {
         saisie = `<input id="${id}" type="number" data-cle="${p.cle}" min="${p.min}" max="${p.max}" step="${p.pas ?? "any"}"
                          value="${p.valeur}">`;

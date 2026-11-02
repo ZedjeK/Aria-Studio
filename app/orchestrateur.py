@@ -67,7 +67,7 @@ class Orchestrateur:
         """`modele` : nom de fichier dans modeles/llm (par défaut celui de config.yaml)."""
         nom = modele or CONFIG["llama"]["modele"]
         fichier = MODELES / "llm" / nom
-        specifique = CONFIG["llama"].get("serveurs_specifiques", {}).get(nom)
+        serveur = moteur(reglages.serveur_llm(reglages.moteur_llm(nom)[0]))
         async with self._verrou:
             if self.actif == "comfyui" and await self.comfy.est_pret():
                 await self.comfy.liberer_vram()
@@ -80,8 +80,7 @@ class Orchestrateur:
                 # Un LLM spécialisé a ses réglages d'entraînement : réflexion, contexte assez grand, vision.
                 contexte, reflexion = max(contexte, specialiste["contexte"]), specialiste["reflexion"]
                 vision = MODELES / "llm" / specialiste["vision"]["nom"] if specialiste.get("vision") else None
-            await self.llama.demarrer(fichier, moteur(specifique) if specifique else None,
-                                      contexte=contexte, reflexion=reflexion, vision=vision)
+            await self.llama.demarrer(fichier, serveur, contexte=contexte, reflexion=reflexion, vision=vision)
             self.actif = "llama"
             yield self.llama
 
