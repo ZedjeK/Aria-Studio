@@ -1,25 +1,25 @@
-"""Construit la version portable d'Aria - Studio à côté du code source : ..\\Aria-Studio-X.Y.Z\\
+"""Construit la version portable d'Aria - Studio et l'installe dans %USERPROFILE%\\.Aria-Studio
 
-    .venv\\Scripts\\python.exe tools\\build_portable.py [--releases-dir DOSSIER]
+    .venv\\Scripts\\python.exe tools\\build_portable.py [--dans DOSSIER]
 
-Le dossier ne contient que le programme ; les affaires de l'utilisateur vivent dans %USERPROFILE%\\.Aria-Studio
-(app/emplacements.py), qu'une mise à jour ne touche jamais :
+Le programme se pose à côté des affaires de l'utilisateur (app/emplacements.py), comme Aria-Pilote dans son
+.Aria-Pilote ; une mise à jour ne touche jamais à data\\, modeles\\, moteurs\\, services\\ ni aria.yaml :
 - python\\           CPython 3.11 portable (python-build-standalone), vérifié par SHA-256, avec les dépendances
                      exactes du .venv (celles qu'on a testées), sans rien télécharger d'autre ;
 - app\\, web\\, …     le code suivi par Git (ni tests, ni outils, ni fichiers non suivis) ;
 - Aria-Studio.exe    le lanceur (tools/launcher/Launcher.cs, compilé avec le csc.exe fourni par Windows).
-Pas de data\\ dedans : sa présence ferait passer Aria en mode portable.
 
-Mise en place : la version est construite dans .build_cache\\staging, puis remplace la même version ou la précédente.
-Si l'utilisateur avait choisi le mode portable (data\\, modeles\\, services\\ ou aria.yaml à côté de l'exe), ses
-affaires passent dans la nouvelle version avant que l'ancienne soit supprimée.
+Mise en place : la version est construite dans .build_cache\\staging. Le fichier .programme du dossier liste ce
+que la version précédente y avait posé : seules ces entrées sont remplacées. Une entrée inconnue qui porte le
+nom d'un fichier du programme arrête tout (rien n'est supprimé qu'Aria n'ait elle-même installé).
+Le zip de la release se fait à partir de .build_cache\\staging (--sans-installer).
 """
 
 import argparse
 import hashlib
 import importlib.metadata
+import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -37,11 +37,12 @@ CSC = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Microsoft.NET" / "Framewo
 
 EXE = "Aria-Studio.exe"
 SANS_LIVRER = ("tests/", "tools/", ".gitignore", ".gitattributes")  # suivis par Git, inutiles à l'utilisateur
-AFFAIRES_PORTABLES = ("data", "modeles", "services", "aria.yaml")  # mode portable : jamais perdues
-VERSION_RE = re.compile(r"^Aria-Studio-(\d+)\.(\d+)\.(\d+)$")
+AFFAIRES = ("data", "modeles", "moteurs", "services", "aria.yaml")  # à l'utilisateur : jamais touchées
+MANIFESTE = ".programme"
 
 sys.path.insert(0, str(ROOT))
 from app import VERSION  # noqa: E402
+from app.emplacements import DEFAUT  # noqa: E402
 
 
 def etape(texte):
@@ -163,37 +164,39 @@ def compiler_lanceur(dest):
 
 # --- mise en place -----------------------------------------------------------------
 
-def versions(dossier):
-    trouvees = [(tuple(int(x) for x in m.groups()), p) for p in dossier.iterdir()
-                if p.is_dir() and (m := VERSION_RE.match(p.name))]
-    return [p for _, p in sorted(trouvees)]
-
-
 def mettre_en_place(staging, dossier):
-    etape("Mise en place")
-    cible = dossier / f"Aria-Studio-{VERSION}"
-    anciennes = [p for p in versions(dossier) if p != cible]
-    source = cible if cible.exists() else (anciennes[-1] if anciennes else None)
-    if source:
-        essai = source.with_name(source.name + ".verif")  # un dossier dont un fichier est ouvert ne se renomme pas
+    """Remplace le programme posé dans `dossier` par celui de `staging`, sans toucher aux affaires de l'utilisateur."""
+    etape(f"Mise en place dans {dossier}")
+    nouvelles = sorted(p.name for p in staging.iterdir())
+    if conflit := [n for n in nouvelles if n in AFFAIRES or n == MANIFESTE]:
+        sys.exit(f"Arrêt : le programme contient {', '.join(conflit)}, réservé à l'utilisateur.")
+    manifeste = dossier / MANIFESTE
+    try:
+        anciennes = json.loads(manifeste.read_text(encoding="utf-8"))["entrees"]
+    except FileNotFoundError:
+        anciennes = []
+    if inconnues := [n for n in nouvelles if (dossier / n).exists() and n not in anciennes]:
+        sys.exit(f"Arrêt : {', '.join(inconnues)} existe déjà dans {dossier} sans venir d'Aria, rien n'est touché.")
+    python = dossier / "python"
+    if python.exists():
+        essai = python.with_name("python.verif")  # un dossier dont un fichier est ouvert ne se renomme pas
         try:
-            source.rename(essai)
-            essai.rename(source)
+            python.rename(essai)
+            essai.rename(python)
         except OSError:
-            sys.exit(f"Arrêt : {source.name} est en cours d'utilisation. Quitte Aria - Studio puis relance.")
-        if not (source / EXE).exists():
-            sys.exit(f"Arrêt : {source} ne ressemble pas à une version d'Aria - Studio, il n'est pas touché.")
-        for nom in AFFAIRES_PORTABLES:
-            if (source / nom).exists():
-                shutil.move(str(source / nom), str(staging / nom))
-                print(f"  mode portable : {nom} repris depuis {source.name}")
-        restes = [n for n in AFFAIRES_PORTABLES if (source / n).exists()]
-        if restes:
-            sys.exit(f"Arrêt : {', '.join(restes)} encore dans {source}, rien n'a été supprimé.")
-        shutil.rmtree(source)
-        print(f"  {'ancien contenu remplacé' if source == cible else 'ancienne version supprimée'} : {source.name}")
-    shutil.move(str(staging), str(cible))
-    return cible
+            sys.exit("Arrêt : Aria - Studio tourne encore. Quitte-la puis relance.")
+    dossier.mkdir(parents=True, exist_ok=True)
+    for nom in anciennes:
+        chemin = dossier / nom
+        if nom in AFFAIRES or not chemin.exists():
+            continue
+        shutil.rmtree(chemin) if chemin.is_dir() else chemin.unlink()
+    for nom in nouvelles:
+        shutil.move(str(staging / nom), str(dossier / nom))
+    manifeste.write_text(json.dumps({"version": VERSION, "entrees": nouvelles}, indent=4), encoding="utf-8")
+    staging.rmdir()
+    print(f"  {len(nouvelles)} entrées posées, {len(anciennes)} remplacées ; data, modeles, moteurs, aria.yaml intacts")
+    return dossier
 
 
 def taille(dossier):
@@ -202,7 +205,8 @@ def taille(dossier):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--releases-dir", default=str(ROOT.parent), help="où placer Aria-Studio-X.Y.Z (défaut : à côté du code)")
+    parser.add_argument("--dans", default=str(DEFAUT), help="où installer le programme (défaut : %%USERPROFILE%%\\.Aria-Studio)")
+    parser.add_argument("--sans-installer", action="store_true", help="construire seulement (.build_cache\\staging, pour le zip)")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -216,11 +220,12 @@ def main():
     installer_dependances(python)
     copier_code(staging)
     compiler_lanceur(staging)
-    version = mettre_en_place(staging, Path(args.releases_dir).resolve())
-
     etape("Terminé")
-    print(f"  {version} ({taille(version) / 1024 ** 2:.0f} Mo)")
-    print(f"  Lancement : double-clic sur « {EXE} » ; tes affaires restent dans %USERPROFILE%\\.Aria-Studio")
+    if args.sans_installer:
+        print(f"  {staging} ({taille(staging) / 1024 ** 2:.0f} Mo)")
+        return
+    dossier = mettre_en_place(staging, Path(args.dans).resolve())
+    print(f"  Lancement : double-clic sur « {dossier / EXE} »")
 
 
 if __name__ == "__main__":

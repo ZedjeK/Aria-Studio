@@ -5,8 +5,9 @@ Par défaut, tout vit dans le dossier de l'utilisateur, comme ~/.ollama ou ~/.cl
     %USERPROFILE%\\.Aria-Studio\\data\\      séquences, rushes, réglages, voix, journaux
     %USERPROFILE%\\.Aria-Studio\\modeles\\   modèles (ailleurs si l'utilisateur l'a choisi dans aria.yaml)
     %USERPROFILE%\\.Aria-Studio\\moteurs\\   ComfyUI portable, llama-server
-Mode portable : si un dossier data\\ se trouve à côté du code (installation d'origine de Jérémy, clé USB…),
-tout reste à côté du code : aria.yaml, data\\, modeles\\ et services\\.
+Mode portable : si un dossier data\\ se trouve à côté du code (clé USB…), tout reste à côté du code : aria.yaml,
+data\\, modeles\\ et services\\. Sauf quand le code est installé dans %USERPROFILE%\\.Aria-Studio lui-même
+(tools/build_portable.py) : son data\\ est alors celui du dossier de l'utilisateur.
 
 Les modules lisent ces chemins à l'import : un changement de dossier des modèles vaut au prochain démarrage.
 Ce module ne dépend pas d'app.config : c'est config qui lui emprunte les favoris (une mise à jour remplace le code,
@@ -28,8 +29,12 @@ class ErreurEmplacement(ValueError):
     pass
 
 
+def _meme_dossier(a: Path, b: Path) -> bool:
+    return os.path.normcase(a.resolve()) == os.path.normcase(b.resolve())
+
+
 def portable() -> bool:
-    return (ROOT / "data").is_dir()
+    return (ROOT / "data").is_dir() and not _meme_dossier(ROOT, DEFAUT)
 
 
 def _racine() -> Path:

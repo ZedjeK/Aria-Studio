@@ -54,6 +54,13 @@ class Modes(Base):
         self.assertEqual(emplacements.MODELES, self.code / "modeles")
         self.assertEqual(emplacements.moteur("llama/llama-server.exe"), self.code / "services" / "llama" / "llama-server.exe")
 
+    def test_code_installe_dans_le_dossier_utilisateur(self):
+        (self.maison / "data").mkdir(parents=True)
+        with mock.patch.object(emplacements, "ROOT", Path(str(self.maison).upper())):  # Windows ignore la casse
+            self.figer()
+            self.assertFalse(emplacements.portable())
+            self.assertEqual(emplacements.moteur("comfyui"), self.maison / "moteurs" / "comfyui")
+
     def test_moteur_absolu_garde_tel_quel(self):
         absolu = Path(self.tmp.name) / "ailleurs" / "comfyui"
         self.assertEqual(emplacements.moteur(str(absolu)), absolu)
