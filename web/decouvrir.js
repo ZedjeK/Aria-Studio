@@ -51,7 +51,7 @@ async function majTypes() {
 function majAide() {
     const sansCle = valeur("source-decouvrir") === "civitai" && !jetonsDecouvrir.civitai;
     document.getElementById("aide-decouvrir").textContent = AIDES_DECOUVRIR[typeDecouvrir] + (sansCle
-        ? " ⚠ Pas de clé Civitai (variable CIVITAI_TOKEN) : beaucoup de modèles refuseront le téléchargement."
+        ? " ⚠ Pas de clé Civitai : beaucoup de modèles refuseront le téléchargement (Réglages, carte « Clés d'accès »)."
         : "");
 }
 document.getElementById("source-decouvrir").addEventListener("change", majAide);

@@ -123,6 +123,11 @@ seulement ajouter des termes, jamais en retirer.
 Aria n'écoute que sur ta machine (`127.0.0.1`). Une fois par jour, elle demande à GitHub s'il existe une nouvelle
 release (option à couper dans Réglages). Elle ne télécharge rien d'elle-même : chaque téléchargement part d'un clic.
 
+Certains modèles Civitai et Hugging Face demandent ta clé d'accès. Colle-la dans Réglages, carte **🔑 Clés
+d'accès**. Elle est rangée dans le Gestionnaire d'identification Windows, chiffrée et propre à ton compte, jamais
+dans un fichier d'Aria, et l'interface ne la réaffiche jamais. Un bouton la teste auprès de sa source. Les
+variables d'environnement `CIVITAI_TOKEN` et `HF_TOKEN` servent si aucune clé n'est enregistrée dans Aria.
+
 ## Pour les développeurs
 
 Il faut Python 3.11. `run.ps1` prépare le `.venv`, installe `requirements.txt` et lance le serveur sur

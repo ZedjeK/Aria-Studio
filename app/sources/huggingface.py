@@ -1,11 +1,10 @@
 """Fiches Hugging Face : https://huggingface.co/<owner>/<repo>/(blob|resolve)/<revision>/<chemin>."""
 
-import os
 from urllib.parse import quote, urlparse
 
 import httpx
 
-from app import modeles
+from app import cles, modeles
 from app.sources import ErreurSource, Fiche
 
 HF = "https://huggingface.co"
@@ -17,8 +16,7 @@ PAR_FAMILLE = {"diffusion_models", "loras", "checkpoints"}
 
 
 def entetes() -> dict:
-    jeton = os.environ.get("HF_TOKEN")
-    return {"Authorization": f"Bearer {jeton}"} if jeton else {}
+    return cles.entetes("huggingface")  # clé saisie dans Réglages (coffre Windows), sinon HF_TOKEN
 
 
 def _analyser(url: str) -> tuple[str, str, str]:
@@ -66,5 +64,5 @@ async def fiche(url: str) -> Fiche:
         page=f"{HF}/{depot}",
         dossier=_deviner_dossier(chemin_fichier),
         licence=licence,
-        jeton_requis=bool(infos.get("gated")) and not os.environ.get("HF_TOKEN"),
+        jeton_requis=bool(infos.get("gated")) and not cles.cle("huggingface"),
     )

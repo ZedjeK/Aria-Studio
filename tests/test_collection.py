@@ -172,7 +172,7 @@ class Empreintes(Base):
         with self.assertRaisesRegex(ErreurTelechargement, "Déjà installé sous un autre nom : MiniMax-H3/modeles/dasiwa_int8"):
             Telechargeur().ajouter(fiche, "MiniMax-H3/modeles")
         fiche.sha256, fiche.jeton_requis = "0" * 64, True
-        with self.assertRaisesRegex(ErreurTelechargement, "CIVITAI_TOKEN"):  # dit quoi faire, sans parler de licence
+        with self.assertRaisesRegex(ErreurTelechargement, "Clés d.accès"):  # dit quoi faire, sans parler de licence
             Telechargeur().ajouter(fiche, "MiniMax-H3/modeles")
         f.unlink()
         self.assertIsNone(modeles.cle_par_empreinte(sha))  # fichier supprimé depuis : plus un doublon

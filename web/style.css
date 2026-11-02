@@ -2443,3 +2443,18 @@ button.quitter-appli:hover {
 .reecriture-workflow .specialiste p {
     margin: 0 0 6px;
 }
+
+/* Réglages : clés d'accès (saisie masquée, jamais réaffichée) */
+.saisie-cle {
+    gap: 8px;
+    margin: 6px 0;
+}
+
+.saisie-cle input {
+    flex: 1;
+    min-width: 200px;
+}
+
+.resultat-cle {
+    margin: 4px 0 0;
+}

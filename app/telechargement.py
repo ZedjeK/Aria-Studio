@@ -24,9 +24,9 @@ class ErreurTelechargement(RuntimeError):
 # Ce qu'il faut faire quand une source refuse l'accès (jamais le jeton lui-même : il reste dans l'environnement).
 ACCES_REFUSE = {
     "civitai": ("Civitai demande une clé d'API pour ce modèle : crée-la sur civitai.com (Account settings, API Keys), "
-                "enregistre-la dans la variable d'environnement Windows CIVITAI_TOKEN, puis relance Aria"),
-    "huggingface": ("Hugging Face refuse l'accès : accepte les conditions sur la page du modèle, et enregistre ton "
-                    "jeton dans la variable d'environnement Windows HF_TOKEN, puis relance Aria"),
+                "puis colle-la dans Réglages, carte « Clés d'accès »"),
+    "huggingface": ("Hugging Face refuse l'accès : accepte les conditions sur la page du modèle, et colle ta clé "
+                    "(Settings, Access Tokens) dans Réglages, carte « Clés d'accès »"),
 }
 
 

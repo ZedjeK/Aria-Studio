@@ -1,10 +1,10 @@
 """Fiches Civitai : https://civitai.com/models/<id>[?modelVersionId=<version>]."""
 
-import os
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from app import cles
 from app.sources import ErreurSource, Fiche
 
 API = "https://civitai.com/api/v1"
@@ -18,8 +18,7 @@ TYPES = {
 
 
 def entetes() -> dict:
-    jeton = os.environ.get("CIVITAI_TOKEN")
-    return {"Authorization": f"Bearer {jeton}"} if jeton else {}
+    return cles.entetes("civitai")  # clé saisie dans Réglages (coffre Windows), sinon CIVITAI_TOKEN
 
 
 def _analyser(url: str) -> tuple[str | None, str | None]:
@@ -58,7 +57,7 @@ async def fiche(url: str) -> Fiche:
         # Beaucoup de modèles ne se téléchargent qu'avec une clé d'API : un HEAD le dit avant la mise en file
         # (401 sans clé, redirection vers le fichier sinon). Rien n'est téléchargé.
         protege = version.get("availability") == "EarlyAccess"
-        if not os.environ.get("CIVITAI_TOKEN"):
+        if not cles.cle("civitai"):
             try:
                 protege = protege or (await client.head(f["downloadUrl"])).status_code in (401, 403)
             except httpx.HTTPError:
@@ -75,7 +74,7 @@ async def fiche(url: str) -> Fiche:
         page=f"https://civitai.com/models/{version['modelId']}?modelVersionId={version['id']}",
         dossier=TYPES.get(type_civitai) or _dossier_famille(type_civitai, base, version.get("model", {}).get("name", "")),
         licence=None,  # Civitai n'expose pas de licence nommée : voir la page du modèle
-        jeton_requis=protege and not os.environ.get("CIVITAI_TOKEN"),
+        jeton_requis=protege and not cles.cle("civitai"),
         mots_declencheurs=[m.strip() for m in version.get("trainedWords") or [] if m.strip()],
         base=base,
     )

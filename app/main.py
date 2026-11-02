@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, casting, collection, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs,
+from app import (assistant, casting, cles, collection, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs,
                  optimiseur, personnages, plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
@@ -1150,10 +1150,46 @@ async def decouvrir_fichiers_hf(depot: str, type: str = "llm", famille: str | No
         raise HTTPException(400, str(e))
 
 
+# Clés d'accès (app/cles.py) : saisies ici, rangées dans le coffre Windows ; seule leur origine revient.
+
 @app.get("/api/jetons")
 def jetons_presents():
-    """Les clés d'accès sont-elles définies ? (Présence seulement : leur valeur ne quitte jamais l'environnement.)"""
-    return {"civitai": bool(os.environ.get("CIVITAI_TOKEN")), "huggingface": bool(os.environ.get("HF_TOKEN"))}
+    """Les clés d'accès sont-elles définies ? (Présence seulement : leur valeur ne revient jamais.)"""
+    return {s: e["origine"] is not None for s, e in cles.etat().items()}
+
+
+@app.get("/api/cles")
+def etat_cles():
+    return cles.etat()
+
+
+class DemandeCle(BaseModel):
+    valeur: str
+
+
+def _cles(action, *args):
+    try:
+        return action(*args)
+    except cles.ErreurCle as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/cles/{source}")
+def enregistrer_cle(source: str, d: DemandeCle):
+    return _cles(cles.enregistrer, source, d.valeur)
+
+
+@app.delete("/api/cles/{source}")
+def supprimer_cle(source: str):
+    return _cles(cles.supprimer, source)
+
+
+@app.post("/api/cles/{source}/tester")
+async def tester_cle(source: str):
+    try:
+        return await cles.tester(source)
+    except cles.ErreurCle as e:
+        raise HTTPException(400, str(e))
 
 
 @app.get("/api/decouvrir/familles")

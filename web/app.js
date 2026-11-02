@@ -30,6 +30,7 @@ document.querySelectorAll(".onglet").forEach((bouton) => {
         if (bouton.dataset.vue === "reglages") {
             chargerReglages();
             chargerMoteurs();
+            chargerCles();
         }
         if (bouton.dataset.vue === "montage") preparerMontage();
         if (bouton.dataset.vue === "scenario") preparerScenario();
@@ -312,6 +313,69 @@ document.getElementById("garder-modeles").addEventListener("click", async () => 
 });
 
 chargerEmplacements();
+
+// Clés d'accès (app/cles.py) : saisies ici, rangées dans le coffre Windows ; seule leur origine revient du serveur.
+
+const ORIGINES_CLE = {
+    aria: ["✓ enregistrée dans Aria (coffre Windows)", "ok"],
+    variable: ["✓ lue dans la variable d'environnement", "ok"],
+};
+
+function afficherCles(etat) {
+    document.getElementById("liste-cles").innerHTML = Object.entries(etat).map(([source, c]) => {
+        const [texte, classe] = ORIGINES_CLE[c.origine] ?? ["aucune clé", "discret"];
+        return `<li data-cle="${source}">
+            <div class="ligne"><strong>${echapper(c.nom)}</strong>
+                <span class="${classe}">${texte}${c.origine === "variable" ? ` ${echapper(c.variable)}` : ""}</span></div>
+            <div class="ligne saisie-cle">
+                <input type="password" autocomplete="new-password" spellcheck="false" placeholder="Colle ta clé ${echapper(c.nom)} ici">
+                <button type="button" class="petit principal" data-action="enregistrer">Enregistrer</button>
+                <button type="button" class="petit" data-action="tester" ${c.origine ? "" : "disabled"}>Tester</button>
+                ${c.origine === "aria" ? '<button type="button" class="petit" data-action="supprimer">Supprimer</button>' : ""}
+            </div>
+            <p class="discret">Où la créer : ${echapper(c.aide)}. La variable ${echapper(c.variable)} sert si aucune clé n'est enregistrée ici.</p>
+            <p class="resultat-cle" hidden></p>
+        </li>`;
+    }).join("");
+}
+
+async function chargerCles() {
+    afficherCles(await api("GET", "/api/cles"));
+}
+
+document.getElementById("liste-cles").addEventListener("click", async (ev) => {
+    const bouton = ev.target.closest("[data-action]");
+    if (!bouton) return;
+    const ligne = bouton.closest("[data-cle]");
+    const source = ligne.dataset.cle;
+    const dire = (texte, ok) => {  // la carte a pu être redessinée : on reprend la ligne affichée
+        const resultat = document.querySelector(`#liste-cles [data-cle="${source}"] .resultat-cle`);
+        resultat.textContent = texte;
+        resultat.className = `resultat-cle ${ok ? "ok" : "ko"}`;
+        resultat.hidden = false;
+    };
+    bouton.disabled = true;
+    try {
+        if (bouton.dataset.action === "enregistrer") {
+            const saisie = ligne.querySelector("input");
+            afficherCles(await api("PUT", `/api/cles/${source}`, { valeur: saisie.value }));
+            saisie.value = "";
+            const r = await api("POST", `/api/cles/${source}/tester`);  // enregistrée : on vérifie tout de suite
+            dire(r.message, r.ok);
+        } else if (bouton.dataset.action === "tester") {
+            const r = await api("POST", `/api/cles/${source}/tester`);
+            dire(r.message, r.ok);
+        } else if (confirm("Supprimer la clé enregistrée dans Aria ? (Elle reste valable chez la source.)")) {
+            afficherCles(await api("DELETE", `/api/cles/${source}`));
+        }
+        if (typeof jetonsDecouvrir !== "undefined") jetonsDecouvrir = await api("GET", "/api/jetons");  // web/decouvrir.js
+    } catch (err) {
+        dire(err.message, false);
+    }
+    bouton.disabled = false;
+});
+
+chargerCles();
 
 // Moteurs (app/moteurs.py) : ComfyUI portable et llama-server aux versions épinglées de catalogue/moteurs.yaml.
 // Rien ne se télécharge sans un clic ; le bandeau prévient quand un moteur obligatoire manque.
