@@ -133,9 +133,11 @@ class Chemin(unittest.TestCase):
         r = asyncio.run(prompt.reecrire(FauxOrchestrateur(llama), "une samouraï androïde", "general.gguf",
                                         workflow="qwen_image_2_1"))
         self.assertEqual(r["prompt"], 'A cyberpunk alley, a "Ramen 24h" sign above her katana.')
-        self.assertIn("« une samouraï »", llama.appels[0][0][0]["content"])
+        consigne = llama.appels[0][0][0]["content"]
+        self.assertIn("« un chevalier »", consigne)  # les deux genres en exemple (banc du 2026-11-02)
+        self.assertIn("« une samouraï »", consigne)
         for nom in ("reecriture", "references", "video", "decoupage"):
-            self.assertIn("never switch it", prompt.consigne(nom), nom)
+            self.assertIn("Never change it", prompt.consigne(nom), nom)
 
     def test_retouche_par_le_specialiste_qui_voit_l_image(self):
         llama = FauxLlama('{"rewritten_prompt": "Change the sky to a warm sunset; keep everything else."}')

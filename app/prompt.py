@@ -26,7 +26,7 @@ The user describes an image idea, often in French. Rewrite it as ONE English pro
 
 Rules:
 1. Stay faithful: keep every subject, action, color, attribute and spatial relation from the idea. Do not add new characters or objects the idea does not imply.
-2. Keep each character's gender. In French, the article and the agreements give it (« une samouraï », « une androïde » are women; « un pilote » is a man): write she/her or he/his accordingly, never switch it.
+2. Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
 3. Make it visual: precise subject description, setting, lighting, mood, composition and camera or medium (photo, illustration, painting...). Choose them to serve the idea.
 4. If the idea asks for written text in the image, keep that text exactly, in quotes. Otherwise mention no text.
 5. 40 to 120 words, plain prose, no lists, no headings, no markdown (no asterisks), no quotes around the whole prompt.
@@ -71,7 +71,7 @@ Rules:
 1. Refer to the references by their number: "the woman from Picture 1", "the dragon from Picture 2". Do not re-describe what the references already show (face, hair, clothes, colors): the model sees them.
 2. Ask explicitly to keep the identity (face, hair) and outfit of the characters from the references, unless the user asks to change them, but NOT their pose, seat, props or background: the characters take the new pose and place described by the user.
 3. Describe what is new, as the user asks: scene, pose, action, setting, lighting, framing, style. Add nothing the user did not imply.
-4. Keep each character's gender. In French, the article and the agreements give it (« une samouraï », « une androïde » are women; « un pilote » is a man): write she/her or he/his accordingly, never switch it.
+4. Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
 5. If the user asks for written text in the image, keep that text exactly, in quotes.
 6. 1 to 4 sentences, at most 90 words, plain prose, no markdown.
 7. Output only the instruction: no preamble, no explanation."""
@@ -85,7 +85,7 @@ Rules:
 3. Sounds: name concrete sounds tied to the action (footsteps, rain, wind...). Mention music only if the user asks for it, separately from the sounds.
 4. If the clip animates a provided image, describe only what moves (motion, camera, sounds), not what the image already shows.
 5. Fit the clip duration: few actions, at most one or two short lines of dialogue.
-6. Keep each character's gender. In French, the article and the agreements give it (« une samouraï », « une androïde » are women; « un pilote » is a man): write she/her or he/his accordingly, never switch it.
+6. Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
 7. 40 to 110 words, plain prose, no lists, no headings.
 8. Output only the prompt: no preamble, no explanation."""
 
@@ -106,7 +106,7 @@ Rules for every shot:
 - continue: the same take goes on from the last image of the previous shot: same place, same light, same framing at first. Begin with "Continuous shot, same scene."
 - cut: a new angle or a new moment of the story.
 - transition: ONE continuous camera movement travelling from the last image of the previous shot to the given arrival; the scene changes progressively over the whole clip, never all at once at the end.
-6. Character: {regle_personnage} Keep each character's gender. In French, the article and the agreements give it (« une samouraï », « une androïde » are women; « un pilote » is a man): write she/her or he/his accordingly, never switch it.
+6. Character: {regle_personnage} Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
 7. Keep the look of the setting (place, light, style) unless a shot's note says otherwise.
 
 Answer with exactly one block per shot, in order, and nothing else:
