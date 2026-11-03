@@ -17,6 +17,7 @@ import yaml
 from app import fiches, mesures, modeles, reglages, workflows
 from app.config import CONFIG
 from app.emplacements import MODELES
+from app.orchestrateur import lancement_llm
 
 FICHIER_LLM = MODELES / "llm" / "recommandations.yaml"
 GO = 2**30
@@ -116,8 +117,14 @@ def propositions() -> dict:
         # Pas de proposition de contexte : llama.cpp (--fit) place lui-même ce qui ne tient pas, et un MoE
         # comme Gemma 26B A4B reste rapide malgré le débordement (81 tokens/s mesurés au Casting).
         taille = os.path.getsize(modeles.DOSSIER / "llm" / fichier) / GO
+        vision = lancement_llm(fichier)["vision"]  # projecteur d'images, chargé d'office avec le LLM
+        if vision is not None and vision.is_file():
+            taille += os.path.getsize(vision) / GO
+        else:
+            vision = None
         if taille + SURCOUT_LLM_GO > libre:
-            alertes.append(f"{nom} ({taille:.1f} Go) dépasse ta VRAM libre ({libre:g} Go) : llama.cpp en place une "
+            avec = ", vision comprise" if vision else ""
+            alertes.append(f"{nom} ({taille:.1f} Go{avec}) dépasse ta VRAM libre ({libre:g} Go) : llama.cpp en place une "
                            "partie sur le processeur. Peu d'effet pour un modèle MoE, nettement plus lent pour un "
                            "modèle dense.")
 

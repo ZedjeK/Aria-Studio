@@ -73,6 +73,18 @@ class Optimiseur(unittest.TestCase):
         self.assertTrue(any("Qwen-Image-Edit 2511" in a and "RAM" in a for a in r["alertes"]))
         self.assertTrue(any("Krea 2 Turbo" in a and "1 MP" in a for a in r["alertes"]))
 
+    def test_vram_du_projecteur_comptee(self):
+        """La vision est chargée d'office avec le LLM : son projecteur (0,6 Go pour Bonsai 2) occupe la carte aussi."""
+        self.carte(12)  # 11 Go libres : 6 Go + 1,5 tiennent, 6 + 6 de projecteur simulé non
+        _, r = self.propositions()
+        self.assertFalse(any(a.startswith(BONSAI.removesuffix(".gguf")) for a in r["alertes"]))
+        mmproj = Path(self.dossier.name) / "Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf"
+        mmproj.write_bytes(b"GGUF")
+        lancement = {"serveur": Path("llama-server.exe"), "contexte": 8192, "reflexion": True, "vision": mmproj}
+        with mock.patch.object(optimiseur, "lancement_llm", lambda f: dict(lancement, vision=mmproj if f == BONSAI else None)):
+            _, r = self.propositions()
+        self.assertTrue(any("12.0 Go, vision comprise" in a for a in r["alertes"]), r["alertes"])
+
     def test_mégapixels_selon_la_carte(self):
         self.carte(48)
         props, _ = self.propositions()

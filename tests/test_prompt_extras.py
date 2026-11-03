@@ -21,12 +21,13 @@ class FauxOrchestrateur:
     def __init__(self, reponse: str):
         self.reponse = reponse
         self.messages = None
+        self.options = None
 
     @asynccontextmanager
     async def llm(self, modele=None):
-        async def generer(messages, **_):
-            self.messages = messages
-            return SimpleNamespace(texte=self.reponse)
+        async def generer(messages, **options):
+            self.messages, self.options = messages, options
+            return SimpleNamespace(texte=self.reponse, tokens_sortie=0, ecriture_tps=0.0)
         yield SimpleNamespace(generer=generer, modele=None)
 
 
@@ -57,6 +58,24 @@ class Peaufiner(unittest.TestCase):
         with self.assertRaises(ErreurSecurite):
             lancer(prompt.peaufiner(o, "A teenage girl wearing a bikini.", None))
         self.assertIsNone(o.messages)  # Llama n'a même pas été appelé
+
+
+class Reflexion(unittest.TestCase):
+    """La réflexion coûte 10 à 20 s : elle sert à la réécriture, pas à traduire « coucher de soleil »."""
+
+    def test_courtes_traductions_sans_reflexion(self):
+        o = FauxOrchestrateur("Sunset light, warm tones.")
+        lancer(prompt.traduire_instruction(o, "coucher de soleil"))
+        self.assertIs(o.options["reflechir"], False)
+        lancer(prompt.traduire_precisions(o, "il pleut"))
+        self.assertIs(o.options["reflechir"], False)
+
+    def test_peaufinage_et_reecriture_reflechissent(self):
+        o = FauxOrchestrateur("A cinematic film still of a young woman standing in the rain.")
+        lancer(prompt.peaufiner(o, "A young woman, standing in the rain.", None))
+        self.assertNotIn("reflechir", o.options)
+        lancer(prompt.reecrire(o, "une femme sous la pluie"))
+        self.assertNotIn("reflechir", o.options)
 
 
 class Traduire(unittest.TestCase):

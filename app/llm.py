@@ -1,6 +1,7 @@
 """Pilote de llama-server (llama.cpp) : processus, santé, génération via l'API compatible OpenAI."""
 
 import asyncio
+import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -129,40 +130,56 @@ class Llama:
 
     async def generer(
         self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 512, seed: int | None = None,
-        budget_reflexion: int = BUDGET_REFLEXION, **echantillonnage,
+        budget_reflexion: int = BUDGET_REFLEXION, reflechir: bool = True, **echantillonnage,
     ) -> Reponse:
         """`echantillonnage` : top_p, top_k, min_p, presence_penalty… (absents : défauts de llama-server).
-        `budget_reflexion` : tokens de réflexion ajoutés à `max_tokens` quand elle est active (0 : déjà comptés)."""
+        `budget_reflexion` : tokens de réflexion ajoutés à `max_tokens` quand elle est active (0 : déjà comptés).
+        `reflechir` : False coupe la réflexion pour cette demande seulement (petites traductions : 10 à 20 s pour rien)."""
+        reflexion = self.reflexion_active and reflechir
         if self.reflexion_active:
-            max_tokens += budget_reflexion
-        corps = {"messages": messages, "temperature": temperature, "max_tokens": max_tokens, **echantillonnage}
+            max_tokens += budget_reflexion  # gardé même sans réflexion : un gabarit peut ignorer enable_thinking
+        corps = {"messages": messages, "temperature": temperature, "max_tokens": max_tokens, **echantillonnage,
+                 "stream": True, "stream_options": {"include_usage": True}}
         if seed is not None:
             corps["seed"] = seed
-        if not self.reflexion_active:
+        if not reflexion:
             # Certains serveurs (fork PrismML) ignorent --reasoning-budget 0 : on coupe aussi la
             # réflexion dans le gabarit de chat. Les gabarits qui ne la gèrent pas ignorent l'option.
             corps["chat_template_kwargs"] = {"enable_thinking": False}
+        # En flux : une commande annulée ferme la connexion, et llama-server arrête aussitôt sa génération. Une
+        # requête non streamée, elle, va jusqu'au bout dans le vide (encore 90 s après la coupure, mesuré sur PrismML).
+        morceaux, fin, donnees = [], None, {}
         async with httpx.AsyncClient(timeout=300) as client:
-            r = await client.post(f"{self.url}/v1/chat/completions", json=corps)
-        if r.status_code != 200:
-            raise ErreurLlama(f"Génération refusée ({r.status_code}) : {r.text[:300]}")
-        donnees = r.json()
+            async with client.stream("POST", f"{self.url}/v1/chat/completions", json=corps) as r:
+                if r.status_code != 200:
+                    erreur = (await r.aread()).decode(errors="replace")
+                    raise ErreurLlama(f"Génération refusée ({r.status_code}) : {erreur[:300]}")
+                async for ligne in r.aiter_lines():
+                    if ligne.startswith("error:"):
+                        raise ErreurLlama(f"Génération interrompue : {ligne[6:].strip()[:300]}")
+                    if not ligne.startswith("data:") or ligne[5:].strip() == "[DONE]":
+                        continue
+                    morceau = json.loads(ligne[5:])
+                    for choix in morceau.get("choices") or []:
+                        morceaux.append((choix.get("delta") or {}).get("content") or "")
+                        fin = choix.get("finish_reason") or fin
+                    if "usage" in morceau:
+                        donnees = morceau
         timings = donnees.get("timings", {})
-        choix = donnees["choices"][0]
-        texte = (choix["message"].get("content") or "").strip()
+        texte = "".join(morceaux).strip()
         if not texte:
             # Jamais en silence : un prompt vide partirait tel quel vers ComfyUI.
-            if choix.get("finish_reason") != "length":
+            if fin != "length":
                 raise ErreurLlama("Le LLM a rendu une réponse vide")
-            if self.reflexion_active:
+            if reflexion:
                 raise ErreurLlama(f"Le LLM a passé ses {max_tokens} tokens à réfléchir sans répondre : coupe sa "
                                   "Réflexion ou augmente sa longueur maximale dans Réglages")
             raise ErreurLlama(f"Le LLM a atteint sa limite de {max_tokens} tokens sans répondre : augmente sa "
                               "longueur maximale dans Réglages")
         return Reponse(
             texte=texte,
-            tokens_entree=donnees["usage"]["prompt_tokens"],
-            tokens_sortie=donnees["usage"]["completion_tokens"],
+            tokens_entree=donnees.get("usage", {}).get("prompt_tokens", 0),
+            tokens_sortie=donnees.get("usage", {}).get("completion_tokens", 0),
             lecture_tps=round(timings.get("prompt_per_second", 0.0), 1),
             ecriture_tps=round(timings.get("predicted_per_second", 0.0), 1),
         )

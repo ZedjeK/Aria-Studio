@@ -1,6 +1,6 @@
-"""Génération avec llama-server (app/llm.py) : budget de réflexion et réponses vides.
+"""Génération avec llama-server (app/llm.py) : budget de réflexion, réponses vides, réponse en flux.
 
-llama-server est simulé (httpx.MockTransport) : rien n'est lancé.
+llama-server est simulé (httpx.MockTransport, morceaux « data: » comme le vrai) : rien n'est lancé.
 """
 
 import asyncio
@@ -19,25 +19,30 @@ VRAI_CLIENT = httpx.AsyncClient  # capturé avant les remplacements (llm.httpx e
 
 class Generer(unittest.TestCase):
     def generer(self, contenu, fin="stop", reflexion=False, **options):
-        """Renvoie (texte, corps envoyé) ; `contenu` : la réponse simulée de llama-server."""
+        """Renvoie (réponse, corps envoyé) ; `contenu` : la réponse simulée de llama-server, envoyée en morceaux."""
         envoyes = []
 
         def repondre(requete):
             envoyes.append(json.loads(requete.content))
-            return httpx.Response(200, json={
-                "choices": [{"message": {"content": contenu, "reasoning_content": "Hmm…"}, "finish_reason": fin}],
-                "usage": {"prompt_tokens": 700, "completion_tokens": 512}, "timings": {}})
+            deltas = [{"role": "assistant", "content": None}, {"reasoning_content": "Hmm…"}]
+            deltas += [{"content": m} for m in ([contenu[:4], contenu[4:]] if contenu else [contenu])]
+            morceaux = [{"choices": [{"delta": d, "finish_reason": None}]} for d in deltas]
+            morceaux += [{"choices": [{"delta": {}, "finish_reason": fin}]},
+                         {"choices": [], "usage": {"prompt_tokens": 700, "completion_tokens": 512},
+                          "timings": {"predicted_per_second": 61.04}}]
+            flux = "".join(f"data: {json.dumps(m)}\n\n" for m in morceaux) + "data: [DONE]\n\n"
+            return httpx.Response(200, text=flux, headers={"content-type": "text/event-stream"})
 
         llama = Llama(Path("llama-server.exe"), 8095, 4096, False)
         llama.reflexion_active = reflexion
         client = lambda **kw: VRAI_CLIENT(transport=httpx.MockTransport(repondre), **kw)  # noqa: E731
         with mock.patch.object(llm.httpx, "AsyncClient", client):
             reponse = asyncio.run(llama.generer([{"role": "user", "content": "x"}], max_tokens=512, **options))
-        return reponse.texte, envoyes[0]
+        return reponse, envoyes[0]
 
     def test_sans_reflexion_la_limite_reste_celle_de_la_reponse(self):
-        texte, corps = self.generer(" Un prompt. ")
-        self.assertEqual(texte, "Un prompt.")
+        reponse, corps = self.generer(" Un prompt. ")
+        self.assertEqual(reponse.texte, "Un prompt.")  # morceaux recollés, réflexion écartée
         self.assertEqual(corps["max_tokens"], 512)
         self.assertEqual(corps["chat_template_kwargs"], {"enable_thinking": False})
 
@@ -45,6 +50,17 @@ class Generer(unittest.TestCase):
         _, corps = self.generer("Un prompt.", reflexion=True)
         self.assertEqual(corps["max_tokens"], 512 + BUDGET_REFLEXION)
         self.assertNotIn("chat_template_kwargs", corps)
+
+    def test_en_flux_pour_pouvoir_annuler(self):
+        """Non streamée, une génération annulée continuait 90 s dans le vide (PrismML, mesuré le 2026-11-03)."""
+        reponse, corps = self.generer("Un prompt.")
+        self.assertTrue(corps["stream"])
+        self.assertEqual((reponse.tokens_entree, reponse.tokens_sortie, reponse.ecriture_tps), (700, 512, 61.0))
+
+    def test_reflexion_coupee_pour_une_demande(self):
+        _, corps = self.generer("Sunset light.", reflexion=True, reflechir=False)
+        self.assertEqual(corps["chat_template_kwargs"], {"enable_thinking": False})
+        self.assertEqual(corps["max_tokens"], 512 + BUDGET_REFLEXION)  # au cas où le gabarit l'ignore
 
     def test_un_specialiste_compte_deja_sa_reflexion(self):
         _, corps = self.generer("{}", reflexion=True, budget_reflexion=0)

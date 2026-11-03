@@ -155,7 +155,8 @@ def params_llm() -> dict[str, Param]:
         Param("contexte", "Contexte (tokens)", "entier", int(llama["contexte"]), 1024, 262144, 1024,
               aide="Plus grand = plus de VRAM ; changer redémarre llama-server"),
         Param("reflexion", "Réflexion (thinking)", "booleen", bool(llama["reflexion"]),
-              aide="Pour les modèles qui la proposent ; plus lent"),
+              aide="Pour les modèles qui la proposent ; plus lent. Sert à la réécriture, au peaufinage et au "
+                   "découpage, jamais aux courtes traductions (retouche, précisions)"),
         Param("moteur", "Moteur", "choix", "auto", choix=tuple(MOTEURS_LLM), libelles=tuple(MOTEURS_LLM.items()),
               aide="Automatique : d'après le format du GGUF. PrismML lit les formats ternaires de Bonsai 2 et ses "
                    "dérivés ; changer redémarre llama-server"),

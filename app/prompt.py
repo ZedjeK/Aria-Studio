@@ -266,7 +266,8 @@ async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, m
         contenu = montrer(instruction, [vue] if vue else None, "retouche", voit=_voit(llama))
         reponse = await llama.generer(
             [{"role": "system", "content": consigne("retouche", modele, regles=regles)}, {"role": "user", "content": contenu}],
-            temperature=regle["temperature_retouche"], max_tokens=200, **reglages.echantillonnage(modele),
+            temperature=regle["temperature_retouche"], max_tokens=200, reflechir=False,
+            **reglages.echantillonnage(modele),
         )
     texte = nettoyer_markdown(reponse.texte)
     securite.verifier(instruction, texte)
@@ -308,7 +309,8 @@ async def traduire_precisions(orchestrateur: Orchestrateur, precisions: str, mod
     async with orchestrateur.llm(modele) as llama:
         reponse = await llama.generer(
             [{"role": "system", "content": consigne("precisions", modele)}, {"role": "user", "content": precisions}],
-            temperature=regle["temperature_traduction"], max_tokens=200, **reglages.echantillonnage(modele),
+            temperature=regle["temperature_traduction"], max_tokens=200, reflechir=False,
+            **reglages.echantillonnage(modele),
         )
     securite.verifier(precisions, reponse.texte)
     return reponse.texte

@@ -21,7 +21,8 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 - **Réglages** : par LLM, par modèle et par checkpoint, avec un bouton *Optimiser* qui part des recommandations
   officielles et de ta carte. Le moteur de chaque LLM (llama.cpp officiel ou PrismML pour les GGUF ternaires, Bonsai 2
   et ses dérivés) se choisit tout seul d'après le fichier, et peut s'imposer à la main. La réflexion des LLM est
-  activée par défaut : la réécriture est plus lente, mais plus soignée. Elle se coupe LLM par LLM.
+  activée par défaut : la réécriture est plus lente, mais plus soignée. Elle se coupe LLM par LLM, et les courtes
+  traductions (consigne de retouche, précisions d'une séquence) s'en passent toujours.
 - **Vision des LLM** : avec son projecteur d'images (`mmproj`, livré avec Bonsai 2 et valable pour ses dérivés), le LLM
   voit l'image qu'il anime, qu'il retouche ou qu'il prend en référence avant de réécrire. Sans projecteur, il lit le
   prompt qui a créé l'image.
