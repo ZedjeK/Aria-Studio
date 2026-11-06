@@ -1,11 +1,17 @@
-// Scénario : composer un prompt anglais en cliquant dans les listes de prompt/listes, puis l'envoyer au Plateau,
-// ou au Montage quand le modèle cible est un modèle vidéo (bloc Plan, action, réplique, durée).
+// Scénario : la seule place où le LLM écrit. On choisit ce qu'on fait (Image, Clip, Séquence) et pour quel modèle,
+// on compose le prompt anglais en cliquant dans les listes de prompt/listes, réparties en onglets (Sujet, Décor et
+// ambiance, Mise en scène), puis il part vers le Plateau ou le Montage, qui le tournent tel quel.
 // Les règles (genre, âge, remplacements, incompatibilités) sont appliquées ici en direct pour guider,
 // mais c'est le serveur qui fait foi : chaque changement repasse par /api/prompt/assembler.
 
-const ICONES_SUJETS = { personnage: "👤", creature: "🐉", objet: "🏺", lieu: "🏞" };
+const LIBELLES_SUJETS = { personnage: "👤 Personnage", creature: "🐉 Créature / animal", objet: "🏺 Objet",
+                          lieu: "🚫 Aucun : un lieu, un paysage" };
+const BROUILLON = "aria-scenario";  // brouillon gardé dans ce navigateur (une simple commodité)
 let structurePrompt = null;
 let sujetPrompt = "personnage";
+let formeScenario = "image";  // image, clip ou sequence
+let ongletScenario = "sujet";
+const ciblesParForme = { image: null, video: null };  // le modèle cible choisi pour chaque forme
 // sujet -> { choix: {bloc: {sous-liste: valeur}}, age, texte, precisions, traduction: {source, texte},
 //            action, traductionAction: {source, texte}, replique, toutes: lève le filtre par origine }
 const etatsPrompt = {};
@@ -27,14 +33,16 @@ const etatPrompt = () => (etatsPrompt[sujetPrompt] ??=
 const cle = (...morceaux) => morceaux.join("|");
 const llmPrompt = () => document.getElementById("llm-prompt").value || null;
 const ciblePrompt = () => document.getElementById("workflow-prompt").value || null;
-const cibleVideo = () => Boolean(optionsPlateau?.workflows.texte_vers_video?.choix.some((w) => w.id === ciblePrompt()));
+const cibleVideo = () => formeScenario !== "image";
 
 async function preparerScenario() {
     if (!promptPret) {
         promptPret = true;
         const { sujets } = await api("GET", "/api/prompt/listes");
         document.getElementById("sujets-prompt").innerHTML = sujets.map((s) =>
-            `<button type="button" data-sujet="${echapper(s.id)}">${ICONES_SUJETS[s.id] ?? ""} ${echapper(s.nom)}</button>`).join("");
+            `<button type="button" data-sujet="${echapper(s.id)}">${echapper(LIBELLES_SUJETS[s.id] ?? s.nom)}</button>`).join("");
+        if (!optionsPlateau) await chargerOptionsPlateau();
+        relireBrouillon();
     }
     await chargerModelesPrompt();
     await chargerPersonnages();
@@ -43,23 +51,25 @@ async function preparerScenario() {
 
 async function chargerModelesPrompt() {
     if (!optionsPlateau) await chargerOptionsPlateau();
-    const t2i = optionsPlateau.workflows.texte_vers_image;
-    const t2v = optionsPlateau.workflows.texte_vers_video;
-    const select = document.getElementById("workflow-prompt");
-    const garde = select.value || choixModele("workflow-creation").workflow || t2i.defaut;
-    const options = (tache) => tache.choix.map((w) =>
-        `<option value="${echapper(w.id)}" ${w.id === garde ? "selected" : ""}>${echapper(w.nom)}${w.id === tache.defaut ? " ★" : ""}</option>`).join("");
-    select.innerHTML = `<optgroup label="🖼️ Image">${options(t2i)}</optgroup>`
-        + (t2v?.choix.length ? `<optgroup label="🎞️ Vidéo">${options(t2v)}</optgroup>` : "");
-    remplirSelect("duree-prompt", optionsPlateau.video.durees.map((d) => [String(d), `${d} s`]), "5");
+    const video = cibleVideo();
+    const tache = optionsPlateau.workflows[video ? "texte_vers_video" : "texte_vers_image"];
+    const cle_ = video ? "video" : "image";
+    const garde = ciblesParForme[cle_]
+        ?? (video ? tache?.defaut : choixModele("workflow-creation").workflow || tache?.defaut);
+    remplirSelect("workflow-prompt", (tache?.choix ?? []).map((w) =>
+        [w.id, `${w.nom}${w.id === tache.defaut ? " ★" : ""}`]), garde);
+    ciblesParForme[cle_] = document.getElementById("workflow-prompt").value || null;
+    remplirSelect("duree-prompt", optionsPlateau.video.durees.map((d) => [String(d), `${d} s`]),
+                  document.getElementById("duree-prompt").value || "5");
     const llm = document.getElementById("llm-prompt");
-    const gardeLlm = llm.value || llmDuWorkflow(select.value);
+    const gardeLlm = llm.value || llmBrouillon || llmDuWorkflow(ciblePrompt());
     llm.innerHTML = optionsPlateau.llm.choix.map((m) =>
         `<option value="${echapper(m.fichier)}" ${m.fichier === gardeLlm ? "selected" : ""}>${echapper(m.nom)}${m.favori ? " ★" : ""}</option>`).join("");
     majCible();
 }
 
-// Cible vidéo : bloc Plan, action, réplique et durée visibles ; « Texte dans l'image » masqué ; envoi au Montage.
+// Image : « Texte dans l'image », envoi au Plateau. Clip : bloc Plan, action, réplique et durée, envoi au Montage.
+// Séquence : onglet Histoire et découpage (decoupage.js).
 function majCible() {
     const video = cibleVideo();
     document.querySelectorAll("[data-bloc-video]").forEach((b) => { b.hidden = !video; });
@@ -68,17 +78,76 @@ function majCible() {
     document.getElementById("envoyer-prompt").textContent = video ? "→ Envoyer au Montage" : "→ Envoyer au Plateau";
     document.getElementById("creer-prompt").textContent = video ? "Tourner" : "Créer";
     rendreEtiquettes();
-    majForme();  // Clip seul ou Séquence (decoupage.js)
+    majForme();  // Séquence (decoupage.js)
+    if (ongletScenario === "histoire" && !enSequence()) choisirOnglet("sujet");
+}
+
+function choisirOnglet(onglet) {
+    ongletScenario = onglet;
+    document.querySelectorAll(".onglet-scenario").forEach((b) =>
+        b.classList.toggle("actif", b.dataset.ongletScenario === onglet));
+    document.querySelectorAll(".volet-scenario").forEach((v) => { v.hidden = v.dataset.voletScenario !== onglet; });
+    garderBrouillon();
+}
+
+// Brouillon : forme, cibles, choix de chaque sujet, histoire. Il revient à la prochaine ouverture d'Aria.
+let minuteurBrouillon = null;
+let llmBrouillon = null;
+
+function garderBrouillon() {
+    clearTimeout(minuteurBrouillon);
+    minuteurBrouillon = setTimeout(() => {
+        const etat = { forme: formeScenario, sujet: sujetPrompt, onglet: ongletScenario, cibles: ciblesParForme,
+                       etats: etatsPrompt, llm: llmPrompt(),
+                       sequence: { reference: decoupage.reference, synopsis: decoupage.synopsis,
+                                   contrainte: decoupage.contrainte, plans: decoupage.plans } };
+        try {
+            localStorage.setItem(BROUILLON, JSON.stringify(etat));
+            document.getElementById("brouillon-scenario").textContent = "✓ brouillon gardé";
+        } catch {
+            document.getElementById("brouillon-scenario").textContent = "";  // stockage refusé : on fait sans
+        }
+    }, 400);
+}
+
+function relireBrouillon() {
+    let b = null;
+    try {
+        b = JSON.parse(localStorage.getItem(BROUILLON) ?? "null");
+    } catch {
+        return;
+    }
+    if (!b) return;
+    if (["image", "clip", "sequence"].includes(b.forme)) formeScenario = b.forme;
+    if (b.sujet && LIBELLES_SUJETS[b.sujet]) sujetPrompt = b.sujet;
+    if (b.onglet) ongletScenario = b.onglet;
+    Object.assign(ciblesParForme, b.cibles ?? {});
+    Object.assign(etatsPrompt, b.etats ?? {});
+    llmBrouillon = b.llm ?? null;
+    const s = b.sequence ?? {};
+    decoupage.reference = s.reference ?? null;
+    decoupage.synopsis = s.synopsis ?? "";
+    decoupage.contrainte = s.contrainte ?? "";
+    if (Array.isArray(s.plans) && s.plans.length >= 2) {
+        decoupage.plans = s.plans;
+        decoupagePret = false;  // preparerDecoupage remplit les listes sans écraser ces plans
+    }
+    document.getElementById("synopsis-scenario").value = decoupage.synopsis;
+    document.getElementById("contrainte-scenario").value = decoupage.contrainte;
+    document.querySelector(`input[name="forme-scenario"][value="${formeScenario}"]`).checked = true;
+    choisirOnglet(ongletScenario);
+    document.getElementById("brouillon-scenario").textContent = "✓ brouillon repris";
 }
 
 async function choisirSujet(sujet) {
     sujetPrompt = sujet;
     document.querySelectorAll("#sujets-prompt button").forEach((b) => b.classList.toggle("actif", b.dataset.sujet === sujet));
     document.getElementById("personnages-prompt").hidden = sujet !== "personnage";
+    document.getElementById("sans-sujet").hidden = sujet !== "lieu";
     try {
         structurePrompt = await api("GET", `/api/prompt/listes?sujet=${encodeURIComponent(sujet)}`);
     } catch (err) {
-        document.getElementById("blocs-prompt").innerHTML = `<p class="ko">${echapper(err.message)}</p>`;
+        document.querySelector('[data-onglet-blocs="sujet"]').innerHTML = `<p class="ko">${echapper(err.message)}</p>`;
         return;
     }
     definitionsPrompt = {};
@@ -97,20 +166,24 @@ async function choisirSujet(sujet) {
     planifierAssemblage();
 }
 
-// Squelette : un accordéon par groupe ; les options sont remplies par appliquerReglesPrompt.
+// Squelette : un accordéon par groupe, rangé dans l'onglet que le serveur lui donne (sujet, decor, scene) ;
+// les options sont remplies par appliquerReglesPrompt.
 function rendreBlocsPrompt() {
-    const premier = structurePrompt.blocs[0];
-    if (![...groupesOuvertsPrompt].some((g) => g.startsWith(`${sujetPrompt}|`))) {
-        groupesOuvertsPrompt.add(cle(sujetPrompt, premier.id, premier.groupes[0]?.nom));
-    }
     let numero = 0;
-    document.getElementById("blocs-prompt").innerHTML = structurePrompt.blocs.map((b) => `
-        <div ${b.video ? `data-bloc-video data-clip-seul ${cibleVideo() ? "" : "hidden"}` : ""}>
-        <h3 class="titre-bloc">${b.video ? "🎞️ " : ""}${echapper(b.titre)}</h3>
-        ${b.groupes.map((g) => {
+    const parOnglet = { sujet: [], decor: [], scene: [] };
+    structurePrompt.blocs.forEach((b) => b.groupes.forEach((g) => (parOnglet[g.onglet] ?? parOnglet.sujet).push([b, g])));
+    Object.entries(parOnglet).forEach(([onglet, groupes]) => {
+        // Le premier accordéon de chaque onglet s'ouvre de lui-même, tant qu'aucun ne l'est.
+        if (groupes.length && !groupes.some(([b, g]) => groupesOuvertsPrompt.has(cle(sujetPrompt, b.id, g.nom)))) {
+            groupesOuvertsPrompt.add(cle(sujetPrompt, groupes[0][0].id, groupes[0][1].nom));
+        }
+    });
+    Object.entries(parOnglet).forEach(([onglet, groupes]) => {
+        document.querySelector(`[data-onglet-blocs="${onglet}"]`).innerHTML = groupes.map(([b, g]) => {
             const id = cle(sujetPrompt, b.id, g.nom);
-            return `<details data-groupe="${echapper(id)}" ${groupesOuvertsPrompt.has(id) ? "open" : ""}>
-                <summary>${echapper(g.nom)} <span class="discret compte"></span></summary>
+            return `<details data-groupe="${echapper(id)}" ${groupesOuvertsPrompt.has(id) ? "open" : ""}
+                     ${b.video ? `data-bloc-video data-clip-seul ${cibleVideo() ? "" : "hidden"}` : ""}>
+                <summary>${b.video ? "🎞️ " : ""}${echapper(g.nom)} <span class="discret compte"></span></summary>
                 <div class="sous-listes">${g.sous_listes.map((sl) => `
                     <div class="sous-liste" data-bloc="${echapper(b.id)}" data-sl="${echapper(sl.nom)}">
                         <div class="entete-sl">
@@ -132,8 +205,8 @@ function rendreBlocsPrompt() {
                     </div>`).join("")}
                 </div>
             </details>`;
-        }).join("")}
-        </div>`).join("");
+        }).join("");
+    });
     const etat = etatPrompt();
     const age = document.getElementById("age-prompt");
     if (age) age.value = etat.age ?? "";
@@ -185,7 +258,7 @@ const enConflit = (etat, bloc, sl, nom) => (incompatPrompt.get(cle(bloc, sl, nom
 
 function appliquerReglesPrompt() {
     const etat = etatPrompt();
-    const divs = [...document.querySelectorAll("#blocs-prompt .sous-liste")];
+    const divs = [...document.querySelectorAll("#blocs-prompt .sous-liste[data-bloc]")];
     // Retirer une valeur peut en libérer ou en masquer d'autres (motif de tatouage…) : on recommence jusqu'à stabilité.
     for (let passe = 0, change = true; change && passe < 5; passe++) {
         change = false;
@@ -312,6 +385,7 @@ function tirer(div) {
 }
 
 function planifierAssemblage() {
+    garderBrouillon();
     clearTimeout(minuteurPrompt);
     minuteurPrompt = setTimeout(assemblerPrompt, 200);
 }
@@ -361,8 +435,8 @@ async function assemblerPrompt() {
     mots.textContent = `${r.mots} mots${r.mots_max ? ` / ${r.mots_max} conseillés` : ""}`;
     mots.classList.toggle("ko", Boolean(r.mots_max) && r.mots > r.mots_max);
     const alertes = [...retraitsPrompt.map((x) => `Retiré : ${x}`), ...r.alertes];
-    if (etat.precisions.trim() && !traductionValide(etat)) alertes.push("Précisions : traduites par Llama à l'envoi");
-    if (r.video && etat.action.trim() && !traductionActionValide(etat)) alertes.push("Action : traduite par Llama à l'envoi");
+    if (etat.precisions.trim() && !traductionValide(etat)) alertes.push("Précisions : traduites par le LLM à l’envoi");
+    if (r.video && etat.action.trim() && !traductionActionValide(etat)) alertes.push("Action : traduite par le LLM à l’envoi");
     retraitsPrompt = [];
     document.getElementById("alertes-prompt").innerHTML = alertes.map((a) => `<li>${echapper(a)}</li>`).join("");
     // La version peaufinée ne vaut que pour le prompt dont elle est partie.
@@ -399,14 +473,14 @@ async function traduireSiBesoin(statut) {
     const etat = etatPrompt();
     const source = etat.precisions.trim();
     if (source && !traductionValide(etat)) {
-        statut("Llama traduit les précisions… (le premier appel charge le modèle)");
+        statut("Le LLM traduit les précisions… (le premier appel charge le modèle)");
         const r = await api("POST", "/api/prompt/traduire", { texte: source, llm: llmPrompt() });
         etat.traduction = { source, texte: r.texte };
         statut("");
     }
     const action = etat.action.trim();
     if (cibleVideo() && action && !traductionActionValide(etat)) {
-        statut("Llama traduit l'action… (le premier appel charge le modèle)");
+        statut("Le LLM traduit l’action… (le premier appel charge le modèle)");
         const r = await api("POST", "/api/prompt/traduire", { texte: action, llm: llmPrompt() });
         etat.traductionAction = { source: action, texte: r.texte };
         statut("");
@@ -614,10 +688,27 @@ document.getElementById("etiquettes-prompt").addEventListener("click", (e) => {
 });
 
 document.getElementById("workflow-prompt").addEventListener("change", () => {
-    document.getElementById("llm-prompt").value = llmDuWorkflow(document.getElementById("workflow-prompt").value);
+    ciblesParForme[cibleVideo() ? "video" : "image"] = ciblePrompt();
+    document.getElementById("llm-prompt").value = llmDuWorkflow(ciblePrompt());
     majCible();
     planifierAssemblage();
 });
+
+document.querySelectorAll('input[name="forme-scenario"]').forEach((radio) => radio.addEventListener("change", async () => {
+    formeScenario = radio.value;
+    peaufinage = null;
+    document.getElementById("peaufine-prompt").hidden = true;
+    await chargerModelesPrompt();  // Image : modèles d'image ; Clip et Séquence : modèles vidéo
+    if (formeScenario === "sequence") choisirOnglet("histoire");
+    planifierAssemblage();
+}));
+
+document.querySelector(".onglets-scenario").addEventListener("click", (e) => {
+    const bouton = e.target.closest(".onglet-scenario");
+    if (bouton) choisirOnglet(bouton.dataset.ongletScenario);
+});
+
+document.getElementById("llm-prompt").addEventListener("change", garderBrouillon);
 
 document.getElementById("effacer-prompt").addEventListener("click", () => {
     delete etatsPrompt[sujetPrompt];

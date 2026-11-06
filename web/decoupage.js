@@ -1,6 +1,6 @@
-// Scénario, mode Séquence (cible vidéo) : un synopsis, des plans (type, durée, note), une image de référence
-// facultative ; Llama écrit le prompt de chaque plan en une fois (app/sequences.decouper), puis la séquence
-// est créée dans le Montage, prête à tourner. Les listes du Scénario donnent le personnage et le décor.
+// Scénario, forme Séquence (onglet Histoire) : un synopsis, des plans (type, durée, note), une image de référence
+// facultative ; le LLM écrit le prompt de chaque plan en une fois (app/sequences.decouper), puis la séquence
+// est créée dans le Montage, prête à tourner. Les onglets Sujet et Décor donnent le personnage et le lieu.
 
 const TYPES_DEPART = [["texte", "✍️ Départ du texte"], ["rush", "🖼️ Départ de la référence"]];
 const TYPES_SUITE = [["prolonger", "↪ Prolonger"], ["couper", "✂ Couper"], ["transition", "🌀 Transition"]];
@@ -12,28 +12,24 @@ const NOTES_TYPES = {
     transition: "où la caméra arrive (facultatif)",
 };
 
-let formeVideo = "clip";
 const decoupage = { reference: null, synopsis: "", contrainte: "", plans: [], resultat: null, perime: false };
 let decoupagePret = false;
 
-const enSequence = () => cibleVideo() && formeVideo === "sequence";
+const enSequence = () => formeScenario === "sequence";
 
 function majForme() {
     document.getElementById("vue-scenario").classList.toggle("forme-sequence", enSequence());
     if (enSequence()) preparerDecoupage();
 }
 
-document.querySelectorAll('input[name="forme-video"]').forEach((radio) => radio.addEventListener("change", () => {
-    formeVideo = radio.value;
-    majForme();
-}));
-
 function preparerDecoupage() {
     if (!decoupagePret) {
         decoupagePret = true;
         const max = optionsPlateau.video.sequence.plans_max;
         remplirSelect("nombre-plans-scenario", Array.from({ length: max - 1 }, (_, i) => [String(i + 2), String(i + 2)]), "3");
-        decoupage.plans = [nouveauPlanDecoupage(0), nouveauPlanDecoupage(1, "prolonger"), nouveauPlanDecoupage(2)];
+        if (decoupage.plans.length < 2) {  // sinon : les plans du brouillon repris
+            decoupage.plans = [nouveauPlanDecoupage(0), nouveauPlanDecoupage(1, "prolonger"), nouveauPlanDecoupage(2)];
+        }
     }
     rendreReference();
     rendrePlansDecoupage();
@@ -47,6 +43,7 @@ const nouveauPlanDecoupage = (k, enchainement) => ({
 
 // Le réglage a changé : le découpage affiché ne lui correspond plus (on le garde, il peut avoir été retouché).
 function perime() {
+    garderBrouillon();
     if (decoupage.resultat) {
         decoupage.perime = true;
         rendreResultat();
@@ -104,7 +101,7 @@ function rendreResultat() {
                 <strong>Plan ${k + 1}</strong>
                 <span class="discret">${echapper([...TYPES_DEPART, ...TYPES_SUITE].find(([v]) => v === p.enchainement)?.[1] ?? "")}
                     · ${p.duree} s</span>
-                <button type="button" class="petit" data-peaufiner title="Peaufiner ce plan avec Llama">✨</button>
+                <button type="button" class="petit" data-peaufiner title="Peaufiner ce plan avec le LLM">✨</button>
             </div>
             <input data-champ="idee" type="text" maxlength="1000" value="${echapper(p.idee)}" title="Résumé en français (affiché dans le Montage)">
             <textarea data-champ="prompt" rows="5">${echapper(p.prompt)}</textarea>
@@ -187,7 +184,7 @@ document.getElementById("decouper-scenario").addEventListener("click", () => {
     const bouton = document.getElementById("decouper-scenario");
     bouton.disabled = true;
     avecLlama(async (statut) => {
-        statut("Llama découpe la séquence… (le premier appel charge le modèle)");
+        statut("Le LLM découpe la séquence… (le premier appel charge le modèle)");
         const etat = etatPrompt();
         const choix = Object.fromEntries(Object.entries(etat.choix).filter(([bloc]) =>
             !structurePrompt.blocs.find((b) => b.id === bloc)?.video));  // le Plan d'un clip seul ne compte pas ici
@@ -219,7 +216,7 @@ resultatDecoupage.addEventListener("click", (e) => {
     const p = decoupage.resultat.plans[Number(li.dataset.plan)];
     e.target.disabled = true;
     avecLlama(async (statut) => {
-        statut(`Llama peaufine le plan ${Number(li.dataset.plan) + 1}…`);
+        statut(`Le LLM peaufine le plan ${Number(li.dataset.plan) + 1}…`);
         const r = await api("POST", "/api/prompt/peaufiner",
                             { prompt: p.prompt, llm: llmPrompt(), workflow: ciblePrompt(), duree: p.duree });
         p.prompt = r.prompt;

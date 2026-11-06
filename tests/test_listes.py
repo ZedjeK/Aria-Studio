@@ -38,6 +38,22 @@ class Lecture(unittest.TestCase):
         groupes = [g["nom"] for g in listes.structure(P)["blocs"][0]["groupes"]]
         self.assertEqual(groupes, ["Identité", "Corps", "Visage", "Cheveux", "Tenue", "Attitude"])
 
+    def test_onglets_du_scenario(self):
+        """Sujet, Décor et ambiance, Mise en scène : chaque accordéon a son onglet, et aucun n'est perdu."""
+        for sujet in listes.SUJETS:
+            for b in listes.structure(sujet)["blocs"]:
+                for g in b["groupes"]:
+                    self.assertIn(g["onglet"], ("sujet", "decor", "scene"), (sujet, b["id"], g["nom"]))
+        par_onglet = {}
+        for b in listes.structure(P)["blocs"]:
+            for g in b["groupes"]:
+                par_onglet.setdefault(g["onglet"], []).append(g["nom"])
+        self.assertEqual(par_onglet["sujet"], ["Identité", "Corps", "Visage", "Cheveux", "Tenue"])
+        self.assertEqual(par_onglet["decor"], ["Lieu et moment", "Ambiance", "Style", "Lumière"])
+        self.assertEqual(par_onglet["scene"], ["Attitude", "Cadrage", "Caméra", "Voix", "Son"])
+        lieu = {g["onglet"] for b in listes.structure("lieu")["blocs"] if b["id"] == "lieu" for g in b["groupes"]}
+        self.assertEqual(lieu, {"decor"})  # « Aucun sujet » : le lieu se décrit dans le Décor
+
     def test_pas_de_sous_liste_lieu_pour_un_sujet_lieu(self):
         scene = next(b for b in listes.structure("lieu")["blocs"] if b["id"] == M)
         self.assertNotIn("Lieu", [sl["nom"] for g in scene["groupes"] for sl in g["sous_listes"]])

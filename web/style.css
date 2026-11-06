@@ -1905,6 +1905,64 @@ button.onglet-casting.actif {
     display: none !important;
 }
 
+/* Scénario : barre fixe (forme, modèle cible), onglets, volets. */
+.barre-scenario {
+    padding-bottom: 0;
+}
+
+.formes-scenario {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-right: auto;
+}
+
+.onglets-scenario {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 12px;
+    border-bottom: 1px solid var(--bord);
+}
+
+button.onglet-scenario {
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--discret);
+    padding: 8px 14px;
+}
+
+button.onglet-scenario.actif {
+    border-bottom-color: var(--neon);
+    background: none;
+    color: var(--texte);
+}
+
+.aide-volet {
+    margin: 0 0 12px;
+}
+
+.volet-scenario .sujets {
+    margin-bottom: 12px;
+}
+
+.llm-scenario {
+    align-items: flex-end;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.llm-scenario label {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    color: var(--discret);
+}
+
 .forme-video {
     align-items: center;
     gap: 12px;

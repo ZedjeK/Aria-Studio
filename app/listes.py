@@ -48,8 +48,24 @@ GROUPES = {
         "Tenue": ["Style vestimentaire", "Haut", "Bas", "Chaussures", "Tenue intime", "Accessoires", "Maquillage"],
         "Attitude": ["Pose", "Action"],
     },
+    "creature": {
+        "Apparence": ["Type", "Taille", "Morphologie", "Revêtement", "Couleurs", "Yeux", "Signe distinctif"],
+        "Attitude": ["Attitude", "Action"],
+    },
+    "mise-en-scene": {"Lieu et moment": ["Lieu", "Moment", "Saison"], "Ambiance": ["Ambiance"]},
+    "commun": {"Style": ["Style", "Palette", "Finition"], "Lumière": ["Lumière"],
+               "Cadrage": ["Cadrage", "Angle de vue", "Objectif"]},
     PLAN: {"Caméra": ["Caméra"], "Voix": ["Langue", "Ton"], "Son": ["Ambiance sonore", "Musique"]},
 }
+
+# Onglets du Scénario : 👤 Sujet (par défaut), 🏞️ Décor et ambiance, 🎥 Mise en scène.
+ONGLETS = {("personnage", "Attitude"): "scene", ("creature", "Attitude"): "scene", ("commun", "Cadrage"): "scene",
+           ("commun", "Style"): "decor", ("commun", "Lumière"): "decor", ("commun", "Autres"): "decor"}
+ONGLETS_BLOCS = {"lieu": "decor", "mise-en-scene": "decor", "commun": "decor", PLAN: "scene"}
+
+
+def onglet(id_bloc: str, groupe: str) -> str:
+    return ONGLETS.get((id_bloc, groupe)) or ONGLETS_BLOCS.get(id_bloc, "sujet")
 # Sous-liste proposée seulement si une autre sous-liste a une valeur contenant ce texte.
 CONDITIONS = {("personnage", "Motif de tatouage"): ("Signe particulier", "tatou")}
 VETEMENTS = {"Haut", "Bas", "Chaussures", "Tenue intime"}  # réunis en « wearing … »
@@ -305,7 +321,8 @@ def structure(sujet: str) -> dict:
             "id": id_bloc,
             "titre": bloc.titre,
             "video": id_bloc == PLAN,
-            "groupes": [{"nom": nom, "sous_listes": [public(sous_listes[n]) for n in noms]}
+            "groupes": [{"nom": nom, "onglet": onglet(id_bloc, nom),
+                         "sous_listes": [public(sous_listes[n]) for n in noms]}
                         for nom, noms in groupes.items() if noms],
         })
         incompatibilites += [[[id_bloc, *g], [id_bloc, *d]] for g, d in bloc.incompatibilites
