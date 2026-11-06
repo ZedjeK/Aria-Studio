@@ -52,7 +52,7 @@ class Montage(unittest.TestCase):
 
     def test_prompt_tourne_tel_quel_sans_llm(self):
         args = self.tourner(prompt="The cat stretches. ", mode="animer", source="rush1")
-        self.assertEqual((args[1], args[2], args[3], args[4]), ("The cat stretches.", None, "animer", "rush1"))
+        self.assertEqual((args[1], args[2], args[3]), ("The cat stretches. ", "animer", "rush1"))
 
     def test_prompt_vide_refuse(self):
         with self.assertRaises(HTTPException) as e:

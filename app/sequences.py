@@ -55,8 +55,9 @@ SURCOUT_SEQUENCE = 1.4
 # en 12 qu'en 8 steps. Les plans avec une réplique montent à 12 steps ; mesuré +17 % de temps sur un plan.
 STEPS_PAROLE = 12
 SURCOUT_PAROLE = 1.17
-# Ce qui, s'il change, oblige à retourner le plan (et ceux qui en dépendent).
-CONTENU_PLAN = ("idee", "prompt", "duree", "enchainement", "rush", "seed", "ambiance")
+# Ce qui, s'il change, oblige à retourner le plan (et ceux qui en dépendent). Le résumé (idee) et l'ancienne case
+# « suit l'ambiance » ne sont plus tournés : le plan tourne son prompt tel quel.
+CONTENU_PLAN = ("prompt", "duree", "enchainement", "rush", "seed")
 CONTENU_SEQUENCE = ("qualite", "format", "casting", "modele")  # un autre checkpoint : des plans qui ne se ressemblent plus
 
 
@@ -359,7 +360,7 @@ def modifier(id_sequence: str, donnees: dict) -> dict:
     avant = {p["id"]: p for p in ancienne["plans"]}
     for p in s["plans"]:
         a = avant.get(p["id"])
-        if a is None or tout_change or any(p[c] != a.get(c, True if c == "ambiance" else None) for c in CONTENU_PLAN):
+        if a is None or tout_change or any(p[c] != a.get(c) for c in CONTENU_PLAN):
             p.update(clip=a["clip"] if a else None, prompt_final=None, a_jour=False)
         else:
             p.update(clip=a["clip"], prompt_final=a["prompt_final"], a_jour=a["a_jour"])

@@ -543,29 +543,10 @@ def source_banc(id_banc: str, demande: DemandeImage):
     return _modifier_banc(id_banc, lambda: casting.utiliser_comme_source(id_banc, demande.cle, demande.fichier))
 
 
-class DemandeReecriture(BaseModel):
-    idee: str
-    modele: str | None = None
-
-
 @app.get("/api/llm/modeles")
 def modeles_llm():
     """Tous les GGUF de modeles/llm (favoris d'abord), et celui présélectionné."""
     return {"defaut": modeles.llm_defaut(), "choix": [{**m, "present": True} for m in plateau.llm_au_choix()]}
-
-
-@app.post("/api/prompt/reecrire")
-async def reecrire_prompt(demande: DemandeReecriture):
-    if banc_actif and banc_actif.etat in ("attente", "en_cours"):
-        raise HTTPException(409, "Un banc est en cours")
-    if demande.modele and demande.modele not in modeles.llm_disponibles():
-        raise HTTPException(400, f"GGUF absent de modeles/llm : {demande.modele}")
-    try:
-        return await prompt.reecrire(orchestrateur, demande.idee, demande.modele)
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except ErreurLlama as e:
-        raise HTTPException(500, str(e))
 
 
 # Onglet Prompt : listes guidées
@@ -987,7 +968,7 @@ def tourner_clip(d: DemandeClip):
     if not d.prompt.strip():
         raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
     return _commander(lambda: plateau_.commander_clip(
-        d.idee or d.prompt, d.prompt.strip(), None, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
+        d.idee or d.prompt, d.prompt, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
         rushes.valider_dossier(d.dossier), d.modele))
 
 

@@ -37,7 +37,7 @@ class Base(unittest.TestCase):
         return plateau.enregistrer(PNG, {"type": "creation", "idee": idee, "prompt": prompt_})
 
     def clip(self, **options):
-        valeurs = dict(idee="x", prompt_force="A slow push-in.", llm=None, mode="texte", source=None, qualite="compromis",
+        valeurs = dict(idee="x", prompt_clip="A slow push-in.", mode="texte", source=None, qualite="compromis",
                        duree=5, format="16:9 (Widescreen)", seed=None, nombre=1)
         valeurs.update(options)
         return self.plateau.commander_clip(**valeurs)
@@ -60,10 +60,10 @@ class Commandes(Base):
     def test_as18_avec_le_rush_anime(self):
         ado = self.rush("une adolescente de 15 ans", "A teenage girl, 15 years old")
         with self.assertRaises(ErreurSecurite):
-            self.clip(mode="animer", source=ado, prompt_force="She slowly takes off her clothes, naked.")
-        self.clip(mode="animer", source=ado, prompt_force="She waves and smiles at the camera.")
+            self.clip(mode="animer", source=ado, prompt_clip="She slowly takes off her clothes, naked.")
+        self.clip(mode="animer", source=ado, prompt_clip="She waves and smiles at the camera.")
         with self.assertRaises(ErreurSecurite):
-            self.clip(prompt_force="A 12-year-old girl in lingerie.")
+            self.clip(prompt_clip="A 12-year-old girl in lingerie.")
 
     def test_qualites_appliquees_au_graphe(self):
         wf = workflows.obtenir("minimax_h3_t2v")

@@ -1,6 +1,6 @@
 // Casting : lancement des bancs et comparaison à l'aveugle.
 
-const NOMS_TACHES = { texte_vers_image: "Texte vers image", retouche: "Retouche", reecriture: "Réécriture (LLM)",
+const NOMS_TACHES = { texte_vers_image: "Texte vers image", retouche: "Retouche", reecriture: "Écriture (LLM)",
                       image_vers_video: "Image vers vidéo", texte_vers_video: "Texte vers vidéo" };
 const AVEC_SOURCE = ["retouche", "image_vers_video"];
 

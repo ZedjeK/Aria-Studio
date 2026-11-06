@@ -237,11 +237,13 @@ class Plateau:
             raise ErreurPlateau(f"{wf.fiche['nom']} accepte de 1 à {wf.accepte_references()} images de référence")
         return workflow
 
-    def commander_clip(self, idee: str, prompt_force: str | None, llm: str | None, mode: str,
-                       source: str | None, qualite: str, duree: int, format: str, seed: int | None,
-                       nombre: int, dossier: str | None = None, modele: str | None = None) -> Commande:
-        """Montage : un clip H3 (avec le son), en animant un rush ou à partir d'un texte.
-        `modele` : un checkpoint de la famille ; None = le modèle par défaut des réglages."""
+    def commander_clip(self, idee: str, prompt_clip: str, mode: str, source: str | None, qualite: str, duree: int,
+                       format: str, seed: int | None, nombre: int, dossier: str | None = None,
+                       modele: str | None = None) -> Commande:
+        """Montage : un clip H3 (avec le son), en animant un rush ou à partir d'un texte. Le prompt est tourné tel
+        quel : il s'écrit au Scénario. `modele` : un checkpoint de la famille ; None = le défaut des réglages."""
+        if not prompt_clip.strip():
+            raise ErreurPlateau("Écris le prompt du clip, ou passe par le ✍️ Scénario")
         if mode not in MODES_VIDEO:
             raise ErreurPlateau(f"Mode inconnu : {mode}")
         if qualite not in QUALITES_VIDEO:
@@ -260,15 +262,9 @@ class Plateau:
             raise ErreurPlateau(f"Workflow vidéo incomplet : {workflow}")
         self._valider_modele(wf, modele)
         textes = textes_origine([source] if mode == "animer" else [])
-        if prompt_force is None:
-            if not idee.strip():
-                raise ErreurPlateau("Écris ton idée")
-            llm = self._valider_llm(llm, workflow)
-            securite.verifier(idee, *textes)
-        else:
-            securite.verifier(idee, prompt_force, *textes)
+        securite.verifier(idee, prompt_clip, *textes)
         return self._mettre_en_file(Commande(
-            idee, prompt_force, None if prompt_force is not None else llm, workflow, format, seed, nombre,
+            idee, prompt_clip.strip(), None, workflow, format, seed, nombre,
             source if mode == "animer" else None, modele, type="clip", mode_video=mode, qualite=qualite,
             duree=duree, textes_origine=textes, dossier=dossier))
 
@@ -529,15 +525,8 @@ class Plateau:
         }))
 
     async def _tourner(self, c: Commande):
-        """Montage : réécriture (consigne vidéo), puis un clip MP4 + sa vignette par seed."""
-        debut = time.perf_counter()
-        if c.prompt is None:
-            c.etape = "Réécriture du prompt"
-            c.prompt = (await prompt.reecrire(self.orchestrateur, c.idee, c.llm, video=c.mode_video,
-                                              regles=workflows.regles_prompt(c.workflow), duree=c.duree,
-                                              vues=[vue(c.parent)] if c.mode_video == "animer" else None))["prompt"]
+        """Montage : un clip MP4 + sa vignette par seed, sur le prompt écrit au Scénario (tel quel)."""
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
-        duree_reecriture = time.perf_counter() - debut
 
         wf = workflows.obtenir(c.workflow)
         q = QUALITES_VIDEO[c.qualite]
@@ -579,7 +568,7 @@ class Plateau:
                 "seed": seed,
                 "parent": c.parent,
                 **({"dossier": c.dossier} if c.dossier else {}),
-                "duree_s": round(time.perf_counter() - debut_clip + (duree_reecriture if i == 0 else 0), 2),
+                "duree_s": round(time.perf_counter() - debut_clip, 2),
             }))
 
     async def _creer(self, c: Commande):

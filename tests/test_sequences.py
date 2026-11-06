@@ -96,15 +96,14 @@ class Reecriture(unittest.TestCase):
                          'She says: "Moteurs au vert." A click click. Audio')
 
 
-class Ambiance(Base):
-    def test_decocher_l_ambiance_retourne_le_plan(self):
+class AJour(Base):
+    def test_seul_ce_qui_est_tourne_fait_retourner(self):
+        """Le résumé d'un plan et sa case « suit l'ambiance » ne sont plus tournés : son prompt, si."""
         s = self.tout_a_jour(sequences.lire(self.creer()["id"]))
-        for p in s["plans"]:
-            p.pop("ambiance")  # séquence enregistrée avant la case : « suit l'ambiance » par défaut
-        sequences._ecrire(s)
-        self.assertEqual(sequences.modifier(s["id"], s)["a_tourner"], [])
         plans = [dict(p) for p in s["plans"]]
-        plans[2]["ambiance"] = False
+        plans[1]["idee"], plans[2]["ambiance"] = "un autre résumé", False
+        self.assertEqual(sequences.modifier(s["id"], {**s, "plans": plans})["a_tourner"], [])
+        plans[2]["prompt"] = "Close-up in the cockpit, she flips two switches."
         self.assertEqual(sequences.modifier(s["id"], {**s, "plans": plans})["a_tourner"], [2, 3])
 
 
@@ -157,7 +156,7 @@ class PlansATourner(Base):
         s = self.tout_a_jour(sequences.lire(self.creer()["id"]))
         self.assertEqual(sequences.public(s)["a_tourner"], [])
         plans = [dict(p) for p in s["plans"]]
-        plans[2]["idee"] = "gros plan, elle sourit"
+        plans[2]["prompt"] = "Close-up, she smiles."
         r = sequences.modifier(s["id"], {**s, "plans": plans})
         self.assertEqual(r["a_tourner"], [2, 3])  # la transition part du plan 3
         self.assertTrue(r["plans"][2]["clip"])  # l'ancien clip reste connu (corbeille au retournage)

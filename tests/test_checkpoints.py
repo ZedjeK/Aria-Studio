@@ -124,11 +124,11 @@ class ReglagesParCheckpoint(Base):
 class Montage(Base):
     def test_clip_avec_un_checkpoint(self):
         clip = plateau.enregistrer(png(), {"type": "creation", "idee": "une pilote"})
-        c = Plateau(orchestrateur=None).commander_clip("elle sourit", "She smiles.", None, "animer", clip,
+        c = Plateau(orchestrateur=None).commander_clip("elle sourit", "She smiles.", "animer", clip,
                                                         "rapide", 5, "16:9 (Widescreen)", None, 1, modele=DASIWA)
         self.assertEqual(c.modele, DASIWA)
         with self.assertRaisesRegex(ErreurPlateau, "Modèle absent"):
-            Plateau(orchestrateur=None).commander_clip("x", "x", None, "animer", clip, "rapide", 5,
+            Plateau(orchestrateur=None).commander_clip("x", "x", "animer", clip, "rapide", 5,
                                                         "16:9 (Widescreen)", None, 1, modele="inconnu.safetensors")
 
     def test_options(self):
