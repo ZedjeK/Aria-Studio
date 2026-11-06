@@ -131,9 +131,10 @@ class FicheEcartee(unittest.TestCase):
 class ReglesDuProfil(unittest.TestCase):
     def test_ajoutees_a_la_consigne_avant_la_clause(self):
         texte = prompt.consigne("reecriture", None, 120, ["Use tags, comma separated.", "No camera terms."])
-        regles = texte.index("Rules of the target model:\n- Use tags, comma separated.\n- No camera terms.")
+        regles = texte.index(f"{prompt.ENTETE_REGLES}\n- Use tags, comma separated.\n- No camera terms.")
         self.assertLess(regles, texte.index(prompt.CLAUSE_MINEURS))  # la clause verrouillée reste la dernière
-        self.assertNotIn("Rules of the target model", prompt.consigne("reecriture", None, 120))
+        self.assertNotIn(prompt.ENTETE_REGLES, prompt.consigne("reecriture", None, 120))
+        self.assertIn("the user wins", prompt.ENTETE_REGLES)  # elles ne remplissent que ce qui reste ouvert
         self.assertIn("No camera terms.", prompt.messages("une pomme", None, ["No camera terms."])[0]["content"])
 
     def test_lues_dans_la_fiche_du_modele_cible(self):

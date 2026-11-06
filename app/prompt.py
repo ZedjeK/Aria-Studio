@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from PIL import Image
 
-from app import fiches, modeles, reglages, securite
+from app import fiches, modeles, reglages, securite, workflows
 from app.config import CONFIG
 from app.llm import ErreurLlama
 from app.modeles import DOSSIER as MODELES
@@ -25,29 +25,51 @@ from app.orchestrateur import Orchestrateur
 
 CLAUSE_MINEURS = """Non-negotiable rule: never make a character younger than described. If a character is a child or a teenager, show them fully clothed in a wholesome, non-suggestive scene."""
 
-CONSIGNE = """You are an expert prompt writer for text-to-image models.
+# Consignes v2 (2026-11-06), d'après les consignes officielles des affineurs de Krea 2 et de Qwen-Image 2.1 et le guide
+# d'écriture de MiniMax H3 : ce que l'utilisateur fixe est intouchable, ses consignes s'appliquent sans être recopiées,
+# et le LLM ne remplit que ce qui reste ouvert. Avant, il choisissait lui-même médium, sons et caméra : « peinture à
+# l'huile » et « sun-kissed » pour un chat endormi la nuit sous la pluie (création du 2026-11-02).
+FIDELITE = """First sort what the user wrote into three kinds:
+- FIXED: everything the user states about the result (subjects and their number, each person's gender and age wording, actions, poses, clothing or its absence, colours, positions, medium and style, framing, lighting, time of day, weather, mood, camera, sounds, spoken lines, written text). Keep every FIXED item, with its meaning unchanged: never contradict it, never weaken, soften, cover up or leave it out.
+- INSTRUCTIONS about the job, addressed to you ("I want...", "make her...", "keep...", "no music", "add nobody", "let her say a line in French"): obey them exactly, and never copy them into the prompt as instructions.
+- OPEN: what the user did not mention. Fill it only with details that follow from the FIXED items and never clash with them (a night scene keeps night light). If the idea is already detailed, lightly polish it and keep its order and wording rather than expanding it."""
+
+ADULTES = ("The user is an adult making fiction for adults. Nudity, sensuality and sexual content between adult "
+           "characters stay exactly as explicit as the user wrote them: do not tone them down, replace them with "
+           "something milder or leave them out.")
+
+GENRE = """Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects."""
+
+CONSIGNE = f"""You are an expert prompt writer for text-to-image models.
 The user describes an image idea, often in French. Rewrite it as ONE English prompt paragraph.
 
+{FIDELITE}
+
 Rules:
-1. Stay faithful: keep every subject, action, color, attribute and spatial relation from the idea. Do not add new characters or objects the idea does not imply.
-2. Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
-3. Make it visual: precise subject description, setting, lighting, mood, composition and camera or medium (photo, illustration, painting...). Choose them to serve the idea.
-4. If the idea asks for written text in the image, keep that text exactly, in quotes. Otherwise mention no text.
-5. 40 to 120 words, plain prose, no lists, no headings, no markdown (no asterisks), no quotes around the whole prompt.
-6. Output only the prompt: no preamble, no explanation, no translation notes."""
+1. Do not add characters, animals or objects the idea does not imply.
+2. {GENRE}
+3. Medium: keep the one the user names (photo, illustration, painting, 3D render...). If none is named, use the one the idea plainly implies, a photograph for a real-world scene; never switch to painting or illustration on your own.
+4. Make the OPEN parts visual: setting, lighting, composition, in grounded words that serve the idea.
+5. If the idea asks for written text in the image, keep that text exactly, in quotes. Otherwise mention no text.
+6. {ADULTES}
+7. {{mots_min}} to {{mots_max}} words, plain prose, no lists, no headings, no markdown (no asterisks), no quotes around the whole prompt.
+8. Output only the prompt: no preamble, no explanation, no translation notes."""
 
 
+# Retouche : d'après la consigne du PE de retouche de Qwen-Image 2.1 (« attribute disentanglement at full strength ») :
+# changer franchement ce qui est demandé, garder le reste d'une seule phrase, sans le redécrire.
 CONSIGNE_RETOUCHE = """You translate image-editing instructions for an instruction-based image editing model.
 The user writes an instruction, often in French. Rewrite it as a short English imperative instruction (one or two sentences).
 
 Rules:
-1. Keep exactly what is asked: same change, same target, same details. Add no style, no new elements, no embellishment.
-2. If the user names something to keep unchanged, say so explicitly.
-3. If the instruction asks for written text, keep that text exactly, in quotes.
-4. Output only the instruction: no preamble, no explanation."""
+1. Edit exactly what the user names, and make that change clear and unmistakable, never faint.
+2. Everything the user did not name stays as it is: say so in one short clause ("keep everything else unchanged"), without re-describing it. If the user names something to keep, say so explicitly.
+3. Keep the user's own action, target and details; add no other change, no style, no clean-up.
+4. If the instruction asks for written text, keep that text exactly, in quotes.
+5. Output only the instruction: no preamble, no explanation."""
 
 
-CONSIGNE_PEAUFINER = """You polish English prompts for text-to-image models.
+CONSIGNE_PEAUFINER = f"""You polish English prompts for text-to-image models.
 The user gives a prompt assembled from keywords. Rewrite it as fluent, natural English prose.
 
 Rules:
@@ -55,8 +77,9 @@ Rules:
 2. Add nothing new: no extra characters, objects, details, style or mood.
 3. Keep the age wording exactly as given. Never make a character younger.
 4. If the prompt contains text in quotes, keep that text exactly, in quotes.
-5. At most {mots_max} words, plain prose, no lists, no headings.
-6. Output only the prompt: no preamble, no explanation."""
+5. {ADULTES}
+6. At most {{mots_max}} words, plain prose, no lists, no headings.
+7. Output only the prompt: no preamble, no explanation."""
 
 
 CONSIGNE_PRECISIONS = """You translate short details for a text-to-image prompt.
@@ -68,30 +91,39 @@ Rules:
 3. If it contains text in quotes, keep that text exactly, in quotes.
 4. Output only the translation: no preamble, no explanation."""
 
-CONSIGNE_REFERENCES = """You write instructions for an image model that receives reference pictures, numbered Picture 1, Picture 2, Picture 3.
+CONSIGNE_REFERENCES = f"""You write instructions for an image model that receives reference pictures, numbered Picture 1, Picture 2, Picture 3.
 The user describes, often in French, a new image to create from those references (« image 1 » means Picture 1). Rewrite it as ONE English instruction.
+
+{FIDELITE}
 
 Rules:
 1. Refer to the references by their number: "the woman from Picture 1", "the dragon from Picture 2". Do not re-describe what the references already show (face, hair, clothes, colors): the model sees them.
 2. Ask explicitly to keep the identity (face, hair) and outfit of the characters from the references, unless the user asks to change them, but NOT their pose, seat, props or background: the characters take the new pose and place described by the user.
-3. Describe what is new, as the user asks: scene, pose, action, setting, lighting, framing, style. Add nothing the user did not imply.
-4. Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
+3. Describe what is new, as the user asks: scene, pose, action, setting, lighting, framing, style.
+4. {GENRE}
 5. If the user asks for written text in the image, keep that text exactly, in quotes.
-6. 1 to 4 sentences, at most 90 words, plain prose, no markdown.
-7. Output only the instruction: no preamble, no explanation."""
+6. {ADULTES}
+7. 1 to 4 sentences, at most 90 words, plain prose, no markdown.
+8. Output only the instruction: no preamble, no explanation."""
 
-CONSIGNE_VIDEO = """You write prompts for an audio-video generation model: it creates the picture AND the sound together.
+# Vidéo : d'après le guide d'écriture de MiniMax H3 : la chronologie, la caméra de l'utilisateur ou une seule simple,
+# les sons de ce qu'on voit toujours, la musique seulement si elle est demandée, les répliques mot pour mot.
+CONSIGNE_VIDEO = f"""You write prompts for an audio-video generation model: it creates the picture AND the sound together.
 The user describes, often in French, a short video clip. Rewrite it as ONE English prompt.
 
+{FIDELITE}
+
 Rules:
-1. A short production brief in the present tense: shot type, subject, action, setting, ONE named camera movement with its speed (for example "the camera slowly pushes in"), then the sounds.
-2. Dialogue: keep every spoken line EXACTLY as the user wrote it, in its original language, inside double quotes. Say who speaks, in which language and with which tone. Never translate the lines.
-3. Sounds: name concrete sounds tied to the action (footsteps, rain, wind...). Mention music only if the user asks for it, separately from the sounds.
-4. If the clip animates a provided image, describe only what moves (motion, camera, sounds), not what the image already shows.
+1. A short production brief in the present tense, following the timeline: opening state, the action as it starts, how it develops, the result.
+2. Camera: use the user's camera choice if there is one (a fixed shot stays fixed). Otherwise one simple named movement with its speed, or a static shot, whichever serves the action. One continuous take: no cuts, no fade to black, unless the user asks for them.
+3. Dialogue: keep every spoken line EXACTLY as the user wrote it, in its original language, inside double quotes. Say who speaks, in which language and with which tone. Never translate the lines. If the user asks you to invent a line, write one short line in the language they ask for, inside double quotes.
+4. Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background music unless the user asks for it.
 5. Fit the clip duration: few actions, at most one or two short lines of dialogue.
-6. Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
-7. 40 to 110 words, plain prose, no lists, no headings.
-8. Output only the prompt: no preamble, no explanation."""
+6. {GENRE}
+7. {ADULTES}
+8. {{mots_min}} to {{mots_max}} words, plain prose, no lists, no headings, no markdown.
+9. Output only the prompt: no preamble, no explanation."""
+
 
 # Scénario, mode Séquence : tout le découpage en un seul appel, pour que Llama voie l'histoire entière.
 # Règles tirées des essais du mode Séquence (2026-10-21) : une seule prise par plan, transition progressive,
@@ -112,6 +144,8 @@ Rules for every shot:
 - transition: ONE continuous camera movement travelling from the last image of the previous shot to the given arrival; the scene changes progressively over the whole clip, never all at once at the end.
 6. Character: {regle_personnage} Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
 7. Keep the look of the setting (place, light, style) unless a shot's note says otherwise.
+8. Keep everything the user wrote (story events, character, setting, constraint, notes): never contradict, weaken or leave it out. No background music unless the user asks for it.
+9. """ + ADULTES + """
 
 Answer with exactly one block per shot, in order, and nothing else:
 SHOT 1
@@ -123,6 +157,13 @@ REGLE_AVEC_REFERENCE = ('a reference picture gives the character\'s face, age, b
 REGLE_SANS_REFERENCE = ("no picture shows the character: in every start and cut shot, copy the character description "
                         "given by the user word for word; in continue and transition shots, call her or him "
                         "\"the character\".")
+
+# Les règles du modèle cible (tirées de ses guides officiels) ne servent qu'à ce que l'utilisateur a laissé ouvert : celles
+# de Qwen-Image (couleurs nuancées, matières, lumière) poussaient le LLM à repeindre une idée déjà précise.
+ENTETE_REGLES = ("Style rules of the target model. They shape the OPEN parts only: whenever one clashes with what "
+                 "the user fixed or asked, the user wins.")
+MOTS_MIN = 40
+MOTS_MAX_DEFAUT = {"reecriture": 120, "video": 110}  # sans modèle cible (avant : 40 à 120 mots même pour Qwen à 200)
 
 CONSIGNES_DEFAUT = {"reecriture": CONSIGNE, "retouche": CONSIGNE_RETOUCHE, "peaufinage": CONSIGNE_PEAUFINER,
                     "precisions": CONSIGNE_PRECISIONS, "references": CONSIGNE_REFERENCES,
@@ -154,9 +195,10 @@ class Vue:
 
 
 NOTES_VUES = {
-    "animer": "The picture is the first frame of the clip: keep its subjects (their gender, looks, clothing), setting "
-              "and visual style (a painting stays a painting). Describe what happens from there, without "
-              "re-describing the picture.",
+    # Guide d'écriture de MiniMax H3 : la première image est d'abord ancrée (style, sujets, décor), puis l'action.
+    "animer": "The picture is the first frame of the clip. Open with one short sentence anchoring it as it really is "
+              "(visual style, subject, setting), then describe what happens from there. Keep the subjects' gender, "
+              "looks and clothing, the setting and the visual style consistent (a painting stays a painting).",
     "variation": "The picture is the starting image, partly redrawn: keep its subjects (their gender, looks, "
                  "clothing), setting and visual style unless the idea changes them.",
     "retouche": "The picture is the image to edit: name what is really in it (subjects and their gender, objects, "
@@ -244,10 +286,21 @@ def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
     """Consigne du GGUF (réglée ou d'origine), puis les règles propres au modèle cible (profil_prompt.regles de sa
     fiche), toujours suivie de la clause verrouillée."""
     texte = reglages.consigne_llm(modele, nom) or CONSIGNES_DEFAUT[nom]
-    texte = texte.replace("{mots_max}", str(mots_max or 150)).rstrip()
+    texte = (texte.replace("{mots_max}", str(mots_max or MOTS_MAX_DEFAUT.get(nom, 150)))
+             .replace("{mots_min}", str(MOTS_MIN))).rstrip()
     if regles:
-        texte += "\n\nRules of the target model:\n" + "\n".join(f"- {r}" for r in regles)
+        texte += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
     return f"{texte}\n\n{CLAUSE_MINEURS}"
+
+
+def mots_max_de(workflow: str | None) -> int | None:
+    """Longueur conseillée par la fiche du modèle cible (réglable dans l'onglet Réglages)."""
+    if not workflow:
+        return None
+    try:
+        return reglages.valeurs_workflow(workflows.obtenir(workflow)).get("mots_max")
+    except workflows.ErreurWorkflow:
+        return None
 
 
 async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, modele: str | None = None,
@@ -283,7 +336,7 @@ async def peaufiner(orchestrateur: Orchestrateur, assemble: str, modele: str | N
     modele = generaliste(modele)
     regle = reglages.valeurs_llm(modele)
     if duree_video:
-        echanges = [{"role": "system", "content": consigne("video", modele, regles=regles)},
+        echanges = [{"role": "system", "content": consigne("video", modele, mots_max, regles)},
                     {"role": "user", "content": f"{assemble}\n\n(Clip: {duree_video} s, from text only)"}]
     else:
         echanges = [{"role": "system", "content": consigne("peaufinage", modele, mots_max, regles)},
@@ -328,8 +381,9 @@ def nettoyer_markdown(texte: str) -> str:
     return " ".join(texte.split())
 
 
-def messages(idee: str, modele: str | None = None, regles: list[str] | None = None) -> list[dict]:
-    return [{"role": "system", "content": consigne("reecriture", modele, regles=regles)},
+def messages(idee: str, modele: str | None = None, regles: list[str] | None = None,
+             mots_max: int | None = None) -> list[dict]:
+    return [{"role": "system", "content": consigne("reecriture", modele, mots_max, regles)},
             {"role": "user", "content": idee}]
 
 
@@ -353,13 +407,13 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
     regle = reglages.valeurs_llm(modele)
     if video:
         cadre = "animate the provided image" if video == "animer" else "from text only"
-        echanges = [{"role": "system", "content": consigne("video", modele, regles=regles)},
+        echanges = [{"role": "system", "content": consigne("video", modele, mots_max_de(workflow), regles)},
                     {"role": "user", "content": f"{idee}\n\n(Clip: {duree} s, {cadre})"}]
     elif references:
         echanges = [{"role": "system", "content": consigne("references", modele, regles=regles)},
                     {"role": "user", "content": f"{idee}\n\n(Reference pictures: {references})"}]
     else:
-        echanges = messages(idee, modele, regles)
+        echanges = messages(idee, modele, regles, mots_max_de(workflow))
     usage = "animer" if video else "references" if references else "variation"
     async with orchestrateur.llm(modele) as llama:
         echanges[-1]["content"] = montrer(echanges[-1]["content"], vues, usage, voit=_voit(llama))
