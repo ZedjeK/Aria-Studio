@@ -2704,3 +2704,11 @@ button.quitter-appli:hover {
     gap: 12px;
     margin: 8px 0;
 }
+
+/* Scénario : le choix du LLM en tête des onglets qui le font travailler. */
+.llm-onglet {
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+}

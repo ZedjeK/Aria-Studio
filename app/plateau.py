@@ -98,9 +98,12 @@ def llm_au_choix() -> list[dict]:
     favoris = {m["fichier"]: m["nom"] for m in CONFIG["llama"].get("modeles_au_choix", [])}
     presents = modeles.llm_disponibles()
     choix = [{"fichier": f, "nom": nom, "favori": True} for f, nom in favoris.items() if f in presents]
-    return choix + [{"fichier": f, "nom": (fiches.fiche_llm(f) or {}).get("nom") or f.removesuffix(".gguf"),
-                     "favori": False, "specialiste": bool(fiches.specialiste(f))}
-                    for f in presents if f not in favoris]
+    choix += [{"fichier": f, "nom": (fiches.fiche_llm(f) or {}).get("nom") or f.removesuffix(".gguf"),
+               "favori": False, "specialiste": bool(fiches.specialiste(f))}
+              for f in presents if f not in favoris]
+    for c in choix:  # 👁 au Scénario : il voit les images de référence (projecteur d'images)
+        c["vision"] = bool(reglages.projecteur_llm(c["fichier"])[0])
+    return choix
 
 
 _CHARGEMENT_RATE = re.compile(r"UNETLoader|CheckpointLoader|state_dict|size mismatch|unexpected key|missing key|"

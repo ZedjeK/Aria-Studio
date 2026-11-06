@@ -263,13 +263,7 @@ async function choisirLlm(idWorkflow, llm) {
     if (optionsPlateau) {
         await chargerOptionsPlateau();
         suivreLlmDuWorkflow();
-        const cible = document.getElementById("workflow-prompt");
-        const liste = document.getElementById("llm-prompt");
-        if (cible.value) {
-            liste.innerHTML = optionsPlateau.llm.choix.map((m) =>
-                `<option value="${echapper(m.fichier)}">${echapper(m.nom)}${m.favori ? " ★" : ""}</option>`).join("");
-            liste.value = llmDuWorkflow(cible.value);
-        }
+        if (document.getElementById("workflow-prompt").value) remplirLlms();  // Scénario : le LLM du modèle a changé
     }
     if (optionsMontage) optionsMontage.llm = (await api("GET", "/api/plateau/options")).llm;
 }

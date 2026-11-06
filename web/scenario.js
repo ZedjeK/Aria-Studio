@@ -46,7 +46,24 @@ const etatPrompt = () => (etatsPrompt[sujetPrompt] ??=
     { choix: {}, age: null, texte: "", precisions: "", traduction: null, action: "", traductionAction: null, replique: "",
       toutes: false, dialogue: false, avecMusique: false, musique: "", traductionMusique: null });
 const cle = (...morceaux) => morceaux.join("|");
-const llmPrompt = () => document.getElementById("llm-prompt").value || null;
+// Un LLM par onglet qui le fait travailler ; par défaut celui du modèle cible (onglet Modèles), sinon le défaut.
+const LLM_ONGLETS = { prompt: "llm-prompt", reference: "llm-reference", libre: "llm-libre", histoire: "llm-histoire" };
+const llmsChoisis = {};  // onglet → GGUF choisi à la main (gardé dans le brouillon)
+const llmPour = (onglet) => document.getElementById(LLM_ONGLETS[onglet]).value || null;
+const llmPrompt = () => llmPour("prompt");
+const nomLlm = (onglet) => document.getElementById(LLM_ONGLETS[onglet]).selectedOptions[0]?.textContent
+    .replace(/ [★👁]/g, "").trim() || "Le LLM";
+
+function remplirLlms() {
+    if (!optionsPlateau) return;
+    const defaut = llmDuWorkflow(ciblePrompt());
+    Object.entries(LLM_ONGLETS).forEach(([onglet, id]) => {
+        const voulu = llmsChoisis[onglet] ?? defaut;
+        document.getElementById(id).innerHTML = optionsPlateau.llm.choix.map((m) =>
+            `<option value="${echapper(m.fichier)}" ${m.fichier === voulu ? "selected" : ""}>${echapper(m.nom)}`
+            + `${m.favori ? " ★" : ""}${m.vision ? " 👁" : ""}</option>`).join("");
+    });
+}
 const ciblePrompt = () => document.getElementById("workflow-prompt").value || null;
 const cibleVideo = () => formeScenario !== "image";
 
@@ -95,10 +112,7 @@ async function chargerModelesPrompt() {
     ciblesParForme[cle_] = document.getElementById("workflow-prompt").value || null;
     remplirSelect("duree-prompt", optionsPlateau.video.durees.map((d) => [String(d), `${d} s`]),
                   document.getElementById("duree-prompt").value || "5");
-    const llm = document.getElementById("llm-prompt");
-    const gardeLlm = llm.value || llmBrouillon || llmDuWorkflow(ciblePrompt());
-    llm.innerHTML = optionsPlateau.llm.choix.map((m) =>
-        `<option value="${echapper(m.fichier)}" ${m.fichier === gardeLlm ? "selected" : ""}>${echapper(m.nom)}${m.favori ? " ★" : ""}</option>`).join("");
+    remplirLlms();
     majCible();
 }
 
@@ -129,13 +143,12 @@ function choisirOnglet(onglet) {
 
 // Brouillon : forme, cibles, choix de chaque sujet, histoire. Il revient à la prochaine ouverture d'Aria.
 let minuteurBrouillon = null;
-let llmBrouillon = null;
 
 function garderBrouillon() {
     clearTimeout(minuteurBrouillon);
     minuteurBrouillon = setTimeout(() => {
         const etat = { forme: formeScenario, sujet: sujetPrompt, onglet: ongletScenario, cibles: ciblesParForme,
-                       etats: etatsPrompt, llm: llmPrompt(), references: refsScenario, libre: libre.echanges,
+                       etats: etatsPrompt, llms: llmsChoisis, references: refsScenario, libre: libre.echanges,
                        sequence: { reference: decoupage.reference, synopsis: decoupage.synopsis,
                                    contrainte: decoupage.contrainte, plans: decoupage.plans,
                                    dialogue: decoupage.dialogue, repliques: decoupage.repliques,
@@ -169,7 +182,7 @@ function relireBrouillon() {
         libre.dernier = tours.length ? lireTour(tours[tours.length - 1].content) : null;
         rendreLibre();
     }
-    llmBrouillon = b.llm ?? null;
+    Object.assign(llmsChoisis, b.llms ?? (b.llm ? { prompt: b.llm } : {}));  // avant : un seul LLM
     const s = b.sequence ?? {};
     decoupage.reference = s.reference ?? null;
     decoupage.synopsis = s.synopsis ?? "";
@@ -583,14 +596,13 @@ function promptAEnvoyer() {
 // Avec une image de référence, le LLM voit les images et écrit le prompt qui s'en sert ; sans, il peaufine.
 document.getElementById("peaufiner-prompt").addEventListener("click", () => avecLlama(async (statut) => {
     await traduireSiBesoin(statut);
-    const select = document.getElementById("llm-prompt");
-    const nom = select.selectedOptions[0]?.textContent.trim() ?? "Le LLM";
     const source = assemblagePrompt.prompt;
     const duree = Number(document.getElementById("duree-prompt").value) || 5;
     const role = roleReference();
+    const nom = nomLlm(role ? "reference" : "prompt");
     statut(`${nom} ${role ? "regarde l'image et écrit" : "peaufine"}… (le premier appel charge le modèle)`);
     const r = role
-        ? await api("POST", "/api/prompt/ecrire", { prompt: source, role, images: imagesReference(), llm: llmPrompt(),
+        ? await api("POST", "/api/prompt/ecrire", { prompt: source, role, images: imagesReference(), llm: llmPour("reference"),
                                                    workflow: ciblePrompt(), duree })
         : await api("POST", "/api/prompt/peaufiner", { prompt: source, llm: llmPrompt(), workflow: ciblePrompt(), duree });
     peaufinage = { source };
@@ -748,7 +760,7 @@ document.getElementById("etiquettes-prompt").addEventListener("click", (e) => {
 
 document.getElementById("workflow-prompt").addEventListener("change", () => {
     ciblesParForme[tacheCible()[0]] = ciblePrompt();
-    document.getElementById("llm-prompt").value = llmDuWorkflow(ciblePrompt());
+    remplirLlms();  // ceux que tu n'as pas choisis suivent le LLM du modèle cible
     majCible();
     planifierAssemblage();
 });
@@ -767,7 +779,10 @@ document.querySelector(".onglets-scenario").addEventListener("click", (e) => {
     if (bouton) choisirOnglet(bouton.dataset.ongletScenario);
 });
 
-document.getElementById("llm-prompt").addEventListener("change", garderBrouillon);
+Object.entries(LLM_ONGLETS).forEach(([onglet, id]) => document.getElementById(id).addEventListener("change", (e) => {
+    llmsChoisis[onglet] = e.target.value;
+    garderBrouillon();
+}));
 
 document.getElementById("effacer-prompt").addEventListener("click", () => {
     delete etatsPrompt[sujetPrompt];

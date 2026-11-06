@@ -71,7 +71,7 @@ async function envoyerLibre(texte) {
     try {
         const r = await api("POST", "/api/prompt/libre", {
             echanges: libre.echanges, forme: formeScenario, workflow: ciblePrompt(), contexte: contexteLibre(),
-            images: imagesReference(), role: roleReference(), llm: llmPrompt(),
+            images: imagesReference(), role: roleReference(), llm: llmPour("libre"),
             duree: Number(document.getElementById("duree-prompt").value) || 5,
         });
         libre.echanges.push({ role: "assistant", content: r.brut });

@@ -463,6 +463,10 @@
             <div class="prompt-guide">
                 <section class="carte" id="blocs-prompt">
                     <div class="volet-scenario" data-volet-scenario="reference" hidden>
+                        <div class="ligne llm-onglet">
+                            <label>LLM <select id="llm-reference"></select></label>
+                            <span class="discret">Il écrit en voyant l'image : 👁 = il a sa vision (sinon, il lit la fiche de l'image).</span>
+                        </div>
                         <p id="aide-reference-scenario" class="discret aide-volet"></p>
                         <div class="ligne roles-reference" data-image-seule>
                             <label class="case"><input type="radio" name="role-reference" value="inspirer" checked> 🎭 S'inspirer</label>
@@ -534,6 +538,9 @@
                         <p class="discret aide-volet">Écris ton idée comme elle vient : le LLM te pose les questions qui
                             manquent, puis écrit le prompt avec toi. Ce que tu as fixé dans les autres onglets compte, et
                             il voit ton image de référence.</p>
+                        <div class="ligne llm-onglet">
+                            <label>LLM du chat <select id="llm-libre"></select></label>
+                        </div>
                         <div class="libre">
                             <div id="conversation-libre" class="conversation-libre"></div>
                             <aside class="fiche-libre">
@@ -558,6 +565,9 @@
                         <div id="sequence-scenario">
                             <p class="discret aide-volet">Le Sujet et le Décor donnent le personnage et le lieu, l'Image de référence
                                 son visage ; raconte l'histoire, choisis les plans, et le LLM écrit le prompt de chacun.</p>
+                            <div class="ligne llm-onglet">
+                                <label>LLM du découpage <select id="llm-histoire"></select></label>
+                            </div>
                             <div class="ligne synopsis-scenario">
                                 <textarea id="synopsis-scenario" rows="4" maxlength="2000"
                                           placeholder="L'histoire, du début à la fin, en français. Les répliques entre guillemets : elle lève les yeux et dit « On décolle ce soir. »"></textarea>
@@ -596,7 +606,7 @@
                     <p id="erreur-prompt" class="ko" hidden></p>
                     <div id="etiquettes-prompt" class="etiquettes"></div>
                     <div class="ligne llm-scenario">
-                        <label>LLM <select id="llm-prompt"></select></label>
+                        <label>LLM · peaufinage et traductions <select id="llm-prompt"></select></label>
                         <button id="peaufiner-prompt" type="button" data-clip-seul disabled>✨ Peaufiner</button>
                     </div>
                     <div id="decoupage-scenario" data-sequence-seule>

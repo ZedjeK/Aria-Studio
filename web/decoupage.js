@@ -210,7 +210,7 @@ document.getElementById("decouper-scenario").addEventListener("click", () => {
             !structurePrompt.blocs.find((b) => b.id === bloc)?.video));  // le Plan d'un clip seul ne compte pas ici
         const r = await api("POST", "/api/sequences/decouper", {
             synopsis: decoupage.synopsis, sujet: sujetPrompt, choix, age: etat.age,
-            plans: decoupage.plans, reference: decoupage.reference, contrainte: decoupage.contrainte, llm: llmPrompt(),
+            plans: decoupage.plans, reference: decoupage.reference, contrainte: decoupage.contrainte, llm: llmPour("histoire"),
             dialogue: decoupage.dialogue,
             repliques: decoupage.dialogue ? decoupage.repliques.split("\n").map((l) => l.trim()).filter(Boolean) : [],
             musique: decoupage.avecMusique ? (decoupage.musique.trim() || "music that fits the story, your choice") : null,
@@ -241,7 +241,7 @@ resultatDecoupage.addEventListener("click", (e) => {
     avecLlama(async (statut) => {
         statut(`Le LLM peaufine le plan ${Number(li.dataset.plan) + 1}…`);
         const r = await api("POST", "/api/prompt/peaufiner",
-                            { prompt: p.prompt, llm: llmPrompt(), workflow: ciblePrompt(), duree: p.duree });
+                            { prompt: p.prompt, llm: llmPour("histoire"), workflow: ciblePrompt(), duree: p.duree });
         p.prompt = r.prompt;
         rendreResultat();
         statut(`Plan peaufiné en ${r.duree_s} s`);
@@ -262,7 +262,7 @@ document.getElementById("creer-sequence-scenario").addEventListener("click", asy
     }
     try {
         const s = await api("POST", "/api/sequences", {
-            titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmPrompt(),
+            titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmPour("histoire"),
             casting: { personnage: decoupage.reference, voix: "auto", ambiance: "",
                        contrainte: decoupage.resultat.contrainte ?? "", reference_partout: true },
             contrainte_en: decoupage.resultat.contrainte_en ?? null,  // traduite au découpage : le tournage s'en sert
