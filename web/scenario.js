@@ -138,6 +138,10 @@ function choisirOnglet(onglet) {
     document.querySelectorAll(".onglet-scenario").forEach((b) =>
         b.classList.toggle("actif", b.dataset.ongletScenario === onglet));
     document.querySelectorAll(".volet-scenario").forEach((v) => { v.hidden = v.dataset.voletScenario !== onglet; });
+    // Un seul chat (libre.js), affiché dans l'onglet Libre ou sous les images de référence, qu'il regarde.
+    const place = document.getElementById(onglet === "reference" ? "place-chat-reference" : "place-chat-libre");
+    const chat = document.getElementById("chat-libre");
+    if (chat.parentElement !== place) place.appendChild(chat);
     garderBrouillon();
 }
 

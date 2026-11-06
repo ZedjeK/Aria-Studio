@@ -482,6 +482,12 @@
                                 <span class="numero">👤</span></div>
                             <span class="discret">Personnage de référence</span>
                         </div>
+                        <div class="chat-reference" data-clip-seul>
+                            <h3 class="titre-bloc">💬 Parle de tes images avec le LLM</h3>
+                            <p class="discret">Il les regarde : dis-lui ce que tu veux en faire, il te pose les questions qui
+                                manquent puis écrit le prompt. C'est la même conversation que l'onglet Libre.</p>
+                            <div id="place-chat-reference"></div>
+                        </div>
                     </div>
                     <div class="volet-scenario" data-volet-scenario="sujet">
                         <p class="discret aide-volet">Facultatif : choisis qui ou quoi est au centre de l'image, ou personne.</p>
@@ -541,6 +547,8 @@
                         <div class="ligne llm-onglet">
                             <label>LLM du chat <select id="llm-libre"></select></label>
                         </div>
+                        <div id="place-chat-libre">
+                        <div id="chat-libre">
                         <div class="libre">
                             <div id="conversation-libre" class="conversation-libre"></div>
                             <aside class="fiche-libre">
@@ -560,6 +568,8 @@
                             <span id="statut-libre" class="discret"></span>
                         </div>
                         <p id="erreur-libre" class="ko" hidden></p>
+                        </div>
+                        </div>
                     </div>
                     <div class="volet-scenario" data-volet-scenario="histoire" hidden>
                         <div id="sequence-scenario">

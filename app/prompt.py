@@ -456,6 +456,20 @@ Answer ONLY with one JSON object, no markdown, nothing before or after:
 {{{{"message": "...", "fiche": {{{{"Sujet": "..."}}}}, "questions": [{{{{"question": "...", "choix": ["...", "..."]}}}}], "prompt": null}}}}"""
 
 ECRIRE = "ÉCRIS LE PROMPT"
+# Les images de référence du Scénario, vues par le LLM du chat : ce qu'il en fait selon leur rôle.
+IMAGES_LIBRE = {
+    "inspirer": "Reference pictures are attached (Picture 1, Picture 2...): look at them first and put what they show "
+                "in the fiche, marked « (vu sur l'image) ». The target model receives them too: in the prompt, refer to "
+                "them by number (\"the woman from Picture 1\"), keep the identity and outfit they show unless the user "
+                "changes them, and do not re-describe faces or clothes. Ask what the user wants to do with them.",
+    "variation": "The attached picture is the starting image, partly redrawn by the target model: look at it first and "
+                 "put what it shows in the fiche, marked « (vu sur l'image) ». Keep its composition, subjects and "
+                 "style unless the user changes them; ask only about what should change.",
+    "animer": "The attached picture is the first frame of the clip: look at it first and put what it shows in the "
+              "fiche, marked « (vu sur l'image) ». The prompt opens with one short sentence anchoring it as it really "
+              "is (style, subject, setting), then describes what happens. Ask about the action, camera, sounds and "
+              "spoken lines, never about what the picture already shows.",
+}
 VIDES_FICHE = {"", "none", "null", "n/a", "-", "—", "aucun", "aucune"}  # « Réplique : None » écrit par Bonsai
 ESSENTIELS = {"image": "subject, action or pose, setting, medium and style, framing, lighting",
               "video": "subject, action, setting, visual style, camera, sounds, spoken line if any"}
@@ -505,6 +519,8 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
         sujets_video=", Caméra, Son, Réplique" if video else "",
         essentiels=ESSENTIELS["video" if video else "image"],
         longueur=f"At most {mots} words." if mots else "")
+    if vues and role in IMAGES_LIBRE:
+        systeme += f"\n\n{IMAGES_LIBRE[role]}"
     if regles := workflows.regles_prompt(workflow):
         systeme += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
     systeme += f"\n\n{CLAUSE_MINEURS}"

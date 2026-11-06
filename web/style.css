@@ -2712,3 +2712,19 @@ button.quitter-appli:hover {
     margin-bottom: 10px;
     font-size: 0.85rem;
 }
+
+/* Image de référence : le chat sous les images, qu'il regarde. */
+.chat-reference {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--bord);
+}
+
+/* Aperçu : la liste du LLM sur toute la largeur, ✨ Peaufiner dessous (le libellé long l'écrasait). */
+.llm-scenario {
+    flex-wrap: wrap;
+}
+
+.llm-scenario label {
+    flex: 1 1 100%;
+}
