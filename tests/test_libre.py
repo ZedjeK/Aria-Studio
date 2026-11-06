@@ -41,6 +41,11 @@ class Lecture(unittest.TestCase):
         self.assertEqual(t["questions"][0]["choix"], ["photo", "peinture", "aquarelle", "3D"])  # 4 au plus
         self.assertIsNone(t["prompt"])
 
+    def test_rubriques_vides_ecartees(self):
+        t = prompt.lire_libre(json.dumps({**TOUR, "fiche": {"Sujet": "une pilote", "Décor": "Aucun choix fait pour le décor",
+                                                            "Réplique": "Aucune réplique donnée"}}))
+        self.assertEqual(t["fiche"], {"Sujet": "une pilote"})
+
     def test_illisible(self):
         with self.assertRaises(prompt.ErreurLibre):
             prompt.lire_libre("Voici mes questions : quel style ?")
@@ -106,6 +111,65 @@ class Tour(unittest.TestCase):
                  [{"role": "user", "content": "Une adolescente de 15 ans à la plage"}])
 
 
+class Ateliers(unittest.TestCase):
+    def test_retouche_et_sequence(self):
+        """Retouche : une consigne d'édition en anglais ; Séquence : l'histoire, en français."""
+        o = FauxLlm(json.dumps(TOUR))
+        tour(o, [{"role": "user", "content": "Rends le ciel orange"}], forme="retouche", workflow="qwen_image_edit_2511",
+             vues=[prompt.Vue(b"PNG", "A cat on a windowsill at night.")], role="retouche")
+        systeme = o.appels[0][0][0]["content"]
+        self.assertIn("instruction-based image editing model", systeme)
+        self.assertIn("the image to edit", systeme)
+        self.assertIn('Write "prompt" (in English)', systeme)
+        o = FauxLlm(json.dumps(TOUR))
+        tour(o, [{"role": "user", "content": "Une pilote rentre au hangar"}], forme="sequence",
+             workflow="minimax_h3_t2v")
+        systeme = o.appels[0][0][0]["content"]
+        self.assertIn("the STORY of a short video sequence", systeme)
+        self.assertIn('Write "prompt" (in French: the whole story', systeme)
+        self.assertNotIn("At most", systeme)
+        self.assertIn("no shots, no camera directions", systeme)
+        self.assertNotIn(prompt.ENTETE_REGLES, systeme)  # les règles des prompts de H3 ne font pas l'histoire
+
+
+class Optimiser(unittest.TestCase):
+    def appeler(self, **champs):
+        appels = []
+
+        async def reecrire(orchestrateur, idee, llm, references=0, **options):
+            appels.append(("reecrire", idee, references, options))
+            return {"prompt": "A ginger cat asleep.", "duree_s": 1.0}
+
+        async def traduire_instruction(orchestrateur, instruction, llm, regles, workflow, vue):
+            appels.append(("retouche", instruction, vue))
+            return "Make the sky orange; keep everything else unchanged."
+
+        with (mock.patch.object(main.prompt, "reecrire", reecrire),
+              mock.patch.object(main.prompt, "traduire_instruction", traduire_instruction),
+              mock.patch.object(plateau, "vue", lambda i: f"vue:{i}"),
+              mock.patch.object(plateau, "textes_origine", lambda ids: [])):
+            r = asyncio.run(main.optimiser_prompt(main.DemandeOptimisation(**champs)))
+        return r, appels[0]
+
+    def test_image_avec_les_complements(self):
+        r, (quoi, idee, refs, options) = self.appeler(atelier="image", idee="un chat roux", complements="A cat, at night.")
+        self.assertEqual((quoi, refs, options["video"]), ("reecrire", 0, None))
+        self.assertIn("Also fixed (keep it): A cat, at night.", idee)
+        self.assertEqual(r["mots"], 4)
+
+    def test_clip_anime_le_rush(self):
+        _, (_, _, _, options) = self.appeler(atelier="clip", idee="il se réveille", images=["r1"], role="animer")
+        self.assertEqual((options["video"], options["vues"]), ("animer", ["vue:r1"]))
+
+    def test_retouche_voit_son_image(self):
+        r, (quoi, instruction, vue) = self.appeler(atelier="retouche", idee="ciel orange", images=["r1"],
+                                                  role="retouche")
+        self.assertEqual((quoi, vue), ("retouche", "vue:r1"))
+        self.assertIn("keep everything else", r["prompt"])
+        with self.assertRaises(HTTPException):
+            self.appeler(atelier="retouche", idee="ciel orange")  # sans image
+
+
 class Route(unittest.TestCase):
     def appeler(self, **champs):
         async def libre(*args, **_):
@@ -119,7 +183,7 @@ class Route(unittest.TestCase):
         for echanges, forme in (([], "image"), ([{"role": "assistant", "content": "{}"}], "image"),
                                 ([{"role": "system", "content": "x"}], "image"),
                                 ([{"role": "user", "content": "x" * 5000}], "image"),
-                                ([{"role": "user", "content": "Un chat"}], "sequence")):
+                                ([{"role": "user", "content": "Un chat"}], "video")):
             with self.assertRaises(HTTPException, msg=(echanges, forme)) as e:
                 self.appeler(echanges=echanges, forme=forme)
             self.assertEqual(e.exception.status_code, 400)

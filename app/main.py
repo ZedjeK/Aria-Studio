@@ -712,6 +712,57 @@ async def ecrire_avec_images(demande: DemandeEcriture):
         raise HTTPException(500, str(e))
 
 
+class DemandeOptimisation(BaseModel):
+    atelier: str  # image, retouche ou clip (la séquence se découpe : /api/sequences/decouper)
+    idee: str = ""  # le prompteur libre, en français
+    complements: str = ""  # ce que les compléments imposent (prompt assemblé des listes et des cases)
+    images: list[str] = []  # images de référence de l'atelier
+    role: str | None = None  # inspirer, variation, animer, retouche
+    workflow: str | None = None
+    llm: str | None = None
+    duree: int = 5
+
+
+@app.post("/api/prompt/optimiser")
+async def optimiser_prompt(d: DemandeOptimisation):
+    """✨ Optimiser d'un atelier du Scénario : le LLM écrit le meilleur prompt pour le modèle cible, d'après l'idée,
+    les compléments (déjà fixés) et les images, qu'il voit. Retouche : une consigne d'édition sur l'image."""
+    _verifier_llm(d.llm)
+    idee, complements_ = d.idee.strip(), d.complements.strip()
+    if d.atelier not in ("image", "retouche", "clip"):
+        raise HTTPException(400, "Atelier inconnu : image, retouche ou clip")
+    if not (idee or complements_):
+        raise HTTPException(400, "Écris ton idée (ou choisis des compléments)")
+    if len(idee) > 2000 or len(complements_) > 4000 or len(d.images) > 3:
+        raise HTTPException(400, "Idée, compléments ou images en trop")
+    if d.atelier == "retouche" and len(d.images) != 1:
+        raise HTTPException(400, "Choisis l'image à retoucher")
+    texte = f"{idee}\n\nAlso fixed (keep it): {complements_}" if idee and complements_ else idee or complements_
+    try:
+        origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
+        securite.verifier(texte, *origines)
+        vues = [plateau.vue(i) for i in d.images] or None
+        llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
+        regles = workflows.regles_prompt(d.workflow)
+        if d.atelier == "retouche":
+            debut = asyncio.get_running_loop().time()
+            consigne = await prompt.traduire_instruction(orchestrateur, texte, llm, regles, d.workflow, vues[0])
+            r = {"prompt": consigne, "duree_s": round(asyncio.get_running_loop().time() - debut, 2)}
+        else:
+            video = ("animer" if d.role == "animer" else "texte") if d.atelier == "clip" else None
+            r = await prompt.reecrire(orchestrateur, texte, llm, len(vues) if vues and d.role == "inspirer" else 0,
+                                      video=video, duree=d.duree, regles=regles, workflow=d.workflow,
+                                      vues=vues if d.role in ("inspirer", "variation", "animer") else None)
+        securite.verifier(texte, r["prompt"], *origines)
+        return {**r, "mots": len(r["prompt"].split())}
+    except ErreurSecurite as e:
+        raise HTTPException(422, str(e))
+    except (plateau.ErreurPlateau, workflows.ErreurWorkflow) as e:
+        raise HTTPException(400, str(e))
+    except ErreurLlama as e:
+        raise HTTPException(500, str(e))
+
+
 class EchangeLibre(BaseModel):
     role: str  # user ou assistant (le JSON rendu au tour précédent)
     content: str
@@ -735,8 +786,8 @@ ECHANGES_LIBRE_MAX, LONGUEUR_ECHANGE_LIBRE = 60, 4000
 async def chat_libre(d: DemandeLibre):
     """Scénario, onglet Libre : un tour de conversation (questions, fiche « Ce que j'ai compris », prompt)."""
     _verifier_llm(d.llm)
-    if d.forme not in ("image", "clip"):
-        raise HTTPException(400, "Le chat Libre écrit une image ou un clip")
+    if d.forme not in ("image", "clip", "retouche", "sequence"):
+        raise HTTPException(400, "Atelier inconnu : image, retouche, clip ou séquence")
     if not d.echanges or d.echanges[-1].role != "user" or len(d.echanges) > ECHANGES_LIBRE_MAX \
             or any(e.role not in ("user", "assistant") or len(e.content) > LONGUEUR_ECHANGE_LIBRE for e in d.echanges):
         raise HTTPException(400, "Conversation invalide ou trop longue : recommence-la")

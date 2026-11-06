@@ -1,7 +1,8 @@
-// Scénario : la seule place où le LLM écrit. On choisit ce qu'on fait (Image, Clip, Séquence) et pour quel modèle,
-// on compose le prompt anglais en cliquant dans les listes de prompt/listes, réparties en onglets (Sujet, Décor et
-// ambiance, Mise en scène), puis il part vers le Plateau ou le Montage, qui le tournent tel quel.
-// Les règles (genre, âge, remplacements, incompatibilités) sont appliquées ici en direct pour guider,
+// Scénario : la seule place où le LLM écrit. Quatre ateliers sur le même gabarit (Image, Retouche, Clip, Séquence) :
+// 1 Départ (images de référence, references.js), 2 Ton idée, le prompteur libre (✨ Optimiser, 💬 Aide : libre.js),
+// 3 Compléments (cases de l'atelier et listes à cliquer de prompt/listes), et à droite le prompt final, modifiable,
+// qui part tel quel vers le Plateau, le panneau de retouche ou le Montage. Chaque atelier garde son brouillon.
+// Les règles des listes (genre, âge, remplacements, incompatibilités) sont appliquées ici en direct pour guider,
 // mais c'est le serveur qui fait foi : chaque changement repasse par /api/prompt/assembler.
 
 const LIBELLES_SUJETS = { personnage: "👤 Personnage", creature: "🐉 Créature / animal", objet: "🏺 Objet",
@@ -9,15 +10,30 @@ const LIBELLES_SUJETS = { personnage: "👤 Personnage", creature: "🐉 Créatu
 const BROUILLON = "aria-scenario";  // brouillon gardé dans ce navigateur (une simple commodité)
 let structurePrompt = null;
 let sujetPrompt = "personnage";
-let formeScenario = "image";  // image, clip ou sequence
-let ongletScenario = "sujet";
-const ciblesParForme = { image: null, video: null, inspirer: null, variation: null };  // modèle cible par forme
+let formeScenario = "image";  // l'atelier : image, retouche, clip ou sequence
+let ongletListe = "sujet";
+const ciblesParForme = { image: null, video: null, inspirer: null, variation: null, retouche: null };  // modèle cible
+const ateliers = {};  // atelier → { idee, final (prompt final), echanges (chat d'aide), dernier (son dernier tour) }
+const atelier = (nom = formeScenario) => (ateliers[nom] ??= { idee: "", final: "", echanges: [], dernier: null });
 
-// Les modèles proposés : vidéo pour un clip ou une séquence ; pour une image, édition quand on s'inspire d'images
-// (références.js), modèles qui savent varier une image pour une variation, sinon texte vers image.
+const IDEES = {
+    image: ["2 · Ton idée", "Ton idée, en français, comme elle vient : une samouraï androïde sous la pluie à Tokyo, "
+        + "ambiance néon…"],
+    retouche: ["2 · Ta retouche", "Ce que tu veux changer sur l'image : remplace le ciel par un coucher de soleil, "
+        + "garde tout le reste…"],
+    clip: ["2 · Ton clip", "Ce qui se passe, en français : elle tourne lentement la tête vers la caméra et sourit…"],
+    sequence: ["2 · Ton histoire", "L'histoire, du début à la fin, en français. Les répliques entre guillemets : "
+        + "elle lève les yeux et dit « On décolle ce soir. »"],
+};
+const ENVOIS = { image: ["→ Envoyer au Plateau", "Créer"], retouche: ["→ Panneau de retouche", "Retoucher"],
+                 clip: ["→ Envoyer au Montage", "Tourner"] };
+
+// Les modèles proposés : vidéo pour un clip ou une séquence, d'édition pour une retouche ; pour une image, d'édition
+// quand on s'inspire d'images (references.js), qui savent varier une image pour une variation, sinon texte vers image.
 function tacheCible() {
     const w = optionsPlateau.workflows;
     if (cibleVideo()) return ["video", w.texte_vers_video];
+    if (formeScenario === "retouche") return ["retouche", w.retouche];
     const n = imagesReference().length;
     if (n && refsScenario.role === "inspirer") {
         return ["inspirer", { ...w.retouche, defaut: optionsPlateau.references_defaut,
@@ -26,15 +42,13 @@ function tacheCible() {
     if (n) return ["variation", { ...w.texte_vers_image, choix: w.texte_vers_image.choix.filter((x) => x.variation) }];
     return ["image", w.texte_vers_image];
 }
-// sujet -> { choix: {bloc: {sous-liste: valeur}}, age, texte, precisions, traduction: {source, texte},
-//            action, traductionAction: {source, texte}, replique, toutes: lève le filtre par origine,
-//            dialogue, avecMusique, musique, traductionMusique : les cases 🗣 et 🎵 d'un clip }
+// sujet -> { choix: {bloc: {sous-liste: valeur}}, age, texte, toutes: lève le filtre par origine,
+//            replique, dialogue, avecMusique, musique, traductionMusique : les cases 🗣 et 🎵 d'un clip }
 const etatsPrompt = {};
 let definitionsPrompt = {};  // "bloc|sous-liste" -> sous-liste de la structure
 let incompatPrompt = new Map();  // "bloc|sous-liste|valeur" -> [[bloc, sous-liste, valeur], …]
 const groupesOuvertsPrompt = new Set();
 let assemblagePrompt = null;
-let peaufinage = null;  // { source } : le prompt assemblé que la version peaufinée a pris pour base
 let occupePrompt = false;
 let minuteurPrompt = null;
 let numeroAssemblage = 0;
@@ -46,26 +60,22 @@ const etatPrompt = () => (etatsPrompt[sujetPrompt] ??=
     { choix: {}, age: null, texte: "", precisions: "", traduction: null, action: "", traductionAction: null, replique: "",
       toutes: false, dialogue: false, avecMusique: false, musique: "", traductionMusique: null });
 const cle = (...morceaux) => morceaux.join("|");
-// Un LLM par onglet qui le fait travailler ; par défaut celui du modèle cible (onglet Modèles), sinon le défaut.
-const LLM_ONGLETS = { prompt: "llm-prompt", reference: "llm-reference", libre: "llm-libre", histoire: "llm-histoire" };
-const llmsChoisis = {};  // onglet → GGUF choisi à la main (gardé dans le brouillon)
-const llmPour = (onglet) => document.getElementById(LLM_ONGLETS[onglet]).value || null;
-const llmPrompt = () => llmPour("prompt");
-const nomLlm = (onglet) => document.getElementById(LLM_ONGLETS[onglet]).selectedOptions[0]?.textContent
+// Un LLM par atelier ; par défaut celui du modèle cible (onglet Modèles), sinon le défaut. 👁 : il voit les images.
+const llmsChoisis = {};  // atelier → GGUF choisi à la main (gardé dans le brouillon)
+const llmAtelier = () => document.getElementById("llm-atelier").value || null;
+const llmPrompt = llmAtelier;  // decoupage.js, libre.js
+const nomLlm = () => document.getElementById("llm-atelier").selectedOptions[0]?.textContent
     .replace(/ [★👁]/g, "").trim() || "Le LLM";
 
 function remplirLlms() {
     if (!optionsPlateau) return;
-    const defaut = llmDuWorkflow(ciblePrompt());
-    Object.entries(LLM_ONGLETS).forEach(([onglet, id]) => {
-        const voulu = llmsChoisis[onglet] ?? defaut;
-        document.getElementById(id).innerHTML = optionsPlateau.llm.choix.map((m) =>
-            `<option value="${echapper(m.fichier)}" ${m.fichier === voulu ? "selected" : ""}>${echapper(m.nom)}`
-            + `${m.favori ? " ★" : ""}${m.vision ? " 👁" : ""}</option>`).join("");
-    });
+    const voulu = llmsChoisis[formeScenario] ?? llmDuWorkflow(ciblePrompt());
+    document.getElementById("llm-atelier").innerHTML = optionsPlateau.llm.choix.map((m) =>
+        `<option value="${echapper(m.fichier)}" ${m.fichier === voulu ? "selected" : ""}>${echapper(m.nom)}`
+        + `${m.favori ? " ★" : ""}${m.vision ? " 👁" : ""}</option>`).join("");
 }
 const ciblePrompt = () => document.getElementById("workflow-prompt").value || null;
-const cibleVideo = () => formeScenario !== "image";
+const cibleVideo = () => formeScenario === "clip" || formeScenario === "sequence";
 
 let preparationScenario = Promise.resolve();
 
@@ -74,17 +84,13 @@ function preparerScenario() {  // appelée à chaque ouverture de l'onglet
     return preparationScenario;
 }
 
-// Ouvre le Scénario sur une forme (et une image de référence) : « ✍️ L'écrire au Scénario », « 🎞️ Animer ».
-async function ouvrirScenario(forme, { animer = null } = {}) {
+// Ouvre le Scénario sur un atelier, avec une image : « ✍️ L'écrire au Scénario », « 🎞️ Animer », « 🖌️ Retoucher ».
+async function ouvrirScenario(forme, { animer = null, retoucher = null } = {}) {
     document.querySelector('.onglet[data-vue="scenario"]').click();
     await preparationScenario;  // le brouillon est relu d'abord : il ne doit pas écraser ce choix
     if (animer) refsScenario.animer = animer;
-    if (formeScenario !== forme) {
-        document.querySelector(`input[name="forme-scenario"][value="${forme}"]`).click();
-    } else if (animer) {
-        await referencesChangees();
-    }
-    if (animer) choisirOnglet("reference");
+    if (retoucher) refsScenario.retouche = retoucher;
+    await choisirAtelier(forme);
 }
 
 async function preparer() {
@@ -103,59 +109,98 @@ async function preparer() {
 
 async function chargerModelesPrompt() {
     if (!optionsPlateau) await chargerOptionsPlateau();
-    const video = cibleVideo();
     const [cle_, tache] = tacheCible();
     const garde = ciblesParForme[cle_]
-        ?? (video ? tache?.defaut : choixModele("workflow-creation").workflow || tache?.defaut);
+        ?? (cle_ === "image" ? choixModele("workflow-creation").workflow || tache?.defaut : tache?.defaut);
     remplirSelect("workflow-prompt", (tache?.choix ?? []).map((w) =>
         [w.id, `${w.nom}${w.id === tache.defaut ? " ★" : ""}`]), garde);
     ciblesParForme[cle_] = document.getElementById("workflow-prompt").value || null;
     remplirSelect("duree-prompt", optionsPlateau.video.durees.map((d) => [String(d), `${d} s`]),
                   document.getElementById("duree-prompt").value || "5");
     remplirLlms();
-    majCible();
+    majAtelier();
 }
 
-// Image : « Texte dans l'image », envoi au Plateau. Clip : bloc Plan, action, réplique et durée, envoi au Montage.
-// Séquence : onglet Histoire et découpage (decoupage.js).
-function majCible() {
-    const video = cibleVideo();
-    document.querySelectorAll("[data-bloc-video]").forEach((b) => { b.hidden = !video; });
-    document.querySelectorAll("[data-video-seule]").forEach((b) => { b.hidden = !video; });
-    document.querySelectorAll("[data-image-seule]").forEach((b) => { b.hidden = video; });
-    document.getElementById("envoyer-prompt").textContent = video ? "→ Envoyer au Montage" : "→ Envoyer au Plateau";
-    document.getElementById("creer-prompt").textContent = video ? "Tourner" : "Créer";
+async function choisirAtelier(nom) {
+    formeScenario = nom;
+    await chargerModelesPrompt();  // ses modèles, son LLM, puis tout l'affichage de l'atelier
+    planifierAssemblage();
+}
+
+// L'atelier en cours : ce qui s'affiche (data-atelier-seul, data-atelier-sauf), son idée, son prompt final, son chat.
+function majAtelier() {
+    const a = atelier();
+    document.querySelectorAll(".onglet-scenario[data-atelier]").forEach((b) =>
+        b.classList.toggle("actif", b.dataset.atelier === formeScenario));
+    document.querySelectorAll("[data-atelier-seul]").forEach((e) => { e.hidden = e.dataset.atelierSeul !== formeScenario; });
+    document.querySelectorAll("[data-atelier-sauf]").forEach((e) => { e.hidden = e.dataset.atelierSauf === formeScenario; });
+    document.querySelectorAll("[data-bloc-video]").forEach((b) => { b.hidden = !cibleVideo(); });
+    const [titre, exemple] = IDEES[formeScenario];
+    document.getElementById("titre-idee").textContent = titre;
+    const idee = document.getElementById("idee-scenario");
+    idee.placeholder = exemple;
+    idee.value = a.idee;
+    document.getElementById("optimiser-scenario").textContent = formeScenario === "sequence" ? "✂ Découper" : "✨ Optimiser";
+    document.getElementById("tel-quel-scenario").hidden = formeScenario === "sequence";
+    document.getElementById("facultatif-depart").textContent = formeScenario === "retouche"
+        ? "(l'image à retoucher)" : "(facultatif)";
+    if (ENVOIS[formeScenario]) {
+        const [envoyer_, lancer] = ENVOIS[formeScenario];
+        document.getElementById("envoyer-prompt").textContent = envoyer_;
+        document.getElementById("creer-prompt").textContent = lancer;
+    }
+    document.getElementById("prompt-final").value = a.final;
+    document.getElementById("chat-libre").hidden = !a.echanges.length;
+    rendreLibre();  // libre.js
     rendreEtiquettes();
     rendreReferencesScenario();  // references.js
     majForme();  // Séquence (decoupage.js)
-    if ((ongletScenario === "histoire" && !enSequence()) || (ongletScenario === "libre" && enSequence())) {
-        choisirOnglet("sujet");
-    }
+    majFinal();
 }
 
-function choisirOnglet(onglet) {
-    ongletScenario = onglet;
-    document.querySelectorAll(".onglet-scenario").forEach((b) =>
-        b.classList.toggle("actif", b.dataset.ongletScenario === onglet));
-    document.querySelectorAll(".volet-scenario").forEach((v) => { v.hidden = v.dataset.voletScenario !== onglet; });
-    // Un seul chat (libre.js), affiché dans l'onglet Libre ou sous les images de référence, qu'il regarde.
-    const place = document.getElementById(onglet === "reference" ? "place-chat-reference" : "place-chat-libre");
-    const chat = document.getElementById("chat-libre");
-    if (chat.parentElement !== place) place.appendChild(chat);
+function choisirListe(onglet) {
+    ongletListe = onglet;
+    document.querySelectorAll(".onglet-liste").forEach((b) => b.classList.toggle("actif", b.dataset.liste === onglet));
+    document.querySelectorAll(".volet-liste").forEach((v) => { v.hidden = v.dataset.voletListe !== onglet; });
+}
+
+// Le prompt final : ce qui part, tel quel. ✨ Optimiser, 💬 Aide ou « Utiliser tel quel » le posent ; tu le retouches.
+function poserFinal(texte) {
+    atelier().final = texte;
+    document.getElementById("prompt-final").value = texte;
+    majFinal();
     garderBrouillon();
 }
 
-// Brouillon : forme, cibles, choix de chaque sujet, histoire. Il revient à la prochaine ouverture d'Aria.
+function majFinal() {
+    const texte = atelier().final.trim();
+    const mots = texte ? texte.split(/\s+/).length : 0;
+    const max = assemblagePrompt?.mots_max;
+    const compte = document.getElementById("mots-final");
+    compte.textContent = mots ? `${mots} mots${max ? ` / ${max} conseillés` : ""}` : "";
+    compte.classList.toggle("ko", Boolean(max) && mots > max);
+    majBoutonsPrompt();
+}
+
+// Ce que les compléments imposent (prompt assemblé des listes et des cases) : donné au LLM comme déjà fixé.
+// Un clip le donne toujours (ses cases disent qui parle et s'il y a de la musique) ; sinon, s'il y a un choix.
+function complements() {
+    if (!assemblagePrompt || formeScenario === "retouche") return "";
+    const e = etatPrompt();
+    const choisi = Object.values(e.choix).some((v) => Object.keys(v ?? {}).length) || e.texte?.trim();
+    return choisi || formeScenario === "clip" ? assemblagePrompt.prompt : "";
+}
+
+// Brouillon : l'atelier, les cibles, les choix de chaque sujet, chaque atelier (idée, chat, prompt final), l'histoire.
 let minuteurBrouillon = null;
 
 function garderBrouillon() {
     clearTimeout(minuteurBrouillon);
     minuteurBrouillon = setTimeout(() => {
-        const etat = { forme: formeScenario, sujet: sujetPrompt, onglet: ongletScenario, cibles: ciblesParForme,
-                       etats: etatsPrompt, llms: llmsChoisis, references: refsScenario, libre: libre.echanges,
-                       sequence: { reference: decoupage.reference, synopsis: decoupage.synopsis,
-                                   contrainte: decoupage.contrainte, plans: decoupage.plans,
-                                   dialogue: decoupage.dialogue, repliques: decoupage.repliques,
+        const etat = { forme: formeScenario, sujet: sujetPrompt, liste: ongletListe, cibles: ciblesParForme,
+                       etats: etatsPrompt, llms: llmsChoisis, references: refsScenario, ateliers,
+                       sequence: { reference: decoupage.reference, contrainte: decoupage.contrainte,
+                                   plans: decoupage.plans, dialogue: decoupage.dialogue, repliques: decoupage.repliques,
                                    avecMusique: decoupage.avecMusique, musique: decoupage.musique } };
         try {
             localStorage.setItem(BROUILLON, JSON.stringify(etat));
@@ -174,22 +219,16 @@ function relireBrouillon() {
         return;
     }
     if (!b) return;
-    if (["image", "clip", "sequence"].includes(b.forme)) formeScenario = b.forme;
+    if (ENVOIS[b.forme] || b.forme === "sequence") formeScenario = b.forme;
     if (b.sujet && LIBELLES_SUJETS[b.sujet]) sujetPrompt = b.sujet;
-    if (b.onglet) ongletScenario = b.onglet;
     Object.assign(ciblesParForme, b.cibles ?? {});
     Object.assign(etatsPrompt, b.etats ?? {});
     Object.assign(refsScenario, b.references ?? {});
-    if (Array.isArray(b.libre)) {  // la conversation du chat Libre (libre.js)
-        libre.echanges = b.libre;
-        const tours = b.libre.filter((e) => e.role === "assistant");
-        libre.dernier = tours.length ? lireTour(tours[tours.length - 1].content) : null;
-        rendreLibre();
-    }
-    Object.assign(llmsChoisis, b.llms ?? (b.llm ? { prompt: b.llm } : {}));  // avant : un seul LLM
+    Object.assign(llmsChoisis, b.llms ?? {});
+    Object.entries(b.ateliers ?? {}).forEach(([nom, a]) => { ateliers[nom] = { ...atelier(nom), ...a }; });
     const s = b.sequence ?? {};
+    if (s.synopsis && !atelier("sequence").idee) atelier("sequence").idee = s.synopsis;  // avant : un champ à part
     decoupage.reference = s.reference ?? null;
-    decoupage.synopsis = s.synopsis ?? "";
     decoupage.contrainte = s.contrainte ?? "";
     if (Array.isArray(s.plans) && s.plans.length >= 2) {
         decoupage.plans = s.plans;
@@ -197,15 +236,13 @@ function relireBrouillon() {
     }
     Object.assign(decoupage, { dialogue: Boolean(s.dialogue), repliques: s.repliques ?? "",
                                avecMusique: Boolean(s.avecMusique), musique: s.musique ?? "" });
-    document.getElementById("synopsis-scenario").value = decoupage.synopsis;
     document.getElementById("contrainte-scenario").value = decoupage.contrainte;
     document.getElementById("dialogue-sequence").checked = decoupage.dialogue;
     document.getElementById("repliques-sequence").value = decoupage.repliques;
     document.getElementById("musique-active-sequence").checked = decoupage.avecMusique;
     document.getElementById("musique-sequence").value = decoupage.musique;
     majCases();
-    document.querySelector(`input[name="forme-scenario"][value="${formeScenario}"]`).checked = true;
-    choisirOnglet(ongletScenario);
+    choisirListe(b.liste ?? "sujet");
     document.getElementById("brouillon-scenario").textContent = "✓ brouillon repris";
 }
 
@@ -283,8 +320,6 @@ function rendreBlocsPrompt() {
     const toutes = document.getElementById("toutes-options");
     if (toutes) toutes.checked = etat.toutes;
     document.getElementById("texte-prompt").value = etat.texte;
-    document.getElementById("precisions-prompt").value = etat.precisions;
-    document.getElementById("action-prompt").value = etat.action;
     document.getElementById("replique-prompt").value = etat.replique;
     document.getElementById("dialogue-prompt").checked = Boolean(etat.dialogue);
     document.getElementById("musique-active-prompt").checked = Boolean(etat.avecMusique);
@@ -475,18 +510,11 @@ function planifierAssemblage() {
 }
 
 function majBoutonsPrompt() {
-    const bloque = occupePrompt || !assemblagePrompt;
-    ["peaufiner-prompt", "envoyer-prompt", "creer-prompt"].forEach((id) => {
-        document.getElementById(id).disabled = bloque;
+    const final = Boolean(atelier().final.trim());
+    ["optimiser-scenario", "aide-scenario", "tel-quel-scenario"].forEach((id) => {
+        document.getElementById(id).disabled = occupePrompt;
     });
-}
-
-function traductionValide(etat) {
-    return etat.traduction && etat.traduction.source === etat.precisions.trim();
-}
-
-function traductionActionValide(etat) {
-    return etat.traductionAction && etat.traductionAction.source === etat.action.trim();
+    ["envoyer-prompt", "creer-prompt"].forEach((id) => { document.getElementById(id).disabled = occupePrompt || !final; });
 }
 
 function traductionMusiqueValide(etat) {
@@ -500,10 +528,7 @@ async function assemblerPrompt() {
     let r;
     try {
         r = await api("POST", "/api/prompt/assembler", {
-            sujet: sujetPrompt, choix: etat.choix, age: etat.age, texte: etat.texte,
-            precisions: traductionValide(etat) ? etat.traduction.texte : etat.precisions,
-            workflow: ciblePrompt(),
-            action: traductionActionValide(etat) ? etat.traductionAction.texte : etat.action,
+            sujet: sujetPrompt, choix: etat.choix, age: etat.age, texte: etat.texte, workflow: ciblePrompt(),
             replique: etat.replique, dialogue: Boolean(etat.dialogue), avec_musique: Boolean(etat.avecMusique),
             musique: traductionMusiqueValide(etat) ? etat.traductionMusique.texte : (etat.musique ?? ""),
         });
@@ -518,27 +543,17 @@ async function assemblerPrompt() {
     if (numero !== numeroAssemblage) return;  // une réponse plus récente est déjà partie
     assemblagePrompt = r;
     erreur.hidden = true;
-    majBoutonsPrompt();
-    document.getElementById("texte-apercu").textContent = r.prompt;
-    const mots = document.getElementById("mots-prompt");
-    mots.textContent = `${r.mots} mots${r.mots_max ? ` / ${r.mots_max} conseillés` : ""}`;
-    mots.classList.toggle("ko", Boolean(r.mots_max) && r.mots > r.mots_max);
+    document.getElementById("texte-apercu").textContent = complements() || "rien pour l'instant";
     const alertes = [...retraitsPrompt.map((x) => `Retiré : ${x}`), ...r.alertes];
-    if (etat.precisions.trim() && !traductionValide(etat)) alertes.push("Précisions : traduites par le LLM à l’envoi");
-    if (r.video && etat.action.trim() && !traductionActionValide(etat)) alertes.push("Action : traduite par le LLM à l’envoi");
     if (r.video && etat.avecMusique && (etat.musique ?? "").trim() && !traductionMusiqueValide(etat)) {
         alertes.push("Musique : traduite par le LLM à l’envoi");
     }
     retraitsPrompt = [];
     document.getElementById("alertes-prompt").innerHTML = alertes.map((a) => `<li>${echapper(a)}</li>`).join("");
-    // La version peaufinée ne vaut que pour le prompt dont elle est partie.
-    if (peaufinage && peaufinage.source !== r.prompt) {
-        peaufinage = null;
-        document.getElementById("peaufine-prompt").hidden = true;
-    }
+    majFinal();
 }
 
-// Llama : traduction des précisions, peaufinage
+// Le LLM : optimiser, aider (libre.js), traduire la musique d'un clip
 
 async function avecLlama(action) {
     const statut = document.getElementById("statut-prompt");
@@ -563,24 +578,10 @@ async function avecLlama(action) {
 
 async function traduireSiBesoin(statut) {
     const etat = etatPrompt();
-    const source = etat.precisions.trim();
-    if (source && !traductionValide(etat)) {
-        statut("Le LLM traduit les précisions… (le premier appel charge le modèle)");
-        const r = await api("POST", "/api/prompt/traduire", { texte: source, llm: llmPrompt() });
-        etat.traduction = { source, texte: r.texte };
-        statut("");
-    }
-    const action = etat.action.trim();
-    if (cibleVideo() && action && !traductionActionValide(etat)) {
-        statut("Le LLM traduit l’action… (le premier appel charge le modèle)");
-        const r = await api("POST", "/api/prompt/traduire", { texte: action, llm: llmPrompt() });
-        etat.traductionAction = { source: action, texte: r.texte };
-        statut("");
-    }
     const musique = (etat.musique ?? "").trim();
-    if (cibleVideo() && etat.avecMusique && musique && !traductionMusiqueValide(etat)) {
+    if (formeScenario === "clip" && etat.avecMusique && musique && !traductionMusiqueValide(etat)) {
         statut("Le LLM traduit la musique…");
-        const r = await api("POST", "/api/prompt/traduire", { texte: musique, llm: llmPrompt() });
+        const r = await api("POST", "/api/prompt/traduire", { texte: musique, llm: llmAtelier() });
         etat.traductionMusique = { source: musique, texte: r.texte };
         statut("");
     }
@@ -589,43 +590,51 @@ async function traduireSiBesoin(statut) {
     if (!assemblagePrompt) throw new Error(document.getElementById("erreur-prompt").textContent);
 }
 
-function promptAEnvoyer() {
-    if (peaufinage && document.getElementById("utiliser-peaufine").checked) {
-        const texte = document.getElementById("texte-peaufine").value.trim();
-        if (texte) return texte;
-    }
-    return assemblagePrompt.prompt;
-}
+const dureeClip = () => Number(document.getElementById("duree-prompt").value) || 5;
 
-// Avec une image de référence, le LLM voit les images et écrit le prompt qui s'en sert ; sans, il peaufine.
-document.getElementById("peaufiner-prompt").addEventListener("click", () => avecLlama(async (statut) => {
+// ✨ Optimiser : le LLM écrit le meilleur prompt pour le modèle cible, d'après ton idée, tes compléments et tes
+// images (il les voit). En séquence, c'est le découpage en plans (decoupage.js).
+document.getElementById("optimiser-scenario").addEventListener("click", () => {
+    if (formeScenario === "sequence") {
+        decouperSequence();
+        return;
+    }
+    avecLlama(async (statut) => {
+        await traduireSiBesoin(statut);
+        const idee = atelier().idee.trim();
+        const comp = complements();
+        if (!idee && !comp) {
+            throw new Error(formeScenario === "retouche" ? "Écris ce que tu veux changer"
+                : "Écris ton idée (ou choisis des compléments)");
+        }
+        const images = imagesReference();
+        statut(`${nomLlm()} ${images.length ? "regarde l'image et écrit" : "écrit"}… (le premier appel charge le modèle)`);
+        const r = await api("POST", "/api/prompt/optimiser", {
+            atelier: formeScenario, idee, complements: comp, images, role: roleReference(), workflow: ciblePrompt(),
+            llm: llmAtelier(), duree: dureeClip(),
+        });
+        poserFinal(r.prompt);
+        statut(`${nomLlm()} · ${r.duree_s} s · ${r.mots} mots`);
+    });
+});
+
+document.getElementById("aide-scenario").addEventListener("click", () => ouvrirAide());  // libre.js
+
+document.getElementById("tel-quel-scenario").addEventListener("click", () => avecLlama(async (statut) => {
     await traduireSiBesoin(statut);
-    const source = assemblagePrompt.prompt;
-    const duree = Number(document.getElementById("duree-prompt").value) || 5;
-    const role = roleReference();
-    const nom = nomLlm(role ? "reference" : "prompt");
-    statut(`${nom} ${role ? "regarde l'image et écrit" : "peaufine"}… (le premier appel charge le modèle)`);
-    const r = role
-        ? await api("POST", "/api/prompt/ecrire", { prompt: source, role, images: imagesReference(), llm: llmPour("reference"),
-                                                   workflow: ciblePrompt(), duree })
-        : await api("POST", "/api/prompt/peaufiner", { prompt: source, llm: llmPrompt(), workflow: ciblePrompt(), duree });
-    peaufinage = { source };
-    document.getElementById("texte-peaufine").value = r.prompt;
-    document.getElementById("utiliser-peaufine").checked = true;
-    document.getElementById("peaufine-prompt").hidden = false;
-    statut(`${nom} · ${r.duree_s} s · ${r.mots ?? r.prompt.split(/\s+/).length} mots`);
+    const texte = [atelier().idee.trim(), complements()].filter(Boolean).join(" ");
+    if (!texte) throw new Error("Écris ton idée");
+    poserFinal(texte);
 }));
 
 // Envoi : le prompt final part tel quel, avec le modèle cible et les images de référence.
 async function envoyer(creer) {
-    await avecLlama(async (statut) => {
-        await traduireSiBesoin(statut);
-        const envoi = { prompt: promptAEnvoyer(), workflow: ciblePrompt(), images: imagesReference(),
-                        role: roleReference(), liberte: refsScenario.liberte,
-                        duree: Number(document.getElementById("duree-prompt").value) || 5, lancer: creer };
-        statut("");
-        await (cibleVideo() ? recevoirAuMontage(envoi) : recevoirAuPlateau(envoi));
-    });
+    const prompt = atelier().final.trim();
+    if (!prompt) return;
+    const envoi = { prompt, workflow: ciblePrompt(), images: imagesReference(), role: roleReference(),
+                    liberte: refsScenario.liberte, duree: dureeClip(), lancer: creer };
+    if (formeScenario === "retouche") await recevoirRetouche(envoi);  // plateau.js
+    else await (cibleVideo() ? recevoirAuMontage(envoi) : recevoirAuPlateau(envoi));
 }
 
 document.getElementById("envoyer-prompt").addEventListener("click", () => envoyer(false));
@@ -691,11 +700,7 @@ document.getElementById("supprimer-personnage").addEventListener("click", async 
 
 document.getElementById("sujets-prompt").addEventListener("click", (e) => {
     const bouton = e.target.closest("button[data-sujet]");
-    if (bouton && bouton.dataset.sujet !== sujetPrompt) {
-        peaufinage = null;
-        document.getElementById("peaufine-prompt").hidden = true;
-        choisirSujet(bouton.dataset.sujet);
-    }
+    if (bouton && bouton.dataset.sujet !== sujetPrompt) choisirSujet(bouton.dataset.sujet);
 });
 
 document.getElementById("blocs-prompt").addEventListener("change", (e) => {
@@ -754,8 +759,7 @@ document.getElementById("etiquettes-prompt").addEventListener("click", (e) => {
     });
 });
 
-[["texte-prompt", "texte"], ["precisions-prompt", "precisions"], ["action-prompt", "action"],
- ["replique-prompt", "replique"], ["musique-prompt", "musique"]].forEach(([id, champ]) => {
+[["texte-prompt", "texte"], ["replique-prompt", "replique"], ["musique-prompt", "musique"]].forEach(([id, champ]) => {
     document.getElementById(id).addEventListener("input", (e) => {
         etatPrompt()[champ] = e.target.value;
         planifierAssemblage();
@@ -764,35 +768,43 @@ document.getElementById("etiquettes-prompt").addEventListener("click", (e) => {
 
 document.getElementById("workflow-prompt").addEventListener("change", () => {
     ciblesParForme[tacheCible()[0]] = ciblePrompt();
-    remplirLlms();  // ceux que tu n'as pas choisis suivent le LLM du modèle cible
-    majCible();
+    remplirLlms();  // s'il n'a pas été choisi à la main, le LLM suit celui du modèle cible
     planifierAssemblage();
 });
-
-document.querySelectorAll('input[name="forme-scenario"]').forEach((radio) => radio.addEventListener("change", async () => {
-    formeScenario = radio.value;
-    peaufinage = null;
-    document.getElementById("peaufine-prompt").hidden = true;
-    await chargerModelesPrompt();  // Image : modèles d'image ; Clip et Séquence : modèles vidéo
-    if (formeScenario === "sequence") choisirOnglet("histoire");
-    planifierAssemblage();
-}));
 
 document.querySelector(".onglets-scenario").addEventListener("click", (e) => {
-    const bouton = e.target.closest(".onglet-scenario");
-    if (bouton) choisirOnglet(bouton.dataset.ongletScenario);
+    const bouton = e.target.closest("[data-atelier]");
+    if (bouton && bouton.dataset.atelier !== formeScenario) choisirAtelier(bouton.dataset.atelier);
 });
 
-Object.entries(LLM_ONGLETS).forEach(([onglet, id]) => document.getElementById(id).addEventListener("change", (e) => {
-    llmsChoisis[onglet] = e.target.value;
+document.querySelector(".onglets-listes").addEventListener("click", (e) => {
+    const bouton = e.target.closest("[data-liste]");
+    if (!bouton) return;
+    choisirListe(bouton.dataset.liste);
     garderBrouillon();
-}));
+});
+
+document.getElementById("llm-atelier").addEventListener("change", (e) => {
+    llmsChoisis[formeScenario] = e.target.value;
+    garderBrouillon();
+});
+
+document.getElementById("idee-scenario").addEventListener("input", (e) => {
+    atelier().idee = e.target.value;
+    if (formeScenario === "sequence") histoireModifiee(e.target.value);  // decoupage.js
+    garderBrouillon();
+});
+
+document.getElementById("prompt-final").addEventListener("input", (e) => {
+    atelier().final = e.target.value;
+    majFinal();
+    garderBrouillon();
+});
 
 document.getElementById("effacer-prompt").addEventListener("click", () => {
-    delete etatsPrompt[sujetPrompt];
-    document.getElementById("personnage-prompt").value = "";
-    document.getElementById("supprimer-personnage").disabled = true;
-    rendreBlocsPrompt();
-    appliquerReglesPrompt();
-    planifierAssemblage();
+    if (!confirm(`Vider l'atelier ${document.querySelector(".onglet-scenario.actif").textContent.trim()} `
+        + "(idée, conversation, prompt final) ? Les listes et les images restent.")) return;
+    ateliers[formeScenario] = { idee: "", final: "", echanges: [], dernier: null };
+    majAtelier();
+    garderBrouillon();
 });

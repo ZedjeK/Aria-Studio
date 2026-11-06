@@ -1,6 +1,6 @@
-// Scénario, forme Séquence (onglet Histoire) : un synopsis, des plans (type, durée, note), une image de référence
-// facultative ; le LLM écrit le prompt de chaque plan en une fois (app/sequences.decouper), puis la séquence
-// est créée dans le Montage, prête à tourner. Les onglets Sujet et Décor donnent le personnage et le lieu.
+// Scénario, atelier Séquence : l'histoire (l'idée de l'atelier), des plans (type, durée, note), un personnage de
+// référence facultatif ; ✂ Découper : le LLM écrit le prompt de chaque plan en une fois (app/sequences.decouper),
+// puis la séquence est créée dans le Montage, prête à tourner. Les listes des compléments donnent personnage et lieu.
 
 const TYPES_DEPART = [["texte", "✍️ Départ du texte"], ["rush", "🖼️ Départ de la référence"]];
 const TYPES_SUITE = [["prolonger", "↪ Prolonger"], ["couper", "✂ Couper"], ["transition", "🌀 Transition"]];
@@ -12,7 +12,7 @@ const NOTES_TYPES = {
     transition: "où la caméra arrive (facultatif)",
 };
 
-const decoupage = { reference: null, synopsis: "", contrainte: "", plans: [], resultat: null, perime: false,
+const decoupage = { reference: null, contrainte: "", plans: [], resultat: null, perime: false,
                     dialogue: false, repliques: "", avecMusique: false, musique: "" };  // cases 🗣 et 🎵
 let decoupagePret = false;
 
@@ -66,7 +66,7 @@ function rendreReference() {
         ? `<img src="${urlImage(id)}" alt="" draggable="false">
            <button type="button" class="petit retirer" data-retirer="1" title="Retirer">✕</button>`
         : '<span class="numero">👤</span>';
-    rendreReferencesScenario();  // le compte de l'onglet Image de référence
+
 }
 
 function rendrePlansDecoupage() {
@@ -130,14 +130,14 @@ document.getElementById("reference-scenario").addEventListener("click", (e) => {
     }, "Quelle image de référence pour le personnage ?");
 });
 
-document.getElementById("synopsis-scenario").addEventListener("input", (e) => {
-    decoupage.synopsis = e.target.value;
-    if (/[«"“]/.test(e.target.value) && !decoupage.dialogue) {  // une réplique dans l'histoire : on parle
+// L'histoire a changé (saisie, ou écrite par 💬 Aide) : une réplique entre guillemets coche 🗣 Dialogue.
+function histoireModifiee(texte) {
+    if (/[«"“]/.test(texte) && !decoupage.dialogue) {
         decoupage.dialogue = document.getElementById("dialogue-sequence").checked = true;
         majCases();
     }
     perime();
-});
+}
 
 [["dialogue-sequence", "dialogue"], ["musique-active-sequence", "avecMusique"]].forEach(([id, champ]) => {
     document.getElementById(id).addEventListener("change", (e) => {
@@ -200,17 +200,16 @@ plansScenario.addEventListener("click", (e) => {
 
 // Découpage par Llama
 
-document.getElementById("decouper-scenario").addEventListener("click", () => {
-    const bouton = document.getElementById("decouper-scenario");
-    bouton.disabled = true;
+function decouperSequence() {  // ✂ Découper, le bouton ✨ de l'atelier Séquence
     avecLlama(async (statut) => {
+        if (!atelier("sequence").idee.trim()) throw new Error("Écris l'histoire (ou fais-la écrire avec 💬 Aide)");
         statut("Le LLM découpe la séquence… (le premier appel charge le modèle)");
         const etat = etatPrompt();
         const choix = Object.fromEntries(Object.entries(etat.choix).filter(([bloc]) =>
             !structurePrompt.blocs.find((b) => b.id === bloc)?.video));  // le Plan d'un clip seul ne compte pas ici
         const r = await api("POST", "/api/sequences/decouper", {
-            synopsis: decoupage.synopsis, sujet: sujetPrompt, choix, age: etat.age,
-            plans: decoupage.plans, reference: decoupage.reference, contrainte: decoupage.contrainte, llm: llmPour("histoire"),
+            synopsis: atelier("sequence").idee, sujet: sujetPrompt, choix, age: etat.age,
+            plans: decoupage.plans, reference: decoupage.reference, contrainte: decoupage.contrainte, llm: llmAtelier(),
             dialogue: decoupage.dialogue,
             repliques: decoupage.dialogue ? decoupage.repliques.split("\n").map((l) => l.trim()).filter(Boolean) : [],
             musique: decoupage.avecMusique ? (decoupage.musique.trim() || "music that fits the story, your choice") : null,
@@ -219,8 +218,8 @@ document.getElementById("decouper-scenario").addEventListener("click", () => {
         decoupage.perime = false;
         rendreResultat();
         statut(`Découpage en ${r.duree_s} s · relis et retouche chaque plan si besoin`);
-    }).finally(() => { bouton.disabled = false; });
-});
+    });
+}
 
 const resultatDecoupage = document.getElementById("resultat-decoupage");
 resultatDecoupage.addEventListener("input", (e) => {
@@ -241,7 +240,7 @@ resultatDecoupage.addEventListener("click", (e) => {
     avecLlama(async (statut) => {
         statut(`Le LLM peaufine le plan ${Number(li.dataset.plan) + 1}…`);
         const r = await api("POST", "/api/prompt/peaufiner",
-                            { prompt: p.prompt, llm: llmPour("histoire"), workflow: ciblePrompt(), duree: p.duree });
+                            { prompt: p.prompt, llm: llmAtelier(), workflow: ciblePrompt(), duree: p.duree });
         p.prompt = r.prompt;
         rendreResultat();
         statut(`Plan peaufiné en ${r.duree_s} s`);
@@ -262,7 +261,7 @@ document.getElementById("creer-sequence-scenario").addEventListener("click", asy
     }
     try {
         const s = await api("POST", "/api/sequences", {
-            titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmPour("histoire"),
+            titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmAtelier(),
             casting: { personnage: decoupage.reference, voix: "auto", ambiance: "",
                        contrainte: decoupage.resultat.contrainte ?? "", reference_partout: true },
             contrainte_en: decoupage.resultat.contrainte_en ?? null,  // traduite au découpage : le tournage s'en sert

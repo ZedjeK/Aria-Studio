@@ -2728,3 +2728,75 @@ button.quitter-appli:hover {
 .llm-scenario label {
     flex: 1 1 100%;
 }
+
+/* Scénario en ateliers : 1 Départ, 2 Ton idée, 3 Compléments (repliés), le prompt final à droite. */
+.bloc-atelier + .bloc-atelier {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--bord);
+}
+
+.bloc-atelier .titre-bloc {
+    margin-top: 0;
+}
+
+#idee-scenario {
+    width: 100%;
+    margin: 0 0 8px;
+}
+
+.actions-idee {
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+#chat-libre {
+    margin-top: 12px;
+}
+
+.complements > summary {
+    cursor: pointer;
+    list-style: revert;
+}
+
+.complements > summary h3 {
+    display: inline;
+}
+
+.onglets-listes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 12px 0;
+    border-bottom: 1px solid var(--bord);
+}
+
+button.onglet-liste {
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--discret);
+    padding: 6px 12px;
+}
+
+button.onglet-liste.actif {
+    border-bottom-color: var(--neon);
+    color: var(--texte);
+}
+
+.apercu-complements {
+    margin-top: 12px;
+    font-size: 0.85rem;
+}
+
+.apercu-complements #texte-apercu {
+    margin: 4px 0;
+}
+
+#prompt-final {
+    width: 100%;
+    margin: 0 0 4px;
+    line-height: 1.5;
+}

@@ -70,19 +70,13 @@ document.getElementById("workflow-creation").addEventListener("change", () => {
     // Changer de modèle propose son format par défaut (réglable dans l'onglet Réglages).
     const w = tousWorkflows().find((x) => x.id === choixModele("workflow-creation").workflow);
     if (w?.format) document.getElementById("format-creation").value = w.format;
-    suivreLlmDuWorkflow();
 });
 document.getElementById("workflow-retouche").addEventListener("change", () => {
     afficherLoras("loras-retouche", "workflow-retouche");
-    suivreLlmDuWorkflow();
 });
 
-// Le LLM qui réécrit pour un workflow (onglets d'usage de Modèles), sinon le LLM par défaut.
+// Le LLM qui écrit pour un workflow (onglets d'usage de Modèles), sinon le LLM par défaut : le Scénario le propose.
 const llmDuWorkflow = (id, o = optionsPlateau) => o?.llm.par_workflow?.[id] ?? o?.llm.defaut;
-
-function suivreLlmDuWorkflow() {  // la retouche seule garde un LLM au Plateau : il traduit sa consigne
-    document.getElementById("llm-retouche").value = llmDuWorkflow(choixModele("workflow-retouche").workflow);
-}
 
 function remplirSelect(id, valeurs, defaut) {
     const select = document.getElementById(id);
@@ -103,9 +97,6 @@ async function chargerOptionsPlateau() {
     const o = await api("GET", "/api/plateau/options");
     optionsPlateau = o;
     const remplir = remplirSelect;
-    const llms = o.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]);
-    // Au premier remplissage, le LLM du workflow choisi (ou du favori) ; ensuite le choix en cours est gardé.
-    remplir("llm-retouche", llms, llmDuWorkflow(choixModele("workflow-retouche").workflow || o.workflows.retouche.defaut));
     const t2i = o.workflows.texte_vers_image;
     remplirModelesCreation();
     const edit = o.workflows.retouche;
@@ -293,7 +284,7 @@ function optionsReferences() {
 }
 
 // Ouvrir une liste la relit : un fichier déposé pendant que la page est ouverte apparaît sans recharger.
-["workflow-creation", "workflow-retouche", "llm-retouche"].forEach((id) =>
+["workflow-creation", "workflow-retouche"].forEach((id) =>
     document.getElementById(id).addEventListener("focus", chargerOptionsPlateau));
 
 function choixModele(idSelect) {
@@ -537,8 +528,12 @@ function ouvrirRetouche(f, mode) {
     document.getElementById("outils-agrandir").hidden = !agrandir;
     canevas.hidden = agrandir;
     document.getElementById("consigne-retouche").placeholder = agrandir
-        ? "Précision facultative, en français : « ajoute la mer à droite »…"
-        : "Ta consigne, en français : « mets-lui une veste en cuir rouge »…";
+        ? "Précision facultative, en français : « ajoute la mer à droite » (traduite par le LLM par défaut)"
+        : "Ta consigne, telle qu'elle partira au modèle (en anglais) : « give her a red leather jacket »…";
+    // Retouche : la consigne part telle quelle ; le Scénario l'écrit et l'optimise en voyant l'image.
+    document.getElementById("entete-consigne-retouche").hidden = agrandir;
+    document.getElementById("aide-consigne-retouche").textContent =
+        "Consigne envoyée telle quelle. Pour la traduire et l'optimiser en voyant l'image :";
     document.getElementById("consigne-retouche").value = "";
     document.getElementById("fondu-retouche").value = agrandir ? 96 : 24;
     document.getElementById("erreur-retouche").hidden = true;
@@ -643,11 +638,11 @@ function choisirAncrage(a) {
 
 document.getElementById("lancer-retouche").addEventListener("click", async () => {
     const consigne = document.getElementById("consigne-retouche").value;
-    const sansTraduction = document.getElementById("sans-reecriture-retouche").checked;
     const commun = {
         source: sourceRetouche.id,
-        reecrire: !sansTraduction,
-        llm: document.getElementById("llm-retouche").value,
+        // Retouche : la consigne du Scénario part telle quelle. Agrandissement : la précision est traduite.
+        reecrire: modeRetouche === "agrandissement",
+        llm: null,
         ...choixModele("workflow-retouche"),
         fondu: Number(document.getElementById("fondu-retouche").value),
         loras: lorasChoisies("loras-retouche"),
@@ -666,9 +661,26 @@ document.getElementById("lancer-retouche").addEventListener("click", async () =>
     }
 });
 
-document.getElementById("sans-reecriture-retouche").addEventListener("change", (e) => {
-    document.getElementById("llm-retouche").disabled = e.target.checked;
+document.getElementById("vers-scenario-retouche").addEventListener("click", () => {
+    const id = sourceRetouche.id;
+    fermerRetouche();
+    ouvrirScenario("retouche", { retoucher: id });
 });
+
+// Le Scénario envoie une consigne prête : le panneau s'ouvre sur l'image, consigne posée (masque et fondu ici).
+async function recevoirRetouche({ prompt, images, workflow, lancer }) {
+    await chargerOptionsPlateau();
+    document.querySelector('.onglet[data-vue="plateau"]').click();
+    ouvrirRetouche(await api("GET", `/api/creations/${encodeURIComponent(images[0])}`), "retouche");
+    document.getElementById("consigne-retouche").value = prompt;
+    const select = document.getElementById("workflow-retouche");
+    const ligne = [...select.options].find((o) => o.value.startsWith(`${workflow}::`));
+    if (ligne && choixModele("workflow-retouche").workflow !== workflow) {
+        select.value = ligne.value;
+        select.dispatchEvent(new Event("change"));
+    }
+    if (lancer) document.getElementById("lancer-retouche").click();
+}
 document.getElementById("ouvrir-retouche").addEventListener("click", () => ouvrirRetouche(ficheOuverte, "retouche"));
 document.getElementById("ouvrir-agrandir").addEventListener("click", () => ouvrirRetouche(ficheOuverte, "agrandissement"));
 document.getElementById("fermer-retouche").addEventListener("click", fermerRetouche);

@@ -446,7 +446,7 @@ Already fixed by the user in the other tabs (keep it as it is, never ask about i
 Each turn:
 1. Update "fiche": what the user has decided so far, as short French phrases, one entry per topic (Sujet, Action, Décor, Style, Lumière, Cadrage{{sujets_video}}). Only what the user said or accepted. When the user lets you choose a topic ("je te laisse choisir"), choose it and add " (choix d'Aria)".
 2. Ask at most 3 short questions in French, only about essential topics still open for this target ({{essentiels}}). Give each question 2 to 4 short answer choices. Ask nothing that is already in the fiche or in the fixed part.
-3. Write "prompt" (in English) only when the user asks you to write it (message "ÉCRIS LE PROMPT"), or when nothing essential is open anymore. The prompt keeps every fiche item and every fixed item, adds nothing that clashes with them, and follows the target's rules below. {{longueur}}
+3. Write "prompt" ({{langue_prompt}}) only when the user asks you to write it (message "ÉCRIS LE PROMPT"), or when nothing essential is open anymore. The prompt keeps every fiche item and every fixed item, adds nothing that clashes with them, and follows the target's rules below. {{longueur}}
 4. Once a prompt exists, each new user message is an adjustment: change only what is asked, keep the rest of the prompt word for word, and give the whole new prompt.
 5. {GENRE}
 6. {ADULTES}
@@ -465,13 +465,25 @@ IMAGES_LIBRE = {
     "variation": "The attached picture is the starting image, partly redrawn by the target model: look at it first and "
                  "put what it shows in the fiche, marked « (vu sur l'image) ». Keep its composition, subjects and "
                  "style unless the user changes them; ask only about what should change.",
+    "retouche": "The attached picture is the image to edit: look at it first and put what it shows in the fiche, "
+                "marked « (vu sur l'image) ». The prompt is an instruction for it: what changes and where, made "
+                "clear and unmistakable, then one short clause saying that everything else stays unchanged.",
     "animer": "The attached picture is the first frame of the clip: look at it first and put what it shows in the "
               "fiche, marked « (vu sur l'image) ». The prompt opens with one short sentence anchoring it as it really "
               "is (style, subject, setting), then describes what happens. Ask about the action, camera, sounds and "
               "spoken lines, never about what the picture already shows.",
 }
 VIDES_FICHE = {"", "none", "null", "n/a", "-", "—", "aucun", "aucune"}  # « Réplique : None » écrit par Bonsai
+DEBUTS_VIDES = ("aucun choix", "aucune réplique", "pas encore", "non défini", "non précisé", "à définir")
+
+
+def vide_fiche(valeur: str) -> bool:
+    """Une rubrique que le LLM remplit pour dire qu'elle est vide (« Aucun choix fait pour le décor ») n'en est pas une."""
+    v = valeur.strip().lower()
+    return v in VIDES_FICHE or v.startswith(DEBUTS_VIDES)
 ESSENTIELS = {"image": "subject, action or pose, setting, medium and style, framing, lighting",
+              "retouche": "what changes, where in the picture, how strongly, what must stay exactly as it is",
+              "sequence": "the character, the place, the story from beginning to end, the spoken lines, the mood",
               "video": "subject, action, setting, visual style, camera, sounds, spoken line if any"}
 
 
@@ -488,8 +500,9 @@ def lire_libre(texte: str) -> dict:
         raise ErreurLibre("Réponse du LLM illisible (pas de JSON)")
     if not isinstance(d, dict):
         raise ErreurLibre("Réponse du LLM illisible")
-    fiche = {str(k).strip(): " ".join(str(v).split()) for k, v in (d.get("fiche") or {}).items()
-             if str(k).strip() and v is not None and str(v).strip().lower() not in VIDES_FICHE}         if isinstance(d.get("fiche"), dict) else {}
+    brute = d.get("fiche") if isinstance(d.get("fiche"), dict) else {}
+    fiche = {str(k).strip(): " ".join(str(v).split()) for k, v in brute.items()
+             if str(k).strip() and v is not None and not vide_fiche(str(v))}
     questions = []
     for q in (d.get("questions") or [])[:3] if isinstance(d.get("questions"), list) else []:
         if isinstance(q, dict) and str(q.get("question") or "").strip():
@@ -510,18 +523,28 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     textes = [e["content"] for e in echanges if e["role"] == "user"]
     securite.verifier(contexte, *textes)
     modele = generaliste(modele)
-    video = forme == "clip"
-    mots = mots_max_de(workflow)
+    nom = workflows.obtenir(workflow).fiche["nom"] if workflow else "the target model"
+    cibles = {  # forme → (cible, rubriques de la fiche, langue du « prompt »)
+        "image": (f"{nom}, a still image", "", "in English"),
+        "clip": (f"{nom}, a {duree}-second video clip with sound", ", Caméra, Son, Réplique", "in English"),
+        "retouche": (f"{nom}, an instruction-based image editing model: the prompt is an English edit instruction "
+                     "for the attached picture, one or two sentences", ", Retouche, À garder", "in English"),
+        "sequence": (f"the STORY of a short video sequence of several shots, that {nom} will film shot by shot",
+                     ", Histoire, Réplique", "in French: the whole story from beginning to end as a short plain "
+                     "narrative, the way the user would tell it: no shots, no camera directions, no English, and "
+                     "spoken lines in quotes only if the user gave or accepted them"),
+    }
+    cible, rubriques, langue_prompt = cibles.get(forme, cibles["image"])
+    mots = mots_max_de(workflow) if forme in ("image", "clip") else None
     systeme = CONSIGNE_LIBRE.format(
-        cible=(workflows.obtenir(workflow).fiche["nom"] if workflow else "an image model") + ", "
-              + (f"a {duree}-second video clip with sound" if video else "a still image"),
-        contexte=contexte.strip() or "nothing yet",
-        sujets_video=", Caméra, Son, Réplique" if video else "",
-        essentiels=ESSENTIELS["video" if video else "image"],
-        longueur=f"At most {mots} words." if mots else "")
+        cible=cible, contexte=contexte.strip() or "nothing yet", sujets_video=rubriques,
+        essentiels=ESSENTIELS.get(forme, ESSENTIELS["video" if forme == "clip" else "image"]),
+        langue_prompt=langue_prompt, longueur=f"At most {mots} words." if mots else "")
     if vues and role in IMAGES_LIBRE:
         systeme += f"\n\n{IMAGES_LIBRE[role]}"
-    if regles := workflows.regles_prompt(workflow):
+    # Les règles du modèle cible écrivent ses prompts ; l'histoire d'une séquence n'en est pas un (le découpage
+    # les applique ensuite plan par plan). À l'essai, elles en faisaient un brief anglais en plans.
+    if forme != "sequence" and (regles := workflows.regles_prompt(workflow)):
         systeme += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
     systeme += f"\n\n{CLAUSE_MINEURS}"
     ecrire = bool(echanges) and echanges[-1]["role"] == "user" and echanges[-1]["content"].strip() == ECRIRE
@@ -531,7 +554,7 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
         for k, e in enumerate(echanges):
             contenu = e["content"]
             if k == 0 and vues:  # les images de référence : il les voit, ou lit leur fiche
-                usage = {"animer": "animer", "variation": "variation"}.get(role, "references")
+                usage = {"animer": "animer", "variation": "variation", "retouche": "retouche"}.get(role, "references")
                 contenu = montrer(contenu, vues, usage, voit=_voit(llama))
             messages_.append({"role": e["role"], "content": contenu})
         debut = time.perf_counter()

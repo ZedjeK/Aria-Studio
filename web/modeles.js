@@ -262,7 +262,6 @@ async function choisirLlm(idWorkflow, llm) {
     await chargerUsages();
     if (optionsPlateau) {
         await chargerOptionsPlateau();
-        suivreLlmDuWorkflow();
         if (document.getElementById("workflow-prompt").value) remplirLlms();  // Scénario : le LLM du modèle a changé
     }
     if (optionsMontage) optionsMontage.llm = (await api("GET", "/api/plateau/options")).llm;

@@ -248,9 +248,11 @@
                 </div>
 
                 <textarea id="consigne-retouche" rows="2"></textarea>
+                <div class="ligne entete-prompt-plateau" id="entete-consigne-retouche">
+                    <span class="discret" id="aide-consigne-retouche"></span>
+                    <button id="vers-scenario-retouche" type="button" class="petit">✍️ L'écrire au Scénario</button>
+                </div>
                 <div class="options-creation">
-                    <label>LLM <select id="llm-retouche"></select></label>
-                    <label class="case"><input type="checkbox" id="sans-reecriture-retouche"> Sans traduction</label>
                     <label>Modèle <select id="workflow-retouche"></select></label>
                     <label>Fondu <input id="fondu-retouche" type="range" min="0" max="128" value="24"></label>
                     <button id="lancer-retouche" class="principal" type="button">Lancer</button>
@@ -438,155 +440,90 @@
         </div>
 
         <div class="vue" id="vue-scenario" hidden>
-            <!-- Scénario (web/scenario.js, web/decoupage.js) : la seule place où le LLM écrit. On choisit ce qu'on
-                 fait et pour quel modèle, on remplit les onglets, et le prompt final part vers le Plateau ou le Montage. -->
+            <!-- Scénario (web/scenario.js, references.js, libre.js, decoupage.js) : la seule place où le LLM écrit.
+                 Quatre ateliers sur le même gabarit : 1 Départ, 2 Ton idée (✨ Optimiser, 💬 Aide), 3 Compléments,
+                 et à droite le prompt final, modifiable, qui part vers le Plateau ou le Montage. -->
             <section class="carte barre-scenario">
-                <div class="ligne options-creation">
-                    <div class="formes-scenario" role="radiogroup" aria-label="Ce que tu fais">
-                        <label class="case"><input type="radio" name="forme-scenario" value="image" checked> 🖼️ Image</label>
-                        <label class="case"><input type="radio" name="forme-scenario" value="clip"> 🎞️ Clip</label>
-                        <label class="case"><input type="radio" name="forme-scenario" value="sequence"> 📽️ Séquence</label>
-                    </div>
-                    <label>Modèle cible <select id="workflow-prompt"></select></label>
-                    <span id="brouillon-scenario" class="discret" title="Ton scénario est gardé dans ce navigateur"></span>
-                    <button id="effacer-prompt" type="button">Effacer</button>
-                </div>
                 <div class="onglets-scenario" role="tablist">
-                    <button type="button" class="onglet-scenario" data-onglet-scenario="reference">🖼️ Image de référence <span id="compte-reference-scenario" class="discret"></span></button>
-                    <button type="button" class="onglet-scenario actif" data-onglet-scenario="sujet">👤 Sujet</button>
-                    <button type="button" class="onglet-scenario" data-onglet-scenario="decor">🏞️ Décor et ambiance</button>
-                    <button type="button" class="onglet-scenario" data-onglet-scenario="scene">🎥 Mise en scène</button>
-                    <button type="button" class="onglet-scenario" data-onglet-scenario="histoire" data-sequence-seule>📽️ Histoire</button>
-                    <button type="button" class="onglet-scenario" data-onglet-scenario="libre" data-clip-seul>💬 Libre</button>
+                    <button type="button" class="onglet-scenario actif" data-atelier="image">🖼️ Image</button>
+                    <button type="button" class="onglet-scenario" data-atelier="retouche">🖌️ Retouche</button>
+                    <button type="button" class="onglet-scenario" data-atelier="clip">🎞️ Clip</button>
+                    <button type="button" class="onglet-scenario" data-atelier="sequence">📽️ Séquence</button>
+                </div>
+                <div class="ligne options-creation">
+                    <label>Modèle cible <select id="workflow-prompt"></select></label>
+                    <label>LLM <select id="llm-atelier" title="👁 : il voit tes images de référence"></select></label>
+                    <span id="brouillon-scenario" class="discret" title="Chaque atelier garde son brouillon dans ce navigateur"></span>
+                    <button id="effacer-prompt" type="button" title="Vide cet atelier (idée, conversation, prompt)">Effacer</button>
                 </div>
             </section>
             <div class="prompt-guide">
-                <section class="carte" id="blocs-prompt">
-                    <div class="volet-scenario" data-volet-scenario="reference" hidden>
-                        <div class="ligne llm-onglet">
-                            <label>LLM <select id="llm-reference"></select></label>
-                            <span class="discret">Il écrit en voyant l'image : 👁 = il a sa vision (sinon, il lit la fiche de l'image).</span>
-                        </div>
+                <section class="carte atelier">
+                    <!-- 1 · Départ -->
+                    <div class="bloc-atelier" id="bloc-depart">
+                        <h3 class="titre-bloc">1 · Départ <span id="facultatif-depart" class="discret">(facultatif)</span></h3>
                         <p id="aide-reference-scenario" class="discret aide-volet"></p>
-                        <div class="ligne roles-reference" data-image-seule>
+                        <div class="ligne roles-reference" data-atelier-seul="image">
                             <label class="case"><input type="radio" name="role-reference" value="inspirer" checked> 🎭 S'inspirer</label>
                             <label class="case"><input type="radio" name="role-reference" value="variation"> 🎨 Variation</label>
                             <label id="bloc-liberte-scenario" class="case discret" hidden>Liberté
                                 <input id="liberte-scenario" type="range" min="0.3" max="0.9" step="0.05" value="0.6">
                                 <span id="valeur-liberte-scenario">0,60</span></label>
                         </div>
-                        <div id="cases-reference-scenario" class="emplacements" data-clip-seul></div>
-                        <div class="bloc-source reference-sequence" data-sequence-seule>
+                        <div id="cases-reference-scenario" class="emplacements" data-atelier-sauf="sequence"></div>
+                        <div class="bloc-source reference-sequence" data-atelier-seul="sequence">
                             <div id="reference-scenario" class="emplacement vide"
                                  title="Image de référence du personnage (facultatif), prise dans les Rushes du Plateau">
                                 <span class="numero">👤</span></div>
                             <span class="discret">Personnage de référence</span>
                         </div>
-                        <div class="chat-reference" data-clip-seul>
-                            <h3 class="titre-bloc">💬 Parle de tes images avec le LLM</h3>
-                            <p class="discret">Il les regarde : dis-lui ce que tu veux en faire, il te pose les questions qui
-                                manquent puis écrit le prompt. C'est la même conversation que l'onglet Libre.</p>
-                            <div id="place-chat-reference"></div>
-                        </div>
                     </div>
-                    <div class="volet-scenario" data-volet-scenario="sujet">
-                        <p class="discret aide-volet">Facultatif : choisis qui ou quoi est au centre de l'image, ou personne.</p>
-                        <div id="sujets-prompt" class="sujets"></div>
-                        <div id="personnages-prompt" class="options-creation personnages-prompt">
-                            <label>Mes personnages <select id="personnage-prompt"></select></label>
-                            <button id="enregistrer-personnage" type="button" class="petit">Enregistrer</button>
-                            <button id="supprimer-personnage" type="button" class="petit" disabled>Supprimer</button>
-                            <span class="discret">Seul ce personnage est enregistré : rappelle-le dans n'importe quelle scène.</span>
+
+                    <!-- 2 · Ton idée : le prompteur libre de l'atelier -->
+                    <div class="bloc-atelier">
+                        <h3 class="titre-bloc" id="titre-idee">2 · Ton idée</h3>
+                        <textarea id="idee-scenario" rows="4" maxlength="2000"></textarea>
+                        <div class="ligne actions-idee">
+                            <button id="optimiser-scenario" type="button" class="principal">✨ Optimiser</button>
+                            <button id="aide-scenario" type="button" title="Le LLM te pose les questions qui manquent">💬 Aide</button>
+                            <button id="tel-quel-scenario" type="button" class="petit"
+                                    title="Ton idée et tes compléments, sans passer par le LLM">Utiliser tel quel</button>
+                            <span id="statut-prompt" class="discret" hidden></span>
                         </div>
-                        <p id="sans-sujet" class="discret" hidden>Pas de sujet : décris le lieu dans 🏞️ Décor et ambiance.</p>
-                        <div class="blocs-onglet" data-onglet-blocs="sujet"></div>
-                    </div>
-                    <div class="volet-scenario" data-volet-scenario="decor" hidden>
-                        <p class="discret aide-volet">Où, quand, et le style de l'image : rien n'est obligatoire.</p>
-                        <div class="blocs-onglet" data-onglet-blocs="decor"></div>
-                    </div>
-                    <div class="volet-scenario" data-volet-scenario="scene" hidden>
-                        <p class="discret aide-volet">Ce qui se passe et comment on le filme.</p>
-                        <div class="blocs-onglet" data-onglet-blocs="scene"></div>
-                        <h3 class="titre-bloc">En toutes lettres</h3>
-                        <div class="sous-listes">
-                            <div class="sous-liste large" data-video-seule data-clip-seul hidden>
-                                <label><span>🎞️ Action (traduite par le LLM à l'envoi)</span>
-                                    <input id="action-prompt" type="text" maxlength="500"
-                                           placeholder="ex. elle tourne lentement la tête vers la caméra et sourit"></label>
+                        <p id="erreur-prompt" class="ko" hidden></p>
+                        <div id="chat-libre" hidden>
+                            <div class="libre">
+                                <div id="conversation-libre" class="conversation-libre"></div>
+                                <aside class="fiche-libre">
+                                    <h3 class="titre-bloc">Ce que j'ai compris</h3>
+                                    <dl id="fiche-libre"></dl>
+                                    <p id="fiche-vide-libre" class="discret">Rien encore.</p>
+                                </aside>
                             </div>
-                            <div class="sous-liste large case-scenario" data-video-seule data-clip-seul hidden>
-                                <label class="case"><input type="checkbox" id="dialogue-prompt"> 🗣 Dialogue : le personnage parle</label>
-                                <textarea id="replique-prompt" rows="2" maxlength="600" hidden
-                                          placeholder="Une réplique par ligne, gardée mot pour mot (ex. Prêt pour le décollage ?)"></textarea>
-                                <small class="discret" data-sans="dialogue-prompt">Décoché : le prompt dit que personne ne parle.</small>
+                            <form id="form-libre" class="ligne form-libre">
+                                <textarea id="message-libre" rows="2" maxlength="2000"
+                                          placeholder="Tes réponses (clique sur une proposition pour l'ajouter ici)…"></textarea>
+                                <button type="submit" class="principal">Envoyer</button>
+                            </form>
+                            <div class="ligne actions-libre">
+                                <button id="ecrire-libre" type="button">✍️ Écris-le maintenant</button>
+                                <button id="recommencer-libre" type="button" class="petit">🔄 Recommencer la conversation</button>
+                                <span id="statut-libre" class="discret"></span>
                             </div>
-                            <div class="sous-liste large case-scenario" data-video-seule data-clip-seul hidden>
-                                <label class="case"><input type="checkbox" id="musique-active-prompt"> 🎵 Musique d'ambiance</label>
-                                <input id="musique-prompt" type="text" maxlength="200" hidden
-                                       placeholder="ex. piano doux, tempo lent (traduite par le LLM à l'envoi ; vide : la liste Musique)">
-                                <small class="discret" data-sans="musique-active-prompt">Décoché : le prompt dit qu'il n'y a pas de musique de fond.</small>
-                            </div>
-                            <div class="sous-liste" data-video-seule data-clip-seul hidden>
-                                <label><span>🎞️ Durée du clip</span> <select id="duree-prompt"></select></label>
-                            </div>
-                            <div class="sous-liste large" data-clip-seul>
-                                <label><span>Précisions (traduites par le LLM à l'envoi)</span>
-                                    <input id="precisions-prompt" type="text" maxlength="500" placeholder="ex. tient un parapluie rouge"></label>
-                            </div>
-                            <div class="sous-liste" data-image-seule>
-                                <label><span>Texte dans l'image</span>
-                                    <input id="texte-prompt" type="text" maxlength="200" placeholder="ex. ARIA, affiché tel quel"></label>
-                            </div>
+                            <p id="erreur-libre" class="ko" hidden></p>
                         </div>
-                    </div>
-                    <div class="volet-scenario" data-volet-scenario="libre" hidden>
-                        <p class="discret aide-volet">Écris ton idée comme elle vient : le LLM te pose les questions qui
-                            manquent, puis écrit le prompt avec toi. Ce que tu as fixé dans les autres onglets compte, et
-                            il voit ton image de référence.</p>
-                        <div class="ligne llm-onglet">
-                            <label>LLM du chat <select id="llm-libre"></select></label>
-                        </div>
-                        <div id="place-chat-libre">
-                        <div id="chat-libre">
-                        <div class="libre">
-                            <div id="conversation-libre" class="conversation-libre"></div>
-                            <aside class="fiche-libre">
-                                <h3 class="titre-bloc">Ce que j'ai compris</h3>
-                                <dl id="fiche-libre"></dl>
-                                <p id="fiche-vide-libre" class="discret">Rien encore : commence par ton idée.</p>
-                            </aside>
-                        </div>
-                        <form id="form-libre" class="ligne form-libre">
-                            <textarea id="message-libre" rows="2" maxlength="2000"
-                                      placeholder="Ton idée, ou tes réponses (clique sur une proposition pour l'ajouter ici)…"></textarea>
-                            <button type="submit" class="principal">Envoyer</button>
-                        </form>
-                        <div class="ligne actions-libre">
-                            <button id="ecrire-libre" type="button">✍️ Écris le prompt</button>
-                            <button id="recommencer-libre" type="button" class="petit">🔄 Recommencer</button>
-                            <span id="statut-libre" class="discret"></span>
-                        </div>
-                        <p id="erreur-libre" class="ko" hidden></p>
-                        </div>
-                        </div>
-                    </div>
-                    <div class="volet-scenario" data-volet-scenario="histoire" hidden>
-                        <div id="sequence-scenario">
-                            <p class="discret aide-volet">Le Sujet et le Décor donnent le personnage et le lieu, l'Image de référence
-                                son visage ; raconte l'histoire, choisis les plans, et le LLM écrit le prompt de chacun.</p>
-                            <div class="ligne llm-onglet">
-                                <label>LLM du découpage <select id="llm-histoire"></select></label>
+                        <!-- Séquence : les plans, la contrainte et les cases, que le découpage suit -->
+                        <div id="sequence-scenario" data-atelier-seul="sequence">
+                            <div class="options-creation">
+                                <label>Nombre de plans <select id="nombre-plans-scenario"></select></label>
+                                <span id="duree-sequence-scenario" class="discret"></span>
                             </div>
-                            <div class="ligne synopsis-scenario">
-                                <textarea id="synopsis-scenario" rows="4" maxlength="2000"
-                                          placeholder="L'histoire, du début à la fin, en français. Les répliques entre guillemets : elle lève les yeux et dit « On décolle ce soir. »"></textarea>
-                            </div>
+                            <ol id="plans-scenario" class="plans-scenario"></ol>
                             <div class="cases-sequence">
                                 <div class="case-scenario">
                                     <label class="case"><input type="checkbox" id="dialogue-sequence"> 🗣 Dialogue : des répliques à placer</label>
                                     <textarea id="repliques-sequence" rows="2" maxlength="600" hidden
-                                              placeholder="Une réplique par ligne, gardée mot pour mot ; le LLM la place dans le bon plan (celles du synopsis entre guillemets comptent aussi)"></textarea>
+                                              placeholder="Une réplique par ligne, gardée mot pour mot ; le LLM la place dans le bon plan (celles de l'histoire entre guillemets comptent aussi)"></textarea>
                                     <small class="discret" data-sans="dialogue-sequence">Décoché : personne ne parle dans le film.</small>
                                 </div>
                                 <div class="case-scenario">
@@ -599,44 +536,85 @@
                             <label class="contrainte-scenario">🔒 Contraintes (tous les plans)
                                 <textarea id="contrainte-scenario" rows="2" maxlength="300"
                                           placeholder="ex. elle garde sa combinaison bleue et les cheveux attachés · jamais de musique"></textarea></label>
-                            <div class="options-creation">
-                                <label>Nombre de plans <select id="nombre-plans-scenario"></select></label>
-                                <span id="duree-sequence-scenario" class="discret"></span>
-                            </div>
-                            <ol id="plans-scenario" class="plans-scenario"></ol>
                         </div>
                     </div>
+
+                    <!-- 3 · Compléments : propres à l'atelier, puis les listes à cliquer -->
+                    <details class="bloc-atelier complements" id="complements" data-atelier-sauf="retouche">
+                        <summary><h3 class="titre-bloc">3 · Compléments <span class="discret">(facultatif : précise ce que tu veux imposer)</span></h3></summary>
+                        <div class="sous-listes">
+                            <div class="sous-liste large case-scenario" data-atelier-seul="clip">
+                                <label class="case"><input type="checkbox" id="dialogue-prompt"> 🗣 Dialogue : le personnage parle</label>
+                                <textarea id="replique-prompt" rows="2" maxlength="600" hidden
+                                          placeholder="Une réplique par ligne, gardée mot pour mot (ex. Prêt pour le décollage ?)"></textarea>
+                                <small class="discret" data-sans="dialogue-prompt">Décoché : le prompt dit que personne ne parle.</small>
+                            </div>
+                            <div class="sous-liste large case-scenario" data-atelier-seul="clip">
+                                <label class="case"><input type="checkbox" id="musique-active-prompt"> 🎵 Musique d'ambiance</label>
+                                <input id="musique-prompt" type="text" maxlength="200" hidden
+                                       placeholder="ex. piano doux, tempo lent (vide : la liste Musique ou au choix du LLM)">
+                                <small class="discret" data-sans="musique-active-prompt">Décoché : le prompt dit qu'il n'y a pas de musique de fond.</small>
+                            </div>
+                            <div class="sous-liste" data-atelier-seul="clip">
+                                <label><span>🎞️ Durée du clip</span> <select id="duree-prompt"></select></label>
+                            </div>
+                            <div class="sous-liste" data-atelier-seul="image">
+                                <label><span>Texte dans l'image</span>
+                                    <input id="texte-prompt" type="text" maxlength="200" placeholder="ex. ARIA, affiché tel quel"></label>
+                            </div>
+                        </div>
+                        <div class="onglets-listes" role="tablist">
+                            <button type="button" class="onglet-liste actif" data-liste="sujet">👤 Sujet</button>
+                            <button type="button" class="onglet-liste" data-liste="decor">🏞️ Décor et ambiance</button>
+                            <button type="button" class="onglet-liste" data-liste="scene">🎥 Mise en scène</button>
+                        </div>
+                        <div id="blocs-prompt">
+                            <div class="volet-liste" data-volet-liste="sujet">
+                                <div id="sujets-prompt" class="sujets"></div>
+                                <div id="personnages-prompt" class="options-creation personnages-prompt">
+                                    <label>Mes personnages <select id="personnage-prompt"></select></label>
+                                    <button id="enregistrer-personnage" type="button" class="petit">Enregistrer</button>
+                                    <button id="supprimer-personnage" type="button" class="petit" disabled>Supprimer</button>
+                                </div>
+                                <p id="sans-sujet" class="discret" hidden>Pas de sujet : décris le lieu dans 🏞️ Décor et ambiance.</p>
+                                <div class="blocs-onglet" data-onglet-blocs="sujet"></div>
+                            </div>
+                            <div class="volet-liste" data-volet-liste="decor" hidden>
+                                <div class="blocs-onglet" data-onglet-blocs="decor"></div>
+                            </div>
+                            <div class="volet-liste" data-volet-liste="scene" hidden>
+                                <div class="blocs-onglet" data-onglet-blocs="scene"></div>
+                            </div>
+                        </div>
+                        <div class="apercu-complements">
+                            <span class="discret">Ce que les compléments imposent :</span>
+                            <p id="texte-apercu"></p>
+                            <div id="etiquettes-prompt" class="etiquettes"></div>
+                            <p id="mineur-prompt" class="discret" hidden>Personnage mineur : options adultes masquées (AS-18).</p>
+                            <ul id="alertes-prompt" class="alertes-prompt"></ul>
+                        </div>
+                    </details>
                 </section>
+
                 <aside class="carte apercu-prompt">
-                    <h2>Prompt</h2>
-                    <p id="texte-apercu"></p>
-                    <span id="mots-prompt" class="discret"></span>
-                    <p id="mineur-prompt" class="discret" hidden>Personnage mineur : options adultes masquées (AS-18).</p>
-                    <ul id="alertes-prompt" class="alertes-prompt"></ul>
-                    <p id="erreur-prompt" class="ko" hidden></p>
-                    <div id="etiquettes-prompt" class="etiquettes"></div>
-                    <div class="ligne llm-scenario">
-                        <label>LLM · peaufinage et traductions <select id="llm-prompt"></select></label>
-                        <button id="peaufiner-prompt" type="button" data-clip-seul disabled>✨ Peaufiner</button>
+                    <h2 id="titre-final">Prompt final</h2>
+                    <div data-atelier-sauf="sequence">
+                        <textarea id="prompt-final" rows="12"
+                                  placeholder="✨ Optimiser, 💬 Aide ou « Utiliser tel quel » le posent ici ; tu peux le retoucher."></textarea>
+                        <span id="mots-final" class="discret"></span>
+                        <div class="ligne actions-prompt">
+                            <button id="envoyer-prompt" type="button" disabled>→ Envoyer au Plateau</button>
+                            <button id="creer-prompt" class="principal" type="button" disabled>Créer</button>
+                        </div>
                     </div>
-                    <div id="decoupage-scenario" data-sequence-seule>
-                        <button id="decouper-scenario" type="button" class="principal">✂ Découper avec le LLM</button>
+                    <div id="decoupage-scenario" data-atelier-seul="sequence">
+                        <p class="discret">✨ Découper : le LLM écrit le prompt de chaque plan d'après ton histoire.</p>
                         <ul id="alertes-decoupage" class="alertes-prompt"></ul>
                         <ol id="resultat-decoupage" class="resultat-decoupage"></ol>
                         <div class="ligne actions-prompt" id="creation-sequence-scenario" hidden>
                             <input id="titre-sequence-scenario" type="text" maxlength="40" placeholder="Titre de la séquence">
                             <button id="creer-sequence-scenario" type="button" class="principal">→ Créer dans le Montage</button>
                         </div>
-                    </div>
-                    <div id="peaufine-prompt" data-clip-seul hidden>
-                        <label class="discret" for="texte-peaufine">Version peaufinée (modifiable)</label>
-                        <textarea id="texte-peaufine" rows="6"></textarea>
-                        <label class="case discret"><input type="checkbox" id="utiliser-peaufine" checked> Utiliser cette version</label>
-                    </div>
-                    <p id="statut-prompt" class="discret" hidden></p>
-                    <div class="ligne actions-prompt" data-clip-seul>
-                        <button id="envoyer-prompt" type="button" disabled>→ Envoyer au Plateau</button>
-                        <button id="creer-prompt" class="principal" type="button" disabled>Créer</button>
                     </div>
                 </aside>
             </div>

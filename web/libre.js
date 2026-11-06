@@ -1,10 +1,9 @@
-// Scénario, onglet Libre : le prompt s'écrit en conversation (POST /api/prompt/libre). Le LLM pose les questions
-// essentielles avec des réponses à cliquer, tient la fiche « Ce que j'ai compris », écrit le prompt sur demande puis
-// l'ajuste. Il connaît ce que les autres onglets fixent et voit l'image de référence. Le prompt écrit rejoint la
-// version modifiable de l'aperçu, d'où il part vers le Plateau ou le Montage.
+// Scénario, 💬 Aide : chaque atelier a sa conversation (POST /api/prompt/libre). Le LLM pose les questions
+// essentielles avec des réponses à cliquer, tient la fiche « Ce que j'ai compris », puis écrit : le prompt final
+// (Image, Retouche, Clip) ou l'histoire (Séquence, que ✂ Découper découpe ensuite). Il connaît les compléments
+// de l'atelier et voit ses images de référence.
 
 const ECRIRE_LIBRE = "ÉCRIS LE PROMPT";  // comme prompt.ECRIRE : ce tour-là réfléchit
-const libre = { echanges: [], dernier: null };  // échanges envoyés au LLM ; dernier tour rendu (fiche, questions)
 
 const lireTour = (contenu) => {
     try {
@@ -14,23 +13,16 @@ const lireTour = (contenu) => {
     }
 };
 
-// Ce que les autres onglets fixent déjà : le prompt assemblé, s'il y a des choix (sinon « A person. » ne dit rien).
-function contexteLibre() {
-    const e = etatPrompt();
-    const choisi = Object.values(e.choix).some((v) => Object.keys(v ?? {}).length)
-        || [e.texte, e.precisions, e.action, e.replique].some((x) => x?.trim());
-    return choisi && assemblagePrompt ? assemblagePrompt.prompt : "";
-}
-
 function rendreLibre() {
+    const a = atelier();
     const conversation = document.getElementById("conversation-libre");
-    conversation.innerHTML = libre.echanges.map((e, k) => {
+    conversation.innerHTML = a.echanges.map((e, k) => {
         if (e.role === "user") {
-            const texte = e.content === ECRIRE_LIBRE ? "✍️ Écris le prompt" : e.content;
+            const texte = e.content === ECRIRE_LIBRE ? "✍️ Écris-le maintenant" : e.content;
             return `<div class="bulle bulle-toi">${echapper(texte)}</div>`;
         }
         const t = lireTour(e.content);
-        const dernier = k === libre.echanges.length - 1;
+        const dernier = k === a.echanges.length - 1;
         return `<div class="bulle bulle-llm">
             <p>${echapper(t.message || "…")}</p>
             ${(t.questions ?? []).map((q, i) => `<div class="question-libre">
@@ -39,49 +31,60 @@ function rendreLibre() {
                     `<button type="button" class="petit" data-question="${i}" data-choix="${echapper(c)}">${echapper(c)}</button>`).join("")}</div>`
                 : ""}
             </div>`).join("")}
-            ${t.prompt ? '<p class="discret">✍️ Prompt écrit : il est à droite, modifiable.</p>' : ""}
+            ${t.prompt ? `<p class="discret">✍️ ${formeScenario === "sequence" ? "Histoire écrite : elle est dans ton idée."
+                : "Prompt écrit : il est à droite, modifiable."}</p>` : ""}
         </div>`;
     }).join("");
     conversation.scrollTop = conversation.scrollHeight;
-    const fiche = libre.dernier?.fiche ?? {};
+    const fiche = a.dernier?.fiche ?? {};
     document.getElementById("fiche-libre").innerHTML = Object.entries(fiche).map(([k, v]) =>
         `<dt>${echapper(k)}</dt><dd>${echapper(v)}</dd>`).join("");
     document.getElementById("fiche-vide-libre").hidden = Object.keys(fiche).length > 0;
 }
 
-function poserPromptLibre(texte) {  // la version modifiable de l'aperçu, celle qui part
-    peaufinage = { source: assemblagePrompt?.prompt ?? "" };
-    document.getElementById("texte-peaufine").value = texte;
-    document.getElementById("utiliser-peaufine").checked = true;
-    document.getElementById("peaufine-prompt").hidden = false;
+// 💬 Aide : la conversation s'ouvre ; la première fois, elle part de ton idée.
+function ouvrirAide() {
+    document.getElementById("chat-libre").hidden = false;
+    const a = atelier();
+    if (!a.echanges.length && a.idee.trim()) envoyerLibre(a.idee);
+    else document.getElementById("message-libre").focus();
 }
 
 async function envoyerLibre(texte) {
     texte = texte.trim();
     if (!texte || occupePrompt) return;
+    const a = atelier();
+    const forme = formeScenario;
     const erreur = document.getElementById("erreur-libre");
     const statut = document.getElementById("statut-libre");
     erreur.hidden = true;
-    libre.echanges.push({ role: "user", content: texte });
+    a.echanges.push({ role: "user", content: texte });
     rendreLibre();
     occupePrompt = true;
     majBoutonsPrompt();
     document.querySelectorAll("#form-libre button, .actions-libre button").forEach((b) => { b.disabled = true; });
-    statut.textContent = texte === ECRIRE_LIBRE ? "Le LLM écrit le prompt… (il réfléchit)" : "Le LLM lit ta réponse…";
+    statut.textContent = texte === ECRIRE_LIBRE ? `${nomLlm()} écrit… (il réfléchit)` : `${nomLlm()} lit ta réponse…`;
     try {
+        if (forme === "clip") await traduireSiBesoin(() => {});  // la musique d'un clip, en anglais
         const r = await api("POST", "/api/prompt/libre", {
-            echanges: libre.echanges, forme: formeScenario, workflow: ciblePrompt(), contexte: contexteLibre(),
-            images: imagesReference(), role: roleReference(),
-            llm: llmPour(ongletScenario === "reference" ? "reference" : "libre"),  // le LLM de l'onglet du chat
-            duree: Number(document.getElementById("duree-prompt").value) || 5,
+            echanges: a.echanges, forme, workflow: ciblePrompt(), contexte: complements(),
+            images: imagesReference(), role: roleReference(), llm: llmAtelier(), duree: dureeClip(),
         });
-        libre.echanges.push({ role: "assistant", content: r.brut });
-        libre.dernier = r;
-        if (r.prompt) poserPromptLibre(r.prompt);
+        a.echanges.push({ role: "assistant", content: r.brut });
+        a.dernier = r;
+        if (r.prompt && forme === "sequence") {  // l'histoire rejoint l'idée, que ✂ Découper découpe
+            a.idee = r.prompt;
+            if (formeScenario === forme) document.getElementById("idee-scenario").value = r.prompt;
+            histoireModifiee(r.prompt);
+        } else if (r.prompt && formeScenario === forme) {
+            poserFinal(r.prompt);
+        } else if (r.prompt) {
+            a.final = r.prompt;
+        }
         statut.textContent = `${r.duree_s} s`;
         document.getElementById("message-libre").value = "";
     } catch (err) {
-        libre.echanges.pop();  // ta réponse reste dans le champ : renvoie-la
+        a.echanges.pop();  // ta réponse reste dans le champ : renvoie-la
         if (texte !== ECRIRE_LIBRE) document.getElementById("message-libre").value = texte;
         erreur.textContent = err.message;
         erreur.hidden = false;
@@ -107,9 +110,10 @@ document.getElementById("message-libre").addEventListener("keydown", (e) => {
 });
 document.getElementById("ecrire-libre").addEventListener("click", () => envoyerLibre(ECRIRE_LIBRE));
 document.getElementById("recommencer-libre").addEventListener("click", () => {
-    if (libre.echanges.length && !confirm("Recommencer la conversation ?")) return;
-    libre.echanges = [];
-    libre.dernier = null;
+    const a = atelier();
+    if (a.echanges.length && !confirm("Recommencer la conversation de cet atelier ?")) return;
+    a.echanges = [];
+    a.dernier = null;
     document.getElementById("erreur-libre").hidden = true;
     document.getElementById("statut-libre").textContent = "";
     rendreLibre();
@@ -120,7 +124,7 @@ document.getElementById("recommencer-libre").addEventListener("click", () => {
 document.getElementById("conversation-libre").addEventListener("click", (e) => {
     const bouton = e.target.closest("[data-choix]");
     if (!bouton) return;
-    const q = libre.dernier?.questions?.[Number(bouton.dataset.question)];
+    const q = atelier().dernier?.questions?.[Number(bouton.dataset.question)];
     const champ = document.getElementById("message-libre");
     const ligne = `${(q?.question ?? "").replace(/\s*\?$/, "")} : ${bouton.dataset.choix}`;
     champ.value = champ.value.trim() ? `${champ.value.trim()}\n${ligne}` : ligne;
