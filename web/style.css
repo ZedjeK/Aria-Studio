@@ -2528,3 +2528,14 @@ button.quitter-appli:hover {
     align-items: center;
     margin-bottom: 4px;
 }
+
+.champ-prompt-clip {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.champ-prompt-clip textarea {
+    flex: 1;
+}

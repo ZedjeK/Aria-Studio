@@ -921,8 +921,7 @@ def video_creation(id_creation: str):
 
 class DemandeClip(BaseModel):
     idee: str = ""
-    prompt: str | None = None  # fourni : pas de réécriture (« Retourner », « Variante »)
-    llm: str | None = None
+    prompt: str = ""  # tourné tel quel : le LLM n'écrit qu'au Scénario
     mode: str = "animer"  # animer (un rush) ou texte
     source: str | None = None  # rush à animer
     qualite: str = "compromis"  # rapide, compromis, qualite
@@ -936,8 +935,10 @@ class DemandeClip(BaseModel):
 
 @app.post("/api/clips")
 def tourner_clip(d: DemandeClip):
+    if not d.prompt.strip():
+        raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
     return _commander(lambda: plateau_.commander_clip(
-        d.idee, d.prompt, d.llm, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
+        d.idee or d.prompt, d.prompt.strip(), None, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
         rushes.valider_dossier(d.dossier), d.modele))
 
 

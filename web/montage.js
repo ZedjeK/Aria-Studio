@@ -6,7 +6,6 @@ let optionsMontage = null;
 let sourceMontage = null;  // rush à animer
 let modeMontage = "animer";
 let commandeMontage = null;
-let dernierMontage = null;  // réglages du dernier tournage, pour « Retourner » et « Variante »
 let clipOuvert = null;
 
 const bobines = creerGalerie({
@@ -54,9 +53,6 @@ async function preparerMontage() {
     remplirSelect("duree-montage", v.durees.map((d) => [String(d), `${d} s`]), "5");
     remplirSelect("format-montage", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     remplirSelect("nombre-montage", Array.from({ length: v.nombre_max }, (_, i) => [String(i + 1), String(i + 1)]), "1");
-    const llms = optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]);
-    remplirSelect("llm-montage", llms, llmDuWorkflow(optionsMontage.video.workflows[modeMontage]
-        ?? optionsMontage.video.workflows.animer, optionsMontage));
     rendreSource();
     majEstimation();
     await bobines.charger();
@@ -81,16 +77,12 @@ function majEstimation() {
 
 // Mode et source
 
-// Animer ou texte : le LLM du workflow vidéo de ce mode (onglet Modèles, Vidéo) ; la séquence découpe avec celui
-// du texte vers vidéo.
+// La séquence découpe avec le LLM du texte vers vidéo (onglet Modèles, Vidéo) ; le clip seul n'en a plus.
 function suivreLlmMontage() {
     if (!optionsMontage) return;
     const llms = optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]);
-    remplirSelect("llm-montage", llms, optionsMontage.llm.defaut);  // un LLM qui vient d'arriver y figure
-    remplirSelect("llm-sequence", llms, optionsMontage.llm.defaut);
-    const w = optionsMontage.video.workflows;
-    if (w[modeMontage]) document.getElementById("llm-montage").value = llmDuWorkflow(w[modeMontage], optionsMontage);
-    document.getElementById("llm-sequence").value = llmDuWorkflow(w.texte, optionsMontage);
+    remplirSelect("llm-sequence", llms, optionsMontage.llm.defaut);  // un LLM qui vient d'arriver y figure
+    document.getElementById("llm-sequence").value = llmDuWorkflow(optionsMontage.video.workflows.texte, optionsMontage);
 }
 
 document.querySelectorAll('input[name="mode-montage"]').forEach((radio) => {
@@ -125,24 +117,23 @@ async function recevoirAuMontage({ prompt, images, role, duree, lancer }) {
         sourceMontage = images[0];
         rendreSource();
     }
-    document.getElementById("idee-montage").value = prompt;
-    document.getElementById("sans-reecriture-montage").checked = true;
+    document.getElementById("prompt-clip").value = prompt;
     const choixDuree = document.getElementById("duree-montage");
     choixDuree.value = String(duree);
     choixDuree.dispatchEvent(new Event("change"));
     document.querySelector('.onglet[data-vue="montage"]').click();
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (lancer) document.getElementById("form-montage").requestSubmit();
-    else document.getElementById("idee-montage").focus();
+    else document.getElementById("prompt-clip").focus();
 }
 
-function animerRush(id) {  // appelé par le bouton « 🎞️ Animer » de la fiche d'un rush
-    sourceMontage = id;
-    document.querySelector('input[name="mode-montage"][value="animer"]').click();
-    document.querySelector('.onglet[data-vue="montage"]').click();
-    rendreSource();
-    document.getElementById("idee-montage").focus();
+// « 🎞️ Animer » d'un rush : le prompt du clip s'écrit au Scénario, qui voit le rush, puis revient ici.
+function animerRush(id) {
+    ouvrirScenario("clip", { animer: id });
 }
+
+document.getElementById("vers-scenario-montage").addEventListener("click", () =>
+    ouvrirScenario("clip", { animer: modeMontage === "animer" ? sourceMontage : null }));
 
 document.getElementById("source-montage").addEventListener("click", (e) => {
     if (e.target.closest("[data-retirer]")) {
@@ -243,24 +234,16 @@ async function tourner(corps) {
         erreur.hidden = false;
         return;
     }
-    dernierMontage = corps;
-    document.querySelectorAll("#form-montage button, #retourner").forEach((b) => { b.disabled = true; });
+    document.querySelectorAll("#form-montage button").forEach((b) => { b.disabled = true; });
     document.getElementById("progression-montage").hidden = false;
     suivreAnnulable(document.getElementById("progression-montage"), commandeMontage.id);
     suivreMontage(Date.now(), estimationSecondes());
 }
 
+// Le prompt part tel quel : le LLM n'écrit qu'au Scénario.
 document.getElementById("form-montage").addEventListener("submit", (e) => {
     e.preventDefault();
-    const idee = document.getElementById("idee-montage").value;
-    const corps = { idee, ...reglagesMontage() };
-    if (document.getElementById("sans-reecriture-montage").checked) corps.prompt = idee;
-    else corps.llm = document.getElementById("llm-montage").value;
-    tourner(corps);
-});
-
-document.getElementById("retourner").addEventListener("click", () => {
-    tourner({ ...dernierMontage, ...reglagesMontage(), prompt: document.getElementById("prompt-montage").value });
+    tourner({ prompt: document.getElementById("prompt-clip").value.trim(), ...reglagesMontage() });
 });
 
 async function suivreMontage(debut, estimation) {
@@ -278,7 +261,7 @@ async function suivreMontage(debut, estimation) {
         return;
     }
     bloc.hidden = true;
-    document.querySelectorAll("#form-montage button, #retourner").forEach((b) => { b.disabled = false; });
+    document.querySelectorAll("#form-montage button").forEach((b) => { b.disabled = false; });
     if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-montage");
         erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "clip") : c.erreur;
@@ -288,7 +271,6 @@ async function suivreMontage(debut, estimation) {
     }
     document.getElementById("clips-montage").innerHTML = c.images.map((id) =>
         `<video src="${urlVideo(id)}" poster="${urlImage(id)}" controls loop playsinline data-creation="${echapper(id)}"></video>`).join("");
-    document.getElementById("prompt-montage").value = c.prompt;
     document.getElementById("resultat-montage").hidden = false;
     bobines.charger();
 }
@@ -355,7 +337,7 @@ document.getElementById("variante-clip").addEventListener("click", () => {
 document.getElementById("reutiliser-clip").addEventListener("click", () => {
     const f = clipOuvert;
     fermerClip();
-    document.getElementById("idee-montage").value = f.idee;
+    document.getElementById("prompt-clip").value = f.prompt ?? "";
     document.querySelector(`input[name="mode-montage"][value="${f.mode_video}"]`).click();
     sourceMontage = f.mode_video === "animer" ? f.parent : sourceMontage;
     document.getElementById("qualite-montage").value = f.qualite;

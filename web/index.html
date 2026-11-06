@@ -275,16 +275,20 @@
                                 <span class="numero">＋</span></div>
                             <button id="choisir-rush" type="button" class="petit">Choisir un rush</button>
                         </div>
-                        <textarea id="idee-montage" rows="4" required
-                                  placeholder="Ton idée, en français. Les répliques entre guillemets : elle lève les yeux et murmure « On décolle ce soir. »"></textarea>
+                        <div class="champ-prompt-clip">
+                            <div class="ligne entete-prompt-plateau">
+                                <label class="discret" for="prompt-clip">Prompt, tourné tel quel par le modèle</label>
+                                <button id="vers-scenario-montage" type="button" class="petit">✍️ L'écrire au Scénario</button>
+                            </div>
+                            <textarea id="prompt-clip" rows="4" required
+                                      placeholder="Le prompt arrive du ✍️ Scénario (avec le rush à animer) ; tu peux le retoucher ici, ou l'écrire toi-même (en anglais)."></textarea>
+                        </div>
                     </div>
                     <div class="options-creation">
                         <label title="Checkpoint de MiniMax H3 (dépose les tiens dans modeles/MiniMax-H3/modeles ; défaut et réglages dans l'onglet Réglages)">Modèle <select id="modele-montage"></select></label>
                         <label>Qualité <select id="qualite-montage"></select></label>
                         <label>Durée <select id="duree-montage"></select></label>
                         <label id="bloc-format-montage" hidden>Format <select id="format-montage"></select></label>
-                        <label>LLM <select id="llm-montage"></select></label>
-                        <label class="case"><input type="checkbox" id="sans-reecriture-montage"> Sans réécriture</label>
                         <label>Seed <input id="seed-montage" type="number" min="0" placeholder="aléatoire"></label>
                         <label>Clips <select id="nombre-montage"></select></label>
                         <button type="submit" class="principal">Tourner</button>
@@ -394,9 +398,6 @@
 
                 <div id="resultat-montage" hidden>
                     <div id="clips-montage" class="vignettes clips"></div>
-                    <label class="discret" for="prompt-montage">Prompt envoyé au modèle (modifiable)</label>
-                    <textarea id="prompt-montage" rows="4"></textarea>
-                    <button id="retourner" type="button">Retourner avec ce prompt</button>
                 </div>
             </section>
 
@@ -433,7 +434,7 @@
                 <dl id="fiche-clip"></dl>
                 <div class="ligne actions-detail">
                     <button id="variante-clip" class="principal">Variante</button>
-                    <button id="reutiliser-clip">Réutiliser l'idée</button>
+                    <button id="reutiliser-clip">Réutiliser le prompt</button>
                     <button id="ouvrir-sequence-clip" class="principal" hidden>📽️ Ouvrir la séquence</button>
                     <a id="telecharger-clip" class="bouton" download>Télécharger</a>
                     <button id="corbeille-clip">🗑 Corbeille</button>
