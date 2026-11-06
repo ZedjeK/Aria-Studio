@@ -46,10 +46,21 @@ def appli(exe: str) -> str | None:
     return parties[-1] if parties else None
 
 
+# Moteurs d'Aria repris après une fermeture brutale (app/comfy.py, ComfyUI.adopter) : à elle aussi.
+ADOPTES: set[int] = set()
+
+
 def pids_aria() -> set[int]:
-    """Ce serveur et tout ce qu'il a lancé (son ComfyUI, son Llama)."""
+    """Ce serveur et tout ce qu'il a lancé (son ComfyUI, son Llama), plus les moteurs qu'il a adoptés."""
     moi = psutil.Process(os.getpid())
-    return {moi.pid} | {p.pid for p in moi.children(recursive=True)}
+    pids = {moi.pid} | {p.pid for p in moi.children(recursive=True)}
+    for pid in list(ADOPTES):
+        try:
+            adopte = psutil.Process(pid)
+            pids |= {pid} | {p.pid for p in adopte.children(recursive=True)}
+        except psutil.Error:
+            ADOPTES.discard(pid)
+    return pids
 
 
 def coupables(exclus: set[int]) -> list[dict]:

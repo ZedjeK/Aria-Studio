@@ -115,6 +115,17 @@ class Orchestrateur:
             await self.comfy.arreter()
             self.actif = None
 
+    async def reprendre(self) -> bool:
+        """Au démarrage : un ComfyUI d'Aria resté orphelin (fermeture brutale d'une Aria précédente) est repris.
+        S'il répond, c'est le moteur actif : sa VRAM est à nous, un LLM la fera libérer avant de se charger, et la
+        pastille ne la compte pas comme une autre appli."""
+        async with self._verrou:
+            if not self.comfy.adopter():
+                return False
+            if await self.comfy.est_pret():
+                self.actif = "comfyui"
+            return True
+
     @asynccontextmanager
     async def sans_moteur(self, id_moteur: str):
         """Arrête notre moteur et le tient arrêté le temps d'un échange de dossiers (app/moteurs.py) ; attend la fin

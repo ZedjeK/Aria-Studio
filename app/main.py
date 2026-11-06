@@ -40,6 +40,7 @@ _taches_fond: set[asyncio.Task] = set()
 
 @asynccontextmanager
 async def cycle_de_vie(_app: FastAPI):
+    await orchestrateur.reprendre()  # un ComfyUI laissé par une Aria fermée brutalement : repris, arrêté en quittant
     telechargeur.demarrer()
     plateau_.demarrer()
     verification = asyncio.create_task(mises_a_jour.verifier())  # au plus une fois par jour, sans bloquer le démarrage

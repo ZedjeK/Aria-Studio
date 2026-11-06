@@ -2,14 +2,18 @@
 
 import asyncio
 import json
+import os
+import socket
 import subprocess
 import uuid
 from pathlib import Path
 from typing import Callable
 
 import httpx
+import psutil
 import websockets
 
+from app import garde
 from app.emplacements import DATA
 
 LOGS = DATA / "logs"
@@ -21,13 +25,27 @@ class ErreurComfy(RuntimeError):
     pass
 
 
+def _chemin(p: Path | str) -> str:
+    return os.path.normcase(os.path.realpath(p))
+
+
 class ComfyUI:
+    """Le ComfyUI d'Aria. Un seul à la fois : celui qu'elle a lancé (`process`), ou celui qu'une Aria précédente a
+    laissé orphelin (`adopte`, fermeture brutale) ; elle arrête l'un comme l'autre en quittant.
+
+    Vu le 2026-11-06 : occupé (une vingtaine de Go de H3 à décharger), ComfyUI a mis plus de 2 s à répondre ; Aria
+    l'a cru mort et en a lancé un second, mort aussitôt sur le port pris ; elle n'a plus suivi que ce second et a
+    laissé le vrai tourner après sa fermeture, 11,8 Go gardés. D'où : jamais de second lancement tant que le nôtre
+    vit ou que le port est pris, et l'adoption des orphelins."""
+
     def __init__(self, dossier: Path, port: int, chemins_modeles: Path):
         self.dossier = dossier
         self.port = port
         self.chemins_modeles = chemins_modeles
         self.url = f"http://127.0.0.1:{port}"
+        self.python = dossier / "python_embeded" / "python.exe"
         self.process: subprocess.Popen | None = None
+        self.adopte: psutil.Process | None = None
         self._log = None
 
     async def est_pret(self) -> bool:
@@ -38,14 +56,72 @@ class ComfyUI:
         except httpx.HTTPError:
             return False
 
+    def vivant(self) -> bool:
+        """Le nôtre tourne-t-il (lancé ou adopté), même s'il ne répond pas tout de suite ?"""
+        if self.process is not None and self.process.poll() is None:
+            return True
+        try:
+            return self.adopte is not None and self.adopte.is_running()
+        except psutil.Error:
+            return False
+
+    def _port_pris(self) -> bool:
+        with socket.socket() as s:
+            s.settimeout(1)
+            return s.connect_ex(("127.0.0.1", self.port)) == 0
+
+    def orphelins(self) -> list[psutil.Process]:
+        """Les ComfyUI d'Aria qu'aucune Aria ne tient plus : lancés depuis son dossier, sur son port, et dont le
+        parent n'existe plus (ou dont le numéro a été repris par un processus plus jeune). Le ComfyUI d'une Aria
+        vivante n'en est jamais un, même si elle partage les moteurs."""
+        dossier, sortie = _chemin(self.dossier), []
+        for p in psutil.process_iter():
+            try:
+                if self.process is not None and p.pid == self.process.pid:
+                    continue
+                cmd = p.cmdline()
+                if not ("ComfyUI/main.py" in cmd and "--port" in cmd and str(self.port) in cmd
+                        and _chemin(p.cwd()) == dossier):
+                    continue
+                try:
+                    orphelin = psutil.Process(p.ppid()).create_time() > p.create_time()
+                except psutil.NoSuchProcess:
+                    orphelin = True
+                if orphelin:
+                    sortie.append(p)
+            except psutil.Error:
+                continue
+        return sortie
+
+    def adopter(self) -> bool:
+        """Reprend un ComfyUI d'Aria resté orphelin : Aria s'en sert, le garde-VRAM le compte comme à elle, et elle
+        l'arrête en quittant. Rien à faire si le nôtre tourne déjà."""
+        if self.vivant():
+            return False
+        orphelins = self.orphelins()
+        if not orphelins:
+            return False
+        self.adopte = orphelins[0]
+        garde.ADOPTES.add(self.adopte.pid)
+        return True
+
     async def demarrer(self, timeout: float = 180):
         if await self.est_pret():
+            self.adopter()  # un orphelin d'Aria qui répond : repris, pour l'arrêter en quittant
+            return
+        if self.vivant() or self._port_pris():
+            # Le nôtre tourne mais il est occupé, ou un ComfyUI tient déjà le port : on l'attend. Un second lancement
+            # mourrait sur le port pris, et on perdrait la trace du vrai.
+            self.adopter()
+            await self._attendre(timeout, lance=False)
             return
         LOGS.mkdir(parents=True, exist_ok=True)
+        if self._log is not None:
+            self._log.close()
         self._log = (LOGS / "comfyui.log").open("w", encoding="utf-8")
         self.process = subprocess.Popen(
             [
-                str(self.dossier / "python_embeded" / "python.exe"), "-s", "ComfyUI/main.py",
+                str(self.python), "-s", "ComfyUI/main.py",
                 "--listen", "127.0.0.1", "--port", str(self.port), "--disable-auto-launch",
                 "--extra-model-paths-config", str(self.chemins_modeles),
             ],
@@ -54,29 +130,45 @@ class ComfyUI:
             stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
+        await self._attendre(timeout, lance=True)
+
+    async def _attendre(self, timeout: float, lance: bool):
         fin = asyncio.get_running_loop().time() + timeout
         while asyncio.get_running_loop().time() < fin:
-            if self.process.poll() is not None:
+            if lance and self.process.poll() is not None:
                 raise ErreurComfy(f"ComfyUI s'est arrêté au démarrage (code {self.process.returncode}), voir data/logs/comfyui.log")
             if await self.est_pret():
                 return
             await asyncio.sleep(1)
-        await self.arreter()
-        raise ErreurComfy(f"ComfyUI n'a pas répondu en {timeout:.0f} s")
+        if lance:
+            await self.arreter()
+            raise ErreurComfy(f"ComfyUI n'a pas répondu en {timeout:.0f} s")
+        raise ErreurComfy(f"ComfyUI tourne mais ne répond plus depuis {timeout:.0f} s (occupé ou bloqué)")
 
     async def arreter(self):
-        if self.process is None:
-            return
-        if self.process.poll() is None:
+        """Arrête le nôtre : celui qu'on a lancé et celui qu'on a adopté."""
+        if self.process is not None and self.process.poll() is None:
             self.process.terminate()
             try:
                 await asyncio.to_thread(self.process.wait, 15)
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 await asyncio.to_thread(self.process.wait)
-        self.process = None
-        self._log.close()
-        self._log = None
+        if self.adopte is not None:
+            try:
+                self.adopte.terminate()
+                try:
+                    await asyncio.to_thread(self.adopte.wait, 15)
+                except psutil.TimeoutExpired:
+                    self.adopte.kill()
+                    await asyncio.to_thread(self.adopte.wait, 15)
+            except psutil.NoSuchProcess:
+                pass
+            garde.ADOPTES.discard(self.adopte.pid)
+        self.process = self.adopte = None
+        if self._log is not None:
+            self._log.close()
+            self._log = None
 
     async def options_sampler(self) -> tuple[list[str], list[str]]:
         """Samplers et schedulers acceptés par le nœud KSampler de ce ComfyUI."""
