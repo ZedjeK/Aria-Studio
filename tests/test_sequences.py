@@ -96,24 +96,7 @@ class Reecriture(unittest.TestCase):
                          'She says: "Moteurs au vert." A click click. Audio')
 
 
-class TexteEnvoyeALlama(Base):
-    def test_ambiance_en_toile_de_fond(self):
-        s = self.creer()
-        texte = sequences.idee_pour_llm(s, 2)
-        self.assertTrue(texte.startswith("gros plan dans le cockpit"))
-        self.assertIn("l'idée gagne", texte)
-        self.assertIn("hangar de nuit", texte)
-        self.assertTrue(texte.endswith(sequences.CONSIGNE_SEQUENCE))
-        self.assertNotIn("TRANSITION", texte)
-
-    def test_plan_qui_ne_suit_pas_l_ambiance(self):
-        plans = self.plans()
-        plans[2]["ambiance"] = False
-        s = self.creer(plans=plans)
-        self.assertNotIn("hangar de nuit", sequences.idee_pour_llm(s, 2))
-        self.assertIn("hangar de nuit", sequences.idee_pour_llm(s, 1))
-        self.assertIn("ONE continuous take", sequences.idee_pour_llm(s, 2))
-
+class Ambiance(Base):
     def test_decocher_l_ambiance_retourne_le_plan(self):
         s = self.tout_a_jour(sequences.lire(self.creer()["id"]))
         for p in s["plans"]:
@@ -123,16 +106,6 @@ class TexteEnvoyeALlama(Base):
         plans = [dict(p) for p in s["plans"]]
         plans[2]["ambiance"] = False
         self.assertEqual(sequences.modifier(s["id"], {**s, "plans": plans})["a_tourner"], [2, 3])
-
-    def test_transition_connait_son_depart_et_son_arrivee(self):
-        s = self.creer()
-        s["plans"][2]["prompt_final"] = "Close-up in a green-lit cockpit, the character flips two switches."
-        texte = sequences.idee_pour_llm(s, 3)
-        self.assertIn("starts exactly on the last image of the previous shot: Close-up in a green-lit cockpit", texte)
-        self.assertIn("ends exactly on this picture: une enseigne néon", texte)  # l'idée d'origine du rush
-        self.assertIn("progressively over the whole clip", texte)
-        s["plans"][2]["prompt_final"] = None  # pas encore réécrit : son idée
-        self.assertIn("previous shot: gros plan dans le cockpit", sequences.idee_pour_llm(s, 3))
 
 
 class Validation(Base):
@@ -295,14 +268,27 @@ class Graphes(Base):
 
 
 class File(Base):
+    def avec_prompts(self):
+        plans = self.plans()
+        for p in plans:
+            p["prompt"] = f"{p['idee']} (prompt du Scénario)"
+        return plans
+
     def test_commande_dans_la_file(self):
-        s = self.creer()
-        with mock.patch.object(Plateau, "_valider_llm", return_value="x.gguf"):
-            p = Plateau(orchestrateur=None)
-            c = p.commander_sequence(s["id"])
-            self.assertEqual((c.type, c.plans, c.dossier), ("sequence", [0, 1, 2, 3], "Séquence Décollage"))
-            with self.assertRaisesRegex(ErreurPlateau, "déjà en tournage"):
-                p.commander_sequence(s["id"])
+        s = self.creer(plans=self.avec_prompts())
+        p = Plateau(orchestrateur=None)
+        c = p.commander_sequence(s["id"])
+        self.assertEqual((c.type, c.plans, c.dossier, c.llm), ("sequence", [0, 1, 2, 3], "Séquence Décollage", None))
+        with self.assertRaisesRegex(ErreurPlateau, "déjà en tournage"):
+            p.commander_sequence(s["id"])
+
+    def test_plan_sans_prompt_refuse(self):
+        """Le LLM n'écrit plus au tournage : un plan à tourner doit avoir son prompt (Scénario ou plan)."""
+        plans = self.avec_prompts()
+        plans[1]["prompt"] = plans[3]["prompt"] = None
+        s = self.creer(plans=plans)
+        with self.assertRaisesRegex(ErreurPlateau, "Plans 2, 4 sans prompt"):
+            Plateau(orchestrateur=None).commander_sequence(s["id"])
 
     def test_rien_a_tourner(self):
         s = self.tout_a_jour(sequences.lire(self.creer()["id"]))

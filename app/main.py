@@ -954,6 +954,7 @@ class DemandeSequence(BaseModel):
     plans: list[dict] = []  # [{id, idee, prompt, duree, enchainement, rush, seed, ambiance}]
     llm: str | None = None
     modele: str | None = None  # checkpoint ; absent = défaut des réglages (création) ou celui déjà choisi
+    contrainte_en: dict | None = None  # {fr, en} : traduction faite au découpage du Scénario
 
 
 class DemandeTournageSequence(BaseModel):

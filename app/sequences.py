@@ -55,14 +55,6 @@ SURCOUT_SEQUENCE = 1.4
 # en 12 qu'en 8 steps. Les plans avec une réplique montent à 12 steps ; mesuré +17 % de temps sur un plan.
 STEPS_PAROLE = 12
 SURCOUT_PAROLE = 1.17
-# Ajouté à l'idée de chaque plan avant la réécriture : à l'essai, Llama inventait un âge différent à chaque plan
-# (« 30s », « middle-aged », « mid-50s ») et H3 suit le texte plutôt que l'image de référence.
-CONSIGNE_SEQUENCE = ("(This is one shot of a sequence: the character's face, age, body and outfit come from the "
-                     "reference picture, so never describe them; call her or him simply \"the character\". "
-                     "The shot is ONE continuous take: never write \"cut to\" nor switch to another angle or place "
-                     "(the next shot does that). "
-                     "Keep every spoken line word for word, in quotes, and never add one: if the idea has no line in "
-                     "quotes, nobody speaks.)")
 # Ce qui, s'il change, oblige à retourner le plan (et ceux qui en dépendent).
 CONTENU_PLAN = ("idee", "prompt", "duree", "enchainement", "rush", "seed", "ambiance")
 CONTENU_SEQUENCE = ("qualite", "format", "casting", "modele")  # un autre checkpoint : des plans qui ne se ressemblent plus
@@ -341,6 +333,10 @@ def _workflow() -> "workflows.Workflow":
 def creer(donnees: dict) -> dict:
     s = _valider(donnees)
     s["modele"] = s["modele"] or _workflow().choisi(None)  # la séquence garde son checkpoint, même si le défaut change
+    traduction = donnees.get("contrainte_en") or {}  # faite au découpage du Scénario
+    if s["casting"]["contrainte"] and traduction.get("fr") == s["casting"]["contrainte"] and traduction.get("en"):
+        s["contrainte_en"] = {"fr": traduction["fr"], "en": " ".join(str(traduction["en"]).split())[:LONGUEUR_CONTRAINTE * 2]}
+        securite.verifier(s["casting"]["contrainte"], s["contrainte_en"]["en"])
     for p in s["plans"]:
         p.update(clip=None, prompt_final=None, a_jour=False)
     s.update(id=f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}", date=datetime.now().isoformat(timespec="seconds"),
@@ -714,8 +710,11 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
             alertes.append(f"Réplique « {r} » absente du découpage : ajoute-la au plan voulu")
     # Ensemble : un mineur des textes d'origine reste un mineur, même si Llama l'a reformulé.
     securite.verifier(*entrees, tout)
+    # La contrainte en anglais, ajoutée telle quelle à chaque plan au tournage (où le LLM n'écrit plus).
+    contrainte_en = ({"fr": contrainte, "en": prompt.nettoyer_markdown(
+        await prompt.traduire_precisions(orchestrateur, contrainte, llm))} if contrainte else None)
     return {"plans": sortie, "alertes": alertes, "duree_s": round(time.perf_counter() - debut, 2),
-            "reference": reference, "contrainte": contrainte}
+            "reference": reference, "contrainte": contrainte, "contrainte_en": contrainte_en}
 
 
 # Tournage (appelé par la file du Plateau)
@@ -725,42 +724,14 @@ def _extrait(texte: str, longueur: int = 400) -> str:
     return texte if len(texte) <= longueur else texte[:longueur].rsplit(" ", 1)[0] + "…"
 
 
-def idee_pour_llm(s: dict, k: int) -> str:
-    """Ce que Llama reçoit pour réécrire le plan k : l'idée, l'ambiance en toile de fond, le trajet d'une transition."""
-    plan = s["plans"][k]
-    morceaux = [plan["idee"]]
-    if s["casting"]["ambiance"] and plan.get("ambiance", True):
-        # À l'essai, « hangar orange » imposé à un plan « cockpit vert » a donné un éclairage qui change en plein plan,
-        # même avec cette consigne : un plan qui se passe ailleurs décoche « suit l'ambiance ».
-        morceaux.append("Ambiance commune de la séquence (toile de fond, seulement là où elle convient ; "
-                        f"si elle contredit l'idée du plan, l'idée gagne) : {s['casting']['ambiance']}")
-    if plan["enchainement"] == "transition":
-        # À l'essai, sans savoir d'où il part ni où il arrive, H3 tenait la première image puis sautait à la dernière.
-        precedent = s["plans"][k - 1]
-        depart = _extrait(precedent.get("prompt_final") or precedent["idee"])
-        f = plateau.fiche(plan["rush"])
-        arrivee = _extrait(f.get("prompt") or f.get("idee") or plan["idee"])
-        morceaux.append(f"TRANSITION. The clip starts exactly on the last image of the previous shot: {depart} "
-                        f"It ends exactly on this picture: {arrivee} Describe ONE continuous camera movement travelling "
-                        "from the start to the end; the scene changes progressively over the whole clip, never all at "
-                        "once at the end.")
-    if s["casting"].get("contrainte"):
-        morceaux.append("CONTRAINTE OBLIGATOIRE de toute la séquence, à respecter aussi dans ce plan : "
-                        f"{s['casting']['contrainte']}")
-    morceaux.append(CONSIGNE_SEQUENCE)
-    return "\n\n".join(morceaux)
-
-
-async def traduire_contrainte(orchestrateur, s: dict) -> str | None:
-    """La contrainte en anglais, traduite une seule fois par Llama (gardée dans s["contrainte_en"])."""
+def contrainte_tournage(s: dict) -> str | None:
+    """La contrainte à ajouter à chaque plan : sa traduction faite au découpage (s["contrainte_en"]) si elle vaut
+    toujours, sinon le texte de Jérémy tel quel (H3 lit aussi le français) ; le LLM n'est plus appelé au tournage."""
     contrainte = s["casting"].get("contrainte")
     if not contrainte:
         return None
     cache = s.get("contrainte_en") or {}
-    if cache.get("fr") != contrainte:
-        en = prompt.nettoyer_markdown(await prompt.traduire_precisions(orchestrateur, contrainte, s["llm"]))
-        s["contrainte_en"] = cache = {"fr": contrainte, "en": en}
-    return cache["en"]
+    return cache["en"] if cache.get("fr") == contrainte and cache.get("en") else contrainte
 
 
 def avec_contrainte(texte: str, contrainte_en: str | None) -> str:
@@ -785,29 +756,14 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
     textes = _textes(s)
     total = len(c.plans)
 
-    # 1. Réécriture (Llama), avant de réserver la carte pour ComfyUI.
-    if s["casting"].get("contrainte"):
-        c.etape = "Traduction de la contrainte"
-    contrainte_en = await traduire_contrainte(p_.orchestrateur, s)
-    regles = workflows.regles_prompt(CONFIG.get("generation", {}).get("image_vers_video"))
-    for rang, k in enumerate(c.plans, 1):
+    # 1. Prompts : écrits au Scénario (découpage) ou dans le plan. Le LLM n'écrit plus au tournage.
+    contrainte_en = contrainte_tournage(s)
+    for k in c.plans:
         plan = s["plans"][k]
-        if plan["prompt"]:
-            plan["prompt_final"] = plan["prompt"]
-        else:
-            c.etape = f"Plan {k + 1} · réécriture ({rang}/{total})"
-            mode = "animer" if plan["enchainement"] == "rush" else "texte"
-            vues = [plateau.vue(plan["rush"])] if mode == "animer" and plan["rush"] else None  # le rush qu'il anime
-            reecrit = (await prompt.reecrire(p_.orchestrateur, idee_pour_llm(s, k), s["llm"], video=mode,
-                                             duree=plan["duree"], regles=regles, vues=vues))["prompt"]
-            source = " ".join([plan["idee"], s["casting"]["ambiance"], s["casting"].get("contrainte", "")])
-            reecrit, _ = sans_repliques_inventees(source, reecrit)
-            plan["prompt_final"] = garder_repliques(plan["idee"], reecrit)
-        if plan["enchainement"] == "prolonger" and not plan["prompt"]:
-            plan["prompt_final"] = f"Continuous shot, same scene. {plan['prompt_final']}"
-        plan["prompt_final"] = avec_contrainte(plan["prompt_final"], contrainte_en)  # prompts imposés compris
-        securite.verifier(s["casting"]["ambiance"], s["casting"].get("contrainte", ""), plan["idee"],
-                          plan["prompt_final"], *textes)
+        if not (plan.get("prompt") or "").strip():
+            raise ErreurSequence(f"Plan {k + 1} sans prompt : écris-le dans le plan, ou découpe la séquence au ✍️ Scénario")
+        plan["prompt_final"] = avec_contrainte(plan["prompt"].strip(), contrainte_en)  # la contrainte, garantie
+        securite.verifier(s["casting"].get("contrainte", ""), plan["idee"], plan["prompt_final"], *textes)
     _ecrire(s)
 
     # 2. Tournage, plan après plan : chacun peut partir du précédent.

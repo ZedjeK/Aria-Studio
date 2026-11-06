@@ -284,13 +284,15 @@ class Plateau:
         if not indices:
             raise ErreurPlateau("Tous les plans sont à jour : choisis ceux à retourner")
         sequences._valider(s, pour_tourner=True)  # AS-18, rushes encore présents, transitions complètes
-        if s["llm"]:
-            self._valider_llm(s["llm"])
+        sans_prompt = [k + 1 for k in indices if not (s["plans"][k].get("prompt") or "").strip()]
+        if sans_prompt:  # le LLM n'écrit plus au tournage : le prompt vient du Scénario ou du plan lui-même
+            raise ErreurPlateau(f"Plan{'s' if len(sans_prompt) > 1 else ''} {', '.join(map(str, sans_prompt))} sans "
+                                "prompt : écris-le dans le plan, ou découpe la séquence au ✍️ Scénario")
         workflow = CONFIG.get("generation", {}).get("image_vers_video")
         if workflows.obtenir(workflow).manquants():
             raise ErreurPlateau(f"Workflow vidéo incomplet : {workflow}")
         return self._mettre_en_file(Commande(
-            s["titre"], None, s["llm"], workflow, s["format"], None, 1, modele=s.get("modele"), type="sequence",
+            s["titre"], None, None, workflow, s["format"], None, 1, modele=s.get("modele"), type="sequence",
             qualite=s["qualite"],
             sequence=id_sequence, plans=indices, dossier=s["dossier"]))
 

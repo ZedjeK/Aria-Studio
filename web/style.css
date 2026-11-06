@@ -2539,3 +2539,16 @@ button.quitter-appli:hover {
 .champ-prompt-clip textarea {
     flex: 1;
 }
+
+/* Séquence du Montage : résumé et prompt de chaque plan ; un prompt manquant se voit. */
+.textes-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.textes-plan textarea.manquant {
+    border-color: #ffc857;
+}

@@ -243,6 +243,7 @@ document.getElementById("creer-sequence-scenario").addEventListener("click", asy
             titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmPrompt(),
             casting: { personnage: decoupage.reference, voix: "auto", ambiance: "",
                        contrainte: decoupage.resultat.contrainte ?? "", reference_partout: true },
+            contrainte_en: decoupage.resultat.contrainte_en ?? null,  // traduite au découpage : le tournage s'en sert
             plans: decoupage.resultat.plans.map((p, k) => ({
                 idee: p.idee || p.note || `Plan ${k + 1}`, prompt: p.prompt, duree: p.duree,
                 enchainement: p.enchainement, rush: p.rush, ambiance: true,

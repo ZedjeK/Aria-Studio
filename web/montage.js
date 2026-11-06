@@ -77,18 +77,9 @@ function majEstimation() {
 
 // Mode et source
 
-// La séquence découpe avec le LLM du texte vers vidéo (onglet Modèles, Vidéo) ; le clip seul n'en a plus.
-function suivreLlmMontage() {
-    if (!optionsMontage) return;
-    const llms = optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]);
-    remplirSelect("llm-sequence", llms, optionsMontage.llm.defaut);  // un LLM qui vient d'arriver y figure
-    document.getElementById("llm-sequence").value = llmDuWorkflow(optionsMontage.video.workflows.texte, optionsMontage);
-}
-
 document.querySelectorAll('input[name="mode-montage"]').forEach((radio) => {
     radio.addEventListener("change", () => {
         modeMontage = radio.value;
-        suivreLlmMontage();
         document.getElementById("bloc-source-montage").hidden = modeMontage !== "animer";
         document.getElementById("bloc-format-montage").hidden = modeMontage !== "texte";
         // Séquence : le formulaire du clip seul s'efface au profit du panneau de la séquence (sequence.js).

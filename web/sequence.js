@@ -1,8 +1,8 @@
-// Montage, mode Séquence : un casting, des plans enchaînés (prolonger, couper, transition), tournés dans l'ordre
-// et assemblés en un film par le serveur (app/sequences.py). La séquence se modifie ici, puis s'enregistre ;
-// un plan modifié n'est plus « à jour » et sera retourné, avec les plans qui partent de lui.
-// Le casting a trois onglets : l'ambiance (toile de fond), la contrainte (impérative sur tous les plans) et la voix
-// (bibliothèque data/voix : essais tournés en cabine silencieuse, ou fichiers audio importés ; app/voix.py).
+// Montage, mode Séquence : des plans enchaînés (prolonger, couper, transition), tournés dans l'ordre et assemblés
+// en un film par le serveur (app/sequences.py). Leurs prompts s'écrivent au Scénario (histoire, découpage) ; ici on
+// les retouche, on règle le tournage (personnage, voix, modèle, qualité) et on tourne : chaque plan tourne son prompt
+// tel quel. Un plan modifié n'est plus « à jour » et sera retourné, avec les plans qui partent de lui.
+// La voix vient de la bibliothèque data/voix (essais tournés en cabine silencieuse, ou fichiers importés ; app/voix.py).
 
 const ENCHAINEMENTS_DEPART = [["rush", "🖼️ Depuis un rush"], ["texte", "✍️ Depuis le texte"]];
 const ENCHAINEMENTS_SUITE = [["prolonger", "↪ Prolonger"], ["couper", "✂ Couper"], ["transition", "🌀 Transition"]];
@@ -20,8 +20,9 @@ let sequencesConnues = [];
 let commandeSequence = null;
 let sequenceModifiee = false;
 
-const nouveauPlan = (enchainement) => ({ idee: "", duree: 5, enchainement, rush: null, ambiance: true,
+const nouveauPlan = (enchainement) => ({ idee: "", prompt: "", duree: 5, enchainement, rush: null, ambiance: true,
                                         clip: null, a_jour: false });
+const parlePlan = (p) => REPLIQUE.test(`${p.idee} ${p.prompt ?? ""}`);
 
 function sequenceVide() {
     // Rapide par défaut : choix de Jérémy pour les séquences (les plans qui parlent montent seuls à 12 steps).
@@ -37,8 +38,6 @@ async function preparerSequence() {
     const ck = checkpointsVideo();
     remplirSelect("modele-sequence", ck.lignes, ck.defaut);
     remplirSelect("format-sequence", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
-    remplirSelect("llm-sequence", optionsMontage.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]),
-                  llmDuWorkflow(optionsMontage.video.workflows.texte, optionsMontage));
     document.getElementById("phrase-voix").placeholder = v.voix.phrase_defaut;
     document.getElementById("lancer-essai-voix").textContent = `🎙️ Tourner l'essai (≈ ${enMinutes(v.voix.estimation_s)})`;
     await chargerVoix();
@@ -68,8 +67,9 @@ function afficherSequence(s) {
     sequenceModifiee = false;
     document.getElementById("choix-sequence").value = s.id ?? "";
     document.getElementById("titre-sequence").value = s.titre;
-    document.getElementById("ambiance-sequence").value = s.casting.ambiance ?? "";
-    document.getElementById("contrainte-sequence").value = s.casting.contrainte ?? "";
+    const contrainte = document.getElementById("contrainte-lue-sequence");  // écrite au Scénario, ajoutée à chaque plan
+    contrainte.textContent = s.casting.contrainte ? `🔒 Contrainte de tous les plans : ${s.casting.contrainte}` : "";
+    contrainte.hidden = !s.casting.contrainte;
     document.getElementById("reference-partout-sequence").checked = s.casting.reference_partout !== false;
     document.getElementById("voix-sequence").value = s.casting.voix ?? "";
     majEcouteVoix();
@@ -80,7 +80,6 @@ function afficherSequence(s) {
     // Une nouvelle séquence prend le défaut des réglages ; une séquence existante garde le sien.
     document.getElementById("modele-sequence").value = s.modele ?? checkpointsVideo().defaut ?? "";
     document.getElementById("format-sequence").value = s.format;
-    if (s.llm) document.getElementById("llm-sequence").value = s.llm;
     document.getElementById("supprimer-sequence").disabled = !s.id;
     document.getElementById("erreur-sequence").hidden = true;
     const film = document.getElementById("film-sequence");
@@ -133,8 +132,6 @@ function rendrePlans() {
                     `<option value="${v}" ${v === p.enchainement ? "selected" : ""}>${t}</option>`).join("")}</select>
                 <select data-champ="duree">${durees.map((d) =>
                     `<option value="${d}" ${d === p.duree ? "selected" : ""}>${d} s</option>`).join("")}</select>
-                <label class="case discret" title="Décoche pour un plan qui se passe ailleurs">
-                    <input type="checkbox" data-champ="ambiance" ${p.ambiance !== false ? "checked" : ""}> suit l'ambiance</label>
                 <span class="etat-plan discret"></span>
                 <span class="actions-plan">
                     <button type="button" class="petit" data-action="monter" title="Monter" ${k === 0 ? "disabled" : ""}>↑</button>
@@ -149,16 +146,15 @@ function rendrePlans() {
             <p class="discret aide-plan">${AIDE_ENCHAINEMENT[p.enchainement]}</p>
             <div class="ligne corps-plan">
                 ${avecRush ? caseRush(p.rush, k === 0 ? "Rush de départ" : "Rush d'arrivée") : ""}
-                <textarea data-champ="idee" rows="3" maxlength="1000"
-                          placeholder="L'idée du plan, en français. Les répliques entre guillemets : elle dit « On décolle ce soir. »">${echapper(p.idee)}</textarea>
+                <div class="textes-plan">
+                    <input data-champ="idee" type="text" maxlength="1000" value="${echapper(p.idee)}"
+                           placeholder="Résumé du plan, pour s'y retrouver (facultatif)">
+                    <textarea data-champ="prompt" rows="4" class="${p.prompt ? "" : "manquant"}"
+                              placeholder="Prompt du plan, tourné tel quel : il arrive du ✍️ Scénario (découpage), ou écris-le ici (en anglais).">${echapper(p.prompt ?? "")}</textarea>
+                </div>
                 ${p.clip ? `<video class="clip-plan" src="${urlVideo(p.clip)}" poster="${urlImage(p.clip)}" muted loop playsinline
                                    preload="none" title="Survole pour voir le plan tourné"></video>` : ""}
             </div>
-            ${p.prompt ? `<details class="prompt-impose">
-                <summary class="discret">📝 Prompt du Scénario : c'est lui qui est tourné, pas l'idée ci-dessus</summary>
-                <textarea data-champ="prompt" rows="4">${echapper(p.prompt)}</textarea>
-                <button type="button" class="petit" data-action="oublier-prompt">Réécrire depuis l'idée à la place</button>
-            </details>` : ""}
         </li>`;
     }).join("");
     document.getElementById("ajouter-plan").disabled = plans.length >= optionsMontage.video.sequence.plans_max;
@@ -181,7 +177,7 @@ function estimationSequence(indices) {
     const v = optionsMontage.video;
     const q = v.qualites.find((x) => x.cle === sequenceCourante.qualite);
     const cout = (p) => q.estimation_s * v.sequence.surcout * (p.duree / 5) ** 1.25
-        * (REPLIQUE.test(p.idee) && q.steps < v.sequence.steps_parole ? v.sequence.surcout_parole : 1);
+        * (parlePlan(p) && q.steps < v.sequence.steps_parole ? v.sequence.surcout_parole : 1);
     return indices.reduce((total, k) => total + cout(sequenceCourante.plans[k]), indices.length ? 5 : 0);
 }
 
@@ -190,8 +186,9 @@ function majEtat() {
     document.querySelectorAll("#plans-sequence .plan-sequence").forEach((li) => {
         const k = Number(li.dataset.plan);
         const p = sequenceCourante.plans[k];
-        const parle = REPLIQUE.test(p.idee) ? " · 🗣 voix soignée (12 steps)" : "";
-        li.querySelector(".etat-plan").textContent = (indices.includes(k) ? "⏳ à tourner" : "✅ à jour") + parle;
+        const parle = parlePlan(p) ? " · 🗣 voix soignée (12 steps)" : "";
+        const sansPrompt = !(p.prompt ?? "").trim() ? " · ✍️ prompt à écrire" : "";
+        li.querySelector(".etat-plan").textContent = (indices.includes(k) ? "⏳ à tourner" : "✅ à jour") + parle + sansPrompt;
         li.classList.toggle("a-jour", !indices.includes(k));
     });
     const duree = sequenceCourante.plans.reduce((t, p) => t + p.duree, 0);
@@ -218,24 +215,11 @@ document.getElementById("titre-sequence").addEventListener("input", (e) => {
     sequenceCourante.titre = e.target.value;
     modifiee();
 });
-document.getElementById("ambiance-sequence").addEventListener("input", (e) => {
-    sequenceCourante.casting.ambiance = e.target.value;
-    modifiee(true);
-});
-document.getElementById("contrainte-sequence").addEventListener("input", (e) => {
-    sequenceCourante.casting.contrainte = e.target.value;
-    modifiee(true);  // ajoutée au prompt de chaque plan : tout est à retourner
-});
 document.getElementById("reference-partout-sequence").addEventListener("change", (e) => {
     sequenceCourante.casting.reference_partout = e.target.checked;
     modifiee(true);
 });
-document.querySelector(".onglets-casting").addEventListener("click", (e) => {
-    const onglet = e.target.closest("[data-onglet-casting]")?.dataset.ongletCasting;
-    if (!onglet) return;
-    document.querySelectorAll(".onglet-casting").forEach((b) => b.classList.toggle("actif", b.dataset.ongletCasting === onglet));
-    document.querySelectorAll(".volet-casting").forEach((v) => { v.hidden = v.dataset.voletCasting !== onglet; });
-});
+document.getElementById("vers-scenario-sequence").addEventListener("click", () => ouvrirScenario("sequence"));
 [["voix-sequence", (v) => { sequenceCourante.casting.voix = v || null; majEcouteVoix(); }],
  ["modele-sequence", (v) => { sequenceCourante.modele = v || null; }],
  ["qualite-sequence", (v) => { sequenceCourante.qualite = v; }],
@@ -244,10 +228,6 @@ document.querySelector(".onglets-casting").addEventListener("click", (e) => {
         poser(e.target.value);
         modifiee(true);  // casting, qualité ou format : toute la séquence est à retourner (taille, voix)
     });
-});
-document.getElementById("llm-sequence").addEventListener("change", (e) => {
-    sequenceCourante.llm = e.target.value;
-    modifiee();
 });
 
 document.getElementById("personnage-sequence").addEventListener("click", (e) => {
@@ -273,6 +253,7 @@ plansEl.addEventListener("input", (e) => {
     const p = sequenceCourante.plans[planDe(e.target)];
     p[champ] = e.target.value;
     p.a_jour = false;
+    if (champ === "prompt") e.target.classList.toggle("manquant", !e.target.value.trim());
     modifiee();
 });
 plansEl.addEventListener("change", (e) => {
@@ -312,13 +293,6 @@ plansEl.addEventListener("click", (e) => {
     if (!action) return;
     if (action === "retourner") {
         tournerSequence([k]);
-        return;
-    }
-    if (action === "oublier-prompt") {  // Llama réécrira ce plan depuis son idée, au tournage
-        plans[k].prompt = null;
-        plans[k].a_jour = false;
-        sequenceModifiee = true;
-        rendrePlans();
         return;
     }
     if (action === "supprimer") {

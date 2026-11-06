@@ -46,26 +46,25 @@ class Contrainte(Base):
         s = sequences.modifier(s["id"], {**s, "casting": {**s["casting"], "contrainte": CONTRAINTE}})
         self.assertEqual(s["a_tourner"], [0, 1, 2, 3])
 
-    def test_donnee_a_llama(self):
-        s = self.creer(casting={"contrainte": CONTRAINTE})
-        for k in range(4):
-            self.assertIn(f"CONTRAINTE OBLIGATOIRE de toute la séquence, à respecter aussi dans ce plan : {CONTRAINTE}",
-                          sequences.idee_pour_llm(s, k))
-        self.assertNotIn("CONTRAINTE", sequences.idee_pour_llm(self.creer(), 0))
-
     def test_ajoutee_au_prompt(self):
         self.assertEqual(sequences.avec_contrainte("She smiles.", EN + "."),
                          f"She smiles. Constraint for every shot: {EN}.")
         self.assertEqual(sequences.avec_contrainte("She smiles.", None), "She smiles.")
 
-    def test_traduite_une_seule_fois(self):
-        s = sequences.lire(self.creer(casting={"contrainte": CONTRAINTE})["id"])
-        llama = FauxLlama(f"**{EN}**")
-        self.assertEqual(asyncio.run(sequences.traduire_contrainte(llama, s)), EN)
-        self.assertEqual(asyncio.run(sequences.traduire_contrainte(llama, s)), EN)  # pas de 2e appel
-        self.assertEqual(len(llama.messages), 1)
-        sequences._ecrire(s)
-        # Enregistrer sans changer la contrainte garde la traduction ; la changer l'oublie.
+    def test_traduite_au_decoupage_gardee_a_la_creation(self):
+        """Le Scénario traduit la contrainte en découpant ; la séquence la garde, le tournage s'en sert sans LLM."""
+        s = sequences.lire(self.creer(casting={"contrainte": CONTRAINTE},
+                                      contrainte_en={"fr": CONTRAINTE, "en": EN})["id"])
+        self.assertEqual(sequences.contrainte_tournage(s), EN)
+        # Une traduction d'une autre contrainte est ignorée ; sans traduction, le texte de Jérémy tel quel.
+        s = sequences.lire(self.creer(casting={"contrainte": CONTRAINTE}, contrainte_en={"fr": "autre", "en": "x"})["id"])
+        self.assertNotIn("contrainte_en", s)
+        self.assertEqual(sequences.contrainte_tournage(s), CONTRAINTE)
+        self.assertIsNone(sequences.contrainte_tournage(sequences.lire(self.creer()["id"])))
+
+    def test_traduction_gardee_tant_que_la_contrainte_ne_change_pas(self):
+        s = sequences.lire(self.creer(casting={"contrainte": CONTRAINTE},
+                                      contrainte_en={"fr": CONTRAINTE, "en": EN})["id"])
         s = sequences.modifier(s["id"], {**s, "titre": "Autre titre"})
         self.assertEqual(sequences.lire(s["id"])["contrainte_en"]["en"], EN)
         s = sequences.modifier(s["id"], {**s, "casting": {**s["casting"], "contrainte": "pluie continue"}})
@@ -127,7 +126,8 @@ class Tournage(Base):
         plans = self.plans()
         for p in plans:
             p["prompt"] = f"{p['idee']} (imposed)"
-        s = self.creer(plans=plans, casting={"personnage": self.pilote, "contrainte": CONTRAINTE})
+        s = self.creer(plans=plans, casting={"personnage": self.pilote, "contrainte": CONTRAINTE},
+                       contrainte_en={"fr": CONTRAINTE, "en": EN})
         recus, televerses = [], []
 
         class FauxComfy:
@@ -143,8 +143,7 @@ class Tournage(Base):
         async def comfyui():
             yield FauxComfy()
 
-        llama = FauxLlama(EN)
-        p = Plateau(orchestrateur=SimpleNamespace(comfyui=comfyui, llm=llama.llm))
+        p = Plateau(orchestrateur=SimpleNamespace(comfyui=comfyui))  # pas de LLM : il n'écrit plus au tournage
         c = p.commander_sequence(s["id"])
         asyncio.run(sequences.tourner(p, c))
         s = sequences.lire(s["id"])
@@ -184,13 +183,11 @@ class RepliquesInventees(Base):
                                                                             "She walks away.")
         self.assertEqual((texte, retirees), ("She walks away.", ["Bonjour.", "Salut."]))
 
-    def test_au_tournage(self):
-        from unittest import mock
-        from app import prompt
-        plans = self.plans()[:2]  # départ (« On décolle ce soir. ») puis prolonger, sans réplique
+    def test_au_tournage_le_prompt_tel_quel(self):
+        plans = self.plans()[:2]
+        plans[0]["prompt"] = 'She looks up and says "On décolle ce soir."'
+        plans[1]["prompt"] = "Continuous shot, same scene. She stands up."
         s = self.creer(plans=plans, casting={"ambiance": ""})
-        reponses = iter([{"prompt": 'She looks up and says "On décolle ce soir."'},
-                         {"prompt": self.INVENTE}])
 
         class FauxComfy:
             async def televerser(self, chemin):
@@ -204,22 +201,19 @@ class RepliquesInventees(Base):
             yield FauxComfy()
 
         p = Plateau(orchestrateur=SimpleNamespace(comfyui=comfyui))
-        with mock.patch.object(Plateau, "_valider_llm", return_value="x.gguf"), \
-                mock.patch.object(prompt, "reecrire", side_effect=lambda *a, **k: next(reponses)):  # AsyncMock
-            asyncio.run(sequences.tourner(p, p.commander_sequence(s["id"])))
+        asyncio.run(sequences.tourner(p, p.commander_sequence(s["id"])))
         finals = [pl["prompt_final"] for pl in sequences.lire(s["id"])["plans"]]
-        self.assertIn('"On décolle ce soir."', finals[0])  # la réplique de l'idée reste
-        self.assertNotIn("Mmm", finals[1])
+        self.assertEqual(finals, [plans[0]["prompt"], plans[1]["prompt"]])
 
 
 class DecoupageAvecContrainte(Base):
     PLANS = [{"enchainement": "texte", "duree": 5, "note": ""}, {"enchainement": "couper", "duree": 5, "note": ""}]
 
     def test_contrainte_envoyee_et_rendue(self):
-        llama = FauxLlama(blocs("She walks.", "She smiles."))
+        llama = FauxLlama(blocs("She walks.", "She smiles."), f"**{EN}**")  # puis la traduction de la contrainte
         r = asyncio.run(sequences.decouper(llama, "Une pilote marche.", "", "", self.PLANS, None, None, False,
                                            f"  {CONTRAINTE} "))
-        self.assertEqual(r["contrainte"], CONTRAINTE)
+        self.assertEqual((r["contrainte"], r["contrainte_en"]), (CONTRAINTE, {"fr": CONTRAINTE, "en": EN}))
         self.assertIn(f"Mandatory constraint, respected in EVERY shot: {CONTRAINTE}", llama.messages[0][1]["content"])
 
     def test_replique_inventee_retiree_et_signalee(self):

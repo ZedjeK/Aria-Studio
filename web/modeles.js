@@ -212,10 +212,7 @@ async function choisirLlm(idWorkflow, llm) {
             liste.value = llmDuWorkflow(cible.value);
         }
     }
-    if (optionsMontage) {
-        optionsMontage.llm = (await api("GET", "/api/plateau/options")).llm;
-        suivreLlmMontage();
-    }
+    if (optionsMontage) optionsMontage.llm = (await api("GET", "/api/plateau/options")).llm;
 }
 
 function rendreUsage(id, u) {
