@@ -19,7 +19,9 @@ class ErreurLlama(RuntimeError):
 
 # Réflexion active : max_tokens borne la réponse, et la réflexion a ce budget en plus. Sans lui, le Bonsai 2 Heretic
 # passait ses 512 tokens à réfléchir et rendait une réponse vide (1 600 tokens en tout pour un prompt vidéo, mesuré).
-BUDGET_REFLEXION = 4096
+# Banc du 2026-11-06 (Bonsai 2, réécriture Qwen, peaufinage, découpage, 2 seeds) : avec 4096, 5 réponses vides sur 10 ;
+# reasoning_effort medium ou low n'y suffit pas (2 et 3 sur 10) ; avec 8192, aucune, pour 52 s en moyenne au lieu de 45.
+BUDGET_REFLEXION = 8192
 
 
 @dataclass

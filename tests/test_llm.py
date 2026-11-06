@@ -62,6 +62,13 @@ class Generer(unittest.TestCase):
         self.assertEqual(corps["chat_template_kwargs"], {"enable_thinking": False})
         self.assertEqual(corps["max_tokens"], 512 + BUDGET_REFLEXION)  # au cas où le gabarit l'ignore
 
+    def test_le_contexte_tient_la_reflexion(self):
+        """Banc du 2026-11-06 : 4096 tokens de réflexion laissaient 5 réponses vides sur 10 ; il en faut 8192, et le
+        contexte d'un LLM qui réfléchit doit les contenir avec la consigne, les images et la réponse."""
+        from app.orchestrateur import CONTEXTE_REFLEXION
+        self.assertGreaterEqual(BUDGET_REFLEXION, 8192)
+        self.assertGreaterEqual(CONTEXTE_REFLEXION, BUDGET_REFLEXION + 4096)
+
     def test_un_specialiste_compte_deja_sa_reflexion(self):
         _, corps = self.generer("{}", reflexion=True, budget_reflexion=0)
         self.assertEqual(corps["max_tokens"], 512)
