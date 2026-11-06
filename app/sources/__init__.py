@@ -21,6 +21,9 @@ class Fiche:
     jeton_requis: bool  # accès protégé et jeton absent de l'environnement
     mots_declencheurs: list[str] = field(default_factory=list)  # LoRAs Civitai
     base: str | None = None  # modèle de base annoncé par la source (Civitai « baseModel »)
+    force_auteur: float | None = None  # LoRA : force médiane de ses images d'exemple (civitai.usage_auteur)
+    images_force: int = 0  # nombre d'images d'exemple qui la donnent
+    prompt_exemple: str | None = None  # LoRA : un prompt de ses images d'exemple
 
     def to_dict(self) -> dict:
         return asdict(self)

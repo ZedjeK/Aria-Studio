@@ -85,10 +85,69 @@ function elementCollection(e) {
             ${e.supprimable ? `<button type="button" class="petit" data-supprimer="${echapper(e.cle)}" data-taille="${e.taille}">Supprimer</button>` : ""}
         </div>
         ${details ? `<div class="discret">${details}</div>` : ""}
-        ${e.declencheurs.length ? `<div class="discret">Déclencheurs : ${echapper(e.declencheurs.join(", "))}</div>` : ""}
+        ${e.lora ? reglageLora(e.cle, e.lora)
+            : e.declencheurs.length ? `<div class="discret">Déclencheurs : ${echapper(e.declencheurs.join(", "))}</div>` : ""}
         <div class="discret">${e.utilise_par.length ? `Utilisé par : ${echapper(e.utilise_par.join(", "))}` : "Utilisé par aucun workflow"}</div>
     </li>`;
 }
+
+// LoRA : mots déclencheurs et force, proposés ensuite au Plateau. Par défaut, ceux de la source : les mots déclarés
+// par l'auteur et la force médiane de ses images d'exemple (Civitai n'a pas de champ « force conseillée »).
+
+const virgule = (x) => Number(x).toFixed(2).replace(".", ",");
+
+function origineLora(l) {
+    if (l.regle) return "Réglée par toi (au Plateau ou ici).";
+    const force = l.force_auteur
+        ? `force de l'auteur : ${virgule(l.force_auteur)}, d'après ${l.images_force} image${l.images_force > 1 ? "s" : ""} d'exemple`
+        : l.civitai ? "pas de force dans ses images d'exemple : 1,00 par défaut" : "1,00 par défaut";
+    const mots = l.declencheurs_source ? "mots déclarés par l'auteur" : "aucun mot déclaré par l'auteur";
+    return `D'après la source : ${force} ; ${mots}.`;
+}
+
+function reglageLora(cle, l) {
+    return `<div class="reglage-lora" data-cle="${echapper(cle)}">
+        <div class="ligne">
+            <label class="mots-lora">Mots déclencheurs
+                <input type="text" data-champ="declencheurs" maxlength="300" value="${echapper(l.declencheurs)}"
+                       placeholder="${l.civitai ? "aucun déclaré par l'auteur (souvent normal)" : "facultatif"}"></label>
+            <label class="force-lora">Force
+                <input type="range" data-champ="force" min="0" max="1.5" step="0.05" value="${l.force}">
+                <span class="valeur">${virgule(l.force)}</span></label>
+            <button type="button" class="petit" data-lora="enregistrer">Enregistrer</button>
+            ${l.regle ? '<button type="button" class="petit" data-lora="oublier" title="Revenir aux valeurs de la source">↺ Source</button>' : ""}
+            ${l.civitai ? '<button type="button" class="petit" data-lora="relire" title="Relire les mots et la force sur Civitai">🔄 Civitai</button>' : ""}
+        </div>
+        <div class="discret">${echapper(origineLora(l))}</div>
+        ${l.prompt_exemple ? `<details class="exemple-lora"><summary class="discret">Prompt d'une image d'exemple de l'auteur</summary>
+            <p class="discret">${echapper(l.prompt_exemple)}</p></details>` : ""}
+    </div>`;
+}
+
+document.getElementById("groupes-collection").addEventListener("input", (e) => {
+    if (e.target.dataset.champ !== "force") return;
+    e.target.closest(".force-lora").querySelector(".valeur").textContent = virgule(e.target.value);
+});
+
+document.getElementById("groupes-collection").addEventListener("click", async (e) => {
+    const bouton = e.target.closest("[data-lora]");
+    if (!bouton) return;
+    const bloc = bouton.closest(".reglage-lora");
+    const cle = bloc.dataset.cle;
+    bouton.disabled = true;
+    try {
+        const l = bouton.dataset.lora === "enregistrer"
+            ? await api("PUT", "/api/collection/lora", { cle,
+                declencheurs: bloc.querySelector('[data-champ="declencheurs"]').value,
+                force: Number(bloc.querySelector('[data-champ="force"]').value) })
+            : await api("POST", `/api/collection/lora/${bouton.dataset.lora}`, { cle });
+        bloc.outerHTML = reglageLora(cle, l);
+        if (typeof chargerOptionsPlateau === "function" && optionsPlateau) chargerOptionsPlateau();  // le Plateau suit
+    } catch (err) {
+        bouton.disabled = false;
+        alert(err.message);
+    }
+});
 
 // Retrouver les sources : seulement sur un clic (l'empreinte part chez Civitai)
 

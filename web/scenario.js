@@ -27,7 +27,8 @@ function tacheCible() {
     return ["image", w.texte_vers_image];
 }
 // sujet -> { choix: {bloc: {sous-liste: valeur}}, age, texte, precisions, traduction: {source, texte},
-//            action, traductionAction: {source, texte}, replique, toutes: lève le filtre par origine }
+//            action, traductionAction: {source, texte}, replique, toutes: lève le filtre par origine,
+//            dialogue, avecMusique, musique, traductionMusique : les cases 🗣 et 🎵 d'un clip }
 const etatsPrompt = {};
 let definitionsPrompt = {};  // "bloc|sous-liste" -> sous-liste de la structure
 let incompatPrompt = new Map();  // "bloc|sous-liste|valeur" -> [[bloc, sous-liste, valeur], …]
@@ -43,7 +44,7 @@ let personnagesEnregistres = [];
 
 const etatPrompt = () => (etatsPrompt[sujetPrompt] ??=
     { choix: {}, age: null, texte: "", precisions: "", traduction: null, action: "", traductionAction: null, replique: "",
-      toutes: false });
+      toutes: false, dialogue: false, avecMusique: false, musique: "", traductionMusique: null });
 const cle = (...morceaux) => morceaux.join("|");
 const llmPrompt = () => document.getElementById("llm-prompt").value || null;
 const ciblePrompt = () => document.getElementById("workflow-prompt").value || null;
@@ -136,7 +137,9 @@ function garderBrouillon() {
         const etat = { forme: formeScenario, sujet: sujetPrompt, onglet: ongletScenario, cibles: ciblesParForme,
                        etats: etatsPrompt, llm: llmPrompt(), references: refsScenario, libre: libre.echanges,
                        sequence: { reference: decoupage.reference, synopsis: decoupage.synopsis,
-                                   contrainte: decoupage.contrainte, plans: decoupage.plans } };
+                                   contrainte: decoupage.contrainte, plans: decoupage.plans,
+                                   dialogue: decoupage.dialogue, repliques: decoupage.repliques,
+                                   avecMusique: decoupage.avecMusique, musique: decoupage.musique } };
         try {
             localStorage.setItem(BROUILLON, JSON.stringify(etat));
             document.getElementById("brouillon-scenario").textContent = "✓ brouillon gardé";
@@ -175,8 +178,15 @@ function relireBrouillon() {
         decoupage.plans = s.plans;
         decoupagePret = false;  // preparerDecoupage remplit les listes sans écraser ces plans
     }
+    Object.assign(decoupage, { dialogue: Boolean(s.dialogue), repliques: s.repliques ?? "",
+                               avecMusique: Boolean(s.avecMusique), musique: s.musique ?? "" });
     document.getElementById("synopsis-scenario").value = decoupage.synopsis;
     document.getElementById("contrainte-scenario").value = decoupage.contrainte;
+    document.getElementById("dialogue-sequence").checked = decoupage.dialogue;
+    document.getElementById("repliques-sequence").value = decoupage.repliques;
+    document.getElementById("musique-active-sequence").checked = decoupage.avecMusique;
+    document.getElementById("musique-sequence").value = decoupage.musique;
+    majCases();
     document.querySelector(`input[name="forme-scenario"][value="${formeScenario}"]`).checked = true;
     choisirOnglet(ongletScenario);
     document.getElementById("brouillon-scenario").textContent = "✓ brouillon repris";
@@ -259,6 +269,20 @@ function rendreBlocsPrompt() {
     document.getElementById("precisions-prompt").value = etat.precisions;
     document.getElementById("action-prompt").value = etat.action;
     document.getElementById("replique-prompt").value = etat.replique;
+    document.getElementById("dialogue-prompt").checked = Boolean(etat.dialogue);
+    document.getElementById("musique-active-prompt").checked = Boolean(etat.avecMusique);
+    document.getElementById("musique-prompt").value = etat.musique ?? "";
+    majCases();
+}
+
+// Cases 🗣 et 🎵 (clip et séquence) : cochée, son champ apparaît ; décochée, la phrase qui dit ce qui se passe.
+function majCases() {
+    [["dialogue-prompt", "replique-prompt"], ["musique-active-prompt", "musique-prompt"],
+     ["dialogue-sequence", "repliques-sequence"], ["musique-active-sequence", "musique-sequence"]].forEach(([c, champ]) => {
+        const coche = document.getElementById(c).checked;
+        document.getElementById(champ).hidden = !coche;
+        document.querySelector(`[data-sans="${c}"]`).hidden = coche;
+    });
 }
 
 function contextePrompt(etat) {
@@ -448,6 +472,10 @@ function traductionActionValide(etat) {
     return etat.traductionAction && etat.traductionAction.source === etat.action.trim();
 }
 
+function traductionMusiqueValide(etat) {
+    return etat.traductionMusique && etat.traductionMusique.source === (etat.musique ?? "").trim();
+}
+
 async function assemblerPrompt() {
     const etat = etatPrompt();
     const numero = ++numeroAssemblage;
@@ -459,7 +487,8 @@ async function assemblerPrompt() {
             precisions: traductionValide(etat) ? etat.traduction.texte : etat.precisions,
             workflow: ciblePrompt(),
             action: traductionActionValide(etat) ? etat.traductionAction.texte : etat.action,
-            replique: etat.replique,
+            replique: etat.replique, dialogue: Boolean(etat.dialogue), avec_musique: Boolean(etat.avecMusique),
+            musique: traductionMusiqueValide(etat) ? etat.traductionMusique.texte : (etat.musique ?? ""),
         });
     } catch (err) {
         if (numero !== numeroAssemblage) return;
@@ -480,6 +509,9 @@ async function assemblerPrompt() {
     const alertes = [...retraitsPrompt.map((x) => `Retiré : ${x}`), ...r.alertes];
     if (etat.precisions.trim() && !traductionValide(etat)) alertes.push("Précisions : traduites par le LLM à l’envoi");
     if (r.video && etat.action.trim() && !traductionActionValide(etat)) alertes.push("Action : traduite par le LLM à l’envoi");
+    if (r.video && etat.avecMusique && (etat.musique ?? "").trim() && !traductionMusiqueValide(etat)) {
+        alertes.push("Musique : traduite par le LLM à l’envoi");
+    }
     retraitsPrompt = [];
     document.getElementById("alertes-prompt").innerHTML = alertes.map((a) => `<li>${echapper(a)}</li>`).join("");
     // La version peaufinée ne vaut que pour le prompt dont elle est partie.
@@ -526,6 +558,13 @@ async function traduireSiBesoin(statut) {
         statut("Le LLM traduit l’action… (le premier appel charge le modèle)");
         const r = await api("POST", "/api/prompt/traduire", { texte: action, llm: llmPrompt() });
         etat.traductionAction = { source: action, texte: r.texte };
+        statut("");
+    }
+    const musique = (etat.musique ?? "").trim();
+    if (cibleVideo() && etat.avecMusique && musique && !traductionMusiqueValide(etat)) {
+        statut("Le LLM traduit la musique…");
+        const r = await api("POST", "/api/prompt/traduire", { texte: musique, llm: llmPrompt() });
+        etat.traductionMusique = { source: musique, texte: r.texte };
         statut("");
     }
     clearTimeout(minuteurPrompt);
@@ -691,8 +730,16 @@ document.getElementById("etiquettes-prompt").addEventListener("click", (e) => {
     if (etiquette) changerChoix(etiquette.dataset.bloc, etiquette.dataset.sl, "");
 });
 
+[["dialogue-prompt", "dialogue"], ["musique-active-prompt", "avecMusique"]].forEach(([id, champ]) => {
+    document.getElementById(id).addEventListener("change", (e) => {
+        etatPrompt()[champ] = e.target.checked;
+        majCases();
+        planifierAssemblage();
+    });
+});
+
 [["texte-prompt", "texte"], ["precisions-prompt", "precisions"], ["action-prompt", "action"],
- ["replique-prompt", "replique"]].forEach(([id, champ]) => {
+ ["replique-prompt", "replique"], ["musique-prompt", "musique"]].forEach(([id, champ]) => {
     document.getElementById(id).addEventListener("input", (e) => {
         etatPrompt()[champ] = e.target.value;
         planifierAssemblage();

@@ -507,6 +507,22 @@ class Video(unittest.TestCase):
         self.assertTrue(r["prompt"].endswith("No music."))
         self.assertTrue(any("écris d'abord une réplique" in a for a in r["alertes"]))
 
+    def test_cases_dialogue_et_musique(self):
+        """Sans consigne, H3 invente une réplique ou une musique : les cases du Scénario le disent toujours."""
+        r = assembler(P, {"video": {"Musique": "Synthwave"}}, workflow=H3, replique="Salut.", dialogue=False,
+                      avec_musique=False)["prompt"]
+        self.assertIn("Nobody speaks.", r)
+        self.assertNotIn("Salut", r)
+        self.assertTrue(r.endswith("No background music."))  # la liste Musique ne compte plus
+        r = assembler(P, {}, workflow=H3, replique="Prêt pour le décollage ?\n\n On y va. ", dialogue=True,
+                      avec_musique=True, musique="soft solo piano, slow tempo.")["prompt"]
+        self.assertIn('They say in French: "Prêt pour le décollage ?" Then: "On y va."', r)
+        self.assertTrue(r.endswith("Background music: soft solo piano, slow tempo."))
+        r = assembler(P, {"video": {"Musique": "Synthwave"}}, workflow=H3, avec_musique=True)["prompt"]
+        self.assertTrue(r.endswith("Music: slow retro synthwave."))  # cochée sans description : la liste
+        self.assertTrue(assembler(P, {}, workflow=H3, avec_musique=True)["prompt"].endswith(
+            "Background music that fits the scene."))
+
     def test_texte_dans_l_image_ignore_en_video(self):
         r = assembler(P, {}, texte="ARIA", workflow=H3)
         self.assertNotIn("ARIA", r["prompt"])
@@ -519,7 +535,9 @@ class Video(unittest.TestCase):
 
     def test_longueurs_et_as18(self):
         with self.assertRaisesRegex(listes.ErreurListes, "Réplique trop longue"):
-            assembler(P, {}, workflow=H3, replique="x" * 201)
+            assembler(P, {}, workflow=H3, replique="x" * 601)
+        with self.assertRaisesRegex(listes.ErreurListes, "Musique trop longue"):
+            assembler(P, {}, workflow=H3, avec_musique=True, musique="x" * 201)
         with self.assertRaisesRegex(listes.ErreurListes, "Action trop longue"):
             assembler(P, {}, workflow=H3, action="x" * 501)
         with self.assertRaises(securite.ErreurSecurite):

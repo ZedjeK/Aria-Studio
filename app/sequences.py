@@ -43,6 +43,8 @@ ENCHAINEMENTS = ("prolonger", "couper", "transition")  # plans suivants
 LONGUEUR_IDEE = 1000
 LONGUEUR_AMBIANCE = 300
 LONGUEUR_CONTRAINTE = 300
+LONGUEUR_LIGNES = 600  # répliques des cases du Scénario
+LONGUEUR_MUSIQUE = 200
 # Ajouts au casting (2026-10-24) : une séquence plus ancienne les reçoit par défaut, sans être « à retourner ».
 CASTING_DEFAUT = {"contrainte": "", "reference_partout": True}
 _ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
@@ -590,7 +592,8 @@ def _valider_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[
 
 
 def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[dict], reference: str | None,
-                      contrainte: str = "") -> str:
+                      contrainte: str = "", dialogue: bool = True, lignes_imposees: list[str] | None = None,
+                      musique: str | None = None) -> str:
     """Message envoyé à Llama : l'histoire, le personnage (sauf avec une image de référence), le décor, la contrainte,
     la langue de chaque réplique, puis la liste des plans avec leur type, durée, note et arrivée."""
     lignes = [f"Story: {synopsis.strip()}",
@@ -598,10 +601,15 @@ def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[d
               f"Setting and look: {decor.strip() or 'free'}"]
     if contrainte:
         lignes.append(f"Mandatory constraint, respected in EVERY shot: {contrainte}")
-    toutes = list(dict.fromkeys(repliques(synopsis) + [r for p in plans for r in repliques(p["note"])]))
-    if toutes:
+    toutes = list(dict.fromkeys(repliques(synopsis) + [r for p in plans for r in repliques(p["note"])]
+                                + list(lignes_imposees or [])))
+    if not dialogue:
+        lignes.append("Nobody speaks in the whole film: no dialogue, no voice-over.")
+    elif toutes:
         lignes.append("Spoken lines, each in this language: "
                       + "; ".join(f'"{r}" ({langue(r)})' for r in toutes))
+    lignes.append(f"Background music for the whole film, the same in every shot: {musique}" if musique
+                  else "No background music.")
     lignes.append("Shots:")
     for k, p in enumerate(plans, 1):
         morceaux = [f"{k}. {TYPES_DECOUPAGE[p['enchainement']]}, {p['duree']} s"]
@@ -650,7 +658,8 @@ def avec_personnage(personnage_: str, texte: str) -> str:
 
 
 async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, plans: list[dict],
-                   reference: str | None, llm: str | None = None, mineur: bool = False, contrainte: str = "") -> dict:
+                   reference: str | None, llm: str | None = None, mineur: bool = False, contrainte: str = "",
+                   dialogue: bool = True, lignes: list[str] | None = None, musique: str | None = None) -> dict:
     """Prompts de tous les plans d'une séquence, écrits ensemble par Llama, puis contrôlés ici.
     `mineur` : le personnage du Scénario est mineur (AS-18 le sait, même si aucun mot ne le dit).
     `contrainte` : impérative sur tous les plans ; la séquence créée la garde au casting, et le tournage l'ajoute
@@ -659,10 +668,17 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     contrainte = " ".join(str(contrainte or "").split())
     if len(contrainte) > LONGUEUR_CONTRAINTE:
         raise ErreurSequence(f"Contrainte de {LONGUEUR_CONTRAINTE} caractères au plus")
+    # Cases du Scénario : les répliques à placer (mot pour mot) et la musique de fond du film. Une réplique entre
+    # guillemets dans l'histoire ou une note vaut dialogue, même case décochée (sinon : deux ordres contraires).
+    dialogue = dialogue or bool(repliques(synopsis)) or any(repliques(p.get("note") or "") for p in plans)
+    lignes = [" ".join(l.split()).strip("«»\"“” ") for l in (lignes or []) if l.strip()] if dialogue else []
+    musique = " ".join(str(musique or "").split()) or None
+    if sum(map(len, lignes)) > LONGUEUR_LIGNES or len(musique or "") > LONGUEUR_MUSIQUE:
+        raise ErreurSequence(f"Répliques ({LONGUEUR_LIGNES}) ou musique ({LONGUEUR_MUSIQUE} caractères) trop longues")
     if reference:
         personnage_ = ""  # l'image fait l'identité : la décrire ferait dériver H3 (essais du mode Séquence)
     rushes_ = [r for r in [reference, *(p["rush"] for p in plans)] if r]
-    entrees = [synopsis, personnage_, decor, contrainte, *(p["note"] for p in plans),
+    entrees = [synopsis, personnage_, decor, contrainte, *lignes, musique or "", *(p["note"] for p in plans),
                *plateau.textes_origine(rushes_), *(["minor"] if mineur else [])]
     securite.verifier(*entrees)
 
@@ -676,7 +692,7 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
                else f"{systeme}\n\nCharacter: {regle_personnage}")  # consigne retouchée sans le repère
     echanges = [{"role": "system", "content": systeme},
                 {"role": "user", "content": demande_decoupage(synopsis, personnage_, decor, plans, reference,
-                                                              contrainte)}]
+                                                              contrainte, dialogue, lignes, musique)}]
     regle = reglages.valeurs_llm(llm)
     debut = time.perf_counter()
     async with orchestrateur.llm(llm) as llama:
@@ -692,7 +708,9 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
                     raise
 
     alertes, sortie = [], []
-    source = " ".join([synopsis, contrainte, *(p["note"] for p in plans)])  # une réplique du synopsis va où Llama veut
+    # Une réplique du synopsis ou des cases va où le LLM veut ; sans dialogue, toute réplique est inventée.
+    source = " ".join([synopsis, contrainte, *(f'"{l}"' for l in lignes), *(p["note"] for p in plans)]) \
+        if dialogue else ""
     for k, (p, (fr, en)) in enumerate(zip(plans, blocs), 1):
         texte, inventees = sans_repliques_inventees(source, sans_etiquette(prompt.nettoyer_markdown(en)))
         fr, _ = sans_repliques_inventees(source, prompt.nettoyer_markdown(fr))
@@ -706,7 +724,7 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
             alertes.append(f"Plan {k} : {len(texte.split())} mots, au-delà des {mots_max} conseillés")
         sortie.append({**p, "idee": fr, "prompt": texte})
     tout = " ".join(p["prompt"] for p in sortie)
-    for r in repliques(synopsis):
+    for r in (list(dict.fromkeys(repliques(synopsis) + lignes)) if dialogue else []):
         if _simple(r) not in _simple(tout):
             alertes.append(f"Réplique « {r} » absente du découpage : ajoute-la au plan voulu")
     # Ensemble : un mineur des textes d'origine reste un mineur, même si Llama l'a reformulé.

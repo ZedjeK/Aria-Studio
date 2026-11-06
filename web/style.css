@@ -2648,3 +2648,59 @@ button.quitter-appli:hover {
         grid-template-columns: 1fr;
     }
 }
+
+/* Ma collection : réglage d'une LoRA (mots déclencheurs, force, source). */
+.reglage-lora {
+    margin: 6px 0;
+    padding: 8px 10px;
+    border-left: 2px solid var(--bord);
+}
+
+.reglage-lora .ligne {
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.reglage-lora label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.75rem;
+    color: var(--discret);
+}
+
+.reglage-lora .mots-lora {
+    flex: 1;
+    min-width: 200px;
+}
+
+.reglage-lora .force-lora {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+.exemple-lora p {
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+}
+
+/* Scénario : cases 🗣 Dialogue et 🎵 Musique d'ambiance (clip et séquence). */
+.case-scenario {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.case-scenario textarea,
+.case-scenario input[type=text] {
+    margin: 0;
+}
+
+.cases-sequence {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 8px 0;
+}

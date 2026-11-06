@@ -505,9 +505,17 @@
                                     <input id="action-prompt" type="text" maxlength="500"
                                            placeholder="ex. elle tourne lentement la tête vers la caméra et sourit"></label>
                             </div>
-                            <div class="sous-liste large" data-video-seule data-clip-seul hidden>
-                                <label><span>🎞️ Réplique (gardée mot pour mot)</span>
-                                    <input id="replique-prompt" type="text" maxlength="200" placeholder="ex. Prêt pour le décollage ?"></label>
+                            <div class="sous-liste large case-scenario" data-video-seule data-clip-seul hidden>
+                                <label class="case"><input type="checkbox" id="dialogue-prompt"> 🗣 Dialogue : le personnage parle</label>
+                                <textarea id="replique-prompt" rows="2" maxlength="600" hidden
+                                          placeholder="Une réplique par ligne, gardée mot pour mot (ex. Prêt pour le décollage ?)"></textarea>
+                                <small class="discret" data-sans="dialogue-prompt">Décoché : le prompt dit que personne ne parle.</small>
+                            </div>
+                            <div class="sous-liste large case-scenario" data-video-seule data-clip-seul hidden>
+                                <label class="case"><input type="checkbox" id="musique-active-prompt"> 🎵 Musique d'ambiance</label>
+                                <input id="musique-prompt" type="text" maxlength="200" hidden
+                                       placeholder="ex. piano doux, tempo lent (traduite par le LLM à l'envoi ; vide : la liste Musique)">
+                                <small class="discret" data-sans="musique-active-prompt">Décoché : le prompt dit qu'il n'y a pas de musique de fond.</small>
                             </div>
                             <div class="sous-liste" data-video-seule data-clip-seul hidden>
                                 <label><span>🎞️ Durée du clip</span> <select id="duree-prompt"></select></label>
@@ -553,6 +561,20 @@
                             <div class="ligne synopsis-scenario">
                                 <textarea id="synopsis-scenario" rows="4" maxlength="2000"
                                           placeholder="L'histoire, du début à la fin, en français. Les répliques entre guillemets : elle lève les yeux et dit « On décolle ce soir. »"></textarea>
+                            </div>
+                            <div class="cases-sequence">
+                                <div class="case-scenario">
+                                    <label class="case"><input type="checkbox" id="dialogue-sequence"> 🗣 Dialogue : des répliques à placer</label>
+                                    <textarea id="repliques-sequence" rows="2" maxlength="600" hidden
+                                              placeholder="Une réplique par ligne, gardée mot pour mot ; le LLM la place dans le bon plan (celles du synopsis entre guillemets comptent aussi)"></textarea>
+                                    <small class="discret" data-sans="dialogue-sequence">Décoché : personne ne parle dans le film.</small>
+                                </div>
+                                <div class="case-scenario">
+                                    <label class="case"><input type="checkbox" id="musique-active-sequence"> 🎵 Musique d'ambiance</label>
+                                    <input id="musique-sequence" type="text" maxlength="200" hidden
+                                           placeholder="ex. synthwave lente, la même sur tout le film">
+                                    <small class="discret" data-sans="musique-active-sequence">Décoché : pas de musique de fond.</small>
+                                </div>
                             </div>
                             <label class="contrainte-scenario">🔒 Contraintes (tous les plans)
                                 <textarea id="contrainte-scenario" rows="2" maxlength="300"

@@ -9,6 +9,7 @@ import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -23,7 +24,7 @@ from app.comfy import ErreurComfy
 from app.config import CONFIG, ROOT, dossier_comfyui_livre
 from app.emplacements import moteur
 from app.orchestrateur import Orchestrateur
-from app.sources import ErreurSource, Fiche, fiche_depuis_url
+from app.sources import ErreurSource, Fiche, civitai, fiche_depuis_url
 from app.telechargement import ErreurTelechargement, Telechargeur
 
 WEB = ROOT / "web"
@@ -405,6 +406,56 @@ def ma_collection():
     return collection.collection()
 
 
+class DemandeReglageLora(BaseModel):
+    cle: str  # <Famille>/loras/<fichier>
+    declencheurs: str = ""
+    force: float = 1.0
+
+
+class DemandeLora(BaseModel):
+    cle: str
+
+
+@app.put("/api/collection/lora")
+def regler_lora(d: DemandeReglageLora):
+    """Ma collection : les mots déclencheurs et la force d'une LoRA (ceux que le Plateau proposera)."""
+    try:
+        securite.verifier(d.declencheurs)
+        return modeles.regler_lora(d.cle, d.declencheurs, d.force)
+    except ErreurSecurite as e:
+        raise HTTPException(422, str(e))
+    except modeles.ErreurModele as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/collection/lora/oublier")
+def oublier_reglage_lora(d: DemandeLora):
+    """Revient aux valeurs de la source : mots déclarés par l'auteur, force de ses images d'exemple."""
+    try:
+        return modeles.oublier_reglage_lora(d.cle)
+    except modeles.ErreurModele as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/collection/lora/relire")
+async def relire_lora(d: DemandeLora):
+    """Relit la version Civitai d'une LoRA : mots déclarés, force et prompt de ses images d'exemple."""
+    try:
+        modeles._famille_lora(d.cle)
+        infos = modeles.charger_registre().get(d.cle) or {}
+        if infos.get("source") != "civitai" or not (id_version := civitai.id_version(infos.get("page"))):
+            raise HTTPException(400, "Cette LoRA ne vient pas de Civitai (ou sa page est inconnue)")
+        version = await civitai.lire_version(id_version)
+        modeles.mettre_a_jour_source(d.cle, {
+            "mots_declencheurs": [m.strip() for m in version.get("trainedWords") or [] if m.strip()],
+            **civitai.usage_auteur(version, d.cle.rsplit("/", 1)[-1])})
+        return modeles.reglage_lora(d.cle)
+    except modeles.ErreurModele as e:
+        raise HTTPException(400, str(e))
+    except (ErreurSource, httpx.HTTPError) as e:
+        raise HTTPException(502, f"Civitai n'a pas répondu : {e}")
+
+
 @app.post("/api/collection/sources")
 async def retrouver_sources():
     """Seulement sur un clic : l'empreinte de chaque fichier déposé à la main est demandée à Civitai."""
@@ -568,14 +619,18 @@ class DemandeAssemblage(BaseModel):
     precisions: str = ""  # texte libre ajouté tel quel (traduit par Llama s'il est rempli)
     workflow: str | None = None  # modèle cible, pour son profil de prompt
     action: str = ""  # vidéo : l'action, déjà traduite en anglais
-    replique: str = ""  # vidéo : la réplique, gardée mot pour mot
+    replique: str = ""  # vidéo : les répliques, une par ligne, gardées mot pour mot
+    dialogue: bool | None = None  # case 🗣 Dialogue : False = personne ne parle
+    musique: str = ""  # case 🎵 Musique d'ambiance : sa description, déjà traduite
+    avec_musique: bool | None = None  # False = pas de musique de fond
 
 
 @app.post("/api/prompt/assembler")
 def assembler_prompt(demande: DemandeAssemblage):
     try:
         return listes.assembler(demande.sujet, demande.choix, demande.age, demande.texte, demande.precisions,
-                                demande.workflow, demande.action, demande.replique)
+                                demande.workflow, demande.action, demande.replique, demande.dialogue,
+                                demande.musique, demande.avec_musique)
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (listes.ErreurListes, workflows.ErreurWorkflow) as e:
@@ -1009,6 +1064,9 @@ class DemandeDecoupage(BaseModel):
     reference: str | None = None  # rush du personnage (galerie du Plateau)
     contrainte: str = ""  # impérative sur tous les plans
     llm: str | None = None
+    dialogue: bool = True  # case 🗣 Dialogue : False = personne ne parle dans le film
+    repliques: list[str] = []  # répliques à placer, mot pour mot (en plus de celles du synopsis)
+    musique: str | None = None  # case 🎵 Musique d'ambiance : sa description ; None = pas de musique de fond
 
 
 @app.post("/api/sequences/decouper")
@@ -1018,7 +1076,8 @@ async def decouper_sequence(d: DemandeDecoupage):
     try:
         desc = listes.description_sequence(d.sujet, d.choix, d.age)
         return await sequences.decouper(orchestrateur, d.synopsis, desc["personnage"], desc["decor"], d.plans,
-                                        d.reference, d.llm, desc["mineur"], d.contrainte)
+                                        d.reference, d.llm, desc["mineur"], d.contrainte, d.dialogue, d.repliques,
+                                        d.musique)
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (sequences.ErreurSequence, plateau.ErreurPlateau, listes.ErreurListes) as e:

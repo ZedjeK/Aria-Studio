@@ -1,5 +1,7 @@
 """Fiches Civitai : https://civitai.com/models/<id>[?modelVersionId=<version>] (ou civitai.red : la même base)."""
 
+import statistics
+from pathlib import PurePosixPath
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -29,6 +31,49 @@ def page(id_modele, id_version=None, niveau: int | None = 0) -> str:
     """La page du modèle, sur civitai.red s'il a du contenu au-delà de PG-13."""
     site = "https://civitai.red" if (niveau or 0) & NIVEAUX_ADULTES else "https://civitai.com"
     return f"{site}/models/{id_modele}" + (f"?modelVersionId={id_version}" if id_version else "")
+
+
+TYPES_RESSOURCE_LORA = ("lora", "locon", "dora")
+
+
+def usage_auteur(version: dict, nom_fichier: str | None = None) -> dict:
+    """Ce que l'auteur fait de sa LoRA dans ses images d'exemple : Civitai n'a pas de champ « force conseillée »,
+    mais leurs métadonnées donnent la force utilisée (on prend la médiane) et un prompt, où se lisent souvent les mots
+    qui la déclenchent quand l'auteur n'en a pas déclaré."""
+    souche = PurePosixPath(nom_fichier).stem.lower() if nom_fichier else ""
+    forces, prompt = [], None
+    for image in version.get("images") or []:
+        meta = image.get("meta") or {}
+        if prompt is None and str(meta.get("prompt") or "").strip():
+            prompt = " ".join(str(meta["prompt"]).split())[:500]
+        loras = [r for r in meta.get("additionalResources") or []
+                 if isinstance(r, dict) and str(r.get("type", "")).lower() in TYPES_RESSOURCE_LORA]
+        if len(loras) > 1:  # plusieurs LoRA sur l'image : celle qui porte le nom du fichier
+            loras = [r for r in loras if souche and PurePosixPath(str(r.get("name", ""))).stem.lower() == souche]
+        for r in loras[:1]:
+            try:
+                force = float(r.get("strength", r.get("weight")))
+            except (TypeError, ValueError):
+                continue
+            if 0 < force <= 2:
+                forces.append(force)
+    return {"force_auteur": round(statistics.median(forces) * 20) / 20 if forces else None,
+            "images_force": len(forces), "prompt_exemple": prompt}
+
+
+async def lire_version(id_version) -> dict:
+    """La version Civitai, telle que l'API la donne."""
+    async with httpx.AsyncClient(timeout=20, headers=entetes()) as client:
+        r = await client.get(f"{API}/model-versions/{id_version}")
+    if r.status_code == 404:
+        raise ErreurSource(f"Version Civitai introuvable : {id_version}")
+    r.raise_for_status()
+    return r.json()
+
+
+def id_version(page_: str | None) -> str | None:
+    """L'id de version d'une page Civitai notée au registre (…?modelVersionId=<id>)."""
+    return parse_qs(urlparse(page_ or "").query).get("modelVersionId", [None])[0]
 
 
 def _analyser(url: str) -> tuple[str | None, str | None]:
@@ -87,6 +132,7 @@ async def fiche(url: str) -> Fiche:
         jeton_requis=protege and not cles.cle("civitai"),
         mots_declencheurs=[m.strip() for m in version.get("trainedWords") or [] if m.strip()],
         base=base,
+        **(usage_auteur(version, f["name"]) if type_civitai in TYPES_LORA else {}),
     )
 
 
@@ -130,4 +176,5 @@ async def par_empreinte(sha256: str) -> dict | None:
         "nom_modele": modele.get("name"),
         "version": version.get("name"),
         "type": modele.get("type"),
+        **(usage_auteur(version, (fichier or {}).get("name")) if modele.get("type") in TYPES_LORA else {}),
     }

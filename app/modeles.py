@@ -85,21 +85,77 @@ def _memoire_loras() -> dict:
     return json.loads(MEMOIRE_LORAS.read_text(encoding="utf-8")) if MEMOIRE_LORAS.is_file() else {}
 
 
+USAGE_LORA = ("force_auteur", "images_force", "prompt_exemple")  # lus dans les images d'exemple (Civitai)
+FORCE_LORA = (0.0, 2.0)
+LONGUEUR_DECLENCHEURS = 300
+
+
+def reglage_lora(cle_lora: str, registre: dict | None = None, memoire: dict | None = None) -> dict:
+    """Mots déclencheurs et force d'une LoRA : ceux que Jérémy a réglés, sinon ceux de la source (mots déclarés par
+    l'auteur, force de ses images d'exemple), sinon 1,0."""
+    retenu = (memoire if memoire is not None else _memoire_loras()).get(cle_lora, {})
+    infos = (registre if registre is not None else charger_registre()).get(cle_lora) or {}
+    source = ", ".join(infos.get("mots_declencheurs") or [])
+    return {
+        "declencheurs": retenu.get("declencheurs", source),
+        "force": retenu.get("force", infos.get("force_auteur") or 1.0),
+        "regle": bool(retenu),  # réglé par Jérémy (au Plateau ou dans Ma collection)
+        "declencheurs_source": source,
+        **{k: infos.get(k) for k in USAGE_LORA},
+        "civitai": infos.get("source") == "civitai",
+    }
+
+
 def loras(famille: str) -> list[dict]:
     registre, memoire = charger_registre(), _memoire_loras()
     liste = []
     for nom in fichiers(f"{famille}/loras", EXTENSIONS_IMAGE):
         cle_lora = f"{famille}/loras/{nom}"
-        retenu = memoire.get(cle_lora, {})
-        source = (registre.get(cle_lora) or {}).get("mots_declencheurs") or []
-        liste.append({
-            "fichier": nom,
-            "nom": Path(nom).stem,
-            "declencheurs": retenu.get("declencheurs", ", ".join(source)),
-            "force": retenu.get("force", 1.0),
-            "page": (registre.get(cle_lora) or {}).get("page"),
-        })
+        r = reglage_lora(cle_lora, registre, memoire)
+        liste.append({"fichier": nom, "nom": Path(nom).stem, "declencheurs": r["declencheurs"], "force": r["force"],
+                      "page": (registre.get(cle_lora) or {}).get("page")})
     return liste
+
+
+def _famille_lora(cle_lora: str) -> tuple[str, str]:
+    morceaux = cle_lora.split("/")
+    if len(morceaux) != 3 or morceaux[1] != "loras" or morceaux[0] == "_base" \
+            or morceaux[2] not in fichiers(f"{morceaux[0]}/loras", EXTENSIONS_IMAGE):
+        raise ErreurModele(f"LoRA inconnue : {cle_lora}")
+    return morceaux[0], morceaux[2]
+
+
+def regler_lora(cle_lora: str, declencheurs: str, force: float) -> dict:
+    """Ma collection : les mots déclencheurs et la force d'une LoRA, retenus comme ceux réglés au Plateau."""
+    famille, fichier = _famille_lora(cle_lora)
+    declencheurs = " ".join(str(declencheurs or "").split())
+    if len(declencheurs) > LONGUEUR_DECLENCHEURS:
+        raise ErreurModele(f"Mots déclencheurs : {LONGUEUR_DECLENCHEURS} caractères au plus")
+    if not FORCE_LORA[0] <= force <= FORCE_LORA[1]:
+        raise ErreurModele("Force de LoRA entre 0 et 2")
+    memoriser_loras(famille, [{"fichier": fichier, "declencheurs": declencheurs, "force": round(force, 2)}])
+    return reglage_lora(cle_lora)
+
+
+def oublier_reglage_lora(cle_lora: str) -> dict:
+    """Revient aux valeurs de la source (mots de l'auteur, force de ses images d'exemple)."""
+    _famille_lora(cle_lora)
+    memoire = _memoire_loras()
+    if memoire.pop(cle_lora, None) is not None:
+        MEMOIRE_LORAS.write_text(json.dumps(memoire, indent=4, ensure_ascii=False), encoding="utf-8")
+    return reglage_lora(cle_lora)
+
+
+def mettre_a_jour_source(cle_lora: str, infos: dict):
+    """Relire Civitai : les mots déclarés et l'usage de l'auteur remplacent ceux du registre (le reste est gardé)."""
+    registre = charger_registre()
+    entree = registre.get(cle_lora)
+    if entree is None:
+        raise ErreurModele(f"Fichier absent du registre : {cle_lora}")
+    entree["mots_declencheurs"] = infos.get("mots_declencheurs") or []
+    for k in USAGE_LORA:
+        entree[k] = infos.get(k)
+    _sauver_registre(registre)
 
 
 def memoriser_loras(famille: str, choix: list[dict]):
@@ -168,6 +224,7 @@ def enregistrer(fichier: Path, fiche: dict, sha256: str, **en_plus):
         "licence": fiche["licence"],
         "mots_declencheurs": fiche.get("mots_declencheurs") or [],
         "base": fiche.get("base"),
+        **{k: fiche[k] for k in USAGE_LORA if fiche.get(k) is not None},
         "taille": fichier.stat().st_size,
         "sha256": sha256,
         "date": datetime.now().isoformat(timespec="seconds"),

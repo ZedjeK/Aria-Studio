@@ -74,7 +74,8 @@ AGE_PRECIS = (3, 120)
 LONGUEUR_TEXTE = 200
 LONGUEUR_PRECISIONS = 500
 LONGUEUR_ACTION = 500
-LONGUEUR_REPLIQUE = 200
+LONGUEUR_REPLIQUE = 600  # plusieurs répliques, une par ligne
+LONGUEUR_MUSIQUE = 200
 
 _COLONNES = {
     "Valeur": "nom", "Prompt image": "prompt", "Prompt vidéo": "prompt", "Remplace": "remplace", "Adulte": "adulte", "Genre": "genre",
@@ -374,10 +375,13 @@ def _qui_parle(sujet: str, genre: str | None) -> str:
 
 
 def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", precisions: str = "",
-              workflow: str | None = None, action: str = "", replique: str = "") -> dict:
+              workflow: str | None = None, action: str = "", replique: str = "", dialogue: bool | None = None,
+              musique: str = "", avec_musique: bool | None = None) -> dict:
     """Prompt anglais assemblé à partir des choix {bloc: {sous-liste: valeur}}, après contrôle des règles.
     Pour un modèle vidéo, le prompt devient un brief de production : rendu, sujet, action, caméra, réplique, sons.
-    `action` arrive déjà traduite en anglais ; `replique` est gardée mot pour mot, dans sa langue."""
+    `action` arrive déjà traduite en anglais ; `replique` (une par ligne) est gardée mot pour mot, dans sa langue.
+    Cases du Scénario : `dialogue` False écrit que personne ne parle, `avec_musique` False qu'il n'y a pas de musique
+    de fond (H3 en invente sinon) ; True prend `musique` (déjà traduite), sinon la liste Musique. None : la liste."""
     definition = _sujet(sujet)
     video = est_video(workflow)
     choix = dict(choix or {})
@@ -386,6 +390,9 @@ def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", 
         action = replique = ""
     selection = _selection(sujet, choix, video)
     texte, precisions, action, replique = texte.strip(), precisions.strip(), action.strip(), replique.strip()
+    musique = " ".join(str(musique or "").split())
+    if len(musique) > LONGUEUR_MUSIQUE:
+        raise ErreurListes(f"Musique trop longue (plus de {LONGUEUR_MUSIQUE} caractères)")
     alertes = []
     if video and texte:
         alertes.append("Texte dans l'image ignoré : il ne concerne que les images")
@@ -494,16 +501,27 @@ def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", 
         plan = {nom_sl: v.prompt for (id_bloc, nom_sl), v in selection.items() if id_bloc == PLAN and v.prompt}
         if "Caméra" in plan:
             phrases.append(phrase(plan["Caméra"]))
-        if replique:
+        lignes = [l.strip().replace(chr(34), chr(39)) for l in replique.splitlines() if l.strip()] \
+            if dialogue is not False else []
+        if lignes:
             ton = f", {plan['Ton']}" if "Ton" in plan else ""
-            phrases.append(f'{_qui_parle(sujet, genre)} in {plan.get("Langue", "French")}{ton}: '
-                           f'"{replique.replace(chr(34), chr(39))}"')
+            suite = "".join(f' Then: "{l}"' for l in lignes[1:])
+            phrases.append(f'{_qui_parle(sujet, genre)} in {plan.get("Langue", "French")}{ton}: "{lignes[0]}"{suite}')
+        elif dialogue is False:
+            phrases.append("Nobody speaks.")
         elif "Langue" in plan or "Ton" in plan:
             alertes.append("Langue et ton ignorés : écris d'abord une réplique")
         if "Ambiance sonore" in plan:
             phrases.append(f"Sounds: {plan['Ambiance sonore']}.")
-        if musique := plan.get("Musique"):
-            phrases.append(phrase(musique) if musique.startswith("no ") else f"Music: {musique}.")
+        liste = plan.get("Musique")
+        if avec_musique is False or (avec_musique and not musique and liste and liste.startswith("no ")):
+            phrases.append("No background music.")
+        elif avec_musique and musique:
+            phrases.append(f"Background music: {musique.rstrip('.')}.")
+        elif liste:
+            phrases.append(phrase(liste) if liste.startswith("no ") else f"Music: {liste}.")
+        elif avec_musique:
+            phrases.append("Background music that fits the scene.")  # cochée sans rien préciser
     else:
         phrases.append(sujet_phrase)
         if rendu:

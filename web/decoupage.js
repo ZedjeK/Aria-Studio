@@ -12,7 +12,8 @@ const NOTES_TYPES = {
     transition: "où la caméra arrive (facultatif)",
 };
 
-const decoupage = { reference: null, synopsis: "", contrainte: "", plans: [], resultat: null, perime: false };
+const decoupage = { reference: null, synopsis: "", contrainte: "", plans: [], resultat: null, perime: false,
+                    dialogue: false, repliques: "", avecMusique: false, musique: "" };  // cases 🗣 et 🎵
 let decoupagePret = false;
 
 const enSequence = () => formeScenario === "sequence";
@@ -131,7 +132,25 @@ document.getElementById("reference-scenario").addEventListener("click", (e) => {
 
 document.getElementById("synopsis-scenario").addEventListener("input", (e) => {
     decoupage.synopsis = e.target.value;
+    if (/[«"“]/.test(e.target.value) && !decoupage.dialogue) {  // une réplique dans l'histoire : on parle
+        decoupage.dialogue = document.getElementById("dialogue-sequence").checked = true;
+        majCases();
+    }
     perime();
+});
+
+[["dialogue-sequence", "dialogue"], ["musique-active-sequence", "avecMusique"]].forEach(([id, champ]) => {
+    document.getElementById(id).addEventListener("change", (e) => {
+        decoupage[champ] = e.target.checked;
+        majCases();
+        perime();
+    });
+});
+[["repliques-sequence", "repliques"], ["musique-sequence", "musique"]].forEach(([id, champ]) => {
+    document.getElementById(id).addEventListener("input", (e) => {
+        decoupage[champ] = e.target.value;
+        perime();
+    });
 });
 
 document.getElementById("contrainte-scenario").addEventListener("input", (e) => {
@@ -192,6 +211,9 @@ document.getElementById("decouper-scenario").addEventListener("click", () => {
         const r = await api("POST", "/api/sequences/decouper", {
             synopsis: decoupage.synopsis, sujet: sujetPrompt, choix, age: etat.age,
             plans: decoupage.plans, reference: decoupage.reference, contrainte: decoupage.contrainte, llm: llmPrompt(),
+            dialogue: decoupage.dialogue,
+            repliques: decoupage.dialogue ? decoupage.repliques.split("\n").map((l) => l.trim()).filter(Boolean) : [],
+            musique: decoupage.avecMusique ? (decoupage.musique.trim() || "music that fits the story, your choice") : null,
         });
         decoupage.resultat = r;
         decoupage.perime = false;
