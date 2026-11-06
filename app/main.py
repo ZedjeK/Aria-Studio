@@ -770,8 +770,7 @@ def regler_variante(id_workflow: str, fichier: str, demande: DemandeReglagesWork
 
 class DemandeCreation(BaseModel):
     idee: str = ""
-    prompt: str | None = None  # fourni : pas de réécriture (« Régénérer », « Variante »)
-    llm: str | None = None
+    prompt: str = ""  # tourné tel quel : le LLM n'écrit qu'au Scénario
     workflow: str | None = None
     format: str = "1:1 (Square)"
     seed: int | None = None
@@ -794,8 +793,10 @@ def options_plateau():
 def creer(demande: DemandeCreation):
     if banc_actif and banc_actif.etat in ("attente", "en_cours"):
         raise HTTPException(409, "Un banc est en cours")
+    if not demande.prompt.strip():
+        raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
     try:
-        commande = plateau_.commander(demande.idee, demande.prompt, demande.llm, demande.workflow,
+        commande = plateau_.commander(demande.idee or demande.prompt, demande.prompt.strip(), None, demande.workflow,
                                       demande.format, demande.seed, demande.nombre, demande.parent, demande.modele,
                                       demande.loras, demande.references, demande.mode_reference, demande.liberte,
                                       rushes.valider_dossier(demande.dossier))

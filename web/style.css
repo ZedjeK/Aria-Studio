@@ -2521,3 +2521,10 @@ button.quitter-appli:hover {
 .resultat-cle {
     margin: 4px 0 0;
 }
+
+/* Plateau : le prompt arrive du Scénario, modifiable avant de tourner. */
+.entete-prompt-plateau {
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}

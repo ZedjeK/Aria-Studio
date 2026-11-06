@@ -49,7 +49,27 @@ const llmPrompt = () => document.getElementById("llm-prompt").value || null;
 const ciblePrompt = () => document.getElementById("workflow-prompt").value || null;
 const cibleVideo = () => formeScenario !== "image";
 
-async function preparerScenario() {
+let preparationScenario = Promise.resolve();
+
+function preparerScenario() {  // appelée à chaque ouverture de l'onglet
+    preparationScenario = preparer();
+    return preparationScenario;
+}
+
+// Ouvre le Scénario sur une forme (et une image de référence) : « ✍️ L'écrire au Scénario », « 🎞️ Animer ».
+async function ouvrirScenario(forme, { animer = null } = {}) {
+    document.querySelector('.onglet[data-vue="scenario"]').click();
+    await preparationScenario;  // le brouillon est relu d'abord : il ne doit pas écraser ce choix
+    if (animer) refsScenario.animer = animer;
+    if (formeScenario !== forme) {
+        document.querySelector(`input[name="forme-scenario"][value="${forme}"]`).click();
+    } else if (animer) {
+        await referencesChangees();
+    }
+    if (animer) choisirOnglet("reference");
+}
+
+async function preparer() {
     if (!promptPret) {
         promptPret = true;
         const { sujets } = await api("GET", "/api/prompt/listes");

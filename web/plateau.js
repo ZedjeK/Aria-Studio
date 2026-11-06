@@ -2,7 +2,6 @@
 
 const urlImage = (id) => `/api/creations/${encodeURIComponent(id)}/image`;
 let commandeEnCours = null;
-let derniereCommande = null;
 let ficheOuverte = null;
 
 let optionsPlateau = null;
@@ -81,8 +80,7 @@ document.getElementById("workflow-retouche").addEventListener("change", () => {
 // Le LLM qui réécrit pour un workflow (onglets d'usage de Modèles), sinon le LLM par défaut.
 const llmDuWorkflow = (id, o = optionsPlateau) => o?.llm.par_workflow?.[id] ?? o?.llm.defaut;
 
-function suivreLlmDuWorkflow() {
-    document.getElementById("llm-creation").value = llmDuWorkflow(choixModele("workflow-creation").workflow);
+function suivreLlmDuWorkflow() {  // la retouche seule garde un LLM au Plateau : il traduit sa consigne
     document.getElementById("llm-retouche").value = llmDuWorkflow(choixModele("workflow-retouche").workflow);
 }
 
@@ -107,7 +105,6 @@ async function chargerOptionsPlateau() {
     const remplir = remplirSelect;
     const llms = o.llm.choix.map((m) => [m.fichier, m.favori ? `${m.nom} ★` : m.nom]);
     // Au premier remplissage, le LLM du workflow choisi (ou du favori) ; ensuite le choix en cours est gardé.
-    remplir("llm-creation", llms, llmDuWorkflow(choixModele("workflow-creation").workflow || o.workflows.texte_vers_image.defaut));
     remplir("llm-retouche", llms, llmDuWorkflow(choixModele("workflow-retouche").workflow || o.workflows.retouche.defaut));
     const t2i = o.workflows.texte_vers_image;
     remplirModelesCreation();
@@ -283,13 +280,10 @@ async function recevoirAuPlateau({ prompt, workflow, images, role, liberte, lanc
         select.value = `${w.id}::${w.origine}`;
         select.dispatchEvent(new Event("change"));
     }
-    document.getElementById("idee-creation").value = prompt;
-    const sansReecriture = document.getElementById("sans-reecriture");
-    sansReecriture.checked = true;
-    sansReecriture.dispatchEvent(new Event("change"));
+    document.getElementById("prompt-plateau").value = prompt;
     document.querySelector('.onglet[data-vue="plateau"]').click();
     if (lancer) document.getElementById("form-creation").requestSubmit();
-    else document.getElementById("idee-creation").focus();
+    else document.getElementById("prompt-plateau").focus();
 }
 
 function optionsReferences() {
@@ -299,17 +293,13 @@ function optionsReferences() {
 }
 
 // Ouvrir une liste la relit : un fichier déposé pendant que la page est ouverte apparaît sans recharger.
-["workflow-creation", "workflow-retouche", "llm-creation", "llm-retouche"].forEach((id) =>
+["workflow-creation", "workflow-retouche", "llm-retouche"].forEach((id) =>
     document.getElementById(id).addEventListener("focus", chargerOptionsPlateau));
 
 function choixModele(idSelect) {
     const [workflow, modele] = document.getElementById(idSelect).value.split("::");
     return { workflow, modele };
 }
-
-document.getElementById("sans-reecriture").addEventListener("change", (e) => {
-    document.getElementById("llm-creation").disabled = e.target.checked;
-});
 
 function optionsFormulaire() {
     const seed = document.getElementById("seed-creation").value;
@@ -333,7 +323,7 @@ async function lancerCommande(corps, url = "/api/creations", erreur = document.g
         return false;
     }
     document.getElementById("erreur-creation").hidden = true;
-    document.querySelectorAll("#form-creation button, #regenerer").forEach((b) => { b.disabled = true; });
+    document.querySelectorAll("#form-creation button").forEach((b) => { b.disabled = true; });
     document.getElementById("progression-creation").hidden = false;
     suivreAnnulable(document.getElementById("progression-creation"), commandeEnCours.id);
     suivreCommande(Date.now());
@@ -354,7 +344,7 @@ async function suivreCommande(debut) {
         return;
     }
     bloc.hidden = true;
-    document.querySelectorAll("#form-creation button, #regenerer").forEach((b) => { b.disabled = false; });
+    document.querySelectorAll("#form-creation button").forEach((b) => { b.disabled = false; });
     if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-creation");
         erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "image", true) : c.erreur;
@@ -364,7 +354,6 @@ async function suivreCommande(debut) {
         chargerGalerie();
         return;
     }
-    derniereCommande = c;
     afficherResultat(c.images, c.prompt, c.type);
     chargerGalerie();
 }
@@ -372,35 +361,21 @@ async function suivreCommande(debut) {
 function afficherResultat(images, prompt, type = "creation") {
     document.getElementById("images-creation").innerHTML = images.map((id) =>
         `<img src="${urlImage(id)}" alt="" data-creation="${echapper(id)}">`).join("");
-    document.getElementById("prompt-creation").value = prompt;
-    // Après une retouche, le texte est une consigne d'édition : la régénération en texte vers image n'a pas de sens.
-    document.getElementById("regenerer").hidden = type !== "creation";
-    document.querySelector("label[for=prompt-creation]").textContent = type === "creation"
-        ? "Prompt envoyé au modèle (modifiable)" : "Consigne envoyée au modèle de retouche";
+    // Une création reprend le prompt du champ ci-dessus ; une retouche montre la consigne envoyée au modèle.
+    const consigne = document.getElementById("consigne-resultat");
+    consigne.textContent = type === "creation" ? "" : `Consigne envoyée au modèle de retouche : ${prompt}`;
+    consigne.hidden = type === "creation";
     document.getElementById("resultat-creation").hidden = false;
 }
 
+// Le prompt part tel quel : le LLM n'écrit qu'au Scénario.
 document.getElementById("form-creation").addEventListener("submit", (e) => {
     e.preventDefault();
-    const idee = document.getElementById("idee-creation").value;
-    const corps = { idee, ...optionsFormulaire(), loras: lorasChoisies("loras-creation") };
-    if (document.getElementById("sans-reecriture").checked) {
-        corps.prompt = idee;  // prompt déjà prêt : pas de passage par le LLM
-    } else {
-        corps.llm = document.getElementById("llm-creation").value;
-    }
-    lancerCommande(corps);
+    const prompt = document.getElementById("prompt-plateau").value.trim();
+    lancerCommande({ prompt, ...optionsFormulaire(), loras: lorasChoisies("loras-creation") });
 });
 
-document.getElementById("regenerer").addEventListener("click", () => {
-    lancerCommande({
-        idee: document.getElementById("idee-creation").value,
-        prompt: document.getElementById("prompt-creation").value,
-        loras: lorasChoisies("loras-creation"),
-        parent: derniereCommande?.images?.[0] ?? null,
-        ...optionsFormulaire(),
-    });
-});
+document.getElementById("vers-scenario").addEventListener("click", () => ouvrirScenario("image"));
 
 // Rushes : galerie rangée partagée avec les Bobines du Montage (web/galerie.js).
 
@@ -486,7 +461,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 function reprendreReglages(f) {
-    document.getElementById("idee-creation").value = f.idee;
+    document.getElementById("prompt-plateau").value = f.prompt ?? f.idee ?? "";
     // Les références de la fiche reviennent avec elle (et la liste des modèles suit leur mode).
     referencesChoisies = [...(f.references ?? [])];
     if (f.mode_reference) {
@@ -521,10 +496,8 @@ document.getElementById("reutiliser").addEventListener("click", () => {
     const f = ficheOuverte;
     fermerFiche();
     reprendreReglages(f);
-    derniereCommande = { images: [f.id] };
-    afficherResultat([f.id], f.prompt);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    document.getElementById("prompt-creation").focus();
+    document.getElementById("prompt-plateau").focus();
 });
 
 document.getElementById("comme-reference").addEventListener("click", () => {
