@@ -423,8 +423,10 @@ class Decoupage(Base):
         plans[0]["enchainement"] = "rush"
         with self.assertRaisesRegex(ErreurSequence, "choisis l'image de référence"):
             self.decouper(FauxLlama(), plans)
-        with self.assertRaisesRegex(ErreurSequence, "synopsis"):
-            self.decouper(FauxLlama(), synopsis=" ")
+        muets = [{**p, "note": ""} for p in self.PLANS]  # ni fil ni « ce qui se passe » : rien à écrire
+        with self.assertRaisesRegex(ErreurSequence, "fil de l'histoire"):
+            self.decouper(FauxLlama(), muets, synopsis=" ")
+        self.decouper(FauxLlama(blocs(*["A shot."] * 4)), synopsis=" ")  # sans fil : les plans racontent
 
     def test_as18(self):
         ado = plateau.enregistrer(png(), {"type": "creation", "idee": "une adolescente de 15 ans"})

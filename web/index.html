@@ -491,6 +491,7 @@
                             <span id="statut-prompt" class="discret" hidden></span>
                         </div>
                         <p id="erreur-prompt" class="ko" hidden></p>
+                        <div id="place-chat-atelier">
                         <div id="chat-libre" hidden>
                             <div class="libre">
                                 <div id="conversation-libre" class="conversation-libre"></div>
@@ -512,20 +513,19 @@
                             </div>
                             <p id="erreur-libre" class="ko" hidden></p>
                         </div>
-                        <!-- Séquence : les plans, la contrainte et les cases, que le découpage suit -->
-                        <div id="sequence-scenario" data-atelier-seul="sequence">
-                            <div class="options-creation">
-                                <label>Nombre de plans <select id="nombre-plans-scenario"></select></label>
-                                <span id="duree-sequence-scenario" class="discret"></span>
-                            </div>
-                            <ol id="plans-scenario" class="plans-scenario"></ol>
+                        </div>
+                    </div>
+
+                    <!-- Séquence, 3 · Les plans : chacun son prompteur (✨, 💬), sa réplique et son prompt -->
+                    <div class="bloc-atelier" id="sequence-scenario" data-atelier-seul="sequence">
+                        <h3 class="titre-bloc">3 · Les plans</h3>
+                        <div class="options-creation">
+                            <label>Nombre de plans <select id="nombre-plans-scenario"></select></label>
+                            <span id="duree-sequence-scenario" class="discret"></span>
+                        </div>
+                        <ol id="plans-scenario" class="plans-scenario"></ol>
+                        <div>
                             <div class="cases-sequence">
-                                <div class="case-scenario">
-                                    <label class="case"><input type="checkbox" id="dialogue-sequence"> 🗣 Dialogue : des répliques à placer</label>
-                                    <textarea id="repliques-sequence" rows="2" maxlength="600" hidden
-                                              placeholder="Une réplique par ligne, gardée mot pour mot ; le LLM la place dans le bon plan (celles de l'histoire entre guillemets comptent aussi)"></textarea>
-                                    <small class="discret" data-sans="dialogue-sequence">Décoché : personne ne parle dans le film.</small>
-                                </div>
                                 <div class="case-scenario">
                                     <label class="case"><input type="checkbox" id="musique-active-sequence"> 🎵 Musique d'ambiance</label>
                                     <input id="musique-sequence" type="text" maxlength="200" hidden
@@ -541,7 +541,7 @@
 
                     <!-- 3 · Compléments : propres à l'atelier, puis les listes à cliquer -->
                     <details class="bloc-atelier complements" id="complements" data-atelier-sauf="retouche">
-                        <summary><h3 class="titre-bloc">3 · Compléments <span class="discret">(facultatif : précise ce que tu veux imposer)</span></h3></summary>
+                        <summary><h3 class="titre-bloc"><span id="numero-complements">3</span> · Compléments <span class="discret">(facultatif : précise ce que tu veux imposer)</span></h3></summary>
                         <div class="sous-listes">
                             <div class="sous-liste large case-scenario" data-atelier-seul="clip">
                                 <label class="case"><input type="checkbox" id="dialogue-prompt"> 🗣 Dialogue : le personnage parle</label>
@@ -608,13 +608,15 @@
                         </div>
                     </div>
                     <div id="decoupage-scenario" data-atelier-seul="sequence">
-                        <p class="discret">✨ Découper : le LLM écrit le prompt de chaque plan d'après ton histoire.</p>
+                        <p class="discret">Chaque plan s'écrit avec son ✨ ou son 💬 ; ✨ Tout écrire les écrit tous d'après le fil.
+                            Clique un plan pour y aller.</p>
+                        <ol id="resume-sequence" class="resume-sequence"></ol>
                         <ul id="alertes-decoupage" class="alertes-prompt"></ul>
-                        <ol id="resultat-decoupage" class="resultat-decoupage"></ol>
-                        <div class="ligne actions-prompt" id="creation-sequence-scenario" hidden>
+                        <div class="ligne actions-prompt" id="creation-sequence-scenario">
                             <input id="titre-sequence-scenario" type="text" maxlength="40" placeholder="Titre de la séquence">
                             <button id="creer-sequence-scenario" type="button" class="principal">→ Créer dans le Montage</button>
                         </div>
+                        <p id="erreur-sequence-scenario" class="ko" hidden></p>
                     </div>
                 </aside>
             </div>

@@ -134,7 +134,7 @@ The user gives, often in French, a short story, the look of the character and of
 Rules for every shot:
 1. A short production brief in the present tense: shot size, what the character does, the setting, ONE named camera movement with its speed, then concrete sounds. 40 to {mots_max} words, plain prose.
 2. One continuous take: never write "cut to", never switch place or angle inside a shot (the next shot does that).
-3. Dialogue: use only the lines in quotes from the story or the shot notes, word for word, inside double quotes; say who speaks, in which language and with which tone. A line is spoken in the language it is written in (a French line is spoken in French), whatever the character's origin. Never translate a line, never invent one: a shot without a line has nobody speaking, nobody murmurs or says anything.
+3. Dialogue: use only the lines in quotes from the story or the shot notes, and each shot's "line", word for word, inside double quotes; say who speaks, in which language and with which tone. A shot's "line" belongs to that shot, at the moment it gives: tie it to the visible action in the timeline of the brief (at the start: the character speaks, then the action begins; in the middle: the line falls during the action; at the end: after the action, as a reaction), never to timecodes. A line is spoken in the language it is written in (a French line is spoken in French), whatever the character's origin. Never translate a line, never invent one: a shot without a line has nobody speaking, nobody murmurs or says anything.
 4. Tell the story in order, spread over the shots; follow each shot's note when there is one. Few actions per shot: fit its duration.
 5. Shot types:
 - start: the first shot; it sets up the character and the place.
@@ -147,7 +147,7 @@ Rules for every shot:
 8. Keep everything the user wrote (story events, character, setting, constraint, notes): never contradict, weaken or leave it out. No background music unless the user asks for it.
 9. """ + ADULTES + """
 
-Answer with exactly one block per shot, in order, and nothing else:
+Answer with exactly one block per shot to write (every shot, unless the user asks for one only), in order, and nothing else:
 SHOT 1
 FR: one short French sentence summarising the shot
 EN: the English prompt"""
@@ -481,9 +481,12 @@ def vide_fiche(valeur: str) -> bool:
     """Une rubrique que le LLM remplit pour dire qu'elle est vide (« Aucun choix fait pour le décor ») n'en est pas une."""
     v = valeur.strip().lower()
     return v in VIDES_FICHE or v.startswith(DEBUTS_VIDES)
+
+
 ESSENTIELS = {"image": "subject, action or pose, setting, medium and style, framing, lighting",
               "retouche": "what changes, where in the picture, how strongly, what must stay exactly as it is",
               "sequence": "the character, the place, the story from beginning to end, the spoken lines, the mood",
+              "plan": "what happens in this shot, the framing, the camera movement, the sounds",
               "video": "subject, action, setting, visual style, camera, sounds, spoken line if any"}
 
 
@@ -533,9 +536,13 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
                      ", Histoire, Réplique", "in French: the whole story from beginning to end as a short plain "
                      "narrative, the way the user would tell it: no shots, no camera directions, no English, and "
                      "spoken lines in quotes only if the user gave or accepted them"),
+        "plan": (f"{nom}, ONE shot of a video sequence: a {duree}-second clip with sound. Write only this shot's "
+                 "prompt, in continuity with the shots around it; if the shot has a line, keep it word for word at its "
+                 "moment, tied to the visible action, and never invent another line", ", Caméra, Son, Réplique",
+                 "in English"),
     }
     cible, rubriques, langue_prompt = cibles.get(forme, cibles["image"])
-    mots = mots_max_de(workflow) if forme in ("image", "clip") else None
+    mots = mots_max_de(workflow) if forme in ("image", "clip", "plan") else None
     systeme = CONSIGNE_LIBRE.format(
         cible=cible, contexte=contexte.strip() or "nothing yet", sujets_video=rubriques,
         essentiels=ESSENTIELS.get(forme, ESSENTIELS["video" if forme == "clip" else "image"]),

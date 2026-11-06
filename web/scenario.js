@@ -22,8 +22,8 @@ const IDEES = {
     retouche: ["2 · Ta retouche", "Ce que tu veux changer sur l'image : remplace le ciel par un coucher de soleil, "
         + "garde tout le reste…"],
     clip: ["2 · Ton clip", "Ce qui se passe, en français : elle tourne lentement la tête vers la caméra et sourit…"],
-    sequence: ["2 · Ton histoire", "L'histoire, du début à la fin, en français. Les répliques entre guillemets : "
-        + "elle lève les yeux et dit « On décolle ce soir. »"],
+    sequence: ["2 · Le fil de l'histoire (facultatif)", "En une à trois phrases, ce qui se passe du début à la fin : "
+        + "une pilote rentre au hangar et retrouve son mécanicien… ✨ Tout écrire le répartit dans les plans."],
 };
 const ENVOIS = { image: ["→ Envoyer au Plateau", "Créer"], retouche: ["→ Panneau de retouche", "Retoucher"],
                  clip: ["→ Envoyer au Montage", "Tourner"] };
@@ -140,7 +140,9 @@ function majAtelier() {
     const idee = document.getElementById("idee-scenario");
     idee.placeholder = exemple;
     idee.value = a.idee;
-    document.getElementById("optimiser-scenario").textContent = formeScenario === "sequence" ? "✂ Découper" : "✨ Optimiser";
+    document.getElementById("optimiser-scenario").textContent = formeScenario === "sequence" ? "✨ Tout écrire" : "✨ Optimiser";
+    document.getElementById("numero-complements").textContent = formeScenario === "sequence" ? "4" : "3";
+    document.getElementById("titre-final").textContent = formeScenario === "sequence" ? "Ta séquence" : "Prompt final";
     document.getElementById("tel-quel-scenario").hidden = formeScenario === "sequence";
     document.getElementById("facultatif-depart").textContent = formeScenario === "retouche"
         ? "(l'image à retoucher)" : "(facultatif)";
@@ -150,8 +152,8 @@ function majAtelier() {
         document.getElementById("creer-prompt").textContent = lancer;
     }
     document.getElementById("prompt-final").value = a.final;
-    document.getElementById("chat-libre").hidden = !a.echanges.length;
-    rendreLibre();  // libre.js
+    document.getElementById("chat-libre").hidden = !conversationActive().echanges.length;  // libre.js
+    rendreLibre();
     rendreEtiquettes();
     rendreReferencesScenario();  // references.js
     majForme();  // Séquence (decoupage.js)
@@ -200,7 +202,7 @@ function garderBrouillon() {
         const etat = { forme: formeScenario, sujet: sujetPrompt, liste: ongletListe, cibles: ciblesParForme,
                        etats: etatsPrompt, llms: llmsChoisis, references: refsScenario, ateliers,
                        sequence: { reference: decoupage.reference, contrainte: decoupage.contrainte,
-                                   plans: decoupage.plans, dialogue: decoupage.dialogue, repliques: decoupage.repliques,
+                                   contrainteEn: decoupage.contrainteEn, plans: decoupage.plans, alertes: decoupage.alertes,
                                    avecMusique: decoupage.avecMusique, musique: decoupage.musique } };
         try {
             localStorage.setItem(BROUILLON, JSON.stringify(etat));
@@ -230,15 +232,20 @@ function relireBrouillon() {
     if (s.synopsis && !atelier("sequence").idee) atelier("sequence").idee = s.synopsis;  // avant : un champ à part
     decoupage.reference = s.reference ?? null;
     decoupage.contrainte = s.contrainte ?? "";
+    decoupage.contrainteEn = s.contrainteEn ?? null;
+    decoupage.alertes = Array.isArray(s.alertes) ? s.alertes : [];
     if (Array.isArray(s.plans) && s.plans.length >= 2) {
-        decoupage.plans = s.plans;
+        decoupage.plans = s.plans.map(normaliserPlan);  // decoupage.js : les anciens plans n'avaient pas de réplique
         decoupagePret = false;  // preparerDecoupage remplit les listes sans écraser ces plans
     }
-    Object.assign(decoupage, { dialogue: Boolean(s.dialogue), repliques: s.repliques ?? "",
-                               avecMusique: Boolean(s.avecMusique), musique: s.musique ?? "" });
+    // Avant : une case 🗣 pour tout le film et ses répliques ; elles rejoignent le fil, rien ne se perd.
+    if (s.dialogue && (s.repliques ?? "").trim() && !decoupage.plans.some((p) => p.replique.trim())) {
+        const lignes = s.repliques.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => `« ${l} »`).join(" ");
+        atelier("sequence").idee = `${atelier("sequence").idee.trim()}\nRépliques : ${lignes}`.trim();
+        garderBrouillon();  // réécrit sans l'ancienne case : pas d'ajout en double au prochain chargement
+    }
+    Object.assign(decoupage, { avecMusique: Boolean(s.avecMusique), musique: s.musique ?? "" });
     document.getElementById("contrainte-scenario").value = decoupage.contrainte;
-    document.getElementById("dialogue-sequence").checked = decoupage.dialogue;
-    document.getElementById("repliques-sequence").value = decoupage.repliques;
     document.getElementById("musique-active-sequence").checked = decoupage.avecMusique;
     document.getElementById("musique-sequence").value = decoupage.musique;
     majCases();
@@ -327,10 +334,11 @@ function rendreBlocsPrompt() {
     majCases();
 }
 
-// Cases 🗣 et 🎵 (clip et séquence) : cochée, son champ apparaît ; décochée, la phrase qui dit ce qui se passe.
+// Cases 🗣 et 🎵 (clip, musique d'une séquence) : cochée, son champ apparaît ; décochée, la phrase qui dit ce qui se
+// passe. Le dialogue d'une séquence se coche plan par plan (decoupage.js).
 function majCases() {
     [["dialogue-prompt", "replique-prompt"], ["musique-active-prompt", "musique-prompt"],
-     ["dialogue-sequence", "repliques-sequence"], ["musique-active-sequence", "musique-sequence"]].forEach(([c, champ]) => {
+     ["musique-active-sequence", "musique-sequence"]].forEach(([c, champ]) => {
         const coche = document.getElementById(c).checked;
         document.getElementById(champ).hidden = !coche;
         document.querySelector(`[data-sans="${c}"]`).hidden = coche;
@@ -514,6 +522,7 @@ function majBoutonsPrompt() {
     ["optimiser-scenario", "aide-scenario", "tel-quel-scenario"].forEach((id) => {
         document.getElementById(id).disabled = occupePrompt;
     });
+    document.querySelectorAll("[data-optimiser-plan], [data-aide-plan]").forEach((b) => { b.disabled = occupePrompt; });
     ["envoyer-prompt", "creer-prompt"].forEach((id) => { document.getElementById(id).disabled = occupePrompt || !final; });
 }
 

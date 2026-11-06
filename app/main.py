@@ -1,6 +1,7 @@
 """Serveur FastAPI d'Aria - Studio : sert l'interface web et l'API."""
 
 import asyncio
+import json
 import os
 import re
 import threading
@@ -14,7 +15,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app import (assistant, casting, cles, collection, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs,
                  optimiseur, personnages, plateau, prompt, reglages, retouche, rushes, securite, sequences, voix, workflows)
@@ -770,9 +771,10 @@ class EchangeLibre(BaseModel):
 
 class DemandeLibre(BaseModel):
     echanges: list[EchangeLibre]
-    forme: str = "image"  # image ou clip
+    forme: str = "image"  # image, clip, retouche, sequence (le fil de l'histoire) ou plan (un plan d'une séquence)
     workflow: str | None = None
     contexte: str = ""  # ce que les autres onglets du Scénario ont déjà fixé (le prompt assemblé)
+    sequence: dict | None = None  # forme « plan » : la demande du découpage (DemandeDecoupage), « plan » = son numéro
     images: list[str] = []  # images de référence du Scénario
     role: str | None = None  # leur rôle : inspirer, variation, animer
     llm: str | None = None
@@ -786,23 +788,41 @@ ECHANGES_LIBRE_MAX, LONGUEUR_ECHANGE_LIBRE = 60, 4000
 async def chat_libre(d: DemandeLibre):
     """Scénario, onglet Libre : un tour de conversation (questions, fiche « Ce que j'ai compris », prompt)."""
     _verifier_llm(d.llm)
-    if d.forme not in ("image", "clip", "retouche", "sequence"):
-        raise HTTPException(400, "Atelier inconnu : image, retouche, clip ou séquence")
+    if d.forme not in ("image", "clip", "retouche", "sequence", "plan"):
+        raise HTTPException(400, "Atelier inconnu : image, retouche, clip, séquence ou plan")
+    if d.forme == "plan" and not (d.sequence and isinstance(d.sequence.get("plan"), int)):
+        raise HTTPException(400, "Quel plan de la séquence ?")
     if not d.echanges or d.echanges[-1].role != "user" or len(d.echanges) > ECHANGES_LIBRE_MAX \
             or any(e.role not in ("user", "assistant") or len(e.content) > LONGUEUR_ECHANGE_LIBRE for e in d.echanges):
         raise HTTPException(400, "Conversation invalide ou trop longue : recommence-la")
     try:
+        contexte, duree, plan_ = d.contexte, d.duree, None
+        if d.forme == "plan":  # 💬 d'un plan : le chat sait ce que sait le découpage, ce plan seul à écrire
+            s = DemandeDecoupage(**d.sequence)
+            desc = listes.description_sequence(s.sujet, s.choix, s.age)
+            plan_ = sequences.preparer_ecriture(s.synopsis, desc["personnage"], desc["decor"], s.plans, s.reference,
+                                                desc["mineur"], s.contrainte, True, [], s.musique, s.plan)
+            contexte = f"{plan_['demande']}\nCharacter rule: {plan_['regle_personnage']}"
+            duree = plan_["plans"][s.plan]["duree"]
         origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
-        securite.verifier(*origines, *(e.content for e in d.echanges if e.role == "user"))
+        entrees = [*origines, *(plan_["entrees"] if plan_ else [])]
+        securite.verifier(*entrees, *(e.content for e in d.echanges if e.role == "user"))
         vues = [plateau.vue(i) for i in d.images[:3]] or None
         llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
-        r = await prompt.libre(orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, d.contexte,
-                               vues, d.role, llm, d.duree)
-        securite.verifier(*origines, r["prompt"] or "", *r["fiche"].values())
+        r = await prompt.libre(orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, contexte,
+                               vues, d.role, llm, duree)
+        if plan_ and r["prompt"]:  # les garde-fous du découpage : réplique du plan à son moment, rien d'inventé
+            texte, alertes = sequences.finir_plan(s.plan + 1, plan_["plans"][s.plan], r["prompt"],
+                                                  plan_["personnage"], plan_["source"])
+            r = {**r, "prompt": texte, "alertes": alertes,
+                 "brut": json.dumps({**json.loads(r["brut"]), "prompt": texte}, ensure_ascii=False)}
+        securite.verifier(*entrees, r["prompt"] or "", *r["fiche"].values())
         return r
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
-    except (plateau.ErreurPlateau, workflows.ErreurWorkflow) as e:
+    except ValidationError as e:
+        raise HTTPException(400, f"Séquence illisible : {e.errors()[0].get('msg', '')}")
+    except (plateau.ErreurPlateau, workflows.ErreurWorkflow, sequences.ErreurSequence, listes.ErreurListes) as e:
         raise HTTPException(400, str(e))
     except ErreurLlama as e:
         raise HTTPException(500, str(e))
@@ -1107,28 +1127,31 @@ def _sequence(action):
 
 
 class DemandeDecoupage(BaseModel):
-    synopsis: str  # l'histoire, en français, répliques entre guillemets
+    synopsis: str = ""  # le fil de l'histoire (facultatif), en français, répliques entre guillemets
     sujet: str = "personnage"  # l'état du Scénario : le personnage et le décor en sont tirés
     choix: dict[str, dict[str, str | None]] = {}
     age: int | None = None
-    plans: list[dict]  # [{enchainement, duree, note, rush}]
+    plans: list[dict]  # [{enchainement, duree, note, rush, replique, moment, off, prompt (déjà écrit)}]
     reference: str | None = None  # rush du personnage (galerie du Plateau)
     contrainte: str = ""  # impérative sur tous les plans
     llm: str | None = None
     dialogue: bool = True  # case 🗣 Dialogue : False = personne ne parle dans le film
     repliques: list[str] = []  # répliques à placer, mot pour mot (en plus de celles du synopsis)
     musique: str | None = None  # case 🎵 Musique d'ambiance : sa description ; None = pas de musique de fond
+    plan: int | None = None  # ✨ d'un plan : son numéro (0 = le premier) ; None = tous les plans
+    contrainte_en: dict | None = None  # {fr, en} : traduction déjà faite de la contrainte, reprise si elle vaut
 
 
 @app.post("/api/sequences/decouper")
 async def decouper_sequence(d: DemandeDecoupage):
-    """Scénario, mode Séquence : les prompts de tous les plans, écrits ensemble par Llama."""
+    """Scénario, atelier Séquence : les prompts de tous les plans écrits ensemble par Llama (✨ Tout écrire), ou
+    d'un seul (✨ d'un plan), les autres servant de contexte."""
     _verifier_llm(d.llm)
     try:
         desc = listes.description_sequence(d.sujet, d.choix, d.age)
         return await sequences.decouper(orchestrateur, d.synopsis, desc["personnage"], desc["decor"], d.plans,
                                         d.reference, d.llm, desc["mineur"], d.contrainte, d.dialogue, d.repliques,
-                                        d.musique)
+                                        d.musique, d.plan, d.contrainte_en)
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (sequences.ErreurSequence, plateau.ErreurPlateau, listes.ErreurListes) as e:

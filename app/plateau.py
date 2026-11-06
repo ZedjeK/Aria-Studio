@@ -173,7 +173,8 @@ class Plateau:
                 "workflows": {mode: CONFIG.get("generation", {}).get(tache) for mode, tache in MODES_VIDEO.items()},
                 # Mode Séquence : de quoi estimer comme le serveur (sequences.estimation).
                 "sequence": {"plans_max": sequences.PLANS_MAX, "surcout": sequences.SURCOUT_SEQUENCE,
-                             "surcout_parole": sequences.SURCOUT_PAROLE, "steps_parole": sequences.STEPS_PAROLE},
+                             "surcout_parole": sequences.SURCOUT_PAROLE, "steps_parole": sequences.STEPS_PAROLE,
+                             "mots_par_seconde": sequences.MOTS_PAR_SECONDE},
                 "voix": voix.options(),
             },
             "references_max": workflows.REFERENCES_MAX,

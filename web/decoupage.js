@@ -1,26 +1,58 @@
-// Scénario, atelier Séquence : l'histoire (l'idée de l'atelier), des plans (type, durée, note), un personnage de
-// référence facultatif ; ✂ Découper : le LLM écrit le prompt de chaque plan en une fois (app/sequences.decouper),
-// puis la séquence est créée dans le Montage, prête à tourner. Les listes des compléments donnent personnage et lieu.
+// Scénario, atelier Séquence. Le fil de l'histoire (l'idée de l'atelier, facultatif) puis les plans, le cœur de
+// l'atelier : chacun a son type, sa durée, « ce qui se passe », sa réplique (🗣, mot pour mot, au début, pendant
+// l'action ou à la fin, voix off possible) et son prompt anglais, modifiable. ✨ d'un plan l'écrit seul (le LLM
+// connaît le fil et les plans voisins), 💬 d'un plan ouvre le chat sous ce plan, ✨ Tout écrire écrit tous les plans
+// d'un coup (app/sequences.decouper). À droite, le résumé, puis la séquence créée dans le Montage, prête à tourner.
 
 const TYPES_DEPART = [["texte", "✍️ Départ du texte"], ["rush", "🖼️ Départ de la référence"]];
 const TYPES_SUITE = [["prolonger", "↪ Prolonger"], ["couper", "✂ Couper"], ["transition", "🌀 Transition"]];
 const NOTES_TYPES = {
-    texte: "ce que montre le premier plan (facultatif)",
-    rush: "ce qui bouge dans la référence (facultatif)",
-    prolonger: "la suite du même plan (facultatif)",
-    couper: "le nouveau moment ou angle (facultatif)",
-    transition: "où la caméra arrive (facultatif)",
+    texte: "Ce qui se passe : elle entre dans le hangar, casque sous le bras…",
+    rush: "Ce qui bouge dans la référence : elle tourne la tête vers la porte…",
+    prolonger: "La suite du même plan : elle pose son casque sur l'établi…",
+    couper: "Le nouveau moment ou angle : gros plan sur ses mains…",
+    transition: "Où la caméra arrive : la rue sous la pluie…",
 };
+const MOMENTS = [["debut", "au début"], ["pendant", "pendant l'action"], ["fin", "à la fin"]];
 
-const decoupage = { reference: null, contrainte: "", plans: [], resultat: null, perime: false,
-                    dialogue: false, repliques: "", avecMusique: false, musique: "" };  // cases 🗣 et 🎵
+const decoupage = { reference: null, contrainte: "", contrainteEn: null, plans: [], alertes: [],
+                    avecMusique: false, musique: "", aidePlan: null };  // aidePlan : le plan dont le chat est ouvert
 let decoupagePret = false;
 
 const enSequence = () => formeScenario === "sequence";
 
+// Un plan complet, quel que soit le brouillon d'où il vient (les anciens n'avaient ni réplique ni prompt).
+const normaliserPlan = (p = {}) => ({
+    enchainement: p.enchainement ?? "couper", duree: p.duree ?? 5, note: p.note ?? "", rush: p.rush ?? null,
+    dialogue: Boolean(p.dialogue), replique: p.replique ?? "", moment: p.moment ?? "pendant", off: Boolean(p.off),
+    prompt: p.prompt ?? "", idee: p.idee ?? "", ecrit: p.ecrit ?? null, echanges: p.echanges ?? [], dernier: p.dernier ?? null,
+});
+
+const nouveauPlanDecoupage = (k, enchainement) => normaliserPlan({
+    enchainement: enchainement ?? (k === 0 ? (decoupage.reference ? "rush" : "texte") : "couper"),
+});
+
+// Ce que le prompt d'un plan a pris en compte : s'il change ensuite, le plan est à réécrire.
+const signature = (p) => JSON.stringify([p.enchainement, p.duree, p.note.trim(), p.dialogue ? p.replique.trim() : "",
+                                         p.moment, p.off, p.rush]);
+
+function etatPlan(p) {
+    if (!p.prompt.trim()) return ["a-ecrire", "✍️ à écrire"];
+    if (p.ecrit && p.ecrit !== signature(p)) return ["perime", "⚠ changé : ✨ pour réécrire"];
+    return ["pret", "✅ prompt prêt"];
+}
+
+// Une réplique trop longue pour son plan : le serveur prévient aussi (sequences.MOTS_PAR_SECONDE).
+function motsReplique(p) {
+    const mots = p.replique.trim() ? p.replique.trim().split(/\s+/).length : 0;
+    const permis = Math.floor((optionsPlateau?.video.sequence.mots_par_seconde ?? 2.5) * p.duree);
+    return { mots, permis, trop: mots > permis };
+}
+
 function majForme() {
     document.getElementById("vue-scenario").classList.toggle("forme-sequence", enSequence());
     if (enSequence()) preparerDecoupage();
+    placerChat();
 }
 
 function preparerDecoupage() {
@@ -34,21 +66,6 @@ function preparerDecoupage() {
     }
     rendreReference();
     rendrePlansDecoupage();
-    rendreResultat();
-}
-
-const nouveauPlanDecoupage = (k, enchainement) => ({
-    enchainement: enchainement ?? (k === 0 ? (decoupage.reference ? "rush" : "texte") : "couper"),
-    duree: 5, note: "", rush: null,
-});
-
-// Le réglage a changé : le découpage affiché ne lui correspond plus (on le garde, il peut avoir été retouché).
-function perime() {
-    garderBrouillon();
-    if (decoupage.resultat) {
-        decoupage.perime = true;
-        rendreResultat();
-    }
 }
 
 function caseImage(id, attribut, titre) {
@@ -66,52 +83,204 @@ function rendreReference() {
         ? `<img src="${urlImage(id)}" alt="" draggable="false">
            <button type="button" class="petit retirer" data-retirer="1" title="Retirer">✕</button>`
         : '<span class="numero">👤</span>';
-
 }
 
-function rendrePlansDecoupage() {
-    const durees = optionsPlateau.video.durees;
-    document.getElementById("nombre-plans-scenario").value = String(decoupage.plans.length);
-    document.getElementById("plans-scenario").innerHTML = decoupage.plans.map((p, k) => {
-        const types = k === 0 ? TYPES_DEPART : TYPES_SUITE;
-        return `<li class="plan-scenario" data-plan="${k}">
+function cartePlan(p, k, durees) {
+    const types = k === 0 ? TYPES_DEPART : TYPES_SUITE;
+    const [classe, etat] = etatPlan(p);
+    const { mots, permis, trop } = motsReplique(p);
+    return `<li class="plan-scenario ${k === decoupage.aidePlan ? "aide-ouverte" : ""}" data-plan="${k}">
+        <div class="ligne entete-plan-scenario">
             <strong>Plan ${k + 1}</strong>
             <select data-champ="enchainement">${types.map(([v, t]) => `<option value="${v}"
                 ${v === p.enchainement ? "selected" : ""} ${v === "rush" && !decoupage.reference ? "disabled" : ""}>${t}</option>`).join("")}</select>
             <select data-champ="duree">${durees.map((d) =>
                 `<option value="${d}" ${d === p.duree ? "selected" : ""}>${d} s</option>`).join("")}</select>
-            <input data-champ="note" type="text" maxlength="500" value="${echapper(p.note)}"
-                   placeholder="${echapper(NOTES_TYPES[p.enchainement])}">
+            <span class="etat-plan ${classe}">${etat}</span>
+            <span class="actions-plan">
+                <button type="button" class="petit" data-optimiser-plan title="Le LLM écrit le prompt de ce plan">✨ Optimiser</button>
+                <button type="button" class="petit" data-aide-plan title="Le LLM te pose ses questions sur ce plan">💬 Aide</button>
+            </span>
+        </div>
+        <div class="corps-plan-scenario">
             ${p.enchainement === "transition"
                 ? caseImage(p.rush, "data-arrivee", "Rush d'arrivée (facultatif : sinon, à choisir dans le Montage)") : ""}
-        </li>`;
-    }).join("");
+            <textarea data-champ="note" rows="2" maxlength="500"
+                      placeholder="${echapper(NOTES_TYPES[p.enchainement])}">${echapper(p.note)}</textarea>
+        </div>
+        <div class="dialogue-plan">
+            <label class="case"><input type="checkbox" data-champ="dialogue" ${p.dialogue ? "checked" : ""}> 🗣 Dialogue</label>
+            ${p.dialogue ? `<div class="replique-plan">
+                <input data-champ="replique" type="text" maxlength="300" value="${echapper(p.replique)}"
+                       placeholder="Ce que dit le personnage, mot pour mot : « Tu m'as encore attendu ? »">
+                <div class="ligne moment-plan">
+                    <span class="discret">Quand :</span>
+                    ${MOMENTS.map(([v, t]) => `<label class="case"><input type="radio" name="moment-plan-${k}"
+                        data-champ="moment" value="${v}" ${p.moment === v ? "checked" : ""}> ${t}</label>`).join("")}
+                    <label class="case" title="On entend la voix, ses lèvres restent fermées">
+                        <input type="checkbox" data-champ="off" ${p.off ? "checked" : ""}> voix off</label>
+                    <small class="discret mots-replique ${trop ? "ko" : ""}">${mots ? `${mots} mots · ${permis} au plus pour ${p.duree} s` : ""}</small>
+                </div>
+            </div>` : ""}
+        </div>
+        <label class="prompt-plan"><span class="discret">Prompt du plan, en anglais, tourné tel quel
+            <small class="mots-plan">${p.prompt.trim() ? `· ${p.prompt.trim().split(/\s+/).length} mots` : ""}</small></span>
+            <textarea data-champ="prompt" rows="3"
+                      placeholder="✨ ou 💬 l'écrivent ici ; tu peux le retoucher, ou l'écrire toi-même.">${echapper(p.prompt)}</textarea>
+        </label>
+        <div class="place-chat-plan"></div>
+    </li>`;
+}
+
+function rendrePlansDecoupage() {
+    rangerChat();  // le chat d'un plan vit dans sa carte : il sort avant qu'on la refasse
+    const durees = optionsPlateau.video.durees;
+    document.getElementById("nombre-plans-scenario").value = String(decoupage.plans.length);
+    document.getElementById("plans-scenario").innerHTML = decoupage.plans.map((p, k) => cartePlan(p, k, durees)).join("");
+    majBoutonsPrompt();
+    placerChat();
+    rendreResume();
+}
+
+// Sans refaire la carte (la saisie garde le focus) : l'état, les compteurs.
+function majCartePlan(k) {
+    const li = document.querySelector(`.plan-scenario[data-plan="${k}"]`);
+    const p = decoupage.plans[k];
+    if (!li || !p) return;
+    const [classe, etat] = etatPlan(p);
+    const badge = li.querySelector(".etat-plan");
+    badge.className = `etat-plan ${classe}`;
+    badge.textContent = etat;
+    li.querySelector(".mots-plan").textContent = p.prompt.trim() ? `· ${p.prompt.trim().split(/\s+/).length} mots` : "";
+    const compteur = li.querySelector(".mots-replique");
+    if (compteur) {
+        const { mots, permis, trop } = motsReplique(p);
+        compteur.textContent = mots ? `${mots} mots · ${permis} au plus pour ${p.duree} s` : "";
+        compteur.classList.toggle("ko", trop);
+    }
+    const prompt = li.querySelector('[data-champ="prompt"]');
+    if (prompt.value !== p.prompt) prompt.value = p.prompt;
+    rendreResume();
+}
+
+// À droite : un plan par ligne (clic : on y va), la durée, les alertes, puis la création dans le Montage.
+function rendreResume() {
     const total = decoupage.plans.reduce((t, p) => t + p.duree, 0);
     document.getElementById("duree-sequence-scenario").textContent = `film d'environ ${total} s`;
+    document.getElementById("resume-sequence").innerHTML = decoupage.plans.map((p, k) => {
+        const [classe, etat] = etatPlan(p);
+        const type = [...TYPES_DEPART, ...TYPES_SUITE].find(([v]) => v === p.enchainement)?.[1] ?? "";
+        const texte = p.note.trim() || p.idee.trim() || "—";
+        return `<li data-aller="${k}" class="${classe}" title="${echapper(etat)}">
+            <strong>${k + 1}</strong> <span class="discret">${echapper(type)} · ${p.duree} s${p.dialogue && p.replique.trim() ? " · 🗣" : ""}</span>
+            <span class="texte-resume">${echapper(texte.length > 70 ? `${texte.slice(0, 70)}…` : texte)}</span>
+            <span class="etat-resume">${etat.split(" ")[0]}</span></li>`;
+    }).join("");
+    document.getElementById("alertes-decoupage").innerHTML =
+        decoupage.alertes.map((a) => `<li>${echapper(a)}</li>`).join("");
 }
 
-function rendreResultat() {
-    const r = decoupage.resultat;
-    document.getElementById("creation-sequence-scenario").hidden = !r;
-    document.getElementById("alertes-decoupage").innerHTML = [
-        ...(decoupage.perime ? ["Tes réglages ont changé depuis ce découpage : redécoupe pour en tenir compte."] : []),
-        ...(r?.alertes ?? []),
-    ].map((a) => `<li>${echapper(a)}</li>`).join("");
-    document.getElementById("resultat-decoupage").innerHTML = (r?.plans ?? []).map((p, k) => `
-        <li class="plan-decoupe" data-plan="${k}">
-            <div class="ligne entete-decoupe">
-                <strong>Plan ${k + 1}</strong>
-                <span class="discret">${echapper([...TYPES_DEPART, ...TYPES_SUITE].find(([v]) => v === p.enchainement)?.[1] ?? "")}
-                    · ${p.duree} s</span>
-                <button type="button" class="petit" data-peaufiner title="Peaufiner ce plan avec le LLM">✨</button>
-            </div>
-            <input data-champ="idee" type="text" maxlength="1000" value="${echapper(p.idee)}" title="Résumé en français (affiché dans le Montage)">
-            <textarea data-champ="prompt" rows="5">${echapper(p.prompt)}</textarea>
-            <small class="discret mots-decoupe">${p.prompt.split(/\s+/).filter(Boolean).length} mots</small>
-        </li>`).join("");
+function planChange(k) {
+    if (k !== undefined) majCartePlan(k);
+    else rendreResume();
+    garderBrouillon();
 }
 
-// Événements : référence, synopsis, nombre et réglages des plans
+// Un plan écrit par le LLM (✨, ✨ Tout écrire ou 💬) : son prompt, son résumé ; « ce qui se passe » vide est rempli.
+function poserPlan(k, ecrit) {
+    const p = decoupage.plans[k];
+    if (!p) return;
+    p.prompt = ecrit.prompt;
+    if (ecrit.idee) p.idee = ecrit.idee;
+    if (!p.note.trim() && ecrit.idee) p.note = ecrit.idee;
+    p.ecrit = signature(p);
+}
+
+// Les alertes d'un plan réécrit remplacent les siennes ; celles des autres restent.
+function majAlertes(alertes, k = null) {
+    decoupage.alertes = k === null ? alertes
+        : [...decoupage.alertes.filter((a) => !a.startsWith(`Plan ${k + 1} :`)), ...alertes];
+}
+
+// Ce que le serveur reçoit pour écrire (✨, ✨ Tout écrire, 💬 d'un plan) : le fil, le personnage et le décor des
+// compléments, chaque plan avec sa réplique et son prompt déjà écrit (le contexte de ses voisins).
+function demandeSequence() {
+    const etat = etatPrompt();
+    const choix = Object.fromEntries(Object.entries(etat.choix).filter(([bloc]) =>
+        !structurePrompt.blocs.find((b) => b.id === bloc)?.video));  // le Plan d'un clip seul ne compte pas ici
+    return {
+        synopsis: atelier("sequence").idee, sujet: sujetPrompt, choix, age: etat.age,
+        plans: decoupage.plans.map((p) => ({
+            enchainement: p.enchainement, duree: p.duree, note: p.note, rush: p.rush,
+            replique: p.dialogue ? p.replique : "", moment: p.moment, off: p.dialogue && p.off, prompt: p.prompt,
+        })),
+        reference: decoupage.reference, contrainte: decoupage.contrainte, contrainte_en: decoupage.contrainteEn,
+        musique: decoupage.avecMusique ? (decoupage.musique.trim() || "music that fits the story, your choice") : null,
+    };
+}
+
+// ✨ Tout écrire, le bouton ✨ de l'atelier : tous les plans d'un coup, d'après le fil et ce que disent les plans.
+function decouperSequence() {
+    avecLlama(async (statut) => {
+        statut(`${nomLlm()} écrit tous les plans… (le premier appel charge le modèle)`);
+        const r = await api("POST", "/api/sequences/decouper", { ...demandeSequence(), llm: llmAtelier() });
+        r.plans.forEach((ecrit, k) => poserPlan(k, ecrit));
+        majAlertes(r.alertes);
+        decoupage.contrainteEn = r.contrainte_en;
+        rendrePlansDecoupage();
+        garderBrouillon();
+        statut(`${nomLlm()} · tous les plans écrits en ${r.duree_s} s · relis-les, retouche si besoin`);
+    });
+}
+
+// ✨ d'un plan : ce plan seul, en continuité avec ses voisins.
+function ecrirePlan(k) {
+    avecLlama(async (statut) => {
+        statut(`${nomLlm()} écrit le plan ${k + 1}… (le premier appel charge le modèle)`);
+        const r = await api("POST", "/api/sequences/decouper", { ...demandeSequence(), plan: k, llm: llmAtelier() });
+        poserPlan(k, r.plans[0]);
+        majAlertes(r.alertes, k);
+        decoupage.contrainteEn = r.contrainte_en;
+        rendrePlansDecoupage();
+        garderBrouillon();
+        statut(`${nomLlm()} · plan ${k + 1} écrit en ${r.duree_s} s`);
+    });
+}
+
+// 💬 d'un plan : le chat (libre.js) descend sous ce plan, avec sa propre conversation. Re-cliquer le referme.
+function rangerChat() {
+    document.getElementById("place-chat-atelier").appendChild(document.getElementById("chat-libre"));
+}
+
+function placerChat() {
+    const k = enSequence() ? decoupage.aidePlan : null;
+    const place = k !== null ? document.querySelector(`.plan-scenario[data-plan="${k}"] .place-chat-plan`) : null;
+    (place ?? document.getElementById("place-chat-atelier")).appendChild(document.getElementById("chat-libre"));
+}
+
+function ouvrirAidePlan(k) {
+    const chat = document.getElementById("chat-libre");
+    if (decoupage.aidePlan === k && !chat.hidden) {
+        decoupage.aidePlan = null;
+        chat.hidden = true;
+        rendrePlansDecoupage();
+        return;
+    }
+    decoupage.aidePlan = k;
+    rendrePlansDecoupage();
+    chat.hidden = false;
+    rendreLibre();
+    const p = decoupage.plans[k];
+    if (!p.echanges.length) envoyerLibre(p.note.trim() || `Aide-moi à écrire le plan ${k + 1}.`);
+    else document.getElementById("message-libre").focus();
+}
+
+// Le fil a changé (saisie, ou écrit par 💬 Aide) : rien à recalculer, il sert de contexte à chaque écriture.
+function histoireModifiee() {
+    garderBrouillon();
+}
+
+// Événements : référence, plans, musique, contraintes
 
 document.getElementById("reference-scenario").addEventListener("click", (e) => {
     if (e.target.closest("[data-retirer]")) {
@@ -119,153 +288,125 @@ document.getElementById("reference-scenario").addEventListener("click", (e) => {
         if (decoupage.plans[0]?.enchainement === "rush") decoupage.plans[0].enchainement = "texte";
         rendreReference();
         rendrePlansDecoupage();
-        perime();
+        garderBrouillon();
         return;
     }
     ouvrirChoixRush((id) => {
         decoupage.reference = id;
         rendreReference();
         rendrePlansDecoupage();
-        perime();
+        garderBrouillon();
     }, "Quelle image de référence pour le personnage ?");
 });
 
-// L'histoire a changé (saisie, ou écrite par 💬 Aide) : une réplique entre guillemets coche 🗣 Dialogue.
-function histoireModifiee(texte) {
-    if (/[«"“]/.test(texte) && !decoupage.dialogue) {
-        decoupage.dialogue = document.getElementById("dialogue-sequence").checked = true;
-        majCases();
-    }
-    perime();
-}
-
-[["dialogue-sequence", "dialogue"], ["musique-active-sequence", "avecMusique"]].forEach(([id, champ]) => {
-    document.getElementById(id).addEventListener("change", (e) => {
-        decoupage[champ] = e.target.checked;
-        majCases();
-        perime();
-    });
+document.getElementById("musique-active-sequence").addEventListener("change", (e) => {
+    decoupage.avecMusique = e.target.checked;
+    majCases();
+    garderBrouillon();
 });
-[["repliques-sequence", "repliques"], ["musique-sequence", "musique"]].forEach(([id, champ]) => {
-    document.getElementById(id).addEventListener("input", (e) => {
-        decoupage[champ] = e.target.value;
-        perime();
-    });
+document.getElementById("musique-sequence").addEventListener("input", (e) => {
+    decoupage.musique = e.target.value;
+    garderBrouillon();
 });
 
 document.getElementById("contrainte-scenario").addEventListener("input", (e) => {
-    decoupage.contrainte = e.target.value;  // donnée à Llama, puis gardée au casting de la séquence créée
-    perime();
+    decoupage.contrainte = e.target.value;  // donnée au LLM, puis gardée au casting de la séquence créée
+    garderBrouillon();
 });
 
 document.getElementById("nombre-plans-scenario").addEventListener("change", (e) => {
     const n = Number(e.target.value);
     decoupage.plans = decoupage.plans.slice(0, n);
     while (decoupage.plans.length < n) decoupage.plans.push(nouveauPlanDecoupage(decoupage.plans.length));
+    if (decoupage.aidePlan !== null && decoupage.aidePlan >= n) {
+        decoupage.aidePlan = null;
+        document.getElementById("chat-libre").hidden = true;
+    }
+    decoupage.alertes = decoupage.alertes.filter((a) => !/^Plan (\d+) :/.test(a) || Number(a.match(/^Plan (\d+)/)[1]) <= n);
     rendrePlansDecoupage();
-    perime();
+    garderBrouillon();
 });
 
 const plansScenario = document.getElementById("plans-scenario");
+const indexPlan = (e) => Number(e.target.closest(".plan-scenario")?.dataset.plan);
+
 plansScenario.addEventListener("change", (e) => {
     const champ = e.target.dataset.champ;
-    if (!champ || champ === "note") return;
-    const p = decoupage.plans[Number(e.target.closest(".plan-scenario").dataset.plan)];
-    p[champ] = champ === "duree" ? Number(e.target.value) : e.target.value;
+    const k = indexPlan(e);
+    const p = decoupage.plans[k];
+    if (!p || !["enchainement", "duree", "dialogue", "moment", "off"].includes(champ)) return;
+    if (champ === "duree") p.duree = Number(e.target.value);
+    else if (champ === "dialogue" || champ === "off") p[champ] = e.target.checked;
+    else p[champ] = e.target.value;
     if (champ === "enchainement" && p.enchainement !== "transition") p.rush = null;
-    rendrePlansDecoupage();
-    perime();
+    if (champ === "moment" || champ === "off") planChange(k);
+    else {
+        rendrePlansDecoupage();
+        garderBrouillon();
+        if (champ === "dialogue" && p.dialogue) {
+            document.querySelector(`.plan-scenario[data-plan="${k}"] [data-champ="replique"]`)?.focus();
+        }
+    }
 });
 plansScenario.addEventListener("input", (e) => {
-    if (e.target.dataset.champ !== "note") return;
-    decoupage.plans[Number(e.target.closest(".plan-scenario").dataset.plan)].note = e.target.value;
-    perime();
+    const champ = e.target.dataset.champ;
+    const k = indexPlan(e);
+    if (!decoupage.plans[k] || !["note", "replique", "prompt"].includes(champ)) return;
+    decoupage.plans[k][champ] = e.target.value;
+    planChange(k);
 });
 plansScenario.addEventListener("click", (e) => {
-    const caseArrivee = e.target.closest("[data-arrivee]");
-    if (!caseArrivee) return;
-    const p = decoupage.plans[Number(caseArrivee.closest(".plan-scenario").dataset.plan)];
+    const k = indexPlan(e);
+    const p = decoupage.plans[k];
+    if (!p) return;
+    if (e.target.closest("[data-optimiser-plan]")) return ecrirePlan(k);
+    if (e.target.closest("[data-aide-plan]")) return ouvrirAidePlan(k);
+    if (!e.target.closest("[data-arrivee]")) return;
     if (e.target.closest("[data-retirer]")) {
         p.rush = null;
         rendrePlansDecoupage();
-        perime();
+        garderBrouillon();
         return;
     }
     ouvrirChoixRush((id) => {
         p.rush = id;
         rendrePlansDecoupage();
-        perime();
+        garderBrouillon();
     }, "Sur quel rush finit la transition ?");
 });
 
-// Découpage par Llama
-
-function decouperSequence() {  // ✂ Découper, le bouton ✨ de l'atelier Séquence
-    avecLlama(async (statut) => {
-        if (!atelier("sequence").idee.trim()) throw new Error("Écris l'histoire (ou fais-la écrire avec 💬 Aide)");
-        statut("Le LLM découpe la séquence… (le premier appel charge le modèle)");
-        const etat = etatPrompt();
-        const choix = Object.fromEntries(Object.entries(etat.choix).filter(([bloc]) =>
-            !structurePrompt.blocs.find((b) => b.id === bloc)?.video));  // le Plan d'un clip seul ne compte pas ici
-        const r = await api("POST", "/api/sequences/decouper", {
-            synopsis: atelier("sequence").idee, sujet: sujetPrompt, choix, age: etat.age,
-            plans: decoupage.plans, reference: decoupage.reference, contrainte: decoupage.contrainte, llm: llmAtelier(),
-            dialogue: decoupage.dialogue,
-            repliques: decoupage.dialogue ? decoupage.repliques.split("\n").map((l) => l.trim()).filter(Boolean) : [],
-            musique: decoupage.avecMusique ? (decoupage.musique.trim() || "music that fits the story, your choice") : null,
-        });
-        decoupage.resultat = r;
-        decoupage.perime = false;
-        rendreResultat();
-        statut(`Découpage en ${r.duree_s} s · relis et retouche chaque plan si besoin`);
-    });
-}
-
-const resultatDecoupage = document.getElementById("resultat-decoupage");
-resultatDecoupage.addEventListener("input", (e) => {
-    const champ = e.target.dataset.champ;
-    if (!champ) return;
-    const k = Number(e.target.closest(".plan-decoupe").dataset.plan);
-    decoupage.resultat.plans[k][champ] = e.target.value;
-    if (champ === "prompt") {
-        e.target.closest(".plan-decoupe").querySelector(".mots-decoupe").textContent =
-            `${e.target.value.split(/\s+/).filter(Boolean).length} mots`;
-    }
-});
-resultatDecoupage.addEventListener("click", (e) => {
-    if (!e.target.closest("[data-peaufiner]")) return;
-    const li = e.target.closest(".plan-decoupe");
-    const p = decoupage.resultat.plans[Number(li.dataset.plan)];
-    e.target.disabled = true;
-    avecLlama(async (statut) => {
-        statut(`Le LLM peaufine le plan ${Number(li.dataset.plan) + 1}…`);
-        const r = await api("POST", "/api/prompt/peaufiner",
-                            { prompt: p.prompt, llm: llmAtelier(), workflow: ciblePrompt(), duree: p.duree });
-        p.prompt = r.prompt;
-        rendreResultat();
-        statut(`Plan peaufiné en ${r.duree_s} s`);
-    }).finally(() => { e.target.disabled = false; });
+document.getElementById("resume-sequence").addEventListener("click", (e) => {
+    const ligne = e.target.closest("[data-aller]");
+    const carte = ligne && document.querySelector(`.plan-scenario[data-plan="${ligne.dataset.aller}"]`);
+    if (!carte) return;
+    carte.scrollIntoView({ behavior: "smooth", block: "center" });
+    carte.querySelector('[data-champ="note"]').focus({ preventScroll: true });
 });
 
-// Création de la séquence dans le Montage : les prompts du découpage sont imposés (pas de nouvelle réécriture).
+// Création de la séquence dans le Montage : les prompts des plans sont imposés (pas de nouvelle réécriture).
 
 document.getElementById("creer-sequence-scenario").addEventListener("click", async () => {
     const titre = document.getElementById("titre-sequence-scenario");
-    const erreur = document.getElementById("erreur-prompt");
+    const erreur = document.getElementById("erreur-sequence-scenario");
     erreur.hidden = true;
-    if (!titre.value.trim()) {
-        titre.focus();
-        erreur.textContent = "Donne un titre à la séquence : ses plans seront rangés dans un dossier à son nom.";
+    const manquant = decoupage.plans.findIndex((p) => !p.prompt.trim());
+    const probleme = !titre.value.trim()
+        ? "Donne un titre à la séquence : ses plans seront rangés dans un dossier à son nom."
+        : manquant >= 0 ? `Plan ${manquant + 1} : pas encore de prompt (✨ Optimiser, 💬 Aide, ou écris-le).` : "";
+    if (probleme) {
+        erreur.textContent = probleme;
         erreur.hidden = false;
+        if (!titre.value.trim()) titre.focus();
         return;
     }
+    const enValide = decoupage.contrainteEn?.fr === decoupage.contrainte.trim().replace(/\s+/g, " ");
     try {
         const s = await api("POST", "/api/sequences", {
             titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmAtelier(),
             casting: { personnage: decoupage.reference, voix: "auto", ambiance: "",
-                       contrainte: decoupage.resultat.contrainte ?? "", reference_partout: true },
-            contrainte_en: decoupage.resultat.contrainte_en ?? null,  // traduite au découpage : le tournage s'en sert
-            plans: decoupage.resultat.plans.map((p, k) => ({
+                       contrainte: decoupage.contrainte.trim(), reference_partout: true },
+            contrainte_en: enValide ? decoupage.contrainteEn : null,  // traduite à l'écriture : le tournage s'en sert
+            plans: decoupage.plans.map((p, k) => ({
                 idee: p.idee || p.note || `Plan ${k + 1}`, prompt: p.prompt, duree: p.duree,
                 enchainement: p.enchainement, rush: p.rush, ambiance: true,
             })),

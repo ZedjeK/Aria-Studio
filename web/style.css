@@ -2005,79 +2005,175 @@ button.onglet-scenario.actif {
     height: 110px;
 }
 
-.plans-scenario,
-.resultat-decoupage {
+.plans-scenario {
     list-style: none;
-    margin: 8px 0 0;
+    margin: 8px 0 12px;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 10px;
 }
 
+/* Séquence : un plan = une carte, avec son prompteur, sa réplique, son prompt et son chat. */
 .plan-scenario {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border-left: 3px solid var(--neon);
-    padding: 4px 0 4px 8px;
-}
-
-.plan-scenario strong {
-    flex: none;
-    min-width: 4.2em;
-    font-size: 0.85rem;
-}
-
-.plan-scenario select {
-    width: auto;
-    flex: none;
-}
-
-.plan-scenario input[data-champ="note"] {
-    flex: 1;
-    min-width: 0;
-}
-
-.plan-scenario .emplacement {
-    width: 48px;
-    height: 48px;
-    flex: none;
-}
-
-.plan-decoupe {
-    border: 1px solid var(--bord);
-    border-left: 3px solid var(--neon);
-    border-radius: 8px;
-    padding: 8px;
     display: flex;
     flex-direction: column;
     gap: 6px;
+    border: 1px solid var(--bord);
+    border-left: 3px solid var(--neon);
+    border-radius: 8px;
+    padding: 8px 10px;
 }
 
-.entete-decoupe {
+.plan-scenario.aide-ouverte {
+    box-shadow: 0 0 10px rgba(255, 46, 136, 0.35);
+}
+
+.entete-plan-scenario {
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
-.entete-decoupe [data-peaufiner] {
+.entete-plan-scenario strong {
+    min-width: 4.2em;
+    font-size: 0.9rem;
+}
+
+.entete-plan-scenario select {
+    width: auto;
+    flex: none;
+    margin: 0;
+}
+
+.etat-plan {
+    font-size: 0.75rem;
+    color: var(--discret);
+}
+
+.etat-plan.pret {
+    color: #5ee0a0;
+}
+
+.etat-plan.perime {
+    color: #ffc857;
+}
+
+.actions-plan {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+}
+
+.corps-plan-scenario {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.corps-plan-scenario textarea {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+}
+
+.corps-plan-scenario .emplacement {
+    width: 64px;
+    height: 64px;
+    flex: none;
+}
+
+.dialogue-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.replique-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 22px;
+}
+
+.replique-plan input {
+    margin: 0;
+}
+
+.moment-plan {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.82rem;
+}
+
+.mots-replique {
     margin-left: auto;
 }
 
-.plan-decoupe textarea {
+.prompt-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.8rem;
+}
+
+.prompt-plan textarea {
     margin: 0;
     font-size: 0.82rem;
+}
+
+.place-chat-plan:empty {
+    display: none;
+}
+
+/* À droite : le résumé de la séquence, un plan par ligne. */
+.resume-sequence {
+    list-style: none;
+    margin: 8px 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.resume-sequence li {
+    display: grid;
+    grid-template-columns: 1.6em 1fr auto;
+    gap: 2px 6px;
+    align-items: baseline;
+    padding: 6px 8px;
+    border: 1px solid var(--bord);
+    border-left: 3px solid var(--bord);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.resume-sequence li:hover {
+    border-color: var(--neon);
+}
+
+.resume-sequence li.pret {
+    border-left-color: #5ee0a0;
+}
+
+.resume-sequence li.perime {
+    border-left-color: #ffc857;
+}
+
+.resume-sequence .texte-resume {
+    grid-column: 2 / 4;
+}
+
+.resume-sequence .etat-resume {
+    grid-column: 3;
+    grid-row: 1;
 }
 
 #creation-sequence-scenario input {
     flex: 1;
     min-width: 0;
-}
-
-@media (max-width: 700px) {
-    .plan-scenario {
-        flex-wrap: wrap;
-    }
 }
 
 .prompt-impose {
