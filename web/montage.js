@@ -116,6 +116,26 @@ function rendreSource() {
         : '<span class="numero">＋</span>';
 }
 
+// Le Scénario envoie un prompt prêt : il part tel quel, sur le rush à animer s'il y en a un, sinon du texte seul.
+async function recevoirAuMontage({ prompt, images, role, duree, lancer }) {
+    if (!optionsMontage) await preparerMontage();  // remplit les listes du Montage avant d'y poser nos valeurs
+    const animer = role === "animer";
+    document.querySelector(`input[name="mode-montage"][value="${animer ? "animer" : "texte"}"]`).click();
+    if (animer) {
+        sourceMontage = images[0];
+        rendreSource();
+    }
+    document.getElementById("idee-montage").value = prompt;
+    document.getElementById("sans-reecriture-montage").checked = true;
+    const choixDuree = document.getElementById("duree-montage");
+    choixDuree.value = String(duree);
+    choixDuree.dispatchEvent(new Event("change"));
+    document.querySelector('.onglet[data-vue="montage"]').click();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (lancer) document.getElementById("form-montage").requestSubmit();
+    else document.getElementById("idee-montage").focus();
+}
+
 function animerRush(id) {  // appelé par le bouton « 🎞️ Animer » de la fiche d'un rush
     sourceMontage = id;
     document.querySelector('input[name="mode-montage"][value="animer"]').click();

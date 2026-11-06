@@ -11,7 +11,21 @@ let structurePrompt = null;
 let sujetPrompt = "personnage";
 let formeScenario = "image";  // image, clip ou sequence
 let ongletScenario = "sujet";
-const ciblesParForme = { image: null, video: null };  // le modèle cible choisi pour chaque forme
+const ciblesParForme = { image: null, video: null, inspirer: null, variation: null };  // modèle cible par forme
+
+// Les modèles proposés : vidéo pour un clip ou une séquence ; pour une image, édition quand on s'inspire d'images
+// (références.js), modèles qui savent varier une image pour une variation, sinon texte vers image.
+function tacheCible() {
+    const w = optionsPlateau.workflows;
+    if (cibleVideo()) return ["video", w.texte_vers_video];
+    const n = imagesReference().length;
+    if (n && refsScenario.role === "inspirer") {
+        return ["inspirer", { ...w.retouche, defaut: optionsPlateau.references_defaut,
+                              choix: w.retouche.choix.filter((x) => x.references >= n) }];
+    }
+    if (n) return ["variation", { ...w.texte_vers_image, choix: w.texte_vers_image.choix.filter((x) => x.variation) }];
+    return ["image", w.texte_vers_image];
+}
 // sujet -> { choix: {bloc: {sous-liste: valeur}}, age, texte, precisions, traduction: {source, texte},
 //            action, traductionAction: {source, texte}, replique, toutes: lève le filtre par origine }
 const etatsPrompt = {};
@@ -52,8 +66,7 @@ async function preparerScenario() {
 async function chargerModelesPrompt() {
     if (!optionsPlateau) await chargerOptionsPlateau();
     const video = cibleVideo();
-    const tache = optionsPlateau.workflows[video ? "texte_vers_video" : "texte_vers_image"];
-    const cle_ = video ? "video" : "image";
+    const [cle_, tache] = tacheCible();
     const garde = ciblesParForme[cle_]
         ?? (video ? tache?.defaut : choixModele("workflow-creation").workflow || tache?.defaut);
     remplirSelect("workflow-prompt", (tache?.choix ?? []).map((w) =>
@@ -78,6 +91,7 @@ function majCible() {
     document.getElementById("envoyer-prompt").textContent = video ? "→ Envoyer au Montage" : "→ Envoyer au Plateau";
     document.getElementById("creer-prompt").textContent = video ? "Tourner" : "Créer";
     rendreEtiquettes();
+    rendreReferencesScenario();  // references.js
     majForme();  // Séquence (decoupage.js)
     if (ongletScenario === "histoire" && !enSequence()) choisirOnglet("sujet");
 }
@@ -98,7 +112,7 @@ function garderBrouillon() {
     clearTimeout(minuteurBrouillon);
     minuteurBrouillon = setTimeout(() => {
         const etat = { forme: formeScenario, sujet: sujetPrompt, onglet: ongletScenario, cibles: ciblesParForme,
-                       etats: etatsPrompt, llm: llmPrompt(),
+                       etats: etatsPrompt, llm: llmPrompt(), references: refsScenario,
                        sequence: { reference: decoupage.reference, synopsis: decoupage.synopsis,
                                    contrainte: decoupage.contrainte, plans: decoupage.plans } };
         try {
@@ -123,6 +137,7 @@ function relireBrouillon() {
     if (b.onglet) ongletScenario = b.onglet;
     Object.assign(ciblesParForme, b.cibles ?? {});
     Object.assign(etatsPrompt, b.etats ?? {});
+    Object.assign(refsScenario, b.references ?? {});
     llmBrouillon = b.llm ?? null;
     const s = b.sequence ?? {};
     decoupage.reference = s.reference ?? null;
@@ -498,71 +513,40 @@ function promptAEnvoyer() {
     return assemblagePrompt.prompt;
 }
 
+// Avec une image de référence, le LLM voit les images et écrit le prompt qui s'en sert ; sans, il peaufine.
 document.getElementById("peaufiner-prompt").addEventListener("click", () => avecLlama(async (statut) => {
     await traduireSiBesoin(statut);
     const select = document.getElementById("llm-prompt");
-    const nom = select.selectedOptions[0]?.textContent.trim() ?? "Llama";
-    statut(`${nom} peaufine… (le premier appel charge le modèle)`);
+    const nom = select.selectedOptions[0]?.textContent.trim() ?? "Le LLM";
     const source = assemblagePrompt.prompt;
-    const r = await api("POST", "/api/prompt/peaufiner", {
-        prompt: source, llm: llmPrompt(), workflow: ciblePrompt(),
-        duree: Number(document.getElementById("duree-prompt").value) || 5,
-    });
+    const duree = Number(document.getElementById("duree-prompt").value) || 5;
+    const role = roleReference();
+    statut(`${nom} ${role ? "regarde l'image et écrit" : "peaufine"}… (le premier appel charge le modèle)`);
+    const r = role
+        ? await api("POST", "/api/prompt/ecrire", { prompt: source, role, images: imagesReference(), llm: llmPrompt(),
+                                                   workflow: ciblePrompt(), duree })
+        : await api("POST", "/api/prompt/peaufiner", { prompt: source, llm: llmPrompt(), workflow: ciblePrompt(), duree });
     peaufinage = { source };
     document.getElementById("texte-peaufine").value = r.prompt;
     document.getElementById("utiliser-peaufine").checked = true;
     document.getElementById("peaufine-prompt").hidden = false;
-    statut(`${nom} · ${r.duree_s} s · ${r.mots} mots`);
+    statut(`${nom} · ${r.duree_s} s · ${r.mots ?? r.prompt.split(/\s+/).length} mots`);
 }));
 
-// Envoi vers le Plateau : le prompt est prêt, il part sans réécriture, sur le modèle cible.
-async function envoyerVersPlateau(creer) {
+// Envoi : le prompt final part tel quel, avec le modèle cible et les images de référence.
+async function envoyer(creer) {
     await avecLlama(async (statut) => {
         await traduireSiBesoin(statut);
-        const texte = promptAEnvoyer();
-        await chargerOptionsPlateau();
-        document.getElementById("idee-creation").value = texte;
-        const sansReecriture = document.getElementById("sans-reecriture");
-        sansReecriture.checked = true;
-        sansReecriture.dispatchEvent(new Event("change"));
-        const cible = document.getElementById("workflow-prompt").value;
-        if (cible && choixModele("workflow-creation").workflow !== cible) {  // même workflow : on garde la variante
-            const w = optionsPlateau.workflows.texte_vers_image.choix.find((x) => x.id === cible);
-            const select = document.getElementById("workflow-creation");
-            select.value = `${w.id}::${w.origine}`;
-            select.dispatchEvent(new Event("change"));
-        }
+        const envoi = { prompt: promptAEnvoyer(), workflow: ciblePrompt(), images: imagesReference(),
+                        role: roleReference(), liberte: refsScenario.liberte,
+                        duree: Number(document.getElementById("duree-prompt").value) || 5, lancer: creer };
         statut("");
-        document.querySelector('.onglet[data-vue="plateau"]').click();
-        if (creer) document.getElementById("form-creation").requestSubmit();
-        else document.getElementById("idee-creation").focus();
+        await (cibleVideo() ? recevoirAuMontage(envoi) : recevoirAuPlateau(envoi));
     });
 }
 
-// Envoi vers le Montage : Texte → vidéo, sans réécriture, avec la durée choisie ici.
-async function envoyerVersMontage(tourner) {
-    await avecLlama(async (statut) => {
-        await traduireSiBesoin(statut);
-        const texte = promptAEnvoyer();
-        if (!optionsMontage) await preparerMontage();  // remplit les listes du Montage avant d'y poser nos valeurs
-        document.querySelector('input[name="mode-montage"][value="texte"]').click();
-        document.getElementById("idee-montage").value = texte;
-        document.getElementById("sans-reecriture-montage").checked = true;
-        const duree = document.getElementById("duree-montage");
-        duree.value = document.getElementById("duree-prompt").value;
-        duree.dispatchEvent(new Event("change"));
-        statut("");
-        document.querySelector('.onglet[data-vue="montage"]').click();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        if (tourner) document.getElementById("form-montage").requestSubmit();
-        else document.getElementById("idee-montage").focus();
-    });
-}
-
-document.getElementById("envoyer-prompt").addEventListener("click", () =>
-    (cibleVideo() ? envoyerVersMontage(false) : envoyerVersPlateau(false)));
-document.getElementById("creer-prompt").addEventListener("click", () =>
-    (cibleVideo() ? envoyerVersMontage(true) : envoyerVersPlateau(true)));
+document.getElementById("envoyer-prompt").addEventListener("click", () => envoyer(false));
+document.getElementById("creer-prompt").addEventListener("click", () => envoyer(true));
 
 // Personnages enregistrés : seulement le bloc Personnage (et l'âge précis)
 
@@ -688,7 +672,7 @@ document.getElementById("etiquettes-prompt").addEventListener("click", (e) => {
 });
 
 document.getElementById("workflow-prompt").addEventListener("change", () => {
-    ciblesParForme[cibleVideo() ? "video" : "image"] = ciblePrompt();
+    ciblesParForme[tacheCible()[0]] = ciblePrompt();
     document.getElementById("llm-prompt").value = llmDuWorkflow(ciblePrompt());
     majCible();
     planifierAssemblage();

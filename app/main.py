@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import (assistant, casting, cles, collection, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs,
-                 optimiseur, personnages, plateau, prompt, reglages, retouche, rushes, sequences, voix, workflows)
+                 optimiseur, personnages, plateau, prompt, reglages, retouche, rushes, securite, sequences, voix, workflows)
 from app.llm import ErreurLlama
 from app.securite import ErreurSecurite
 from app.comfy import ErreurComfy
@@ -628,6 +628,45 @@ async def peaufiner_prompt(demande: DemandePeaufinage):
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except workflows.ErreurWorkflow as e:
+        raise HTTPException(400, str(e))
+    except ErreurLlama as e:
+        raise HTTPException(500, str(e))
+
+
+class DemandeEcriture(BaseModel):
+    prompt: str  # le prompt assemblé par le Scénario
+    role: str  # inspirer (références), variation (image de départ), animer (première image du clip)
+    images: list[str]  # rushes, dans l'ordre : Picture 1, 2, 3
+    llm: str | None = None
+    workflow: str | None = None  # modèle cible : ses règles et sa longueur
+    duree: int = 5  # animer : durée du clip, en secondes
+
+
+ROLES_REFERENCE = {"inspirer": 3, "variation": 1, "animer": 1}  # rôle → nombre d'images au plus
+
+
+@app.post("/api/prompt/ecrire")
+async def ecrire_avec_images(demande: DemandeEcriture):
+    """Scénario avec une image de référence : le LLM voit les images (ou lit leur fiche) et écrit le prompt qui s'en
+    sert : instruction « Picture 1… » pour s'inspirer, image de départ d'une variation, première image d'un clip."""
+    _verifier_llm(demande.llm)
+    if demande.role not in ROLES_REFERENCE or not 1 <= len(demande.images) <= ROLES_REFERENCE[demande.role]:
+        raise HTTPException(400, "Images de référence : 1 à 3 pour s'inspirer, une seule pour une variation ou un clip")
+    try:
+        origines = plateau.textes_origine(demande.images)  # AS-18 : un rush né d'un mineur le reste
+        securite.verifier(demande.prompt, *origines)
+        vues = [plateau.vue(i) for i in demande.images]
+        llm = demande.llm or (workflows.llm_de(demande.workflow) if demande.workflow else None)
+        r = await prompt.reecrire(orchestrateur, demande.prompt, llm,
+                                  len(vues) if demande.role == "inspirer" else 0,
+                                  video="animer" if demande.role == "animer" else None, duree=demande.duree,
+                                  regles=workflows.regles_prompt(demande.workflow), workflow=demande.workflow,
+                                  vues=vues)
+        securite.verifier(demande.prompt, r["prompt"], *origines)
+        return {**r, "mots": len(r["prompt"].split())}
+    except ErreurSecurite as e:
+        raise HTTPException(422, str(e))
+    except (plateau.ErreurPlateau, workflows.ErreurWorkflow) as e:
         raise HTTPException(400, str(e))
     except ErreurLlama as e:
         raise HTTPException(500, str(e))

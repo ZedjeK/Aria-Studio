@@ -65,6 +65,7 @@ function rendreReference() {
         ? `<img src="${urlImage(id)}" alt="" draggable="false">
            <button type="button" class="petit retirer" data-retirer="1" title="Retirer">✕</button>`
         : '<span class="numero">👤</span>';
+    rendreReferencesScenario();  // le compte de l'onglet Image de référence
 }
 
 function rendrePlansDecoupage() {

@@ -464,6 +464,7 @@
                     <button id="effacer-prompt" type="button">Effacer</button>
                 </div>
                 <div class="onglets-scenario" role="tablist">
+                    <button type="button" class="onglet-scenario" data-onglet-scenario="reference">🖼️ Image de référence <span id="compte-reference-scenario" class="discret"></span></button>
                     <button type="button" class="onglet-scenario actif" data-onglet-scenario="sujet">👤 Sujet</button>
                     <button type="button" class="onglet-scenario" data-onglet-scenario="decor">🏞️ Décor et ambiance</button>
                     <button type="button" class="onglet-scenario" data-onglet-scenario="scene">🎥 Mise en scène</button>
@@ -472,6 +473,23 @@
             </section>
             <div class="prompt-guide">
                 <section class="carte" id="blocs-prompt">
+                    <div class="volet-scenario" data-volet-scenario="reference" hidden>
+                        <p id="aide-reference-scenario" class="discret aide-volet"></p>
+                        <div class="ligne roles-reference" data-image-seule>
+                            <label class="case"><input type="radio" name="role-reference" value="inspirer" checked> 🎭 S'inspirer</label>
+                            <label class="case"><input type="radio" name="role-reference" value="variation"> 🎨 Variation</label>
+                            <label id="bloc-liberte-scenario" class="case discret" hidden>Liberté
+                                <input id="liberte-scenario" type="range" min="0.3" max="0.9" step="0.05" value="0.6">
+                                <span id="valeur-liberte-scenario">0,60</span></label>
+                        </div>
+                        <div id="cases-reference-scenario" class="emplacements" data-clip-seul></div>
+                        <div class="bloc-source reference-sequence" data-sequence-seule>
+                            <div id="reference-scenario" class="emplacement vide"
+                                 title="Image de référence du personnage (facultatif), prise dans les Rushes du Plateau">
+                                <span class="numero">👤</span></div>
+                            <span class="discret">Personnage de référence</span>
+                        </div>
+                    </div>
                     <div class="volet-scenario" data-volet-scenario="sujet">
                         <p class="discret aide-volet">Facultatif : choisis qui ou quoi est au centre de l'image, ou personne.</p>
                         <div id="sujets-prompt" class="sujets"></div>
@@ -517,15 +535,9 @@
                     </div>
                     <div class="volet-scenario" data-volet-scenario="histoire" hidden>
                         <div id="sequence-scenario">
-                            <p class="discret aide-volet">Le Sujet et le Décor donnent le personnage et le lieu ; raconte l'histoire,
-                                choisis les plans, et le LLM écrit le prompt de chacun.</p>
+                            <p class="discret aide-volet">Le Sujet et le Décor donnent le personnage et le lieu, l'Image de référence
+                                son visage ; raconte l'histoire, choisis les plans, et le LLM écrit le prompt de chacun.</p>
                             <div class="ligne synopsis-scenario">
-                                <div class="bloc-source">
-                                    <div id="reference-scenario" class="emplacement vide"
-                                         title="Image de référence du personnage (facultatif), prise dans les Rushes du Plateau">
-                                        <span class="numero">👤</span></div>
-                                    <span class="discret">Référence</span>
-                                </div>
                                 <textarea id="synopsis-scenario" rows="4" maxlength="2000"
                                           placeholder="L'histoire, du début à la fin, en français. Les répliques entre guillemets : elle lève les yeux et dit « On décolle ce soir. »"></textarea>
                             </div>
@@ -791,6 +803,7 @@
     <script src="/static/decouvrir.js"></script>
     <script src="/static/modeles.js"></script>
     <script src="/static/scenario.js"></script>
+    <script src="/static/references.js"></script>
     <script src="/static/reglages.js"></script>
     <script src="/static/montage.js"></script>
     <script src="/static/sequence.js"></script>

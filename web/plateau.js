@@ -263,6 +263,35 @@ emplacements.addEventListener("drop", async (e) => {
     if (f) placerReference(f.id, index);
 });
 
+// Le Scénario envoie un prompt prêt : il part tel quel, avec son modèle cible et ses images de référence.
+async function recevoirAuPlateau({ prompt, workflow, images, role, liberte, lancer }) {
+    await chargerOptionsPlateau();
+    referencesChoisies = [...images];
+    if (role) {
+        modeReference = role;
+        document.querySelector(`input[name="mode-reference"][value="${role}"]`).checked = true;
+        document.getElementById("zone-references").open = true;
+    }
+    if (role === "variation") {
+        document.getElementById("liberte-reference").value = liberte;
+        document.getElementById("valeur-liberte").textContent = Number(liberte).toFixed(2).replace(".", ",");
+    }
+    rendreReferences();  // refait la liste des modèles : édition pour s'inspirer, variation, texte vers image
+    const w = listeCreation().choix.find((x) => x.id === workflow);
+    if (w && choixModele("workflow-creation").workflow !== workflow) {  // même workflow : on garde la variante
+        const select = document.getElementById("workflow-creation");
+        select.value = `${w.id}::${w.origine}`;
+        select.dispatchEvent(new Event("change"));
+    }
+    document.getElementById("idee-creation").value = prompt;
+    const sansReecriture = document.getElementById("sans-reecriture");
+    sansReecriture.checked = true;
+    sansReecriture.dispatchEvent(new Event("change"));
+    document.querySelector('.onglet[data-vue="plateau"]').click();
+    if (lancer) document.getElementById("form-creation").requestSubmit();
+    else document.getElementById("idee-creation").focus();
+}
+
 function optionsReferences() {
     return referencesActives().length
         ? { references: referencesActives(), mode_reference: modeReference, liberte: liberteReference() }
