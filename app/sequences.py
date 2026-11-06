@@ -60,7 +60,8 @@ SURCOUT_PAROLE = 1.17
 # Ce qui, s'il change, oblige à retourner le plan (et ceux qui en dépendent). Le résumé (idee) et l'ancienne case
 # « suit l'ambiance » ne sont plus tournés : le plan tourne son prompt tel quel.
 CONTENU_PLAN = ("prompt", "duree", "enchainement", "rush", "seed")
-CONTENU_SEQUENCE = ("qualite", "format", "casting", "modele")  # un autre checkpoint : des plans qui ne se ressemblent plus
+# Un autre checkpoint ou d'autres LoRA : des plans qui ne se ressemblent plus.
+CONTENU_SEQUENCE = ("qualite", "format", "casting", "modele", "loras")
 
 
 class ErreurSequence(ValueError):
@@ -226,7 +227,9 @@ def _chemin(id_sequence: str):
 
 
 def lire(id_sequence: str) -> dict:
-    return json.loads(_chemin(id_sequence).read_text(encoding="utf-8"))
+    s = json.loads(_chemin(id_sequence).read_text(encoding="utf-8"))
+    s.setdefault("loras", [])  # séquence d'avant les LoRA vidéo
+    return s
 
 
 def _ecrire(s: dict):
@@ -320,11 +323,15 @@ def _valider(donnees: dict, pour_tourner: bool = False) -> dict:
     modele = donnees.get("modele") or None  # None : creer() prend le défaut des réglages, modifier() garde l'ancien
     if modele and modele not in _workflow().variantes():
         raise ErreurSequence(f"Checkpoint absent de modeles/{_workflow().famille}/modeles : {modele}")
+    try:  # les LoRA de la famille vidéo, les mêmes sur tous les plans ; leurs réglages retenus pour la prochaine fois
+        loras = plateau.Plateau._valider_loras(_workflow(), donnees.get("loras"), titre)
+    except plateau.ErreurPlateau as e:
+        raise ErreurSequence(str(e))
     s = {"titre": titre, "qualite": qualite, "format": format_, "casting": casting, "plans": plans,
-         "llm": donnees.get("llm") or None, "modele": modele}
+         "llm": donnees.get("llm") or None, "modele": modele, "loras": loras}
     # AS-18 : tout le texte de la séquence, avec les textes d'origine des rushes, clips et voix qu'elle utilise.
     securite.verifier(ambiance, contrainte, *(p["idee"] for p in plans), *(p["prompt"] or "" for p in plans),
-                      *_textes(s))
+                      *(l["declencheurs"] for l in loras), *_textes(s))
     return s
 
 
@@ -354,6 +361,7 @@ def modifier(id_sequence: str, donnees: dict) -> dict:
     ancienne = lire(id_sequence)
     ancienne["casting"] = {**CASTING_DEFAUT, **ancienne["casting"]}
     ancienne["modele"] = ancienne.get("modele") or _workflow().modele_origine  # tournée avant le choix du checkpoint
+    ancienne["loras"] = ancienne.get("loras") or []  # tournée avant les LoRA vidéo
     s = _valider(donnees)
     s["modele"] = s["modele"] or ancienne["modele"]
     tout_change = any(s[c] != ancienne[c] for c in CONTENU_SEQUENCE)
@@ -431,7 +439,7 @@ def graphe_plan(s: dict, k: int, prompt_plan: str, seed: int, fichiers: dict) ->
     q = plateau.QUALITES_VIDEO[s["qualite"]]
     wf = workflows.obtenir(CONFIG.get("generation", {}).get("image_vers_video"))
     valeurs = {"prompt": prompt_plan, "seed": seed, "duree": p["duree"], "megapixels": q["megapixels"],
-               "modele": s.get("modele"),
+               "modele": s.get("modele"), "loras": s.get("loras") or [],
                "steps": steps_plan(s, p), "prefixe": "aria_sequence"}
     if p["enchainement"] == "rush":
         valeurs["image"] = fichiers["rush"]
@@ -889,7 +897,9 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
         plan = s["plans"][k]
         if not (plan.get("prompt") or "").strip():
             raise ErreurSequence(f"Plan {k + 1} sans prompt : écris-le dans le plan, ou découpe la séquence au ✍️ Scénario")
-        plan["prompt_final"] = avec_contrainte(plan["prompt"].strip(), contrainte_en)  # la contrainte, garantie
+        # La contrainte, garantie ; les mots déclencheurs des LoRA en tête, comme pour une image.
+        plan["prompt_final"] = plateau.avec_declencheurs(avec_contrainte(plan["prompt"].strip(), contrainte_en),
+                                                         s.get("loras"))
         securite.verifier(s["casting"].get("contrainte", ""), plan["idee"], plan["prompt_final"], *textes)
     _ecrire(s)
 

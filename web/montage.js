@@ -25,8 +25,13 @@ const bobines = creerGalerie({
     ouvrir: (f) => ouvrirClip(f),
 });
 
-// Checkpoints de MiniMax H3 (image et texte vers vidéo partagent la famille) : [[fichier, libellé]] et le défaut
-// réglé dans l'onglet Réglages.
+// Le workflow vidéo dont la famille donne checkpoints et LoRA (image et texte vers vidéo partagent MiniMax-H3).
+function workflowVideo() {
+    const t = optionsMontage?.workflows.image_vers_video;
+    return t ? (t.choix.find((x) => x.id === t.defaut) ?? t.choix[0]) : null;
+}
+
+// Checkpoints de MiniMax H3 : [[fichier, libellé]] et le défaut réglé dans l'onglet Réglages.
 function checkpointsVideo() {
     const t = optionsMontage.workflows.image_vers_video;
     const w = t.choix.find((x) => x.id === t.defaut) ?? t.choix[0];
@@ -48,6 +53,7 @@ async function preparerMontage() {
     remplirSelect("duree-montage", v.durees.map((d) => [String(d), `${d} s`]), "5");
     remplirSelect("format-montage", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     remplirSelect("nombre-montage", Array.from({ length: v.nombre_max }, (_, i) => [String(i + 1), String(i + 1)]), "1");
+    rendreLoras("loras-montage", workflowVideo());  // plateau.js : ce qui est déjà coché reste coché
     rendreSource();
     majEstimation();
     await bobines.charger();
@@ -207,6 +213,7 @@ function reglagesMontage() {
         nombre: Number(document.getElementById("nombre-montage").value),
         seed: seed === "" ? null : Number(seed),
         dossier: bobines.dossierOuvert(),  // tourné depuis un dossier ouvert : tous les clips y sont rangés
+        loras: lorasChoisies("loras-montage"),  // mots déclencheurs en tête du prompt, au tournage
     };
 }
 
@@ -279,6 +286,8 @@ function ouvrirClip(f) {
         ["LLM", f.llm ? f.llm.replace(".gguf", "") : "aucun"],
         ["Qualité", [NOMS_QUALITES[f.qualite] ?? f.qualite, f.megapixels && `${f.megapixels} MP`,
                      f.steps && `${f.steps} steps`].filter(Boolean).join(" · ")],
+        ["LoRA", f.loras?.length ? f.loras.map((l) => `${l.fichier.replace(/\.safetensors$/, "")} (${Number(l.force)
+            .toFixed(2).replace(".", ",")})`).join(" · ") : "aucune"],
         ["Clip", [`${f.duree} s`, `${f.largeur}×${f.hauteur}`, f.format].filter(Boolean).join(" · ")],
         ["Seed", f.seed],
         ["Tournage", enMinutes(f.duree_s)],

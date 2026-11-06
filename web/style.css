@@ -2907,3 +2907,25 @@ button.onglet-liste.actif {
     margin: 0 0 4px;
     line-height: 1.5;
 }
+
+/* Ma collection : les LoRA filtrées par usage (image, retouche, vidéo), un badge par usage. */
+.filtres-loras {
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 4px 0 10px;
+}
+
+.filtres-loras button.actif {
+    border-color: var(--neon);
+    box-shadow: 0 0 8px rgba(255, 46, 136, 0.35);
+}
+
+.badge.usage-lora {
+    border-color: rgba(255, 46, 136, 0.45);
+}
+
+/* LoRA d'un clip (Montage) et d'une séquence : sous leurs réglages. */
+#loras-montage,
+#loras-sequence {
+    margin-top: 10px;
+}

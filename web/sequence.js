@@ -28,7 +28,7 @@ function sequenceVide() {
     // Rapide par défaut : choix de Jérémy pour les séquences (les plans qui parlent montent seuls à 12 steps).
     return { id: null, titre: "", qualite: "rapide", format: "16:9 (Widescreen)", llm: null, film: null,
              casting: { personnage: null, voix: "auto", ambiance: "", contrainte: "", reference_partout: true },
-             plans: [nouveauPlan("rush")] };
+             loras: [], plans: [nouveauPlan("rush")] };
 }
 
 async function preparerSequence() {
@@ -80,6 +80,9 @@ function afficherSequence(s) {
     // Une nouvelle séquence prend le défaut des réglages ; une séquence existante garde le sien.
     document.getElementById("modele-sequence").value = s.modele ?? checkpointsVideo().defaut ?? "";
     document.getElementById("format-sequence").value = s.format;
+    // Ses LoRA, cochées ; une LoRA supprimée du disque n'est plus proposée (elle partira au prochain enregistrement).
+    rendreLoras("loras-sequence", workflowVideo(), s.loras ?? []);
+    sequenceCourante.loras = lorasChoisies("loras-sequence");
     document.getElementById("supprimer-sequence").disabled = !s.id;
     document.getElementById("erreur-sequence").hidden = true;
     const film = document.getElementById("film-sequence");
@@ -230,6 +233,12 @@ document.getElementById("vers-scenario-sequence").addEventListener("click", () =
     });
 });
 
+// LoRA de la séquence : les mêmes sur tous les plans ; en changer fait retourner toute la séquence.
+brancherLoras("loras-sequence", () => {
+    sequenceCourante.loras = lorasChoisies("loras-sequence");
+    modifiee(true);
+});
+
 document.getElementById("personnage-sequence").addEventListener("click", (e) => {
     if (e.target.closest("[data-retirer]")) {
         sequenceCourante.casting.personnage = null;
@@ -337,6 +346,7 @@ function corpsSequence() {
              modele: s.modele ?? (document.getElementById("modele-sequence").value || null),
              casting: { personnage: s.casting.personnage, voix: s.casting.voix, ambiance: s.casting.ambiance,
                         contrainte: s.casting.contrainte ?? "", reference_partout: s.casting.reference_partout !== false },
+             loras: s.loras ?? [],
              plans: s.plans.map((p) => ({ ...p })) };
 }
 

@@ -295,6 +295,7 @@
                         <label>Clips <select id="nombre-montage"></select></label>
                         <button type="submit" class="principal">Tourner</button>
                     </div>
+                    <div id="loras-montage" class="loras"></div>
                     <p id="estimation-montage" class="discret"></p>
                     <input id="fichier-montage" type="file" accept="image/png,image/jpeg,image/webp" hidden>
                 </form>
@@ -357,6 +358,7 @@
                                 <label>Qualité <select id="qualite-sequence"></select></label>
                                 <label id="bloc-format-sequence" hidden>Format <select id="format-sequence"></select></label>
                             </div>
+                            <div id="loras-sequence" class="loras" title="Les mêmes LoRA sur tous les plans : les changer fait retourner la séquence"></div>
                         </div>
                     </div>
                     <ol id="plans-sequence" class="plans-sequence"></ol>

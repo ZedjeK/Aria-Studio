@@ -1087,6 +1087,7 @@ class DemandeClip(BaseModel):
     nombre: int = 1
     dossier: str | None = None
     modele: str | None = None  # checkpoint de la famille ; absent = le modèle par défaut des réglages
+    loras: list[dict] = []  # [{fichier, force, declencheurs}] de modeles/MiniMax-H3/loras
 
 
 @app.post("/api/clips")
@@ -1095,7 +1096,7 @@ def tourner_clip(d: DemandeClip):
         raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
     return _commander(lambda: plateau_.commander_clip(
         d.idee or d.prompt, d.prompt, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
-        rushes.valider_dossier(d.dossier), d.modele))
+        rushes.valider_dossier(d.dossier), d.modele, d.loras))
 
 
 # Montage, mode Séquence
@@ -1111,6 +1112,7 @@ class DemandeSequence(BaseModel):
     llm: str | None = None
     modele: str | None = None  # checkpoint ; absent = défaut des réglages (création) ou celui déjà choisi
     contrainte_en: dict | None = None  # {fr, en} : traduction faite au découpage du Scénario
+    loras: list[dict] = []  # [{fichier, force, declencheurs}] : les mêmes sur tous les plans
 
 
 class DemandeTournageSequence(BaseModel):

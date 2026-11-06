@@ -50,14 +50,35 @@ async function chargerModeles() {
         : "Tous tes fichiers ont une source connue";
     document.getElementById("groupes-collection").innerHTML = c.groupes.map(groupeCollection).join("")
         + c.fiches_ecartees.map((e) => `<p class="ko">Fiche de workflow écartée : ${echapper(e)}</p>`).join("");
+    filtrerLoras();
 }
 
 const TYPES_CHERCHER = { image: "des modèles image", video: "des modèles vidéo", lora: "des LoRA", llm: "un LLM" };
 
+// LoRA : un filtre par usage (celui des workflows de leur famille). Une LoRA Qwen-Image 2.1 sert à la fois l'image et
+// la retouche : elle est dans les deux.
+const USAGES_LORA = [["image", "🖼️ Image"], ["retouche", "🖌️ Retouche"], ["video", "🎞️ Vidéo"]];
+let filtreLoras = "tous";
+
+function filtresLoras(elements) {
+    const compte = (u) => elements.filter((e) => e.usages.includes(u)).length;
+    return `<div class="ligne filtres-loras" role="tablist">${[["tous", "Tous", elements.length],
+        ...USAGES_LORA.map(([u, nom]) => [u, nom, compte(u)])].map(([u, nom, n]) =>
+        `<button type="button" class="petit ${u === filtreLoras ? "actif" : ""}" data-filtre-loras="${u}">${nom} · ${n}</button>`).join("")}
+        </div>`;
+}
+
+function filtrerLoras() {
+    document.querySelectorAll("[data-filtre-loras]").forEach((b) => b.classList.toggle("actif", b.dataset.filtreLoras === filtreLoras));
+    document.querySelectorAll(".collection [data-usages]").forEach((li) => {
+        li.hidden = filtreLoras !== "tous" && !li.dataset.usages.split(" ").includes(filtreLoras);
+    });
+}
+
 function groupeCollection(g) {
     const titre = `${echapper(g.nom)} <span class="discret">· ${g.elements.length} · ${taille(g.taille)}</span>`;
     const liste = g.elements.length
-        ? `<ul class="liste collection">${g.elements.map(elementCollection).join("")}</ul>`
+        ? `${g.id === "lora" ? filtresLoras(g.elements) : ""}<ul class="liste collection">${g.elements.map(elementCollection).join("")}</ul>`
         : `<p class="discret">Rien pour l'instant.</p>`;
     const chercher = TYPES_CHERCHER[g.id]
         ? `<button type="button" class="petit" data-chercher="${g.id}">🔎 Chercher ${TYPES_CHERCHER[g.id]}</button>` : "";
@@ -75,10 +96,13 @@ function elementCollection(e) {
         : "";
     const details = [source, e.base ? `base ${echapper(e.base)}` : "", e.licence ? `licence ${echapper(e.licence)}` : ""]
         .filter(Boolean).join(" · ");
-    return `<li>
+    const usages = e.lora ? USAGES_LORA.filter(([u]) => e.usages.includes(u)) : [];
+    return `<li ${e.lora ? `data-usages="${e.usages.join(" ")}"` : ""}>
         <div class="ligne">
             <strong class="nom-collection">${echapper(e.nom)}</strong>
             ${e.famille ? `<span class="badge">${echapper(e.famille)}</span>` : ""}
+            ${usages.map(([, nom]) => `<span class="badge usage-lora">${nom}</span>`).join("")}
+            ${e.lora && !usages.length ? '<span class="badge usage-lora" title="Aucun workflow installé pour cette famille">sans usage</span>' : ""}
             <span class="discret">${taille(e.taille)}</span>
             <span class="${classe}">${origine}</span>
             <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(e.dossier)}" title="Ouvrir son dossier">📂</button>
@@ -112,7 +136,7 @@ function reglageLora(cle, l) {
                 <input type="text" data-champ="declencheurs" maxlength="300" value="${echapper(l.declencheurs)}"
                        placeholder="${l.civitai ? "aucun déclaré par l'auteur (souvent normal)" : "facultatif"}"></label>
             <label class="force-lora">Force
-                <input type="range" data-champ="force" min="0" max="1.5" step="0.05" value="${l.force}">
+                <input type="range" data-champ="force" min="0" max="2" step="0.05" value="${l.force}">
                 <span class="valeur">${virgule(l.force)}</span></label>
             <button type="button" class="petit" data-lora="enregistrer">Enregistrer</button>
             ${l.regle ? '<button type="button" class="petit" data-lora="oublier" title="Revenir aux valeurs de la source">↺ Source</button>' : ""}
@@ -127,6 +151,13 @@ function reglageLora(cle, l) {
 document.getElementById("groupes-collection").addEventListener("input", (e) => {
     if (e.target.dataset.champ !== "force") return;
     e.target.closest(".force-lora").querySelector(".valeur").textContent = virgule(e.target.value);
+});
+
+document.getElementById("groupes-collection").addEventListener("click", (e) => {
+    const filtre = e.target.closest("[data-filtre-loras]");
+    if (!filtre) return;
+    filtreLoras = filtre.dataset.filtreLoras;
+    filtrerLoras();
 });
 
 document.getElementById("groupes-collection").addEventListener("click", async (e) => {

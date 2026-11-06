@@ -6,27 +6,34 @@ let ficheOuverte = null;
 
 let optionsPlateau = null;
 
-// Section LoRAs : seulement celles de la famille du modèle choisi (dossier modeles/<Famille>/loras).
+// Section LoRAs : seulement celles de la famille du modèle choisi (dossier modeles/<Famille>/loras). La même pour
+// le Plateau (création, retouche), un clip du Montage et une séquence (famille MiniMax-H3).
 const tousWorkflows = () => optionsPlateau
     ? [...optionsPlateau.workflows.texte_vers_image.choix, ...optionsPlateau.workflows.retouche.choix] : [];
+const FORCE_MAX_LORA = 2;  // comme le serveur (plateau._valider_loras)
 
 function afficherLoras(idConteneur, idSelect) {
-    const conteneur = document.getElementById(idConteneur);
     const { workflow } = choixModele(idSelect);
-    const w = tousWorkflows().find((x) => x.id === workflow);
+    rendreLoras(idConteneur, tousWorkflows().find((x) => x.id === workflow));
+}
+
+// `w` : le workflow (sa famille et ses LoRAs). `choisies` : [{fichier, force, declencheurs}] à cocher (une séquence
+// rouverte) ; sinon, ce qui est déjà coché ou réglé est gardé quand la liste est refaite.
+function rendreLoras(idConteneur, w, choisies = null) {
+    const conteneur = document.getElementById(idConteneur);
     if (!w) {
         conteneur.innerHTML = "";
         return;
     }
-    // On garde ce qui est déjà coché / réglé quand la liste est rafraîchie.
-    const avant = Object.fromEntries(lorasChoisies(idConteneur, true).map((l) => [l.fichier, l]));
+    const avant = Object.fromEntries((choisies ? choisies.map((l) => ({ ...l, actif: true }))
+        : lorasChoisies(idConteneur, true)).map((l) => [l.fichier, l]));
     conteneur.innerHTML = `<h3>LoRAs · ${echapper(w.famille)}</h3>` + (w.loras.length
         ? w.loras.map((l) => {
             const a = avant[l.fichier];
             const force = a ? a.force : l.force;
             return `<div class="lora ${a?.actif ? "active" : ""}" data-fichier="${echapper(l.fichier)}">
                 <label title="${echapper(l.fichier)}"><input type="checkbox" ${a?.actif ? "checked" : ""}> ${echapper(l.nom)}</label>
-                <input type="range" min="0" max="1.5" step="0.05" value="${force}">
+                <input type="range" min="0" max="${FORCE_MAX_LORA}" step="0.05" value="${force}">
                 <span class="valeur">${Number(force).toFixed(2)}</span>
                 <input type="text" placeholder="mots déclencheurs (facultatif)" value="${echapper(a ? a.declencheurs : l.declencheurs)}">
             </div>`;
@@ -53,7 +60,8 @@ function lorasChoisies(idConteneur, toutes = false) {
         .map(({ actif, ...l }) => (toutes ? { actif, ...l } : l));
 }
 
-["loras-creation", "loras-retouche"].forEach((id) => {
+// `quandChange` : appelé à chaque réglage (une séquence s'en sert pour savoir qu'elle est à retourner).
+function brancherLoras(id, quandChange = null) {
     const conteneur = document.getElementById(id);
     conteneur.addEventListener("input", (e) => {
         const ligne = e.target.closest(".lora");
@@ -63,8 +71,10 @@ function lorasChoisies(idConteneur, toutes = false) {
             ligne.classList.toggle("active", e.target.checked);
             majConseilLoras(conteneur);
         }
+        if (quandChange) quandChange();
     });
-});
+}
+["loras-creation", "loras-retouche", "loras-montage"].forEach((id) => brancherLoras(id));
 document.getElementById("workflow-creation").addEventListener("change", () => {
     afficherLoras("loras-creation", "workflow-creation");
     // Changer de modèle propose son format par défaut (réglable dans l'onglet Réglages).

@@ -244,17 +244,24 @@ def catalogue() -> list[Workflow]:
 
 # Familles : ce que les fiches en disent, pour ranger et chercher un modèle (onglet Modèles).
 NATURES = {"texte_vers_image": "image", "retouche": "image", "image_vers_video": "video", "texte_vers_video": "video"}
+# Usages d'une famille (le classement des LoRA de Ma collection) : une LoRA se charge dans tous les workflows de sa
+# famille, donc Qwen-Image 2.1 sert à la fois l'image et la retouche.
+USAGES = {"texte_vers_image": "image", "retouche": "retouche", "image_vers_video": "video", "texte_vers_video": "video"}
+ORDRE_USAGES = ("image", "retouche", "video")
 
 
 def familles() -> dict[str, dict]:
-    """{famille: {nature (image ou video), bases et nom_contient Civitai, hf (dépôts d'origine), workflows}}
-    d'après les fiches."""
+    """{famille: {nature (image ou video), usages (image, retouche, video), bases et nom_contient Civitai, hf
+    (dépôts d'origine), workflows}} d'après les fiches."""
     sortie = {}
     for wf in catalogue():
-        f = sortie.setdefault(wf.famille, {"nature": "image", "bases": [], "nom_contient": None, "hf": [],
-                                           "workflows": []})
+        f = sortie.setdefault(wf.famille, {"nature": "image", "usages": [], "bases": [], "nom_contient": None,
+                                           "hf": [], "workflows": []})
         if NATURES.get(wf.fiche["tache"]) == "video":
             f["nature"] = "video"
+        usage = USAGES.get(wf.fiche["tache"])
+        if usage and usage not in f["usages"]:
+            f["usages"] = sorted([*f["usages"], usage], key=ORDRE_USAGES.index)
         civitai = wf.fiche.get("civitai") or {}
         f["bases"] += [b for b in civitai.get("bases", []) if b not in f["bases"]]
         f["nom_contient"] = civitai.get("nom_contient") or f["nom_contient"]

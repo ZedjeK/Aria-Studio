@@ -128,6 +128,12 @@ def _dimensions_png(donnees: bytes) -> tuple[int, int]:
     return struct.unpack(">II", donnees[16:24])
 
 
+def avec_declencheurs(prompt_: str, loras: list[dict] | None) -> str:
+    """Les mots déclencheurs des LoRAs choisies, en tête du prompt (image, clip, plan de séquence)."""
+    declencheurs = ", ".join(l["declencheurs"] for l in loras or [] if l.get("declencheurs"))
+    return f"{declencheurs}, {prompt_}" if declencheurs else prompt_
+
+
 class Plateau:
     def __init__(self, orchestrateur: Orchestrateur):
         self.orchestrateur = orchestrateur
@@ -243,9 +249,10 @@ class Plateau:
 
     def commander_clip(self, idee: str, prompt_clip: str, mode: str, source: str | None, qualite: str, duree: int,
                        format: str, seed: int | None, nombre: int, dossier: str | None = None,
-                       modele: str | None = None) -> Commande:
+                       modele: str | None = None, loras: list[dict] | None = None) -> Commande:
         """Montage : un clip H3 (avec le son), en animant un rush ou à partir d'un texte. Le prompt est tourné tel
-        quel : il s'écrit au Scénario. `modele` : un checkpoint de la famille ; None = le défaut des réglages."""
+        quel : il s'écrit au Scénario. `modele` : un checkpoint de la famille ; None = le défaut des réglages.
+        `loras` : celles de la famille (modeles/MiniMax-H3/loras), leurs mots déclencheurs en tête du prompt."""
         if not prompt_clip.strip():
             raise ErreurPlateau("Écris le prompt du clip, ou passe par le ✍️ Scénario")
         if mode not in MODES_VIDEO:
@@ -267,9 +274,10 @@ class Plateau:
         self._valider_modele(wf, modele)
         textes = textes_origine([source] if mode == "animer" else [])
         securite.verifier(idee, prompt_clip, *textes)
+        loras = self._valider_loras(wf, loras, f"{idee} {prompt_clip}", textes)
         return self._mettre_en_file(Commande(
             idee, prompt_clip.strip(), None, workflow, format, seed, nombre,
-            source if mode == "animer" else None, modele, type="clip", mode_video=mode, qualite=qualite,
+            source if mode == "animer" else None, modele, loras, type="clip", mode_video=mode, qualite=qualite,
             duree=duree, textes_origine=textes, dossier=dossier))
 
     def commander_sequence(self, id_sequence: str, plans: list[int] | None = None) -> Commande:
@@ -462,9 +470,7 @@ class Plateau:
 
     @staticmethod
     def _avec_declencheurs(c: Commande) -> str:
-        """Ajoute en tête du prompt les mots déclencheurs des LoRAs choisies."""
-        declencheurs = ", ".join(l["declencheurs"] for l in c.loras if l["declencheurs"])
-        return f"{declencheurs}, {c.prompt}" if declencheurs else c.prompt
+        return avec_declencheurs(c.prompt, c.loras)
 
     def _suivi(self, c: Commande):
         return lambda valeur, maximum: setattr(c, "progression", valeur / maximum)
@@ -530,7 +536,7 @@ class Plateau:
 
     async def _tourner(self, c: Commande):
         """Montage : un clip MP4 + sa vignette par seed, sur le prompt écrit au Scénario (tel quel)."""
-        securite.verifier(c.idee, c.prompt, *c.textes_origine)
+        securite.verifier(c.idee, c.prompt, *c.textes_origine, *(l["declencheurs"] for l in c.loras))
 
         wf = workflows.obtenir(c.workflow)
         q = QUALITES_VIDEO[c.qualite]
@@ -541,8 +547,9 @@ class Plateau:
             c.etape = f"Tournage {i + 1}/{c.nombre}" if c.nombre > 1 else "Tournage"
             c.progression = 0.0
             debut_clip = time.perf_counter()
-            valeurs = {"prompt": c.prompt, "seed": seed, "duree": c.duree, "megapixels": q["megapixels"],
-                       "steps": q["steps"], "modele": c.modele, "prefixe": "aria_montage"}
+            valeurs = {"prompt": self._avec_declencheurs(c), "seed": seed, "duree": c.duree,
+                       "megapixels": q["megapixels"], "steps": q["steps"], "modele": c.modele, "loras": c.loras,
+                       "prefixe": "aria_montage"}
             async with self.orchestrateur.comfyui() as comfy:
                 if c.mode_video == "animer":
                     source = source or await comfy.televerser(chemin_image(c.parent))
@@ -568,6 +575,7 @@ class Plateau:
                 "megapixels": q["megapixels"],
                 "steps": q["steps"],
                 "modele": wf.choisi(c.modele),
+                "loras": c.loras,
                 "format": c.format if c.mode_video == "texte" else "image source",
                 "seed": seed,
                 "parent": c.parent,
