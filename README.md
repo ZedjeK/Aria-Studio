@@ -1,8 +1,8 @@
 # Aria - Studio
 
-Un studio de génération d'images et de vidéos **100 % local**, piloté depuis le navigateur. Tu écris une idée en
-français, un LLM local la réécrit en prompt détaillé, et ta carte graphique fait le reste : rien ne part dans le
-cloud.
+Un studio de génération d'images et de vidéos **100 % local**, piloté depuis le navigateur. Tu composes ton idée
+en français au Scénario, un LLM local t'aide à en faire un prompt fidèle, et ta carte graphique tourne exactement ce
+prompt : rien ne part dans le cloud.
 
 Sous le capot : [FastAPI](https://fastapi.tiangolo.com/) pour l'interface, [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cpp) pour le LLM.
@@ -12,20 +12,29 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 
 ## Ce que ça fait
 
-- **Plateau** : des images depuis une idée, des retouches (avec ou sans masque), l'agrandissement d'une image, la
-  création depuis des images de référence (personnage, style) ou en variation.
-- **Montage** : des clips vidéo avec le son (MiniMax H3), en animant une image ou depuis un texte.
-- **Scénario et Séquences** : le LLM découpe ton idée en plans ; ambiance, contraintes et voix pour tout le film ;
-  bibliothèque de voix de référence ; Aria tourne les plans puis assemble le film.
+- **Scénario** : la seule place où le LLM écrit. Tu choisis Image, Clip ou Séquence et le modèle cible, puis tu
+  remplis ce que tu veux :
+  - **Image de référence** : les images dont s'inspirer, l'image de départ d'une variation, le rush à animer ou le
+    personnage d'une séquence. Le LLM les voit quand il écrit.
+  - **Sujet** (facultatif), **Décor et ambiance**, **Mise en scène** : des listes à cliquer, assemblées mot pour mot.
+  - **Histoire** (séquence) : le synopsis, les contraintes et les plans ; le LLM écrit le prompt de chaque plan.
+  - **Libre** : un chat où le LLM te pose les questions qui manquent (avec des réponses à cliquer), tient une fiche
+    de ce qu'il a compris, puis écrit le prompt avec toi et l'ajuste.
+
+  Le prompt final, toujours visible et modifiable, part vers le Plateau ou le Montage.
+- **Plateau** : il tourne ce prompt tel quel, avec ses réglages (modèle, format, LoRA, références, variation). Il
+  retouche aussi une image (avec ou sans masque : le LLM traduit ta consigne en voyant l'image) et l'agrandit.
+- **Montage** : des clips vidéo avec le son (MiniMax H3), en animant un rush ou depuis le texte, et les séquences :
+  il tourne les plans écrits au Scénario, avec la voix de référence de ta bibliothèque, puis assemble le film.
 - **Casting** : des bancs pour comparer les modèles d'image et les LLM sur les mêmes idées, et choisir tes favoris.
 - **Réglages** : par LLM, par modèle et par checkpoint, avec un bouton *Optimiser* qui part des recommandations
   officielles et de ta carte. Le moteur de chaque LLM (llama.cpp officiel ou PrismML pour les GGUF ternaires, Bonsai 2
   et ses dérivés) se choisit tout seul d'après le fichier, et peut s'imposer à la main. La réflexion des LLM est
-  activée par défaut : la réécriture est plus lente, mais plus soignée. Elle se coupe LLM par LLM, et les courtes
-  traductions (consigne de retouche, précisions d'une séquence) s'en passent toujours.
+  activée par défaut : l'écriture est plus lente, mais plus soignée. Elle se coupe LLM par LLM ; les courtes
+  traductions et les questions du chat Libre s'en passent toujours.
 - **Vision des LLM** : avec son projecteur d'images (`mmproj`, livré avec Bonsai 2 et valable pour ses dérivés), le LLM
-  voit l'image qu'il anime, qu'il retouche ou qu'il prend en référence avant de réécrire. Sans projecteur, il lit le
-  prompt qui a créé l'image.
+  voit l'image qu'il anime, qu'il retouche ou qu'il prend en référence avant d'écrire. Sans projecteur, il lit le
+  prompt qui a créé l'image. Ce que tu fixes reste intouchable : il ne remplit que ce que tu as laissé ouvert.
 - **Modèles**, en cinq sous-onglets :
   - **Rechercher** : modèles image, modèles vidéo, LoRA ou LLM, sur Civitai et Hugging Face. Seuls les modèles qui
     vont dans un workflow d'Aria sont montrés, leur dossier est choisi pour toi, et ce que tu as déjà porte
@@ -33,10 +42,10 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
   - **Ma collection** : ce que tu as, d'où ça vient, et quels workflows l'utilisent. « Retrouver les sources »
     retrouve la page Civitai d'un fichier déposé à la main, grâce à son empreinte SHA-256 et seulement sur un clic.
   - **Texte → image**, **Image → image**, **Vidéo** : les workflows de chaque usage, avec leur favori, leurs
-    checkpoints, leurs LoRA, le LLM qui réécrit pour chacun (le Plateau, le Montage et le Scénario le prennent
-    tout seuls), et un bouton pour télécharger ce qui leur manque. Quand l'auteur d'un modèle publie un LLM
+    checkpoints, leurs LoRA, le LLM qui écrit pour chacun (le Scénario le prend tout seul), et un bouton pour
+    télécharger ce qui leur manque. Quand l'auteur d'un modèle publie un LLM
     entraîné pour lui écrire ses prompts (le « prompt enhancer » de Qwen-Image 2.1, par exemple), Aria le propose
-    🎯 : il réécrit avec sa propre consigne officielle. Les autres LLM reçoivent les règles du modèle cible,
+    🎯 : choisi au Scénario, il écrit avec sa propre consigne officielle. Les autres LLM reçoivent les règles du modèle cible,
     tirées de ses guides officiels.
 - **✕ Annuler** : une création, un clip ou une séquence en cours s'arrête d'un clic, où qu'elle en soit ; ce qui
   est déjà produit reste.

@@ -113,7 +113,9 @@ function majCible() {
     rendreEtiquettes();
     rendreReferencesScenario();  // references.js
     majForme();  // Séquence (decoupage.js)
-    if (ongletScenario === "histoire" && !enSequence()) choisirOnglet("sujet");
+    if ((ongletScenario === "histoire" && !enSequence()) || (ongletScenario === "libre" && enSequence())) {
+        choisirOnglet("sujet");
+    }
 }
 
 function choisirOnglet(onglet) {
@@ -132,7 +134,7 @@ function garderBrouillon() {
     clearTimeout(minuteurBrouillon);
     minuteurBrouillon = setTimeout(() => {
         const etat = { forme: formeScenario, sujet: sujetPrompt, onglet: ongletScenario, cibles: ciblesParForme,
-                       etats: etatsPrompt, llm: llmPrompt(), references: refsScenario,
+                       etats: etatsPrompt, llm: llmPrompt(), references: refsScenario, libre: libre.echanges,
                        sequence: { reference: decoupage.reference, synopsis: decoupage.synopsis,
                                    contrainte: decoupage.contrainte, plans: decoupage.plans } };
         try {
@@ -158,6 +160,12 @@ function relireBrouillon() {
     Object.assign(ciblesParForme, b.cibles ?? {});
     Object.assign(etatsPrompt, b.etats ?? {});
     Object.assign(refsScenario, b.references ?? {});
+    if (Array.isArray(b.libre)) {  // la conversation du chat Libre (libre.js)
+        libre.echanges = b.libre;
+        const tours = b.libre.filter((e) => e.role === "assistant");
+        libre.dernier = tours.length ? lireTour(tours[tours.length - 1].content) : null;
+        rendreLibre();
+    }
     llmBrouillon = b.llm ?? null;
     const s = b.sequence ?? {};
     decoupage.reference = s.reference ?? null;

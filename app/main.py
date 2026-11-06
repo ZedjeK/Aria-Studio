@@ -623,6 +623,10 @@ async def peaufiner_prompt(demande: DemandePeaufinage):
             if demande.workflow else None
         duree = demande.duree if listes.est_video(demande.workflow) else None
         llm = demande.llm or (workflows.llm_de(demande.workflow) if demande.workflow else None)
+        if not duree and prompt.specialiste_pour(llm, "creation", demande.workflow):
+            # 🎯 Le LLM entraîné pour ce modèle (prompt enhancer officiel) écrit avec sa propre consigne.
+            r = await prompt.reecrire(orchestrateur, demande.prompt, llm, workflow=demande.workflow)
+            return {**r, "mots": len(r["prompt"].split())}
         return await prompt.peaufiner(orchestrateur, demande.prompt, llm, mots_max, duree,
                                       workflows.regles_prompt(demande.workflow))
     except ErreurSecurite as e:
@@ -664,6 +668,51 @@ async def ecrire_avec_images(demande: DemandeEcriture):
                                   vues=vues)
         securite.verifier(demande.prompt, r["prompt"], *origines)
         return {**r, "mots": len(r["prompt"].split())}
+    except ErreurSecurite as e:
+        raise HTTPException(422, str(e))
+    except (plateau.ErreurPlateau, workflows.ErreurWorkflow) as e:
+        raise HTTPException(400, str(e))
+    except ErreurLlama as e:
+        raise HTTPException(500, str(e))
+
+
+class EchangeLibre(BaseModel):
+    role: str  # user ou assistant (le JSON rendu au tour précédent)
+    content: str
+
+
+class DemandeLibre(BaseModel):
+    echanges: list[EchangeLibre]
+    forme: str = "image"  # image ou clip
+    workflow: str | None = None
+    contexte: str = ""  # ce que les autres onglets du Scénario ont déjà fixé (le prompt assemblé)
+    images: list[str] = []  # images de référence du Scénario
+    role: str | None = None  # leur rôle : inspirer, variation, animer
+    llm: str | None = None
+    duree: int = 5
+
+
+ECHANGES_LIBRE_MAX, LONGUEUR_ECHANGE_LIBRE = 60, 4000
+
+
+@app.post("/api/prompt/libre")
+async def chat_libre(d: DemandeLibre):
+    """Scénario, onglet Libre : un tour de conversation (questions, fiche « Ce que j'ai compris », prompt)."""
+    _verifier_llm(d.llm)
+    if d.forme not in ("image", "clip"):
+        raise HTTPException(400, "Le chat Libre écrit une image ou un clip")
+    if not d.echanges or d.echanges[-1].role != "user" or len(d.echanges) > ECHANGES_LIBRE_MAX \
+            or any(e.role not in ("user", "assistant") or len(e.content) > LONGUEUR_ECHANGE_LIBRE for e in d.echanges):
+        raise HTTPException(400, "Conversation invalide ou trop longue : recommence-la")
+    try:
+        origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
+        securite.verifier(*origines, *(e.content for e in d.echanges if e.role == "user"))
+        vues = [plateau.vue(i) for i in d.images[:3]] or None
+        llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
+        r = await prompt.libre(orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, d.contexte,
+                               vues, d.role, llm, d.duree)
+        securite.verifier(*origines, r["prompt"] or "", *r["fiche"].values())
+        return r
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (plateau.ErreurPlateau, workflows.ErreurWorkflow) as e:

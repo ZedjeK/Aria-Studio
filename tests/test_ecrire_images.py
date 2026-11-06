@@ -53,5 +53,31 @@ class Ecrire(unittest.TestCase):
         self.assertEqual(e.exception.status_code, 422)
 
 
+class Peaufiner(unittest.TestCase):
+    def test_le_specialiste_du_modele_ecrit_avec_sa_consigne(self):
+        """Le Plateau n'a plus de LLM : le prompt enhancer officiel (🎯) sert au ✨ Peaufiner du Scénario."""
+        appels = []
+
+        async def reecrire(orchestrateur, idee, llm, references=0, **options):
+            appels.append(("reecrire", llm, options.get("workflow")))
+            return {"prompt": "A long official description.", "duree_s": 1.0}
+
+        async def peaufiner(*args, **_):
+            appels.append(("peaufiner",))
+            return {"prompt": "x", "duree_s": 1.0, "mots": 1}
+
+        demande = main.DemandePeaufinage(prompt="A cat.", llm="pe.gguf", workflow="qwen_image_2_1")
+        specialiste = lambda m, u, w: {"usage": u} if m == "pe.gguf" else None  # noqa: E731
+        with mock.patch.object(main.prompt, "reecrire", reecrire), \
+                mock.patch.object(main.prompt, "peaufiner", peaufiner), \
+                mock.patch.object(main.prompt, "specialiste_pour", specialiste), \
+                mock.patch.object(main.modeles, "llm_disponibles", return_value=["pe.gguf", "bonsai.gguf"]):
+            r = asyncio.run(main.peaufiner_prompt(demande))
+            self.assertEqual((appels[-1], r["mots"]), (("reecrire", "pe.gguf", "qwen_image_2_1"), 4))
+            asyncio.run(main.peaufiner_prompt(main.DemandePeaufinage(prompt="A cat.", llm="bonsai.gguf",
+                                                                     workflow="qwen_image_2_1")))
+            self.assertEqual(appels[-1], ("peaufiner",))
+
+
 if __name__ == "__main__":
     unittest.main()

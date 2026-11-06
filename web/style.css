@@ -2552,3 +2552,99 @@ button.quitter-appli:hover {
 .textes-plan textarea.manquant {
     border-color: #ffc857;
 }
+
+/* Scénario, onglet Libre : la conversation et la fiche « Ce que j'ai compris ». */
+.libre {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.conversation-libre {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 120px;
+    max-height: 460px;
+    overflow-y: auto;
+    padding: 8px;
+    border: 1px solid var(--bord);
+    border-radius: 8px;
+}
+
+.bulle {
+    max-width: 85%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.bulle p {
+    margin: 0 0 6px;
+}
+
+.bulle-toi {
+    align-self: flex-end;
+    white-space: pre-wrap;
+    background: var(--fond);
+    border: 1px solid var(--neon);
+}
+
+.bulle-llm {
+    align-self: flex-start;
+    border: 1px solid var(--bord);
+}
+
+.question-libre {
+    margin-top: 8px;
+}
+
+.choix-libre {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.choix-libre button.choisi {
+    border-color: var(--neon);
+}
+
+.fiche-libre dl {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.fiche-libre dt {
+    color: var(--discret);
+    font-size: 0.75rem;
+    margin-top: 6px;
+}
+
+.fiche-libre dd {
+    margin: 0;
+}
+
+.form-libre {
+    align-items: stretch;
+    gap: 8px;
+}
+
+.form-libre textarea {
+    flex: 1;
+    margin: 0;
+}
+
+.actions-libre {
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+    .libre {
+        grid-template-columns: 1fr;
+    }
+}

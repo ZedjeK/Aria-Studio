@@ -434,6 +434,109 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
     }
 
 
+# Scénario, onglet Libre : le prompt s'écrit en conversation. Le LLM pose les questions essentielles (avec des réponses
+# à cliquer) au lieu de deviner ce que Jérémy n'a pas dit, tient une fiche de ce qu'il a compris, puis écrit le prompt
+# et l'ajuste. Chaque tour rend un objet JSON ; la conversation est gardée par l'interface (brouillon du Scénario).
+
+CONSIGNE_LIBRE = f"""You help a French-speaking adult user write ONE prompt for a generation model, together, through a short conversation in French.
+
+Target: {{cible}}.
+Already fixed by the user in the other tabs (keep it as it is, never ask about it again): {{contexte}}
+
+Each turn:
+1. Update "fiche": what the user has decided so far, as short French phrases, one entry per topic (Sujet, Action, Décor, Style, Lumière, Cadrage{{sujets_video}}). Only what the user said or accepted. When the user lets you choose a topic ("je te laisse choisir"), choose it and add " (choix d'Aria)".
+2. Ask at most 3 short questions in French, only about essential topics still open for this target ({{essentiels}}). Give each question 2 to 4 short answer choices. Ask nothing that is already in the fiche or in the fixed part.
+3. Write "prompt" (in English) only when the user asks you to write it (message "ÉCRIS LE PROMPT"), or when nothing essential is open anymore. The prompt keeps every fiche item and every fixed item, adds nothing that clashes with them, and follows the target's rules below. {{longueur}}
+4. Once a prompt exists, each new user message is an adjustment: change only what is asked, keep the rest of the prompt word for word, and give the whole new prompt.
+5. {GENRE}
+6. {ADULTES}
+7. "message": one or two friendly French sentences to the user (what you understood, or what you changed). No question in it: questions go in "questions". Always say « tu » to the user, never « vous ».
+
+Answer ONLY with one JSON object, no markdown, nothing before or after:
+{{{{"message": "...", "fiche": {{{{"Sujet": "..."}}}}, "questions": [{{{{"question": "...", "choix": ["...", "..."]}}}}], "prompt": null}}}}"""
+
+ECRIRE = "ÉCRIS LE PROMPT"
+VIDES_FICHE = {"", "none", "null", "n/a", "-", "—", "aucun", "aucune"}  # « Réplique : None » écrit par Bonsai
+ESSENTIELS = {"image": "subject, action or pose, setting, medium and style, framing, lighting",
+              "video": "subject, action, setting, visual style, camera, sounds, spoken line if any"}
+
+
+class ErreurLibre(ErreurLlama):
+    pass
+
+
+def lire_libre(texte: str) -> dict:
+    """L'objet JSON d'un tour, vérifié : message, fiche (texte → texte), 0 à 3 questions à 2-4 choix, prompt ou None."""
+    texte = texte.rpartition("</think>")[2]
+    try:
+        d = json.loads(texte[texte.index("{"):texte.rindex("}") + 1])
+    except ValueError:
+        raise ErreurLibre("Réponse du LLM illisible (pas de JSON)")
+    if not isinstance(d, dict):
+        raise ErreurLibre("Réponse du LLM illisible")
+    fiche = {str(k).strip(): " ".join(str(v).split()) for k, v in (d.get("fiche") or {}).items()
+             if str(k).strip() and v is not None and str(v).strip().lower() not in VIDES_FICHE}         if isinstance(d.get("fiche"), dict) else {}
+    questions = []
+    for q in (d.get("questions") or [])[:3] if isinstance(d.get("questions"), list) else []:
+        if isinstance(q, dict) and str(q.get("question") or "").strip():
+            choix = [" ".join(str(c).split()) for c in (q.get("choix") or []) if str(c).strip()][:4]
+            questions.append({"question": " ".join(str(q["question"]).split()), "choix": choix})
+    prompt_ = d.get("prompt")
+    prompt_ = nettoyer_markdown(str(prompt_)) if isinstance(prompt_, str) and prompt_.strip() else None
+    return {"message": " ".join(str(d.get("message") or "").split()), "fiche": fiche, "questions": questions,
+            "prompt": prompt_}
+
+
+async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, workflow: str | None,
+                contexte: str = "", vues: list[Vue] | None = None, role: str | None = None,
+                modele: str | None = None, duree: int = 5) -> dict:
+    """Un tour du chat Libre. `echanges` : [{role: user|assistant, content}], les tours d'assistant étant les objets
+    JSON déjà rendus. Seul le tour « ÉCRIS LE PROMPT » réfléchit : les questions et les ajustements partent en
+    quelques secondes. `vues`, `role` : les images de référence du Scénario (animer, inspirer, variation)."""
+    textes = [e["content"] for e in echanges if e["role"] == "user"]
+    securite.verifier(contexte, *textes)
+    modele = generaliste(modele)
+    video = forme == "clip"
+    mots = mots_max_de(workflow)
+    systeme = CONSIGNE_LIBRE.format(
+        cible=(workflows.obtenir(workflow).fiche["nom"] if workflow else "an image model") + ", "
+              + (f"a {duree}-second video clip with sound" if video else "a still image"),
+        contexte=contexte.strip() or "nothing yet",
+        sujets_video=", Caméra, Son, Réplique" if video else "",
+        essentiels=ESSENTIELS["video" if video else "image"],
+        longueur=f"At most {mots} words." if mots else "")
+    if regles := workflows.regles_prompt(workflow):
+        systeme += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
+    systeme += f"\n\n{CLAUSE_MINEURS}"
+    ecrire = bool(echanges) and echanges[-1]["role"] == "user" and echanges[-1]["content"].strip() == ECRIRE
+    regle = reglages.valeurs_llm(modele)
+    async with orchestrateur.llm(modele) as llama:
+        messages_ = [{"role": "system", "content": systeme}]
+        for k, e in enumerate(echanges):
+            contenu = e["content"]
+            if k == 0 and vues:  # les images de référence : il les voit, ou lit leur fiche
+                usage = {"animer": "animer", "variation": "variation"}.get(role, "references")
+                contenu = montrer(contenu, vues, usage, voit=_voit(llama))
+            messages_.append({"role": e["role"], "content": contenu})
+        debut = time.perf_counter()
+        for essai in range(2):  # une réponse sans JSON est redemandée une fois
+            reponse = await llama.generer(messages_, temperature=regle["temperature_reecriture"], max_tokens=1200,
+                                          reflechir=ecrire, **reglages.echantillonnage(modele))
+            try:
+                tour = lire_libre(reponse.texte)
+                break
+            except ErreurLibre:
+                if essai:
+                    raise
+                messages_ += [{"role": "assistant", "content": reponse.texte},
+                              {"role": "user", "content": "Answer ONLY with the JSON object described."}]
+        duree_s = time.perf_counter() - debut
+    securite.verifier(contexte, *textes, *tour["fiche"].values(), tour["prompt"] or "")
+    return {**tour, "brut": json.dumps({k: tour[k] for k in ("message", "fiche", "questions", "prompt")},
+                                       ensure_ascii=False),
+            "modele": llama.modele.name if llama.modele else modele, "duree_s": round(duree_s, 2)}
+
+
 # Contrôles automatiques d'un prompt produit (Casting LLM).
 
 _MOTS_EN = {"the", "a", "an", "of", "with", "in", "and", "on", "is", "at", "her", "his", "its", "under", "by"}

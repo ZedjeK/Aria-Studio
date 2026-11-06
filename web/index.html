@@ -457,6 +457,7 @@
                     <button type="button" class="onglet-scenario" data-onglet-scenario="decor">🏞️ Décor et ambiance</button>
                     <button type="button" class="onglet-scenario" data-onglet-scenario="scene">🎥 Mise en scène</button>
                     <button type="button" class="onglet-scenario" data-onglet-scenario="histoire" data-sequence-seule>📽️ Histoire</button>
+                    <button type="button" class="onglet-scenario" data-onglet-scenario="libre" data-clip-seul>💬 Libre</button>
                 </div>
             </section>
             <div class="prompt-guide">
@@ -520,6 +521,30 @@
                                     <input id="texte-prompt" type="text" maxlength="200" placeholder="ex. ARIA, affiché tel quel"></label>
                             </div>
                         </div>
+                    </div>
+                    <div class="volet-scenario" data-volet-scenario="libre" hidden>
+                        <p class="discret aide-volet">Écris ton idée comme elle vient : le LLM te pose les questions qui
+                            manquent, puis écrit le prompt avec toi. Ce que tu as fixé dans les autres onglets compte, et
+                            il voit ton image de référence.</p>
+                        <div class="libre">
+                            <div id="conversation-libre" class="conversation-libre"></div>
+                            <aside class="fiche-libre">
+                                <h3 class="titre-bloc">Ce que j'ai compris</h3>
+                                <dl id="fiche-libre"></dl>
+                                <p id="fiche-vide-libre" class="discret">Rien encore : commence par ton idée.</p>
+                            </aside>
+                        </div>
+                        <form id="form-libre" class="ligne form-libre">
+                            <textarea id="message-libre" rows="2" maxlength="2000"
+                                      placeholder="Ton idée, ou tes réponses (clique sur une proposition pour l'ajouter ici)…"></textarea>
+                            <button type="submit" class="principal">Envoyer</button>
+                        </form>
+                        <div class="ligne actions-libre">
+                            <button id="ecrire-libre" type="button">✍️ Écris le prompt</button>
+                            <button id="recommencer-libre" type="button" class="petit">🔄 Recommencer</button>
+                            <span id="statut-libre" class="discret"></span>
+                        </div>
+                        <p id="erreur-libre" class="ko" hidden></p>
                     </div>
                     <div class="volet-scenario" data-volet-scenario="histoire" hidden>
                         <div id="sequence-scenario">
@@ -792,6 +817,7 @@
     <script src="/static/modeles.js"></script>
     <script src="/static/scenario.js"></script>
     <script src="/static/references.js"></script>
+    <script src="/static/libre.js"></script>
     <script src="/static/reglages.js"></script>
     <script src="/static/montage.js"></script>
     <script src="/static/sequence.js"></script>
