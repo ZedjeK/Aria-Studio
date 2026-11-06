@@ -19,16 +19,11 @@ const bobines = creerGalerie({
         corbeille: "La corbeille est vide.",
         dossier: "Dossier vide : tourne depuis ce dossier, ou glisse des vignettes sur son nom.",
     },
-    // Vignette = première image ; la vidéo se lance au survol.
+    // Vignette = première image du clip, immobile ; un clic ouvre sa fiche (lecture muette, 🔊 dans les contrôles).
     vignette: (f, choisi) => `<video src="${urlVideo(f.id)}" poster="${urlImage(f.id)}" muted loop playsinline
         preload="none" draggable="true" data-creation="${echapper(f.id)}" class="${choisi ? "choisi" : ""}"></video>`,
     ouvrir: (f) => ouvrirClip(f),
 });
-
-for (const conteneur of [document.querySelector("#bobines-montage [data-role=vignettes]"), document.getElementById("clips-montage")]) {
-    conteneur.addEventListener("mouseover", (e) => { if (e.target.tagName === "VIDEO") e.target.play().catch(() => {}); });
-    conteneur.addEventListener("mouseout", (e) => { if (e.target.tagName === "VIDEO") e.target.pause(); });
-}
 
 // Checkpoints de MiniMax H3 (image et texte vers vidéo partagent la famille) : [[fichier, libellé]] et le défaut
 // réglé dans l'onglet Réglages.
@@ -261,7 +256,7 @@ async function suivreMontage(debut, estimation) {
         return;
     }
     document.getElementById("clips-montage").innerHTML = c.images.map((id) =>
-        `<video src="${urlVideo(id)}" poster="${urlImage(id)}" controls loop playsinline data-creation="${echapper(id)}"></video>`).join("");
+        `<video src="${urlVideo(id)}" poster="${urlImage(id)}" controls muted loop playsinline data-creation="${echapper(id)}"></video>`).join("");
     document.getElementById("resultat-montage").hidden = false;
     bobines.charger();
 }
@@ -302,6 +297,7 @@ function ouvrirClip(f) {
     document.getElementById("reutiliser-clip").hidden = Boolean(f.sequence);
     document.getElementById("ouvrir-sequence-clip").hidden = !f.sequence;
     document.getElementById("detail-clip").hidden = false;
+    video.muted = true;  // le son se remet à la main (🔊), à chaque clip ouvert
     video.play().catch(() => {});
 }
 

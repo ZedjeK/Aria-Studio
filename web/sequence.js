@@ -152,8 +152,8 @@ function rendrePlans() {
                     <textarea data-champ="prompt" rows="4" class="${p.prompt ? "" : "manquant"}"
                               placeholder="Prompt du plan, tourné tel quel : il arrive du ✍️ Scénario (découpage), ou écris-le ici (en anglais).">${echapper(p.prompt ?? "")}</textarea>
                 </div>
-                ${p.clip ? `<video class="clip-plan" src="${urlVideo(p.clip)}" poster="${urlImage(p.clip)}" muted loop playsinline
-                                   preload="none" title="Survole pour voir le plan tourné"></video>` : ""}
+                ${p.clip ? `<video class="clip-plan" src="${urlVideo(p.clip)}" poster="${urlImage(p.clip)}" controls muted loop playsinline
+                                   preload="none" title="Le plan tourné"></video>` : ""}
             </div>
         </li>`;
     }).join("");
@@ -307,9 +307,6 @@ plansEl.addEventListener("click", (e) => {
     sequenceModifiee = true;
     rendrePlans();
 });
-// Survol : le plan tourné se lance.
-plansEl.addEventListener("mouseover", (e) => { if (e.target.tagName === "VIDEO") e.target.play().catch(() => {}); });
-plansEl.addEventListener("mouseout", (e) => { if (e.target.tagName === "VIDEO") e.target.pause(); });
 
 // Après un déplacement ou une suppression : le premier plan démarre, les suivants s'enchaînent.
 function normaliserEnchainements() {

@@ -1582,6 +1582,16 @@ button.danger:not(:disabled) {
     box-shadow: 0 0 10px rgba(255, 46, 136, 0.5);
 }
 
+/* Les clips du Montage : plus grands que les images, en 16:9, le clip entier visible (vertical compris). */
+.vignettes.clips {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.vignettes.clips video {
+    aspect-ratio: 16 / 9;
+    object-fit: contain;
+}
+
 #clips-montage video {
     aspect-ratio: auto;
     object-fit: contain;
@@ -1854,9 +1864,10 @@ button.onglet-casting.actif {
 }
 
 .clip-plan {
-    width: 96px;
-    height: 96px;
-    object-fit: cover;
+    width: 260px;
+    aspect-ratio: 16 / 9;
+    align-self: flex-start;
+    object-fit: contain;
     border-radius: 8px;
     border: 1px solid var(--bord);
     background: #000;
