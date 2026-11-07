@@ -3,14 +3,12 @@
 const NOMS_CONSIGNES = {
     reecriture: "Réécriture (idée → prompt)",
     retouche: "Consigne de retouche",
-    peaufinage: "Peaufinage (Scénario)",
     precisions: "Traduction des précisions",
     references: "Créer depuis des références (Plateau)",
     video: "Vidéo (Montage)",
     decoupage: "Découpage d'une séquence (Scénario)",
 };
 const AIDES_CONSIGNES = {
-    peaufinage: "{mots_max} est remplacé par la limite de mots du modèle cible.",
     decoupage: "{mots_max} : limite de mots du modèle vidéo ; {regle_personnage} : règle selon qu'une image de référence est choisie ou non.",
 };
 let etatReglages = null;

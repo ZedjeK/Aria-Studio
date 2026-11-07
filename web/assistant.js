@@ -224,32 +224,34 @@ document.getElementById("essai-assistant").addEventListener("click", async (ev) 
     try {
         suivreEssai((await api("POST", "/api/assistant/essai")).id, Date.now());
     } catch (err) {
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
         ev.target.disabled = false;
     }
 });
 
 async function suivreEssai(id, debut) {
-    const c = await api("GET", `/api/commandes/${id}`);
     const suivi = document.getElementById("suivi-essai-assistant");
     const barre = document.getElementById("barre-essai-assistant");
-    const secondes = Math.round((Date.now() - debut) / 1000);
-    if (["attente", "en_cours"].includes(c.etat)) {
-        barre.hidden = false;
-        barre.firstElementChild.style.width = `${Math.round(100 * c.progression)}%`;
-        suivi.textContent = c.etat === "attente" ? `En file d'attente… ${secondes} s`
-            : `${c.etape || "Finalisation"} · ${Math.round(100 * c.progression)} % · ${secondes} s`;
-        setTimeout(() => suivreEssai(id, debut), 700);
-        return;
+    let c;
+    try {
+        c = await suivreJusquauBout(id, (r) => {
+            if (!["attente", "en_cours"].includes(r.etat)) return;
+            const secondes = Math.round((Date.now() - debut) / 1000);
+            barre.hidden = false;
+            barre.firstElementChild.style.width = `${Math.round(100 * r.progression)}%`;
+            suivi.textContent = r.etat === "attente" ? `En file d'attente… ${secondes} s`
+                : `${r.etape || "Finalisation"} · ${Math.round(100 * r.progression)} % · ${secondes} s`;
+        }, 700);
+    } catch (err) {
+        c = { etat: "erreur", erreur: `Suivi interrompu (${err.message}) : l'essai continue peut-être, regarde les rushes.` };
     }
+    const secondes = Math.round((Date.now() - debut) / 1000);
     barre.hidden = true;
     document.getElementById("essai-assistant").disabled = false;
     if (c.etat === "erreur") {
         suivi.textContent = "";
         const erreur = document.getElementById("erreur-essai-assistant");
-        erreur.textContent = c.erreur;
-        erreur.hidden = false;
+        afficherErreur(erreur, c.erreur);
         return;
     }
     suivi.textContent = `Tout tourne ✓ (${secondes} s). L'image est aussi dans tes rushes.`;

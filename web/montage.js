@@ -169,7 +169,12 @@ document.getElementById("liste-choix-rush").addEventListener("click", (e) => {
     document.getElementById("choix-rush").hidden = true;
     quandRushChoisi(id);
 });
-document.getElementById("fermer-choix-rush").addEventListener("click", () => { document.getElementById("choix-rush").hidden = true; });
+const fermerChoixRush = () => { document.getElementById("choix-rush").hidden = true; };
+document.getElementById("fermer-choix-rush").addEventListener("click", fermerChoixRush);
+document.getElementById("choix-rush").addEventListener("click", (e) => { if (e.target.id === "choix-rush") fermerChoixRush(); });
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !document.getElementById("choix-rush").hidden) fermerChoixRush();
+});
 
 document.getElementById("fichier-montage").addEventListener("change", async (e) => {
     const fichier = e.target.files[0];
@@ -230,8 +235,7 @@ async function tourner(corps) {
     try {
         commande = await api("POST", "/api/clips", corps);
     } catch (err) {
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
         return;
     }
     suivreMontage(commande.id, Date.now(), estimationSecondes());
@@ -266,8 +270,7 @@ async function suivreMontage(id, debut, estimation) {
         }, 1500);
     } catch (err) {
         const erreur = document.getElementById("erreur-montage");
-        erreur.textContent = `Suivi interrompu (${err.message}) : le tournage continue peut-être, regarde les bobines.`;
-        erreur.hidden = false;
+        afficherErreur(erreur, `Suivi interrompu (${err.message}) : le tournage continue peut-être, regarde les bobines.`);
     } finally {
         suiviesMontage.splice(suiviesMontage.indexOf(id), 1);
         if (suiviesMontage.length) {
@@ -280,8 +283,7 @@ async function suivreMontage(id, debut, estimation) {
     if (!c) return;
     if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-montage");
-        erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "clip") : c.erreur;
-        erreur.hidden = false;
+        afficherErreur(erreur, c.etat === "annule" ? messageAnnulation(c, "clip") : c.erreur);
         if (c.images.length) bobines.charger();
         return;
     }
@@ -293,7 +295,8 @@ async function suivreMontage(id, debut, estimation) {
 
 // Fiche d'un clip
 
-const NOMS_QUALITES = { rapide: "⚡ Rapide", compromis: "⚖️ Compromis", qualite: "💎 Qualité" };
+// Le nom d'une qualité, tel que le serveur le donne (plateau.QUALITES_VIDEO).
+const nomQualite = (cle) => optionsMontage?.video.qualites.find((q) => q.cle === cle)?.nom ?? cle;
 
 function ouvrirClip(f) {
     clipOuvert = f;
@@ -307,10 +310,9 @@ function ouvrirClip(f) {
         ["Idée", f.idee || "—"],
         ["Prompt", f.prompt],
         ["LLM", f.llm ? f.llm.replace(".gguf", "") : "aucun"],
-        ["Qualité", [NOMS_QUALITES[f.qualite] ?? f.qualite, f.megapixels && `${f.megapixels} MP`,
+        ["Qualité", [nomQualite(f.qualite), f.megapixels && `${f.megapixels} MP`,
                      f.steps && `${f.steps} steps`].filter(Boolean).join(" · ")],
-        ["LoRA", f.loras?.length ? f.loras.map((l) => `${l.fichier.replace(/\.safetensors$/, "")} (${Number(l.force)
-            .toFixed(2).replace(".", ",")})`).join(" · ") : "aucune"],
+        ["LoRA", f.loras?.length ? f.loras.map((l) => `${l.fichier.replace(/\.safetensors$/, "")} (${virgule(l.force)})`).join(" · ") : "aucune"],
         ["Clip", [`${f.duree} s`, `${f.largeur}×${f.hauteur}`, f.format].filter(Boolean).join(" · ")],
         ["Seed", f.seed],
         ["Tournage", enMinutes(f.duree_s)],

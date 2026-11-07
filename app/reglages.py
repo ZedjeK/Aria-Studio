@@ -5,7 +5,7 @@ les fiches et les api.json des workflows, qui ne sont jamais modifiés. Supprime
 fichier) revient aux valeurs d'origine. Chaque valeur est contrôlée avant d'être enregistrée.
 
     llm:
-        <fichier.gguf>: {temperature_reecriture: 0.5, contexte: 8192, consignes: {peaufinage: "…"}}
+        <fichier.gguf>: {temperature_reecriture: 0.5, contexte: 8192, consignes: {reecriture: "…"}}
     workflows:
         <id>: {steps: 30, cfg: 1.0, sampler: euler, scheduler: simple, shift: 3.1, megapixels: 1, …,
                modele: <checkpoint par défaut, dans modeles/<Famille>/modeles>,
@@ -15,7 +15,6 @@ fichier) revient aux valeurs d'origine. Chaque valeur est contrôlée avant d'ê
 import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 import yaml
 
@@ -25,7 +24,7 @@ from app.emplacements import DATA
 FICHIER = DATA / "reglages.yaml"
 FICHIER_SAMPLERS = DATA / "comfyui_samplers.json"
 LONGUEUR_CONSIGNE = 4000
-CONSIGNES = ("reecriture", "retouche", "peaufinage", "precisions", "references", "video", "decoupage")
+CONSIGNES = ("reecriture", "retouche", "precisions", "references", "video", "decoupage")
 
 # Liste de secours tant que ComfyUI n'a jamais démarré (sinon : celle qu'il annonce, voir memoriser_samplers).
 SAMPLERS_SECOURS = ["euler", "euler_ancestral", "heun", "dpm_2", "dpm_2_ancestral", "lms", "dpmpp_2m",
@@ -141,8 +140,6 @@ def params_llm() -> dict[str, Param]:
     return {p.cle: p for p in [
         Param("temperature_reecriture", "Température · réécriture", defaut=0.7, aide="Idée → prompt (Plateau)",
               **temperature),
-        Param("temperature_peaufinage", "Température · peaufinage", defaut=0.3,
-              aide="Plus bas = plus fidèle, moins de broderie", **temperature),
         Param("temperature_retouche", "Température · consigne de retouche", defaut=0.2, **temperature),
         Param("temperature_traduction", "Température · traduction des précisions", defaut=0.2, **temperature),
         # Échantillonnage : valeurs d'origine = défauts de llama-server.
@@ -155,8 +152,8 @@ def params_llm() -> dict[str, Param]:
         Param("contexte", "Contexte (tokens)", "entier", int(llama["contexte"]), 1024, 262144, 1024,
               aide="Plus grand = plus de VRAM ; changer redémarre llama-server"),
         Param("reflexion", "Réflexion (thinking)", "booleen", bool(llama["reflexion"]),
-              aide="Pour les modèles qui la proposent ; plus lent. Sert à la réécriture, au peaufinage et au "
-                   "découpage, jamais aux courtes traductions (retouche, précisions)"),
+              aide="Pour les modèles qui la proposent ; plus lent. Sert à la réécriture et au découpage, "
+                   "jamais aux courtes traductions (retouche, précisions)"),
         Param("moteur", "Moteur", "choix", "auto", choix=tuple(MOTEURS_LLM), libelles=tuple(MOTEURS_LLM.items()),
               aide="Automatique : d'après le format du GGUF. PrismML lit les formats ternaires de Bonsai 2 et ses "
                    "dérivés ; changer redémarre llama-server"),

@@ -21,7 +21,6 @@ Chaque plan tourné est un clip des Bobines (rangé dans le dossier de la séque
 AS-18 : les textes des plans, l'ambiance et les textes d'origine de tous les rushes utilisés passent par securite.
 """
 
-import copy
 import json
 import math
 import random
@@ -30,7 +29,8 @@ import time
 import uuid
 from datetime import datetime
 
-from app import plateau, prompt, reglages, rushes, securite, voix, workflows
+from app import modeles, plateau, prompt, reglages, rushes, securite, voix, workflows
+from app.comfy import video_et_affiche
 from app.config import CONFIG
 from app.emplacements import DATA
 
@@ -43,7 +43,6 @@ ENCHAINEMENTS = ("prolonger", "couper", "transition")  # plans suivants
 LONGUEUR_IDEE = 1000
 LONGUEUR_AMBIANCE = 300
 LONGUEUR_CONTRAINTE = 300
-LONGUEUR_LIGNES = 600  # répliques des cases du Scénario
 LONGUEUR_MUSIQUE = 200
 # Ajouts au casting (2026-10-24) : une séquence plus ancienne les reçoit par défaut, sans être « à retourner ».
 CASTING_DEFAUT = {"contrainte": "", "reference_partout": True}
@@ -324,7 +323,7 @@ def _valider(donnees: dict, pour_tourner: bool = False) -> dict:
     if modele and modele not in _workflow().variantes():
         raise ErreurSequence(f"Checkpoint absent de modeles/{_workflow().famille}/modeles : {modele}")
     try:  # les LoRA de la famille vidéo, les mêmes sur tous les plans ; leurs réglages retenus pour la prochaine fois
-        loras = plateau.Plateau._valider_loras(_workflow(), donnees.get("loras"), titre)
+        loras = plateau.valider_loras(_workflow(), donnees.get("loras"), titre)
     except plateau.ErreurPlateau as e:
         raise ErreurSequence(str(e))
     s = {"titre": titre, "qualite": qualite, "format": format_, "casting": casting, "plans": plans,
@@ -342,6 +341,8 @@ def _workflow() -> "workflows.Workflow":
 
 def creer(donnees: dict) -> dict:
     s = _valider(donnees)
+    if s["loras"]:
+        modeles.memoriser_loras(_workflow().famille, s["loras"])
     s["modele"] = s["modele"] or _workflow().choisi(None)  # la séquence garde son checkpoint, même si le défaut change
     traduction = donnees.get("contrainte_en") or {}  # faite au découpage du Scénario
     if s["casting"]["contrainte"] and traduction.get("fr") == s["casting"]["contrainte"] and traduction.get("en"):
@@ -363,6 +364,8 @@ def modifier(id_sequence: str, donnees: dict) -> dict:
     ancienne["modele"] = ancienne.get("modele") or _workflow().modele_origine  # tournée avant le choix du checkpoint
     ancienne["loras"] = ancienne.get("loras") or []  # tournée avant les LoRA vidéo
     s = _valider(donnees)
+    if s["loras"]:
+        modeles.memoriser_loras(_workflow().famille, s["loras"])
     s["modele"] = s["modele"] or ancienne["modele"]
     tout_change = any(s[c] != ancienne[c] for c in CONTENU_SEQUENCE)
     if ancienne.get("contrainte_en", {}).get("fr") == s["casting"]["contrainte"]:
@@ -631,8 +634,7 @@ def ligne_replique(p: dict) -> str:
 
 
 def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[dict], reference: str | None,
-                      contrainte: str = "", dialogue: bool = True, lignes_imposees: list[str] | None = None,
-                      musique: str | None = None, cible: int | None = None) -> str:
+                      contrainte: str = "", musique: str | None = None, cible: int | None = None) -> str:
     """Message envoyé à Llama : le fil de l'histoire, le personnage (sauf avec une image de référence), le décor, la
     contrainte, la langue de chaque réplique, puis la liste des plans avec leur type, durée, ce qui s'y passe, leur
     réplique et leur arrivée. `cible` : un seul plan à écrire, avec le prompt déjà écrit de ses voisins."""
@@ -641,9 +643,8 @@ def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[d
               f"Setting and look: {decor.strip() or 'free'}"]
     if contrainte:
         lignes.append(f"Mandatory constraint, respected in EVERY shot: {contrainte}")
-    toutes = list(dict.fromkeys(repliques(synopsis) + [r for p in plans for r in repliques(p["note"])]
-                                + list(lignes_imposees or [])))
-    parlent = dialogue and bool(toutes or any(p.get("replique") for p in plans))
+    toutes = list(dict.fromkeys(repliques(synopsis) + [r for p in plans for r in repliques(p["note"])]))
+    parlent = bool(toutes or any(p.get("replique") for p in plans))
     if not parlent:
         lignes.append("Nobody speaks in the whole film: no dialogue, no voice-over.")
     elif toutes:
@@ -736,11 +737,12 @@ def alerte_replique(k: int, p: dict) -> list[str]:
             "pressée ou coupée"] if mots > permis else []
 
 
-def source_repliques(synopsis: str, contrainte: str, lignes: list[str], plans: list[dict], dialogue: bool) -> str:
-    """Ce qui a le droit d'être dit (ou écrit entre guillemets) : le reste est une réplique inventée par Llama."""
-    if not dialogue:
+def source_repliques(synopsis: str, contrainte: str, plans: list[dict]) -> str:
+    """Ce qui a le droit d'être dit (ou écrit entre guillemets) : le reste est une réplique inventée par Llama. Sans
+    aucune réplique nulle part, tout texte entre guillemets du LLM en est une."""
+    if not (repliques(synopsis) or any(repliques(p["note"]) or p["replique"] for p in plans)):
         return ""
-    return " ".join([synopsis, contrainte, *(f'"{l}"' for l in lignes), *(p["note"] for p in plans),
+    return " ".join([synopsis, contrainte, *(p["note"] for p in plans),
                      *(f'"{p["replique"]}"' for p in plans if p["replique"])])
 
 
@@ -760,44 +762,37 @@ def finir_plan(k: int, p: dict, en: str, personnage_: str, source: str) -> tuple
 
 
 def preparer_ecriture(synopsis: str, personnage_: str, decor: str, plans: list[dict], reference: str | None,
-                      mineur: bool = False, contrainte: str = "", dialogue: bool = True,
-                      lignes: list[str] | None = None, musique: str | None = None, cible: int | None = None) -> dict:
+                      mineur: bool = False, contrainte: str = "", musique: str | None = None,
+                      cible: int | None = None) -> dict:
     """Ce que le découpage, ✨ et 💬 d'un plan partagent : les entrées validées et passées par AS-18."""
     plans = _valider_decoupage(synopsis, personnage_, decor, plans, reference, cible)
     contrainte = " ".join(str(contrainte or "").split())
     if len(contrainte) > LONGUEUR_CONTRAINTE:
         raise ErreurSequence(f"Contrainte de {LONGUEUR_CONTRAINTE} caractères au plus")
-    # Une réplique (d'un plan, ou entre guillemets dans le fil ou une note) vaut dialogue, même case décochée.
-    dialogue = dialogue or bool(repliques(synopsis)) or any(repliques(p["note"]) or p["replique"] for p in plans)
-    lignes = [" ".join(l.split()).strip("«»\"“” ") for l in (lignes or []) if l.strip()] if dialogue else []
     musique = " ".join(str(musique or "").split()) or None
-    if sum(map(len, lignes)) > LONGUEUR_LIGNES or len(musique or "") > LONGUEUR_MUSIQUE:
-        raise ErreurSequence(f"Répliques ({LONGUEUR_LIGNES}) ou musique ({LONGUEUR_MUSIQUE} caractères) trop longues")
+    if len(musique or "") > LONGUEUR_MUSIQUE:
+        raise ErreurSequence(f"Musique de {LONGUEUR_MUSIQUE} caractères au plus")
     if reference:
         personnage_ = ""  # l'image fait l'identité : la décrire ferait dériver H3 (essais du mode Séquence)
     rushes_ = [r for r in [reference, *(p["rush"] for p in plans)] if r]
-    entrees = [synopsis, personnage_, decor, contrainte, *lignes, musique or "", *(p["note"] for p in plans),
+    entrees = [synopsis, personnage_, decor, contrainte, musique or "", *(p["note"] for p in plans),
                *(p["replique"] for p in plans), *plateau.textes_origine(rushes_), *(["minor"] if mineur else [])]
     securite.verifier(*entrees)
-    return {"plans": plans, "personnage": personnage_, "contrainte": contrainte, "dialogue": dialogue,
-            "lignes": lignes, "musique": musique, "entrees": entrees,
-            "source": source_repliques(synopsis, contrainte, lignes, plans, dialogue),
-            "demande": demande_decoupage(synopsis, personnage_, decor, plans, reference, contrainte, dialogue,
-                                         lignes, musique, cible),
+    return {"plans": plans, "personnage": personnage_, "contrainte": contrainte, "musique": musique,
+            "entrees": entrees, "source": source_repliques(synopsis, contrainte, plans),
+            "demande": demande_decoupage(synopsis, personnage_, decor, plans, reference, contrainte, musique, cible),
             "regle_personnage": prompt.REGLE_AVEC_REFERENCE if reference else prompt.REGLE_SANS_REFERENCE}
 
 
 async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, plans: list[dict],
                    reference: str | None, llm: str | None = None, mineur: bool = False, contrainte: str = "",
-                   dialogue: bool = True, lignes: list[str] | None = None, musique: str | None = None,
-                   cible: int | None = None, contrainte_en: dict | None = None) -> dict:
+                   musique: str | None = None, cible: int | None = None, contrainte_en: dict | None = None) -> dict:
     """Prompts des plans d'une séquence écrits par Llama, puis contrôlés ici : tous ensemble (✨ Tout écrire), ou
     un seul (`cible`, ✨ d'un plan), les autres servant de contexte.
     `mineur` : le personnage du Scénario est mineur (AS-18 le sait, même si aucun mot ne le dit).
     `contrainte` : impérative sur tous les plans ; la séquence créée la garde au casting, et le tournage l'ajoute
     au prompt de chaque plan. `contrainte_en` : sa traduction déjà faite ({fr, en}), reprise si elle vaut toujours."""
-    e = preparer_ecriture(synopsis, personnage_, decor, plans, reference, mineur, contrainte, dialogue, lignes,
-                          musique, cible)
+    e = preparer_ecriture(synopsis, personnage_, decor, plans, reference, mineur, contrainte, musique, cible)
     plans, contrainte = e["plans"], e["contrainte"]
     cibles = list(range(len(plans))) if cible is None else [cible]
 
@@ -834,7 +829,7 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
         sortie.append({**p, "idee": fr, "prompt": texte})
     tout = " ".join(p["prompt"] for p in sortie)
     if cible is None:
-        for r in (list(dict.fromkeys(repliques(synopsis) + e["lignes"])) if e["dialogue"] else []):
+        for r in repliques(synopsis):  # une réplique du fil : le LLM la place dans le plan qu'il veut
             if _simple(r) not in _simple(tout):
                 alertes.append(f"Réplique « {r} » absente du découpage : ajoute-la au plan voulu")
     # Ensemble : un mineur des textes d'origine reste un mineur, même si Llama l'a reformulé.
@@ -925,8 +920,7 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
             elif ref_voix:
                 fichiers["voix"] = await comfy.televerser(plateau.chemin_video(ref_voix))
             sorties = await comfy.executer(graphe_plan(s, k, prompt_plan, seed, fichiers), progression=p_._suivi(c))
-        mp4 = next((o for n, o in sorties if n.lower().endswith(".mp4")), None)
-        affiche = next((o for n, o in sorties if n.lower().endswith(".png")), None)
+        mp4, affiche = video_et_affiche(sorties)
         if not (mp4 and affiche):
             raise plateau.ErreurPlateau(f"Plan {k + 1} : ComfyUI n'a pas renvoyé la vidéo attendue")
         ancien = plan.get("clip")
@@ -950,8 +944,7 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
     async with p_.orchestrateur.comfyui() as comfy:
         noms = [await comfy.televerser(plateau.chemin_video(p["clip"])) for p in s["plans"]]
         sorties = await comfy.executer(graphe_film(s, noms))
-    mp4 = next((o for n, o in sorties if n.lower().endswith(".mp4")), None)
-    affiche = next((o for n, o in sorties if n.lower().endswith(".png")), None)
+    mp4, affiche = video_et_affiche(sorties)
     if not (mp4 and affiche):
         raise plateau.ErreurPlateau("Assemblage : ComfyUI n'a pas renvoyé le film")
     ancien_film = s.get("film")

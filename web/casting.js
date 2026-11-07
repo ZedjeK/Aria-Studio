@@ -61,8 +61,7 @@ document.getElementById("lancer-banc").addEventListener("click", async () => {
         bancAffiche = actif.id;
         afficherProgression(actif);
     } catch (err) {
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
     }
 });
 

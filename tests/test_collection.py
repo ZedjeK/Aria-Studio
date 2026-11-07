@@ -14,7 +14,7 @@ from unittest import mock
 
 import httpx
 
-from app import collection, decouvrir, fiches, modeles, workflows
+from app import collection, config, decouvrir, fiches, modeles, workflows
 from app.sources import civitai
 
 FAMILLES = {
@@ -258,7 +258,7 @@ class LlmParWorkflow(unittest.TestCase):
         self.installes = ["defaut.gguf", "bonsai.gguf"]
         self.patchs = [mock.patch.object(workflows.emplacements, "_fichier_choix", lambda: Path(self.tmp.name) / "aria.yaml"),
                        mock.patch.object(workflows.modeles, "llm_disponibles", lambda: self.installes),
-                       mock.patch.dict(workflows.CONFIG["llama"], {"modele": "defaut.gguf"})]
+                       mock.patch.dict(config.CONFIG["llama"], {"modele": "defaut.gguf"})]
         for p in self.patchs:
             p.start()
 

@@ -190,7 +190,7 @@
                     <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
                     <button type="button" class="petit" data-selection="fermer">Terminer</button>
                 </div>
-                <div id="galerie" data-role="vignettes" class="vignettes"></div>
+                <div data-role="vignettes" class="vignettes"></div>
                 <p data-role="pied-corbeille" class="ligne pied-corbeille" hidden>
                     <span class="discret">Ce qui est dans la corbeille reste restaurable jusqu'à ce que tu la vides.</span>
                     <button data-role="vider-corbeille" type="button" class="petit danger">Vider la corbeille</button>
@@ -323,7 +323,7 @@
                         </div>
                         <div class="champs-casting">
                             <p id="contrainte-lue-sequence" class="discret" hidden></p>
-                            <div class="volet-casting" data-volet-casting="voix">
+                            <div class="volet-casting">
                                 <div class="ligne voix-casting">
                                     <label>🎙️ Voix de référence <select id="voix-sequence"></select></label>
                                     <audio id="ecoute-voix-sequence" controls preload="none" hidden></audio>
@@ -732,7 +732,7 @@
                     <button id="ouvrir-assistant" type="button" class="petit">🧭 Assistant de premier lancement</button>
                 </div>
                 <p id="carte-graphique" class="discret"></p>
-                <ul id="liste-moteurs" class="liste-moteurs"></ul>
+                <ul class="liste-moteurs"></ul>
                 <p class="discret">Versions épinglées, testées ensemble (catalogue/moteurs.yaml) : téléchargées depuis
                     leur release GitHub officielle, empreinte SHA-256 vérifiée. L'ancienne version reste à côté.</p>
             </section>

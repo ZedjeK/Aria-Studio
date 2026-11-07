@@ -186,14 +186,6 @@ textarea {
     font: inherit;
 }
 
-#resultat-reecriture {
-    margin: 12px 0 0;
-    padding: 12px;
-    border-left: 2px solid var(--neon);
-    background: var(--fond);
-    line-height: 1.5;
-}
-
 input,
 textarea,
 select {
@@ -1074,35 +1066,6 @@ button.de:hover:not(:disabled) {
     opacity: 1;
 }
 
-#peaufiner-prompt {
-    width: 100%;
-}
-
-#peaufiner-prompt + .discret {
-    margin: 4px 0 8px;
-    font-size: 0.75rem;
-}
-
-#peaufine-prompt {
-    margin-bottom: 8px;
-}
-
-#peaufine-prompt textarea {
-    margin: 4px 0;
-    font-size: 0.85rem;
-    line-height: 1.5;
-}
-
-#peaufine-prompt .case {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-#peaufine-prompt .case input {
-    flex: none;
-}
-
 .actions-prompt button {
     flex: 1;
 }
@@ -1731,27 +1694,7 @@ button.danger:not(:disabled) {
     font-size: 0.75rem;
 }
 
-/* Casting de la séquence : onglets Ambiance, Contraintes, Voix (même allure que les sous-onglets de Modèles). */
-.onglets-casting {
-    display: flex;
-    gap: 4px;
-    border-bottom: 1px solid var(--bord);
-}
-
-button.onglet-casting {
-    border: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    background: none;
-    color: var(--discret);
-    padding: 6px 12px;
-}
-
-button.onglet-casting.actif {
-    border-bottom-color: var(--neon);
-    background: none;
-    color: var(--texte);
-}
+/* Casting de la séquence : ses volets (personnage, voix). */
 
 .volet-casting {
     display: flex;
@@ -1969,21 +1912,9 @@ button.onglet-casting.actif {
     margin: 0;
 }
 
-#vue-scenario.forme-sequence [data-clip-seul],
-#vue-scenario:not(.forme-sequence) [data-sequence-seule] {
-    display: none !important;
-}
-
 /* Scénario : barre fixe (forme, modèle cible), onglets, volets. */
 .barre-scenario {
     padding-bottom: 0;
-}
-
-.formes-scenario {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-right: auto;
 }
 
 .onglets-scenario {
@@ -2011,56 +1942,6 @@ button.onglet-scenario.actif {
 
 .aide-volet {
     margin: 0 0 12px;
-}
-
-.volet-scenario .sujets {
-    margin-bottom: 12px;
-}
-
-.llm-scenario {
-    align-items: flex-end;
-    gap: 8px;
-    margin: 12px 0;
-}
-
-.llm-scenario label {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-width: 0;
-    font-size: 0.8rem;
-    color: var(--discret);
-}
-
-.forme-video {
-    align-items: center;
-    gap: 12px;
-}
-
-.forme-video .case {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.forme-video input {
-    flex: none;
-}
-
-.synopsis-scenario {
-    align-items: stretch;
-    gap: 12px;
-    margin: 8px 0;
-}
-
-.synopsis-scenario textarea {
-    flex: 1;
-    margin: 0;
-}
-
-.synopsis-scenario .emplacement {
-    width: 110px;
-    height: 110px;
 }
 
 .plans-scenario {
@@ -2115,12 +1996,6 @@ button.onglet-scenario.actif {
 
 .etat-plan.perime {
     color: var(--warn);
-}
-
-.actions-plan {
-    margin-left: auto;
-    display: flex;
-    gap: 6px;
 }
 
 .corps-plan-scenario {
@@ -2232,15 +2107,6 @@ button.onglet-scenario.actif {
 #creation-sequence-scenario input {
     flex: 1;
     min-width: 0;
-}
-
-.prompt-impose {
-    margin-top: 6px;
-}
-
-.prompt-impose textarea {
-    margin: 6px 0;
-    font-size: 0.8rem;
 }
 
 /* Réglages : checkpoints de la famille d'un workflow */
@@ -2868,30 +2734,6 @@ button.quitter-appli:hover {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 12px;
     margin: 8px 0;
-}
-
-/* Scénario : le choix du LLM en tête des onglets qui le font travailler. */
-.llm-onglet {
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-    font-size: 0.85rem;
-}
-
-/* Image de référence : le chat sous les images, qu'il regarde. */
-.chat-reference {
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid var(--bord);
-}
-
-/* Aperçu : la liste du LLM sur toute la largeur, ✨ Peaufiner dessous (le libellé long l'écrasait). */
-.llm-scenario {
-    flex-wrap: wrap;
-}
-
-.llm-scenario label {
-    flex: 1 1 100%;
 }
 
 /* Scénario en ateliers : 1 Départ, 2 Ton idée, 3 Compléments (repliés), le prompt final à droite. */

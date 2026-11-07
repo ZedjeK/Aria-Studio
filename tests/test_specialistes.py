@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest import mock
 
-from app import collection, fiches, llm, modeles, prompt
+from app import collection, config, fiches, llm, modeles, prompt
 from app.llm import ErreurLlama, Reponse
 
 SPECIALISTE = {
@@ -90,7 +90,7 @@ class Chemin(unittest.TestCase):
         (self.llm_dir / "pe-edit.consigne.txt").write_text("CONSIGNE RETOUCHE", encoding="utf-8")
         self.patchs = [mock.patch.object(fiches, "catalogue_llm", lambda: CATALOGUE),
                        mock.patch.object(prompt, "MODELES", Path(self.tmp.name)),
-                       mock.patch.dict(prompt.CONFIG["llama"], {"modele": "general.gguf"})]
+                       mock.patch.dict(config.CONFIG["llama"], {"modele": "general.gguf"})]
         for p in self.patchs:
             p.start()
 

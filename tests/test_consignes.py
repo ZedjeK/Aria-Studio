@@ -18,7 +18,7 @@ class Consignes(unittest.TestCase):
             self.assertIn(prompt.ADULTES, texte, nom)
 
     def test_contenu_adulte_jamais_adouci(self):
-        for nom in ("peaufinage", "decoupage"):
+        for nom in ("reecriture", "decoupage"):
             self.assertIn(prompt.ADULTES, prompt.consigne(nom), nom)
         self.assertIn("never make a character younger", prompt.CLAUSE_MINEURS)  # la clause mineurs reste la dernière
         self.assertTrue(prompt.consigne("reecriture").endswith(prompt.CLAUSE_MINEURS))

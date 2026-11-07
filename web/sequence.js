@@ -197,7 +197,7 @@ function majEtat() {
     document.querySelectorAll("#plans-sequence .plan-sequence").forEach((li) => {
         const k = Number(li.dataset.plan);
         const p = sequenceCourante.plans[k];
-        const parle = parlePlan(p) ? " · 🗣 voix soignée (12 steps)" : "";
+        const parle = parlePlan(p) ? ` · 🗣 voix soignée (${optionsMontage.video.sequence.steps_parole} steps)` : "";
         const sansPrompt = !(p.prompt ?? "").trim() ? " · ✍️ prompt à écrire" : "";
         li.querySelector(".etat-plan").textContent = (indices.includes(k) ? "⏳ à tourner" : "✅ à jour") + parle + sansPrompt;
         li.classList.toggle("a-jour", !indices.includes(k));
@@ -277,7 +277,7 @@ plansEl.addEventListener("change", (e) => {
     const champ = e.target.dataset.champ;
     if (!champ || champ === "idee") return;
     const p = sequenceCourante.plans[planDe(e.target)];
-    p[champ] = champ === "duree" ? Number(e.target.value) : champ === "ambiance" ? e.target.checked : e.target.value;
+    p[champ] = champ === "duree" ? Number(e.target.value) : e.target.value;
     if (champ === "enchainement" && !["rush", "transition"].includes(p.enchainement)) p.rush = null;
     p.a_jour = false;
     sequenceModifiee = true;
@@ -369,8 +369,7 @@ async function enregistrerSequence() {
         await chargerListeSequences();
         return true;
     } catch (err) {
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
         return false;
     }
 }
@@ -392,8 +391,7 @@ async function tournerSequence(plans = null) {
     if (!sequenceCourante.titre.trim()) {
         document.getElementById("titre-sequence").focus();
         const erreur = document.getElementById("erreur-sequence");
-        erreur.textContent = "Donne un titre à la séquence : ses clips seront rangés dans un dossier à son nom.";
-        erreur.hidden = false;
+        afficherErreur(erreur, "Donne un titre à la séquence : ses clips seront rangés dans un dossier à son nom.");
         return;
     }
     if ((sequenceModifiee || !sequenceCourante.id) && !(await enregistrerSequence())) return;
@@ -405,8 +403,7 @@ async function tournerSequence(plans = null) {
                              { plans: indices });
     } catch (err) {
         const erreur = document.getElementById("erreur-sequence");
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
         return;
     }
     bloquerSequence(true);
@@ -449,10 +446,9 @@ async function suivreSequence(commande, debut, estimation) {
     bobines.charger();
     if (panne || c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-sequence");
-        erreur.textContent = panne
+        afficherErreur(erreur, panne
             ? `Suivi interrompu (${panne.message}) : le tournage continue peut-être, rouvre la séquence dans un moment.`
-            : c.etat === "annule" ? messageAnnulation(c, "plan") : c.erreur;
-        erreur.hidden = false;
+            : c.etat === "annule" ? messageAnnulation(c, "plan") : c.erreur);
     } else {
         document.getElementById("film-sequence").scrollIntoView({ behavior: "smooth", block: "center" });
     }
@@ -544,16 +540,18 @@ async function lancerEssaiVoix() {
 }
 
 async function suivreEssaiVoix(id, debut) {
-    const c = await api("GET", `/api/commandes/${id}`);
     const estimation = optionsMontage.video.voix.estimation_s;
-    const ecoule = (Date.now() - debut) / 1000;
     const bloc = document.getElementById("progression-voix");
-    bloc.querySelector(".barre div").style.width = `${Math.round(100 * Math.min(1, ecoule / estimation))}%`;
-    bloc.querySelector("span").textContent = c.etat === "attente" ? `En file d'attente… ${enMinutes(ecoule)}`
-        : `${c.etape || "Préparation"} · ${Math.round(100 * c.progression)} % · ${enMinutes(ecoule)}`;
-    if (["attente", "en_cours"].includes(c.etat)) {
-        setTimeout(() => suivreEssaiVoix(id, debut), 1500);
-        return;
+    let c;
+    try {
+        c = await suivreJusquauBout(id, (r) => {
+            const ecoule = (Date.now() - debut) / 1000;
+            bloc.querySelector(".barre div").style.width = `${Math.round(100 * Math.min(1, ecoule / estimation))}%`;
+            bloc.querySelector("span").textContent = r.etat === "attente" ? `En file d'attente… ${enMinutes(ecoule)}`
+                : `${r.etape || "Préparation"} · ${Math.round(100 * r.progression)} % · ${enMinutes(ecoule)}`;
+        }, 1500);
+    } catch (err) {
+        c = { etat: "erreur", erreur: `Suivi interrompu (${err.message}) : l'essai continue peut-être.` };
     }
     bloc.hidden = true;
     document.getElementById("lancer-essai-voix").disabled = false;

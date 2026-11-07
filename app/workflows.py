@@ -5,10 +5,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-
 from app import emplacements, fiches, memo, modeles, reglages, securite
-from app.config import CONFIG, ROOT
+from app.config import ROOT
 
 DOSSIER = ROOT / "workflows"
 # Valeurs acceptées par le nœud ResolutionSelector de ComfyUI (comfy_extras/nodes_resolution.py).
@@ -212,8 +210,8 @@ class Workflow:
             if lora["fichier"] not in disponibles:
                 raise ErreurWorkflow(f"LoRA absente de modeles/{self.famille}/loras : {lora['fichier']}")
             force = float(lora["force"])
-            if not 0 <= force <= 2:
-                raise ErreurWorkflow(f"Force de LoRA entre 0 et 2 : {force}")
+            if not modeles.FORCE_LORA[0] <= force <= modeles.FORCE_LORA[1]:
+                raise ErreurWorkflow(f"Force de LoRA entre {modeles.FORCE_LORA[0]:g} et {modeles.FORCE_LORA[1]:g} : {force}")
             nid = f"aria_lora_{i}"
             api[nid] = {"class_type": "LoraLoaderModelOnly",
                         "inputs": {"lora_name": lora["fichier"], "strength_model": force, "model": precedent}}

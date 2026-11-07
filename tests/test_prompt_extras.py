@@ -35,31 +35,6 @@ def lancer(coroutine):
     return asyncio.run(coroutine)
 
 
-class Peaufiner(unittest.TestCase):
-    def test_renvoie_la_version_du_llm(self):
-        o = FauxOrchestrateur("A cinematic film still of a young woman standing in the rain.")
-        r = lancer(prompt.peaufiner(o, "Cinematic film still. A young woman in her early twenties, standing.", None, 120))
-        self.assertEqual(r["prompt"], o.reponse)
-        self.assertIn("At most 120 words", o.messages[0]["content"])
-
-    def test_cible_video_consigne_video(self):
-        o = FauxOrchestrateur('Medium shot. She whispers in French: "On décolle ce soir." Sounds: rain.')
-        lancer(prompt.peaufiner(o, 'A woman. She says in French: "On décolle ce soir."', None, 110, duree_video=8))
-        self.assertIn("Never translate the lines", o.messages[0]["content"])
-        self.assertIn("(Clip: 8 s, from text only)", o.messages[1]["content"])
-
-    def test_mineur_et_terme_sensible_ajoute_par_le_llm(self):
-        o = FauxOrchestrateur("A cheerful young person in a swimsuit on the beach.")  # le LLM a « perdu » l'âge
-        with self.assertRaises(ErreurSecurite):
-            lancer(prompt.peaufiner(o, "A teenage girl, on a beach.", None))
-
-    def test_entree_bloquee_avant_llama(self):
-        o = FauxOrchestrateur("ignoré")
-        with self.assertRaises(ErreurSecurite):
-            lancer(prompt.peaufiner(o, "A teenage girl wearing a bikini.", None))
-        self.assertIsNone(o.messages)  # Llama n'a même pas été appelé
-
-
 class Reflexion(unittest.TestCase):
     """La réflexion coûte 10 à 20 s : elle sert à la réécriture, pas à traduire « coucher de soleil »."""
 
@@ -70,10 +45,8 @@ class Reflexion(unittest.TestCase):
         lancer(prompt.traduire_precisions(o, "il pleut"))
         self.assertIs(o.options["reflechir"], False)
 
-    def test_peaufinage_et_reecriture_reflechissent(self):
+    def test_la_reecriture_reflechit(self):
         o = FauxOrchestrateur("A cinematic film still of a young woman standing in the rain.")
-        lancer(prompt.peaufiner(o, "A young woman, standing in the rain.", None))
-        self.assertNotIn("reflechir", o.options)
         lancer(prompt.reecrire(o, "une femme sous la pluie"))
         self.assertNotIn("reflechir", o.options)
 

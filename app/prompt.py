@@ -1,4 +1,4 @@
-"""Travail du LLM sur les prompts : réécriture d'une idée, consigne de retouche, peaufinage, traduction.
+"""Travail du LLM sur les prompts : réécriture d'une idée, consigne de retouche, traduction.
 
 Les consignes et les températures se règlent par GGUF dans l'onglet Réglages (data/reglages.yaml).
 La clause de protection des mineurs, elle, n'est pas modifiable : le code l'ajoute à chaque consigne.
@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from PIL import Image
 
 from app import fiches, modeles, reglages, securite, workflows
-from app.config import CONFIG
 from app.llm import ErreurLlama
 from app.modeles import DOSSIER as MODELES
 from app.orchestrateur import Orchestrateur
@@ -67,19 +66,6 @@ Rules:
 3. Keep the user's own action, target and details; add no other change, no style, no clean-up.
 4. If the instruction asks for written text, keep that text exactly, in quotes.
 5. Output only the instruction: no preamble, no explanation."""
-
-
-CONSIGNE_PEAUFINER = f"""You polish English prompts for text-to-image models.
-The user gives a prompt assembled from keywords. Rewrite it as fluent, natural English prose.
-
-Rules:
-1. Keep every element exactly: subject, age, gender, origin, body, face, hair, clothing, pose, action, setting, time, weather, style, lighting, framing, palette. Do not remove, soften, replace or censor any of them.
-2. Add nothing new: no extra characters, objects, details, style or mood.
-3. Keep the age wording exactly as given. Never make a character younger.
-4. If the prompt contains text in quotes, keep that text exactly, in quotes.
-5. {ADULTES}
-6. At most {{mots_max}} words, plain prose, no lists, no headings.
-7. Output only the prompt: no preamble, no explanation."""
 
 
 CONSIGNE_PRECISIONS = """You translate short details for a text-to-image prompt.
@@ -165,7 +151,7 @@ ENTETE_REGLES = ("Style rules of the target model. They shape the OPEN parts onl
 MOTS_MIN = 40
 MOTS_MAX_DEFAUT = {"reecriture": 120, "video": 110}  # sans modèle cible (avant : 40 à 120 mots même pour Qwen à 200)
 
-CONSIGNES_DEFAUT = {"reecriture": CONSIGNE, "retouche": CONSIGNE_RETOUCHE, "peaufinage": CONSIGNE_PEAUFINER,
+CONSIGNES_DEFAUT = {"reecriture": CONSIGNE, "retouche": CONSIGNE_RETOUCHE,
                     "precisions": CONSIGNE_PRECISIONS, "references": CONSIGNE_REFERENCES,
                     "video": CONSIGNE_VIDEO, "decoupage": CONSIGNE_DECOUPAGE}
 
@@ -325,34 +311,6 @@ async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, m
     texte = nettoyer_markdown(reponse.texte)
     securite.verifier(instruction, texte)
     return texte
-
-
-async def peaufiner(orchestrateur: Orchestrateur, assemble: str, modele: str | None = None,
-                    mots_max: int | None = None, duree_video: int | None = None,
-                    regles: list[str] | None = None) -> dict:
-    """Rend fluide un prompt assemblé par l'onglet Scénario, sans rien retirer ni ajouter.
-    `duree_video` : la cible est un modèle vidéo ; la consigne vidéo garde les répliques mot pour mot."""
-    securite.verifier(assemble)
-    modele = generaliste(modele)
-    regle = reglages.valeurs_llm(modele)
-    if duree_video:
-        echanges = [{"role": "system", "content": consigne("video", modele, mots_max, regles)},
-                    {"role": "user", "content": f"{assemble}\n\n(Clip: {duree_video} s, from text only)"}]
-    else:
-        echanges = [{"role": "system", "content": consigne("peaufinage", modele, mots_max, regles)},
-                    {"role": "user", "content": assemble}]
-    async with orchestrateur.llm(modele) as llama:
-        debut = time.perf_counter()
-        reponse = await llama.generer(
-            echanges,
-            temperature=regle["temperature_peaufinage"], max_tokens=regle["max_tokens"],
-            **reglages.echantillonnage(modele))
-        duree = time.perf_counter() - debut
-    texte = nettoyer_markdown(reponse.texte)
-    # Ensemble : un mineur de l'original reste un mineur, même si le LLM l'a reformulé.
-    securite.verifier(assemble, texte)
-    return {"prompt": texte, "modele": llama.modele.name if llama.modele else modele,
-            "duree_s": round(duree, 2), "mots": len(texte.split())}
 
 
 async def traduire_precisions(orchestrateur: Orchestrateur, precisions: str, modele: str | None = None) -> str:
