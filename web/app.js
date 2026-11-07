@@ -40,6 +40,29 @@ document.addEventListener("click", async (e) => {
     }
 });
 
+const attendre = (ms) => new Promise((fin) => setTimeout(fin, ms));
+
+// Suit une commande jusqu'au bout et rend la commande finie. Chaque suivi garde son propre id : une variante lancée
+// pendant une génération ne détourne plus le suivi de la première. Un relevé raté (serveur occupé, réseau) est
+// réessayé ; au bout de `ratesMax` d'affilée, l'erreur remonte et l'appelant débloque son formulaire.
+async function suivreJusquauBout(id, chaqueReleve, intervalle, ratesMax = 20) {
+    let rates = 0;
+    for (;;) {
+        let c;
+        try {
+            c = await api("GET", `/api/commandes/${id}`);
+            rates = 0;
+        } catch (err) {
+            if (++rates >= ratesMax) throw err;
+            await attendre(intervalle);
+            continue;
+        }
+        chaqueReleve(c);
+        if (!["attente", "en_cours"].includes(c.etat)) return c;
+        await attendre(intervalle);
+    }
+}
+
 // Message d'une commande annulée : ce qui était déjà produit reste (galerie, bobines).
 function messageAnnulation(c, nom, feminin = false) {
     const n = c.images.length;
@@ -479,8 +502,11 @@ function afficherMoteurs(e) {
     bandeau.querySelector("span").textContent = manquants.length
         ? `⚠ ${manquants.map((m) => m.nom).join(" et ")} : absent${manquants.length > 1 ? "s" : ""}, Aria ne peut pas générer sans.`
         : "";
-    if (occupe) setTimeout(chargerMoteurs, 1000);
+    clearTimeout(minuteurMoteurs);  // chaque appel relançait sa propre boucle d'une seconde : elles s'empilaient
+    if (occupe) minuteurMoteurs = setTimeout(chargerMoteurs, 1000);
 }
+
+let minuteurMoteurs = null;
 
 async function chargerMoteurs() {
     try {

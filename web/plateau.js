@@ -1,7 +1,6 @@
 // Plateau : création (idée → LLM → image), suivi de la commande, rushes et fiche détaillée.
 
 const urlImage = (id) => `/api/creations/${encodeURIComponent(id)}/image`;
-let commandeEnCours = null;
 let ficheOuverte = null;
 
 let optionsPlateau = null;
@@ -316,36 +315,53 @@ function optionsFormulaire() {
 
 async function lancerCommande(corps, url = "/api/creations", erreur = document.getElementById("erreur-creation")) {
     erreur.hidden = true;
+    let commande;
     try {
-        commandeEnCours = await api("POST", url, corps);
+        commande = await api("POST", url, corps);
     } catch (err) {
         erreur.textContent = err.message;
         erreur.hidden = false;
         return false;
     }
     document.getElementById("erreur-creation").hidden = true;
-    document.querySelectorAll("#form-creation button").forEach((b) => { b.disabled = true; });
-    document.getElementById("progression-creation").hidden = false;
-    suivreAnnulable(document.getElementById("progression-creation"), commandeEnCours.id);
-    suivreCommande(Date.now());
+    suivreCommande(commande.id, Date.now());
     return true;
 }
 
-async function suivreCommande(debut) {
-    const c = await api("GET", `/api/commandes/${commandeEnCours.id}`);
-    const bloc = document.getElementById("progression-creation");
-    const secondes = Math.round((Date.now() - debut) / 1000);
-    bloc.querySelector(".barre div").style.width = `${Math.round(100 * c.progression)}%`;
-    bloc.querySelector("span").textContent = c.etat === "attente"
-        ? `En file d'attente… ${secondes} s`
-        : `${c.etape || "Finalisation"} · ${Math.round(100 * c.progression)} % · ${secondes} s`;
+// Commandes du Plateau suivies en ce moment (création, variante, retouche) : la barre montre la dernière lancée,
+// chacune affiche son résultat en finissant, et le formulaire se débloque quand toutes sont finies.
+const suiviesPlateau = [];
 
-    if (["attente", "en_cours"].includes(c.etat)) {
-        setTimeout(() => suivreCommande(debut), 700);
-        return;
+async function suivreCommande(id, debut) {
+    const bloc = document.getElementById("progression-creation");
+    suiviesPlateau.push(id);
+    document.querySelectorAll("#form-creation button").forEach((b) => { b.disabled = true; });
+    bloc.hidden = false;
+    suivreAnnulable(bloc, id);
+    let c = null;
+    try {
+        c = await suivreJusquauBout(id, (r) => {
+            if (suiviesPlateau.at(-1) !== id) return;
+            const secondes = Math.round((Date.now() - debut) / 1000);
+            bloc.querySelector(".barre div").style.width = `${Math.round(100 * r.progression)}%`;
+            bloc.querySelector("span").textContent = r.etat === "attente"
+                ? `En file d'attente… ${secondes} s`
+                : `${r.etape || "Finalisation"} · ${Math.round(100 * r.progression)} % · ${secondes} s`;
+        }, 700);
+    } catch (err) {
+        const erreur = document.getElementById("erreur-creation");
+        erreur.textContent = `Suivi interrompu (${err.message}) : la génération continue peut-être, regarde les rushes.`;
+        erreur.hidden = false;
+    } finally {
+        suiviesPlateau.splice(suiviesPlateau.indexOf(id), 1);
+        if (suiviesPlateau.length) {
+            suivreAnnulable(bloc, suiviesPlateau.at(-1));
+        } else {
+            bloc.hidden = true;
+            document.querySelectorAll("#form-creation button").forEach((b) => { b.disabled = false; });
+        }
     }
-    bloc.hidden = true;
-    document.querySelectorAll("#form-creation button").forEach((b) => { b.disabled = false; });
+    if (!c) return;
     if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-creation");
         erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "image", true) : c.erreur;
@@ -522,6 +538,7 @@ const ANCRAGES = ["haut-gauche", "haut", "haut-droite", "gauche", "centre", "dro
 const FLECHES = ["↖", "↑", "↗", "←", "•", "→", "↙", "↓", "↘"];
 let modeRetouche = "retouche";
 let sourceRetouche = null;
+let masqueGarde = null;  // { id, image, fondu } : le masque peint attend le retour du Scénario (✍️ L'écrire au Scénario)
 let gomme = false;
 let ancrage = "centre";
 
@@ -548,12 +565,28 @@ function ouvrirRetouche(f, mode) {
     document.getElementById("fondu-retouche").value = agrandir ? 96 : 24;
     document.getElementById("erreur-retouche").hidden = true;
 
+    // Prête quand l'image est chargée et le masque gardé (même image) repeint : une retouche lancée dans la foulée
+    // (Scénario, « Retoucher ») part avec lui.
     const img = document.getElementById("image-retouche");
-    img.onload = () => {
-        canevas.width = img.naturalWidth;
-        canevas.height = img.naturalHeight;
-        ctx.clearRect(0, 0, canevas.width, canevas.height);
-    };
+    const garde = mode === "retouche" && masqueGarde?.id === f.id ? masqueGarde : null;
+    masqueGarde = null;
+    const pret = new Promise((fin) => {
+        img.onload = () => {
+            canevas.width = img.naturalWidth;
+            canevas.height = img.naturalHeight;
+            ctx.clearRect(0, 0, canevas.width, canevas.height);
+            if (!garde) return fin();
+            document.getElementById("fondu-retouche").value = garde.fondu;
+            const masque = new Image();
+            masque.onload = () => {
+                ctx.drawImage(masque, 0, 0);
+                fin();
+            };
+            masque.onerror = () => fin();
+            masque.src = garde.image;
+        };
+        img.onerror = () => fin();
+    });
     img.src = urlImage(f.id);
     if (agrandir) {
         document.getElementById("largeur-agrandir").value = Math.round(f.largeur * 1.3 / 8) * 8;
@@ -561,6 +594,7 @@ function ouvrirRetouche(f, mode) {
         choisirAncrage("centre");
     }
     document.getElementById("panneau-retouche").hidden = false;
+    return pret;
 }
 
 function fermerRetouche() {
@@ -673,6 +707,7 @@ document.getElementById("lancer-retouche").addEventListener("click", async () =>
 
 document.getElementById("vers-scenario-retouche").addEventListener("click", () => {
     const id = sourceRetouche.id;
+    masqueGarde = { id, image: canevas.toDataURL(), fondu: document.getElementById("fondu-retouche").value };
     fermerRetouche();
     ouvrirScenario("retouche", { retoucher: id });
 });
@@ -681,7 +716,7 @@ document.getElementById("vers-scenario-retouche").addEventListener("click", () =
 async function recevoirRetouche({ prompt, images, workflow, lancer }) {
     await chargerOptionsPlateau();
     document.querySelector('.onglet[data-vue="plateau"]').click();
-    ouvrirRetouche(await api("GET", `/api/creations/${encodeURIComponent(images[0])}`), "retouche");
+    await ouvrirRetouche(await api("GET", `/api/creations/${encodeURIComponent(images[0])}`), "retouche");
     document.getElementById("consigne-retouche").value = prompt;
     const select = document.getElementById("workflow-retouche");
     const ligne = [...select.options].find((o) => o.value.startsWith(`${workflow}::`));

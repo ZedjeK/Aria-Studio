@@ -895,22 +895,22 @@ label.bouton:hover {
     color: var(--discret);
 }
 
-.blocs-prompt > div:first-child .titre-bloc {
+#blocs-prompt > div:first-child .titre-bloc {
     margin-top: 0;
 }
 
-.blocs-prompt details {
+#blocs-prompt details {
     border: 1px solid var(--bord);
     border-radius: 8px;
     margin-bottom: 8px;
 }
 
-.blocs-prompt summary {
+#blocs-prompt summary {
     cursor: pointer;
     padding: 8px 12px;
 }
 
-.blocs-prompt details[open] summary {
+#blocs-prompt details[open] summary {
     border-bottom: 1px solid var(--bord);
 }
 
