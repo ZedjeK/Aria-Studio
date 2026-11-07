@@ -12,7 +12,7 @@ from pathlib import Path
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
@@ -66,6 +66,36 @@ class InterfaceSansCache(StaticFiles):
 
 app = FastAPI(title="Aria Studio", lifespan=cycle_de_vie)
 app.mount("/static", InterfaceSansCache(directory=WEB), name="static")
+
+
+def hotes_locaux() -> set[str]:
+    """Les en-têtes Host acceptés : 127.0.0.1, localhost et [::1] sur le port d'Aria (config.yaml, section app), plus
+    l'hôte de config.yaml s'il en nomme un autre (pas 0.0.0.0 ni ::, qui veulent dire « toutes les adresses »)."""
+    port = CONFIG["app"]["port"]
+    noms = {"127.0.0.1", "localhost", "[::1]"}
+    hote = str(CONFIG["app"].get("host") or "").strip()
+    if hote and hote not in ("0.0.0.0", "::", "[::]"):
+        noms.add(f"[{hote}]" if ":" in hote and not hote.startswith("[") else hote)
+    return {f"{nom}:{port}" for nom in noms}
+
+
+@app.middleware("http")
+async def local_seulement(requete: Request, suite):
+    """N'accepte que l'interface d'Aria Studio elle-même (même garde qu'Aria Pilote).
+
+    - Hôte : bloque le « DNS rebinding » (un site qui se ferait passer pour 127.0.0.1 pour lire la galerie, les
+      réglages, ou piloter ComfyUI et Llama).
+    - Origine : bloque les requêtes envoyées par une autre page ouverte dans le navigateur (quitter Aria, lancer un
+      téléchargement, enregistrer une clé…). Le navigateur n'envoie pas d'Origin pour l'interface elle-même en GET,
+      ni le lanceur ni curl : seule une origine présente et étrangère est refusée, quelle que soit la méthode.
+    """
+    hotes = hotes_locaux()
+    if requete.headers.get("host") not in hotes:
+        return JSONResponse(status_code=403, content={"detail": "Hôte refusé."})
+    origine = requete.headers.get("origin")
+    if origine is not None and origine not in {f"http://{h}" for h in hotes}:
+        return JSONResponse(status_code=403, content={"detail": "Origine refusée."})
+    return await suite(requete)
 
 
 @app.exception_handler(garde.ErreurGarde)
