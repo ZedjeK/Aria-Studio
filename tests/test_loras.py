@@ -1,5 +1,5 @@
 """LoRA : mots déclencheurs et force. Civitai n'a pas de champ « force conseillée » : la force vient des images
-d'exemple de l'auteur (civitai.usage_auteur) ; Jérémy les règle dans Ma collection (modeles.regler_lora).
+d'exemple de l'auteur (civitai.usage_auteur) ; l'utilisateur les règle dans Ma collection (modeles.regler_lora).
 Rien n'est téléchargé : registre, mémoire et dossier des modèles sont temporaires."""
 
 import json

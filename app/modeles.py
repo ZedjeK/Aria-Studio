@@ -91,15 +91,15 @@ LONGUEUR_DECLENCHEURS = 300
 
 
 def reglage_lora(cle_lora: str, registre: dict | None = None, memoire: dict | None = None) -> dict:
-    """Mots déclencheurs et force d'une LoRA : ceux que Jérémy a réglés, sinon ceux de la source (mots déclarés par
-    l'auteur, force de ses images d'exemple), sinon 1,0."""
+    """Mots déclencheurs et force d'une LoRA : ceux que l'utilisateur a réglés, sinon ceux de la source (mots
+    déclarés par l'auteur, force de ses images d'exemple), sinon 1,0."""
     retenu = (memoire if memoire is not None else _memoire_loras()).get(cle_lora, {})
     infos = (registre if registre is not None else charger_registre()).get(cle_lora) or {}
     source = ", ".join(infos.get("mots_declencheurs") or [])
     return {
         "declencheurs": retenu.get("declencheurs", source),
         "force": retenu.get("force", infos.get("force_auteur") or 1.0),
-        "regle": bool(retenu),  # réglé par Jérémy (au Plateau ou dans Ma collection)
+        "regle": bool(retenu),  # réglé par l'utilisateur (au Plateau ou dans Ma collection)
         "declencheurs_source": source,
         **{k: infos.get(k) for k in USAGE_LORA},
         "civitai": infos.get("source") == "civitai",

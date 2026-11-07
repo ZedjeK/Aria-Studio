@@ -15,7 +15,7 @@ from app.garde import ErreurGarde, Garde
 from app.orchestrateur import Orchestrateur
 
 GO = 2**30
-PROCESSUS = {  # pid : (nom, exe, RAM en Go) — ceux vus sur la machine de Jérémy cette semaine
+PROCESSUS = {  # pid : (nom, exe, RAM en Go) — ceux vus sur la machine de l'auteur cette semaine
     10: ("explorer.exe", r"C:\Windows\explorer.exe", 0.6),
     11: ("opera.exe", r"C:\Users\utilisateur\AppData\Local\Programs\Opera GX\opera.exe", 0.3),
     12: ("llama-server.exe", r"C:\Users\utilisateur\Desktop\Aria-Pilote\Aria-Pilote-0.12.0\engines\llama.cpp\llama-server.exe", 10.3),

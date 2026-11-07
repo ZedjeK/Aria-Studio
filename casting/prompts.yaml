@@ -38,7 +38,7 @@ retouche:
     - id: enseigne
       teste: le texte
       source: neon.png
-      prompt: Change the sign text to "JEREMY"
+      prompt: Change the sign text to "RENE"
     - id: aquarelle
       teste: le style
       source: miniature.png

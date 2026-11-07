@@ -1,6 +1,6 @@
 """Réglages fins des LLM et des workflows (onglet Réglages), rangés dans data/reglages.yaml.
 
-Le fichier ne contient que les changements de Jérémy : les valeurs d'origine restent dans config.yaml,
+Le fichier ne contient que les changements de l'utilisateur : les valeurs d'origine restent dans config.yaml,
 les fiches et les api.json des workflows, qui ne sont jamais modifiés. Supprimer une clé (ou tout le
 fichier) revient aux valeurs d'origine. Chaque valeur est contrôlée avant d'être enregistrée.
 
@@ -237,7 +237,7 @@ def echantillonnage(modele: str | None) -> dict:
 
 
 def consigne_llm(modele: str | None, nom: str) -> str | None:
-    """Consigne réécrite par Jérémy pour ce GGUF, ou None (consigne d'origine)."""
+    """Consigne réécrite par l'utilisateur pour ce GGUF, ou None (consigne d'origine)."""
     return (lire()["llm"].get(nom_llm(modele), {}).get("consignes") or {}).get(nom)
 
 
@@ -335,8 +335,8 @@ def params_workflow(wf) -> dict[str, Param]:
 
 
 def valeurs_workflow(wf) -> dict:
-    """Réglages de Jérémy, sinon d'origine. Un choix qui n'est plus proposé (checkpoint supprimé du dossier, sampler
-    disparu) revient à la valeur d'origine au lieu de faire échouer la génération."""
+    """Réglages de l'utilisateur, sinon d'origine. Un choix qui n'est plus proposé (checkpoint supprimé du dossier,
+    sampler disparu) revient à la valeur d'origine au lieu de faire échouer la génération."""
     propres = lire()["workflows"].get(wf.id, {})
     valeurs = {}
     for cle, p in params_workflow(wf).items():
@@ -349,7 +349,8 @@ def valeurs_workflow(wf) -> dict:
 # workflow ajoute par une LoRA (Turbo, Lightning), ou demandent d'autres steps.
 
 def loras_du_workflow(wf) -> list[str]:
-    """Nœuds LoraLoaderModelOnly livrés dans le graphe du workflow (ex. le Turbo de H3), pas ceux choisis par Jérémy."""
+    """Nœuds LoraLoaderModelOnly livrés dans le graphe du workflow (ex. le Turbo de H3), pas ceux choisis par
+    l'utilisateur."""
     return [nid for nid, n in wf.api.items() if n.get("class_type") == "LoraLoaderModelOnly"]
 
 

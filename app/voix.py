@@ -3,7 +3,7 @@
 Une voix vient :
     d'un essai de voix   H3 tourne un gros plan en cabine d'enregistrement capitonnée, sans musique ni ambiance,
                          où le personnage dit une phrase ; seul le son est gardé (FLAC) ;
-    d'un fichier audio   un enregistrement de Jérémy (wav, mp3, flac ou ogg).
+    d'un fichier audio   un enregistrement de l'utilisateur (wav, mp3, flac ou ogg).
 Essais réels du 2026-10-22 (data/tests/voix) : écart parole / bruit de fond de 82 dB en cabine, contre 13 dB pour
 le son d'un plan tourné dans un hangar (la référence du mode Auto) ; le bruit d'une référence passe dans les plans
 qui la reçoivent (14 dB, contre 48 dB avec la voix de la cabine). La référence transmet le timbre ; le ton suit
@@ -165,7 +165,7 @@ def options() -> dict:
             "estimation_s": round(plateau.QUALITES_VIDEO[QUALITE]["estimation_s"] * 1.4)}
 
 
-# Fichier audio de Jérémy
+# Fichier audio de l'utilisateur
 
 def format_audio(son: bytes) -> str | None:
     """Format d'après les premiers octets (jamais d'après le nom)."""
@@ -197,7 +197,7 @@ def duree_audio(son: bytes, format_: str) -> float | None:
 
 
 def importer(son: bytes, nom: str, nom_origine: str = "") -> dict:
-    """Une voix enregistrée par Jérémy, gardée aussitôt dans la bibliothèque."""
+    """Une voix enregistrée par l'utilisateur, gardée aussitôt dans la bibliothèque."""
     nom = _nom_valide(nom)
     if len(son) > TAILLE_MAX:
         raise ErreurVoix(f"Fichier audio de {TAILLE_MAX // (1024 * 1024)} Mo au plus")

@@ -25,7 +25,7 @@ const nouveauPlan = (enchainement) => ({ idee: "", prompt: "", duree: 5, enchain
 const parlePlan = (p) => REPLIQUE.test(`${p.idee} ${p.prompt ?? ""}`);
 
 function sequenceVide() {
-    // Rapide par défaut : choix de Jérémy pour les séquences (les plans qui parlent montent seuls à 12 steps).
+    // Rapide par défaut : choix de l'auteur pour les séquences (les plans qui parlent montent seuls à 12 steps).
     return { id: null, titre: "", qualite: "rapide", format: "16:9 (Widescreen)", llm: null, film: null,
              casting: { personnage: null, voix: "auto", ambiance: "", contrainte: "", reference_partout: true },
              loras: [], plans: [nouveauPlan("rush")] };

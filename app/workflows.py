@@ -94,7 +94,7 @@ class Workflow:
         """Copie de api.json avec les valeurs injectées (défauts de la fiche complétés par `valeurs`)."""
         api = copy.deepcopy(self.api)
         entrees = self.fiche["entrees"]
-        # Ordre de priorité : valeurs de l'appel > réglages de Jérémy (data/reglages.yaml) > défauts de la fiche.
+        # Ordre de priorité : valeurs de l'appel > réglages de l'utilisateur (data/reglages.yaml) > défauts de la fiche.
         regle = reglages.valeurs_workflow(self)
         if valeurs.get("modele") is None:  # rien de choisi : le modèle par défaut des réglages, pas l'origine
             valeurs = {k: v for k, v in valeurs.items() if k != "modele"}

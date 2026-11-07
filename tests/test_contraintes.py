@@ -56,7 +56,7 @@ class Contrainte(Base):
         s = sequences.lire(self.creer(casting={"contrainte": CONTRAINTE},
                                       contrainte_en={"fr": CONTRAINTE, "en": EN})["id"])
         self.assertEqual(sequences.contrainte_tournage(s), EN)
-        # Une traduction d'une autre contrainte est ignorée ; sans traduction, le texte de Jérémy tel quel.
+        # Une traduction d'une autre contrainte est ignorée ; sans traduction, le texte de l'utilisateur tel quel.
         s = sequences.lire(self.creer(casting={"contrainte": CONTRAINTE}, contrainte_en={"fr": "autre", "en": "x"})["id"])
         self.assertNotIn("contrainte_en", s)
         self.assertEqual(sequences.contrainte_tournage(s), CONTRAINTE)

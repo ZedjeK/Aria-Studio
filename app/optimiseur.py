@@ -1,7 +1,7 @@
 """⚡ Optimiser (onglet Réglages) : propositions de réglages selon le matériel et les recommandations des modèles.
 
 Rien n'est appliqué ici : on renvoie un tableau « actuel → proposé », avec la raison et la source de chaque
-ligne, et c'est Jérémy qui coche ce qu'il garde (l'interface passe ensuite par les routes de réglages).
+ligne, et c'est l'utilisateur qui coche ce qu'il garde (l'interface passe ensuite par les routes de réglages).
 
 Sources des recommandations, relevées sur les pages officielles des modèles :
     workflows : bloc « recommandations » de workflows/<id>/fiche.yaml ;

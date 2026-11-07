@@ -14,5 +14,53 @@
     "miniature.png": {
         "banc": "2026-10-19_222230_texte_vers_image",
         "image": "krea2_turbo/miniature_1234.png"
+    },
+    "pilote.png": {
+        "banc": null,
+        "image": null,
+        "provenance": "Générée hors banc du Casting (préfixe ComfyUI « aria_atelier ») : le banc et l'image d'origine sont inconnus. Le reste est lu dans le chunk PNG tEXt « prompt » écrit par ComfyUI (graphe identique à workflows/qwen_image_2_1/api.json, hors format et préfixe).",
+        "workflow": "qwen_image_2_1",
+        "modeles": {
+            "unet": "qwen_image_2.1_int8_convrot.safetensors",
+            "clip": "qwen3vl_8b_int8_convrot.safetensors",
+            "vae": "qwen_image_2.1_vae_bf16.safetensors"
+        },
+        "licence_modele": "qwen-research (workflows/qwen_image_2_1/fiche.yaml : usage non commercial seulement)",
+        "reglages": {
+            "format": "2:3 (Portrait Photo)",
+            "taille": "832x1248",
+            "seed": 98974460726024,
+            "steps": 25,
+            "cfg": 1.0,
+            "sampler": "euler",
+            "scheduler": "simple"
+        },
+        "date": "inconnue (au plus tard le 2026-10-24, date du commit qui l'a ajoutée)",
+        "auteur_du_prompt": "inconnu (écrit à la main ou par le LLM du Scénario : rien ne l'indique)",
+        "version_comfyui": "inconnue"
+    },
+    "dragon.png": {
+        "banc": null,
+        "image": null,
+        "provenance": "Générée hors banc du Casting (préfixe ComfyUI « aria_atelier ») : le banc et l'image d'origine sont inconnus. Le reste est lu dans le chunk PNG tEXt « prompt » écrit par ComfyUI (graphe identique à workflows/qwen_image_2_1/api.json, hors format et préfixe).",
+        "workflow": "qwen_image_2_1",
+        "modeles": {
+            "unet": "qwen_image_2.1_int8_convrot.safetensors",
+            "clip": "qwen3vl_8b_int8_convrot.safetensors",
+            "vae": "qwen_image_2.1_vae_bf16.safetensors"
+        },
+        "licence_modele": "qwen-research (workflows/qwen_image_2_1/fiche.yaml : usage non commercial seulement)",
+        "reglages": {
+            "format": "16:9 (Widescreen)",
+            "taille": "1376x768",
+            "seed": 165502114357557,
+            "steps": 25,
+            "cfg": 1.0,
+            "sampler": "euler",
+            "scheduler": "simple"
+        },
+        "date": "inconnue (au plus tard le 2026-10-24, date du commit qui l'a ajoutée)",
+        "auteur_du_prompt": "inconnu (écrit à la main ou par le LLM du Scénario : rien ne l'indique)",
+        "version_comfyui": "inconnue"
     }
 }

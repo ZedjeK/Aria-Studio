@@ -13,7 +13,7 @@ reecriture:
       prompt: trois chats noirs assis sur un muret, un seul a les yeux verts
     - id: enseigne
       teste: le texte à garder
-      prompt: une enseigne de bar où il est écrit « Chez Jérémy »
+      prompt: une enseigne de bar où il est écrit « Chez René »
     - id: bretagne
       teste: l'expression idiomatique
       prompt: un temps de chien sur la côte bretonne, un phare dans la tempête

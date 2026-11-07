@@ -1,5 +1,5 @@
 """Le Plateau et le Montage tournent le prompt tel quel : le LLM n'écrit qu'au Scénario (refonte du 2026-11-06).
-Origine : la réécriture libre du Plateau et du Montage déformait le brouillon de Jérémy. Rien n'est lancé."""
+Origine : la réécriture libre du Plateau et du Montage déformait le brouillon de l'utilisateur. Rien n'est lancé."""
 
 import unittest
 from types import SimpleNamespace
