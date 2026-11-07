@@ -134,29 +134,16 @@ def copier_code(dest):
     print(f"  {n} fichiers")
 
 
-def icone(cible):
-    """Icône d'Aria : un « A » rose néon sur fond nuit, aux tailles de Windows."""
-    from PIL import Image, ImageDraw, ImageFont
-
-    taille = 256
-    img = Image.new("RGBA", (taille, taille), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.rounded_rectangle((8, 8, taille - 8, taille - 8), radius=48, fill=(13, 13, 20, 255), outline=(255, 46, 136, 255),
-                        width=10)
-    try:
-        police = ImageFont.truetype("segoeuib.ttf", 170)
-    except OSError:
-        police = ImageFont.load_default(170)
-    d.text((taille / 2, taille / 2 + 6), "A", font=police, fill=(255, 46, 136, 255), anchor="mm")
-    img.save(cible, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+# Icône du lanceur : le logo de la famille Aria (web/logo.svg, clap orange), rendu avec Chromium aux tailles de
+# Windows. Le .ico est versionné : la construction n'a rien à dessiner.
+ICONE = ROOT / "tools" / "launcher" / "aria-studio.ico"
 
 
 def compiler_lanceur(dest):
     etape(f"Lanceur {EXE}")
     if not CSC.exists():
         sys.exit(f"Compilateur C# introuvable : {CSC}")
-    ico = CACHE / "aria.ico"
-    icone(ico)
+    ico = ICONE
     subprocess.run([str(CSC), "/nologo", "/target:winexe", "/optimize+", f"/out:{dest / EXE}", f"/win32icon:{ico}",
                     "/codepage:65001", "/reference:System.Windows.Forms.dll", str(ROOT / "tools" / "launcher" / "Launcher.cs")],
                    check=True)

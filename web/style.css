@@ -1,12 +1,45 @@
+/* Polices de la famille Aria, embarquées (licence SIL OFL 1.1, voir polices/OFL-*.txt). */
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 500; font-display: swap; src: url("polices/space-grotesk-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 500; font-display: swap; src: url("polices/space-grotesk-latin-ext-500-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 600; font-display: swap; src: url("polices/space-grotesk-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 600; font-display: swap; src: url("polices/space-grotesk-latin-ext-600-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 700; font-display: swap; src: url("polices/space-grotesk-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 700; font-display: swap; src: url("polices/space-grotesk-latin-ext-700-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("polices/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("polices/ibm-plex-mono-latin-ext-400-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("polices/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("polices/ibm-plex-mono-latin-ext-500-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("polices/ibm-plex-mono-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("polices/ibm-plex-mono-latin-ext-600-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
 :root {
-    --fond: #0d0d14;
-    --carte: #161622;
-    --bord: #2a2a3d;
-    --texte: #e6e6f0;
-    --discret: #8a8aa3;
-    --neon: #ff2e88;
-    --ok: #3ee6a8;
-    --ko: #ff5c5c;
+    /* Palette de la famille Aria : mêmes valeurs qu'Aria Vault, Scope et Shield. */
+    --bg: #030812;
+    --surface: #06101f;
+    --surface-sunken: #040b17;
+    --hover: #0b1a30;
+    --line: #1a2d4d;
+    --line-strong: #27406b;
+    --text: #ddebff;
+    --muted: #93a8c8;
+    --accent: #7df9ff;    /* actif, OK */
+    --accent-2: #5c8bff;  /* bleu du logo */
+    --action: #ff8a1f;    /* orange du logo : actions principales */
+    --on-action: #1a0b00;
+    --warn: #ffd166;
+    --danger: #ff5c7a;
+    --font-display: "Space Grotesk", system-ui, sans-serif;
+    --font-body: "IBM Plex Mono", ui-monospace, monospace;
+
+    /* Noms historiques d'Aria Studio, branchés sur la palette. */
+    --fond: var(--bg);
+    --carte: var(--surface);
+    --bord: var(--line);
+    --texte: var(--text);
+    --discret: var(--muted);
+    --neon: var(--accent);
+    --ok: var(--accent);
+    --ko: var(--danger);
 }
 
 * {
@@ -22,7 +55,7 @@ body {
     margin: 0;
     background: var(--fond);
     color: var(--texte);
-    font-family: "Segoe UI", system-ui, sans-serif;
+    font-family: var(--font-body);
 }
 
 main {
@@ -31,17 +64,30 @@ main {
     padding: 48px 16px;
 }
 
+h1, h2, h3, h4, nav button {
+    font-family: var(--font-display);
+}
+
 h1 {
+    display: flex;
+    align-items: center;
+    gap: 14px;
     margin: 0;
     font-size: 2.4rem;
-    color: var(--neon);
-    text-shadow: 0 0 12px rgba(255, 46, 136, 0.6);
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.02em;
+}
+
+h1 .logo {
+    width: 48px;   /* taille commune du logo d'en-tête des applis Aria */
+    height: 48px;
 }
 
 h1 span {
-    color: var(--texte);
-    text-shadow: none;
-    font-weight: 300;
+    color: var(--accent);
+    text-shadow: 0 0 12px rgba(125, 249, 255, 0.5);
+    font-weight: 500;
 }
 
 .sous-titre {
@@ -68,7 +114,7 @@ h1 span {
     list-style: none;
     margin: 0;
     padding: 0;
-    font-family: "Cascadia Code", Consolas, monospace;
+    font-family: var(--font-body);
 }
 
 #etat li {
@@ -100,11 +146,22 @@ button:disabled {
     cursor: not-allowed;
 }
 
-button.actif,
+button.actif {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 button.principal {
-    background: var(--neon);
-    border-color: var(--neon);
-    color: #fff;
+    background: var(--action);
+    border-color: var(--action);
+    color: var(--on-action);
+    font-weight: 600;
+}
+
+button.principal:hover:not(:disabled) {
+    border-color: var(--action);
+    filter: brightness(1.1);
 }
 
 button.petit {
@@ -415,11 +472,11 @@ body.large main {
 .conseil-loras {
     margin: 6px 0 0;
     font-size: 0.8rem;
-    color: #ffc857;
+    color: var(--warn);
 }
 
 .lora .valeur {
-    font-family: "Cascadia Code", Consolas, monospace;
+    font-family: var(--font-body);
     font-size: 0.85rem;
     color: var(--neon);
 }
@@ -491,7 +548,7 @@ body.large main {
 
 .vignettes img:hover {
     border-color: var(--neon);
-    box-shadow: 0 0 10px rgba(255, 46, 136, 0.5);
+    box-shadow: 0 0 10px rgba(125, 249, 255, 0.5);
 }
 
 .voile {
@@ -502,7 +559,7 @@ body.large main {
     align-items: center;
     justify-content: center;
     padding: 16px;
-    background: rgba(5, 5, 10, 0.85);
+    background: rgba(3, 8, 18, 0.85);
 }
 
 .voile[hidden] {
@@ -577,7 +634,7 @@ body.large main {
     background: var(--carte);
     border-color: var(--neon);
     color: var(--neon);
-    box-shadow: 0 0 8px rgba(255, 46, 136, 0.5);
+    box-shadow: 0 0 8px rgba(125, 249, 255, 0.5);
 }
 
 .toile {
@@ -620,6 +677,7 @@ body.large main {
 .ancrages button.actif {
     background: var(--neon);
     border-color: var(--neon);
+    color: var(--bg);
 }
 
 .apercu-agrandir {
@@ -787,7 +845,7 @@ label.bouton:hover {
 }
 
 .vram-juste {
-    color: #ffc857;
+    color: var(--warn);
 }
 
 .vram-deborde {
@@ -933,7 +991,7 @@ label.bouton:hover {
     margin: 8px 0;
     padding: 0;
     font-size: 0.8rem;
-    color: #ffc857;
+    color: var(--warn);
 }
 
 .etiquettes {
@@ -1068,8 +1126,8 @@ button.de:hover:not(:disabled) {
     color: var(--neon);
     font-size: 1.6rem;
     text-align: center;
-    text-shadow: 0 0 12px rgba(255, 46, 136, 0.6);
-    box-shadow: 0 0 24px rgba(255, 46, 136, 0.25) inset;
+    text-shadow: 0 0 12px rgba(125, 249, 255, 0.6);
+    box-shadow: 0 0 24px rgba(125, 249, 255, 0.25) inset;
 }
 
 .voile-depot .discret {
@@ -1179,7 +1237,7 @@ button.restaurer {
 }
 
 .consignes textarea {
-    font-family: "Cascadia Code", Consolas, monospace;
+    font-family: var(--font-body);
     font-size: 0.8rem;
     line-height: 1.45;
 }
@@ -1229,7 +1287,7 @@ button.restaurer {
 
 .tableau-optimiser .valeurs {
     white-space: nowrap;
-    font-family: "Cascadia Code", Consolas, monospace;
+    font-family: var(--font-body);
 }
 
 .tableau-optimiser .valeurs strong {
@@ -1269,7 +1327,7 @@ nav {
 
 .pastille.actif {
     color: var(--ok);
-    text-shadow: 0 0 8px rgba(62, 230, 168, 0.6);
+    text-shadow: 0 0 8px rgba(125, 249, 255, 0.6);
 }
 
 .pastille.veille {
@@ -1281,11 +1339,11 @@ nav {
 }
 
 .vram-direct {
-    font-family: "Cascadia Code", Consolas, monospace;
+    font-family: var(--font-body);
 }
 
 .vram-direct.alerte-vram {
-    color: #ffb347;
+    color: var(--warn);
 }
 
 /* Garde-VRAM : une demande attend que d'autres applis rendent la carte. */
@@ -1296,9 +1354,9 @@ nav {
     gap: 8px 12px;
     margin: 12px 0 0;
     padding: 10px 14px;
-    border: 1px solid #ffb347;
+    border: 1px solid var(--warn);
     border-radius: 8px;
-    background: rgba(255, 179, 71, 0.08);
+    background: rgba(255, 209, 102, 0.08);
     font-size: 0.9rem;
 }
 
@@ -1395,7 +1453,7 @@ button.sous-onglet.actif {
 .emplacement.vide:hover,
 .emplacement.survol {
     border-color: var(--neon);
-    box-shadow: 0 0 12px rgba(255, 46, 136, 0.35) inset;
+    box-shadow: 0 0 12px rgba(125, 249, 255, 0.35) inset;
 }
 
 .emplacement.plein {
@@ -1466,7 +1524,7 @@ button.vue-rush .nombre {
 
 button.vue-rush.survol {
     border-color: var(--neon);
-    box-shadow: 0 0 10px rgba(255, 46, 136, 0.5);
+    box-shadow: 0 0 10px rgba(125, 249, 255, 0.5);
 }
 
 button.vue-rush.nouveau {
@@ -1519,7 +1577,7 @@ button.danger:not(:disabled) {
     opacity: 1;
     outline: 3px solid var(--neon);
     outline-offset: -3px;
-    box-shadow: 0 0 12px rgba(255, 46, 136, 0.6);
+    box-shadow: 0 0 12px rgba(125, 249, 255, 0.6);
 }
 
 .pied-corbeille {
@@ -1579,7 +1637,7 @@ button.danger:not(:disabled) {
 
 .vignettes video:hover {
     border-color: var(--neon);
-    box-shadow: 0 0 10px rgba(255, 46, 136, 0.5);
+    box-shadow: 0 0 10px rgba(125, 249, 255, 0.5);
 }
 
 /* Les clips du Montage : plus grands que les images, en 16:9, le clip entier visible (vertical compris). */
@@ -1607,7 +1665,7 @@ button.danger:not(:disabled) {
     opacity: 1;
     outline: 3px solid var(--neon);
     outline-offset: -3px;
-    box-shadow: 0 0 12px rgba(255, 46, 136, 0.6);
+    box-shadow: 0 0 12px rgba(125, 249, 255, 0.6);
 }
 
 #video-clip {
@@ -1804,7 +1862,7 @@ button.onglet-casting.actif {
 }
 
 .plan-sequence.a-jour {
-    border-left-color: #3ddc97;
+    border-left-color: var(--accent);
 }
 
 .entete-plan {
@@ -2026,7 +2084,7 @@ button.onglet-scenario.actif {
 }
 
 .plan-scenario.aide-ouverte {
-    box-shadow: 0 0 10px rgba(255, 46, 136, 0.35);
+    box-shadow: 0 0 10px rgba(125, 249, 255, 0.35);
 }
 
 .entete-plan-scenario {
@@ -2052,11 +2110,11 @@ button.onglet-scenario.actif {
 }
 
 .etat-plan.pret {
-    color: #5ee0a0;
+    color: var(--accent);
 }
 
 .etat-plan.perime {
-    color: #ffc857;
+    color: var(--warn);
 }
 
 .actions-plan {
@@ -2155,11 +2213,11 @@ button.onglet-scenario.actif {
 }
 
 .resume-sequence li.pret {
-    border-left-color: #5ee0a0;
+    border-left-color: var(--accent);
 }
 
 .resume-sequence li.perime {
-    border-left-color: #ffc857;
+    border-left-color: var(--warn);
 }
 
 .resume-sequence .texte-resume {
@@ -2212,7 +2270,7 @@ button.onglet-scenario.actif {
     padding: 10px 14px;
     border: 1px solid var(--neon);
     border-radius: 8px;
-    background: rgba(255, 46, 136, 0.08);
+    background: rgba(125, 249, 255, 0.08);
     font-size: 0.9rem;
 }
 
@@ -2248,7 +2306,7 @@ button.onglet-scenario.actif {
 }
 
 .avertissement-dossier {
-    color: #ffc857;
+    color: var(--warn);
     font-size: 0.85rem;
     margin: 0 0 10px;
 }
@@ -2657,7 +2715,7 @@ button.quitter-appli:hover {
 }
 
 .textes-plan textarea.manquant {
-    border-color: #ffc857;
+    border-color: var(--warn);
 }
 
 /* Scénario, onglet Libre : la conversation et la fiche « Ce que j'ai compris ». */
@@ -2917,11 +2975,11 @@ button.onglet-liste.actif {
 
 .filtres-loras button.actif {
     border-color: var(--neon);
-    box-shadow: 0 0 8px rgba(255, 46, 136, 0.35);
+    box-shadow: 0 0 8px rgba(125, 249, 255, 0.35);
 }
 
 .badge.usage-lora {
-    border-color: rgba(255, 46, 136, 0.45);
+    border-color: rgba(125, 249, 255, 0.45);
 }
 
 /* LoRA d'un clip (Montage) et d'une séquence : sous leurs réglages. */

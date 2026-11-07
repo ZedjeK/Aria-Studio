@@ -1,4 +1,8 @@
-# Aria - Studio
+<p align="center">
+  <img src="docs/logo.png" width="160" alt="Logo d'Aria Studio : un A néon glitché avec un clap de cinéma orange">
+</p>
+
+<h1 align="center">Aria Studio</h1>
 
 Un studio de génération d'images et de vidéos **100 % local**, piloté depuis le navigateur. Tu composes ton idée
 en français au Scénario, un LLM local t'aide à en faire un prompt fidèle, et ta carte graphique tourne exactement ce
@@ -199,5 +203,7 @@ sont remplacés. Avec `--sans-installer`, elle reste dans `.build_cache\staging`
 
 ## Licence
 
-Le code d'Aria - Studio est sous [licence MIT](LICENSE). Les moteurs et les modèles qu'il télécharge gardent leur
-propre licence.
+Le code d'Aria Studio est sous [licence MIT](LICENSE). Les moteurs et les modèles qu'il télécharge gardent leur
+propre licence. Les polices de l'interface, [Space Grotesk](https://github.com/floriankarsten/space-grotesk) et
+[IBM Plex Mono](https://github.com/IBM/plex), sont embarquées dans `web/polices/` sous licence SIL Open Font
+License 1.1 (textes joints).
