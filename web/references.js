@@ -8,8 +8,8 @@ const refsScenario = { role: "inspirer", inspirer: [], variation: null, liberte:
 const AIDES_REFERENCE = {
     inspirer: "Jusqu'à 3 images : cite-les dans ton idée (« la femme de l'image 1 sur le dragon de l'image 2 »). Le "
         + "prompt partira vers un modèle d'édition qui les reçoit.",
-    variation: "Une seule image : sa composition est gardée, ton idée dit ce qui change. Plus de liberté = plus de "
-        + "changements.",
+    variation: "Une seule image : sa composition est gardée, ton idée dit ce qui change. La force du changement "
+        + "(Liberté) se règle au Plateau.",
     retouche: "L'image à retoucher : le LLM la regarde pour écrire une consigne qui lui correspond. Le masque se "
         + "dessine ensuite dans le panneau de retouche.",
     clip: "Le rush à animer : il devient la première image du clip. Sans lui, le clip part du texte seul.",
@@ -56,10 +56,7 @@ function rendreReferencesScenario() {
     const max = seule ? 1 : (optionsPlateau?.references_max ?? 3);
     document.getElementById("cases-reference-scenario").innerHTML = Array.from({ length: max }, (_, i) =>
         caseReference(ids[i] ?? null, i, TITRES_CASE[formeScenario] ?? "Clique pour choisir un rush")).join("");
-    document.getElementById("bloc-liberte-scenario").hidden = seule !== "variation";
     document.querySelector(`input[name="role-reference"][value="${refsScenario.role}"]`).checked = true;
-    document.getElementById("liberte-scenario").value = refsScenario.liberte;
-    document.getElementById("valeur-liberte-scenario").textContent = virgule(refsScenario.liberte);
     document.getElementById("aide-reference-scenario").textContent =
         AIDES_REFERENCE[formeScenario === "image" ? refsScenario.role : formeScenario];
 }
@@ -100,8 +97,3 @@ document.querySelectorAll('input[name="role-reference"]').forEach((radio) => rad
     referencesChangees();
 }));
 
-document.getElementById("liberte-scenario").addEventListener("input", (e) => {
-    refsScenario.liberte = Number(e.target.value);
-    document.getElementById("valeur-liberte-scenario").textContent = virgule(refsScenario.liberte);
-    garderBrouillon();
-});

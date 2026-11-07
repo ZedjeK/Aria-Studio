@@ -14,7 +14,8 @@ let formeScenario = "image";  // l'atelier : image, retouche, clip ou sequence
 let ongletListe = "sujet";
 const ciblesParForme = { image: null, video: null, inspirer: null, variation: null, retouche: null };  // modèle cible
 const ateliers = {};  // atelier → { idee, final (prompt final), echanges (chat d'aide), dernier (son dernier tour) }
-const atelier = (nom = formeScenario) => (ateliers[nom] ??= { idee: "", final: "", echanges: [], dernier: null });
+const atelier = (nom = formeScenario) => (ateliers[nom] ??= { idee: "", final: "", echanges: [], dernier: null,
+                                                            llm: null });  // llm : celui qui a écrit le prompt final
 
 const IDEES = {
     image: ["2 · Ton idée", "Ton idée, en français, comme elle vient : une samouraï androïde sous la pluie à Tokyo, "
@@ -165,14 +166,33 @@ function choisirListe(onglet) {
 }
 
 // Le prompt final : ce qui part, tel quel. ✨ Optimiser, 💬 Aide ou « Utiliser tel quel » le posent ; tu le retouches.
-function poserFinal(texte) {
+function poserFinal(texte, llm = null) {
     atelier().final = texte;
+    atelier().llm = llm;
     document.getElementById("prompt-final").value = texte;
     majFinal();
     garderBrouillon();
 }
 
+// Ce que le Plateau, le panneau de retouche ou le Montage ajouteront au prompt (leurs propres réglages).
+function majPartiraAvec() {
+    const texteDe = (id) => document.getElementById(id)?.selectedOptions?.[0]?.textContent?.trim() ?? "";
+    const actives = (id) => document.querySelectorAll(`#${id} .lora input[type=checkbox]:checked`).length;
+    const loras = (id) => (actives(id) ? ` · ${actives(id)} LoRA` : "");
+    const lignes = {
+        image: () => `${texteDe("nombre-creation") || 1} image(s) · ${texteDe("format-creation") || "format du Plateau"}`
+            + `${loras("loras-creation")}`,
+        retouche: () => `le masque et le fondu se règlent au panneau de retouche${loras("loras-retouche")}`,
+        clip: () => `${texteDe("nombre-montage") || 1} clip(s) · ${dureeClip()} s · ${texteDe("qualite-montage")
+            .split(" · ")[0] || "qualité du Montage"}${loras("loras-montage")}`,
+    };
+    const ligne = lignes[formeScenario];
+    document.getElementById("partira-avec").textContent = ligne
+        ? `Partira avec : ${ligne()} (réglages du ${formeScenario === "clip" ? "Montage" : "Plateau"})` : "";
+}
+
 function majFinal() {
+    majPartiraAvec();
     const texte = atelier().final.trim();
     const mots = compterMots(texte);
     const max = assemblagePrompt?.mots_max;
@@ -201,7 +221,9 @@ function garderBrouillon() {
                        etats: etatsPrompt, llms: llmsChoisis, references: refsScenario, ateliers,
                        sequence: { reference: decoupage.reference, contrainte: decoupage.contrainte,
                                    contrainteEn: decoupage.contrainteEn, plans: decoupage.plans, alertes: decoupage.alertes,
-                                   avecMusique: decoupage.avecMusique, musique: decoupage.musique } };
+                                   avecMusique: decoupage.avecMusique, musique: decoupage.musique,
+                                   sequenceId: decoupage.sequenceId,
+                                   titre: document.getElementById("titre-sequence-scenario").value } };
         try {
             localStorage.setItem(BROUILLON, JSON.stringify(etat));
             document.getElementById("brouillon-scenario").textContent = "✓ brouillon gardé";
@@ -232,6 +254,8 @@ function relireBrouillon() {
     decoupage.contrainte = s.contrainte ?? "";
     decoupage.contrainteEn = s.contrainteEn ?? null;
     decoupage.alertes = Array.isArray(s.alertes) ? s.alertes : [];
+    decoupage.sequenceId = s.sequenceId ?? null;
+    document.getElementById("titre-sequence-scenario").value = s.titre ?? "";
     if (Array.isArray(s.plans) && s.plans.length >= 2) {
         decoupage.plans = s.plans.map(normaliserPlan);  // decoupage.js : les anciens plans n'avaient pas de réplique
         decoupagePret = false;  // preparerDecoupage remplit les listes sans écraser ces plans
@@ -567,12 +591,23 @@ async function avecLlama(action) {
     occupePrompt = true;
     majBoutonsPrompt();
     erreur.hidden = true;
+    // Pendant que le LLM écrit, le message compte les secondes ; le message final (durée, mots) reste tel quel.
+    let message = "";
+    const debut = Date.now();
+    const afficher = (enCours) => {
+        statut.textContent = enCours && message ? `${message} · ${Math.round((Date.now() - debut) / 1000)} s` : message;
+        statut.hidden = !message;
+    };
+    const minuteur = setInterval(() => afficher(true), 1000);
     try {
-        await action((message) => {
-            statut.textContent = message;
-            statut.hidden = !message;
+        await action((m) => {
+            message = m;
+            afficher(true);
         });
+        clearInterval(minuteur);
+        afficher(false);
     } catch (err) {
+        clearInterval(minuteur);
         statut.hidden = true;
         afficherErreur(erreur, err.message);
     } finally {
@@ -618,7 +653,7 @@ document.getElementById("optimiser-scenario").addEventListener("click", () => {
             atelier: formeScenario, idee, complements: comp, images, role: roleReference(), workflow: ciblePrompt(),
             llm: llmAtelier(), duree: dureeClip(),
         });
-        poserFinal(r.prompt);
+        poserFinal(r.prompt, llmAtelier());
         statut(`${nomLlm()} · ${r.duree_s} s · ${r.mots} mots`);
     });
 });
@@ -637,7 +672,7 @@ async function envoyer(creer) {
     const prompt = atelier().final.trim();
     if (!prompt) return;
     const envoi = { prompt, workflow: ciblePrompt(), images: imagesReference(), role: roleReference(),
-                    liberte: refsScenario.liberte, duree: dureeClip(), lancer: creer };
+                    duree: dureeClip(), lancer: creer, idee: atelier().idee.trim(), llm: atelier().llm };
     if (formeScenario === "retouche") await recevoirRetouche(envoi);  // plateau.js
     else await (cibleVideo() ? recevoirAuMontage(envoi) : recevoirAuPlateau(envoi));
 }

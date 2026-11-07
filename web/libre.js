@@ -67,6 +67,7 @@ async function envoyerLibre(texte) {
     if (!texte || occupePrompt) return;
     const a = conversationActive();
     const plan = planAide();  // un plan de la séquence, gardé même si on change de plan pendant que le LLM écrit
+    const llm = llmAtelier();
     const forme = plan !== null ? "plan" : formeScenario;
     const erreur = document.getElementById("erreur-libre");
     const statut = document.getElementById("statut-libre");
@@ -94,9 +95,10 @@ async function envoyerLibre(texte) {
             a.idee = r.prompt;
             if (formeScenario === forme) document.getElementById("idee-scenario").value = r.prompt;
         } else if (r.prompt && formeScenario === forme) {
-            poserFinal(r.prompt);
+            poserFinal(r.prompt, llm);
         } else if (r.prompt) {
             a.final = r.prompt;
+            a.llm = llm;
         }
         statut.textContent = `${r.duree_s} s`;
         document.getElementById("message-libre").value = "";

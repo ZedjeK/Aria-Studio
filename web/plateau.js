@@ -27,8 +27,15 @@ function rendreLoras(idConteneur, w, choisies = null) {
     }
     const avant = Object.fromEntries((choisies ? choisies.map((l) => ({ ...l, actif: true }))
         : lorasChoisies(idConteneur, true)).map((l) => [l.fichier, l]));
-    conteneur.innerHTML = `<h3>LoRAs · ${echapper(w.famille)}</h3>` + (w.loras.length
-        ? w.loras.map((l) => {
+    if (!w.loras.length) {
+        conteneur.innerHTML = `<h3>LoRAs · ${echapper(w.famille)}</h3>
+            <p class="discret">Aucune LoRA : dépose des .safetensors dans modeles/${echapper(w.famille)}/loras.</p>`;
+        return;
+    }
+    const ouvert = conteneur.querySelector("details")?.open ?? w.loras.some((l) => avant[l.fichier]?.actif);
+    conteneur.innerHTML = `<details class="choix-loras" ${ouvert ? "open" : ""}>
+        <summary><h3>LoRAs · ${echapper(w.famille)} <span class="compte-loras"></span></h3></summary>`
+        + w.loras.map((l) => {
             const a = avant[l.fichier];
             const force = a ? a.force : l.force;
             return `<div class="lora ${a?.actif ? "active" : ""}" data-fichier="${echapper(l.fichier)}">
@@ -38,14 +45,17 @@ function rendreLoras(idConteneur, w, choisies = null) {
                 <input type="text" placeholder="mots déclencheurs (facultatif)" value="${echapper(a ? a.declencheurs : l.declencheurs)}">
             </div>`;
         }).join("") + `<p class="conseil-loras" hidden>💡 Plusieurs LoRAs cochées : baisse un peu la force de chacune
-            (vers 0,6 à 0,8), sinon elles se marchent dessus et « cuisent » l'image.</p>`
-        : `<p class="discret">Aucune LoRA : dépose des .safetensors dans modeles/${echapper(w.famille)}/loras.</p>`);
+            (vers 0,6 à 0,8), sinon elles se marchent dessus et « cuisent » l'image.</p></details>`;
     majConseilLoras(conteneur);
 }
 
+// Le conseil quand plusieurs LoRAs sont cochées, et le compte dans le titre replié.
 function majConseilLoras(conteneur) {
+    const cochees = conteneur.querySelectorAll(".lora input[type=checkbox]:checked").length;
     const conseil = conteneur.querySelector(".conseil-loras");
-    if (conseil) conseil.hidden = conteneur.querySelectorAll(".lora input[type=checkbox]:checked").length < 2;
+    if (conseil) conseil.hidden = cochees < 2;
+    const compte = conteneur.querySelector(".compte-loras");
+    if (compte) compte.textContent = cochees ? `· ${cochees} active${cochees > 1 ? "s" : ""}` : "· aucune active";
 }
 
 function lorasChoisies(idConteneur, toutes = false) {
@@ -261,7 +271,11 @@ emplacements.addEventListener("drop", async (e) => {
 });
 
 // Le Scénario envoie un prompt prêt : il part tel quel, avec son modèle cible et ses images de référence.
-async function recevoirAuPlateau({ prompt, workflow, images, role, liberte, lancer }) {
+// Le prompt reçu du Scénario, avec son idée et le LLM qui l'a écrit : ils partent avec lui tant qu'il n'est pas changé.
+let envoiScenario = null;
+
+async function recevoirAuPlateau({ prompt, workflow, images, role, liberte = null, lancer, idee = "", llm = null }) {
+    envoiScenario = { prompt: prompt.trim(), idee, llm };
     await chargerOptionsPlateau();
     referencesChoisies = [...images];
     if (role) {
@@ -269,7 +283,7 @@ async function recevoirAuPlateau({ prompt, workflow, images, role, liberte, lanc
         document.querySelector(`input[name="mode-reference"][value="${role}"]`).checked = true;
         document.getElementById("zone-references").open = true;
     }
-    if (role === "variation") {
+    if (role === "variation" && liberte !== null) {
         document.getElementById("liberte-reference").value = liberte;
         document.getElementById("valeur-liberte").textContent = virgule(liberte);
     }
@@ -386,7 +400,8 @@ function afficherResultat(images, prompt, type = "creation") {
 document.getElementById("form-creation").addEventListener("submit", (e) => {
     e.preventDefault();
     const prompt = document.getElementById("prompt-plateau").value.trim();
-    lancerCommande({ prompt, ...optionsFormulaire(), loras: lorasChoisies("loras-creation") });
+    const meta = envoiScenario?.prompt === prompt ? { idee: envoiScenario.idee, ecrit_par: envoiScenario.llm } : {};
+    lancerCommande({ prompt, ...meta, ...optionsFormulaire(), loras: lorasChoisies("loras-creation") });
 });
 
 document.getElementById("vers-scenario").addEventListener("click", () => ouvrirScenario("image"));
@@ -523,7 +538,6 @@ document.getElementById("comme-reference").addEventListener("click", () => {
 
 document.getElementById("supprimer-creation").addEventListener("click", async () => {
     const f = ficheOuverte;
-    if (!confirm("Mettre cette image à la corbeille ? Tu pourras la restaurer tant que la corbeille n'est pas vidée.")) return;
     await api("DELETE", `/api/creations/${encodeURIComponent(f.id)}`);
     fermerFiche();
     chargerGalerie();
@@ -560,6 +574,7 @@ function ouvrirRetouche(f, mode) {
         "Consigne envoyée telle quelle. Pour la traduire et l'optimiser en voyant l'image :";
     document.getElementById("consigne-retouche").value = "";
     document.getElementById("fondu-retouche").value = agrandir ? 96 : 24;
+    majFondu();
     document.getElementById("erreur-retouche").hidden = true;
 
     // Prête quand l'image est chargée et le masque gardé (même image) repeint : une retouche lancée dans la foulée
@@ -574,6 +589,7 @@ function ouvrirRetouche(f, mode) {
             ctx.clearRect(0, 0, canevas.width, canevas.height);
             if (!garde) return fin();
             document.getElementById("fondu-retouche").value = garde.fondu;
+            majFondu();
             const masque = new Image();
             masque.onload = () => {
                 ctx.drawImage(masque, 0, 0);
@@ -593,6 +609,11 @@ function ouvrirRetouche(f, mode) {
     document.getElementById("panneau-retouche").hidden = false;
     return pret;
 }
+
+const majFondu = () => {
+    document.getElementById("valeur-fondu").textContent = `${document.getElementById("fondu-retouche").value} px`;
+};
+document.getElementById("fondu-retouche").addEventListener("input", majFondu);
 
 function fermerRetouche() {
     document.getElementById("panneau-retouche").hidden = true;

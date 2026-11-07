@@ -121,6 +121,19 @@ document.querySelectorAll(".onglet").forEach((bouton) => {
 
 const ETATS_MOTEUR = { actif: "chargé", veille: "en veille", absent: "introuvable" };
 
+// Une génération tourne (quel que soit l'onglet ouvert) : ce qu'elle fait, où elle en est, et ce qui attend derrière.
+const NOMS_COMMANDES = { creation: "Image", retouche: "Retouche", agrandissement: "Agrandissement", clip: "Clip",
+                         sequence: "Séquence", voix: "Essai de voix" };
+
+function enCours(c) {
+    if (!c) return "";
+    const nom = NOMS_COMMANDES[c.type] ?? c.type;
+    const avance = c.etat === "attente" ? "en file" : `${Math.round(100 * c.progression)} %`;
+    const titre = `${nom} : ${c.etape || (c.etat === "attente" ? "en file d'attente" : "en cours")}`
+        + (c.file > 1 ? ` · ${c.file - 1} autre${c.file > 2 ? "s" : ""} derrière` : "");
+    return `<span class="pastille en-cours" title="${echapper(titre)}">⏳ ${nom} ${avance}${c.file > 1 ? ` (+${c.file - 1})` : ""}</span>`;
+}
+
 async function majEtatDirect() {
     if (document.hidden) return;  // onglet caché : la barre d'état n'interroge plus le serveur pour rien
     const zone = document.getElementById("etat-direct");
@@ -141,7 +154,7 @@ async function majEtatDirect() {
     const vram = e.vram_totale_go
         ? `<span class="vram-direct ${alerte ? "alerte-vram" : ""}" title="${echapper(titreVram)}">${alerte ? "⚠ " : ""}${e.vram_utilisee_go.toLocaleString("fr-FR")} / ${e.vram_totale_go.toLocaleString("fr-FR")} Go</span>`
         : "";
-    zone.innerHTML = pastille("ComfyUI", e.comfyui) + pastille("Llama", e.llama, e.llama.modele) + vram;
+    zone.innerHTML = enCours(e.commande) + pastille("ComfyUI", e.comfyui) + pastille("Llama", e.llama, e.llama.modele) + vram;
     majBandeauGarde(e.garde?.attente);
 }
 
@@ -522,6 +535,7 @@ function afficherMoteurs(e) {
     const manquants = e.moteurs.filter((m) => m.statut === "absent" && !m.facultatif);
     const bandeau = document.getElementById("bandeau-moteurs");
     bandeau.hidden = !manquants.length;
+    if (manquants.length) document.getElementById("systeme-reglages").open = true;  // à installer : visible d'emblée
     bandeau.querySelector("span").textContent = manquants.length
         ? `⚠ ${manquants.map((m) => m.nom).join(" et ")} : absent${manquants.length > 1 ? "s" : ""}, Aria ne peut pas générer sans.`
         : "";
@@ -591,6 +605,7 @@ async function choisirComfyui(sien) {
 
 document.getElementById("voir-moteurs").addEventListener("click", () => {
     document.querySelector('.onglet[data-vue="reglages"]').click();
+    document.getElementById("systeme-reglages").open = true;
     document.getElementById("carte-moteurs").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
