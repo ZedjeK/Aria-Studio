@@ -5,7 +5,6 @@ const urlVideo = (id) => `/api/creations/${encodeURIComponent(id)}/video`;
 let optionsMontage = null;
 let sourceMontage = null;  // rush à animer
 let modeMontage = "animer";
-let commandeMontage = null;
 let clipOuvert = null;
 
 const bobines = creerGalerie({
@@ -220,17 +219,15 @@ function reglagesMontage() {
 async function tourner(corps) {
     const erreur = document.getElementById("erreur-montage");
     erreur.hidden = true;
+    let commande;
     try {
-        commandeMontage = await api("POST", "/api/clips", corps);
+        commande = await api("POST", "/api/clips", corps);
     } catch (err) {
         erreur.textContent = err.message;
         erreur.hidden = false;
         return;
     }
-    document.querySelectorAll("#form-montage button").forEach((b) => { b.disabled = true; });
-    document.getElementById("progression-montage").hidden = false;
-    suivreAnnulable(document.getElementById("progression-montage"), commandeMontage.id);
-    suivreMontage(Date.now(), estimationSecondes());
+    suivreMontage(commande.id, Date.now(), estimationSecondes());
 }
 
 // Le prompt part tel quel : le LLM n'écrit qu'au Scénario.
@@ -239,22 +236,41 @@ document.getElementById("form-montage").addEventListener("submit", (e) => {
     tourner({ prompt: document.getElementById("prompt-clip").value.trim(), ...reglagesMontage() });
 });
 
-async function suivreMontage(debut, estimation) {
-    const c = await api("GET", `/api/commandes/${commandeMontage.id}`);
+// Clips suivis en ce moment (tournage, variante) : comme au Plateau, chacun garde son id.
+const suiviesMontage = [];
+
+async function suivreMontage(id, debut, estimation) {
     const bloc = document.getElementById("progression-montage");
-    const ecoule = (Date.now() - debut) / 1000;
-    bloc.querySelector(".barre div").style.width = `${Math.round(100 * c.progression)}%`;
-    const reste = Math.max(0, estimation - ecoule);
-    bloc.querySelector("span").textContent = c.etat === "attente"
-        ? `En file d'attente… ${enMinutes(ecoule)}`
-        : `${c.etape || "Finalisation"} · ${Math.round(100 * c.progression)} % · ${enMinutes(ecoule)}`
-          + (reste > 0 ? ` · encore ≈ ${enMinutes(reste)}` : "");
-    if (["attente", "en_cours"].includes(c.etat)) {
-        setTimeout(() => suivreMontage(debut, estimation), 1500);
-        return;
+    suiviesMontage.push(id);
+    document.querySelectorAll("#form-montage button").forEach((b) => { b.disabled = true; });
+    bloc.hidden = false;
+    suivreAnnulable(bloc, id);
+    let c = null;
+    try {
+        c = await suivreJusquauBout(id, (r) => {
+            if (suiviesMontage.at(-1) !== id) return;
+            const ecoule = (Date.now() - debut) / 1000;
+            const reste = Math.max(0, estimation - ecoule);
+            bloc.querySelector(".barre div").style.width = `${Math.round(100 * r.progression)}%`;
+            bloc.querySelector("span").textContent = r.etat === "attente"
+                ? `En file d'attente… ${enMinutes(ecoule)}`
+                : `${r.etape || "Finalisation"} · ${Math.round(100 * r.progression)} % · ${enMinutes(ecoule)}`
+                  + (reste > 0 ? ` · encore ≈ ${enMinutes(reste)}` : "");
+        }, 1500);
+    } catch (err) {
+        const erreur = document.getElementById("erreur-montage");
+        erreur.textContent = `Suivi interrompu (${err.message}) : le tournage continue peut-être, regarde les bobines.`;
+        erreur.hidden = false;
+    } finally {
+        suiviesMontage.splice(suiviesMontage.indexOf(id), 1);
+        if (suiviesMontage.length) {
+            suivreAnnulable(bloc, suiviesMontage.at(-1));
+        } else {
+            bloc.hidden = true;
+            document.querySelectorAll("#form-montage button").forEach((b) => { b.disabled = false; });
+        }
     }
-    bloc.hidden = true;
-    document.querySelectorAll("#form-montage button").forEach((b) => { b.disabled = false; });
+    if (!c) return;
     if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-montage");
         erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "clip") : c.erreur;
@@ -327,7 +343,8 @@ document.getElementById("variante-clip").addEventListener("click", () => {
     fermerClip();
     window.scrollTo({ top: 0, behavior: "smooth" });
     tourner({ idee: f.idee, prompt: f.prompt, mode: f.mode_video, source: f.parent, qualite: f.qualite, duree: f.duree,
-              format: f.mode_video === "texte" ? f.format : "16:9 (Widescreen)", nombre: 1, dossier: f.dossier ?? null });
+              format: f.mode_video === "texte" ? f.format : "16:9 (Widescreen)", nombre: 1, dossier: f.dossier ?? null,
+              modele: f.modele ?? null, loras: f.loras ?? [] });  // le même checkpoint et les mêmes LoRA
 });
 
 document.getElementById("reutiliser-clip").addEventListener("click", () => {
@@ -339,6 +356,9 @@ document.getElementById("reutiliser-clip").addEventListener("click", () => {
     document.getElementById("qualite-montage").value = f.qualite;
     document.getElementById("duree-montage").value = String(f.duree);
     if (f.mode_video === "texte") document.getElementById("format-montage").value = f.format;
+    const modele = document.getElementById("modele-montage");
+    if (f.modele && [...modele.options].some((o) => o.value === f.modele)) modele.value = f.modele;
+    rendreLoras("loras-montage", workflowVideo(), f.loras ?? []);  // ses LoRA, cochées comme au tournage
     rendreSource();
     majEstimation();
     window.scrollTo({ top: 0, behavior: "smooth" });

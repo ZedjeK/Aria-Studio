@@ -221,6 +221,9 @@ function demandeSequence() {
 
 // ✨ Tout écrire, le bouton ✨ de l'atelier : tous les plans d'un coup, d'après le fil et ce que disent les plans.
 function decouperSequence() {
+    const ecrits = decoupage.plans.filter((p) => p.prompt.trim()).length;
+    if (ecrits && !confirm(`✨ Tout écrire réécrit aussi ${ecrits > 1 ? `les ${ecrits} plans` : "le plan"} qui `
+        + `${ecrits > 1 ? "ont" : "a"} déjà un prompt, tes retouches à la main comprises. Continuer ?`)) return;
     avecLlama(async (statut) => {
         statut(`${nomLlm()} écrit tous les plans… (le premier appel charge le modèle)`);
         const r = await api("POST", "/api/sequences/decouper", { ...demandeSequence(), llm: llmAtelier() });
@@ -316,6 +319,12 @@ document.getElementById("contrainte-scenario").addEventListener("input", (e) => 
 
 document.getElementById("nombre-plans-scenario").addEventListener("change", (e) => {
     const n = Number(e.target.value);
+    const remplis = decoupage.plans.slice(n).filter((p) => p.note.trim() || p.replique.trim() || p.prompt.trim()).length;
+    if (remplis && !confirm(`Passer à ${n} plans supprime ${remplis > 1 ? `${remplis} plans déjà remplis`
+        : "un plan déjà rempli"} (ce qui s'y passe, réplique, prompt). Continuer ?`)) {
+        e.target.value = String(decoupage.plans.length);
+        return;
+    }
     decoupage.plans = decoupage.plans.slice(0, n);
     while (decoupage.plans.length < n) decoupage.plans.push(nouveauPlanDecoupage(decoupage.plans.length));
     if (decoupage.aidePlan !== null && decoupage.aidePlan >= n) {
@@ -408,7 +417,9 @@ document.getElementById("creer-sequence-scenario").addEventListener("click", asy
             contrainte_en: enValide ? decoupage.contrainteEn : null,  // traduite à l'écriture : le tournage s'en sert
             plans: decoupage.plans.map((p, k) => ({
                 idee: p.idee || p.note || `Plan ${k + 1}`, prompt: p.prompt, duree: p.duree,
-                enchainement: p.enchainement, rush: p.rush, ambiance: true,
+                // Départ de la référence : l'image du personnage est le rush du plan 1 (le serveur l'exige).
+                enchainement: p.enchainement, rush: p.enchainement === "rush" ? decoupage.reference : p.rush,
+                ambiance: true,
             })),
         });
         await ouvrirSequence(s.id);

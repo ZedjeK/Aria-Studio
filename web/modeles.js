@@ -9,6 +9,7 @@ const ORIGINES = {
 };
 let sousOngletModeles = "collection";
 let sourcesEnCours = false;
+let minuteurSources = null;  // une seule relecture en attente, quel que soit le nombre de clics sur l'onglet
 
 function ouvrirModeles() {
     chargerTelechargements();
@@ -202,7 +203,8 @@ async function suivreSources() {
         document.getElementById("retrouver-sources").disabled = true;
         zone.textContent = `Fichier ${Math.min(s.fait + 1, s.total)} sur ${s.total} : ${s.fichier ?? "…"} · `
             + (s.phase === "civitai" ? "question à Civitai…" : "calcul de l'empreinte…");
-        setTimeout(suivreSources, 1000);
+        clearTimeout(minuteurSources);
+        minuteurSources = setTimeout(suivreSources, 1000);
         return;
     }
     if (s.etat !== "termine") return;

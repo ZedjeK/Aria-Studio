@@ -17,7 +17,6 @@ const REPLIQUE = /[«"“]/;
 
 let sequenceCourante = null;
 let sequencesConnues = [];
-let commandeSequence = null;
 let sequenceModifiee = false;
 
 const nouveauPlan = (enchainement) => ({ idee: "", prompt: "", duree: 5, enchainement, rush: null, ambiance: true,
@@ -53,7 +52,9 @@ async function chargerListeSequences() {
         `<option value="${echapper(s.id)}" ${s.id === garde ? "selected" : ""}>${echapper(s.titre)}</option>`).join("");
 }
 
-async function ouvrirSequence(id) {  // depuis la fiche d'un plan ou d'un film des Bobines
+async function ouvrirSequence(id) {  // depuis la fiche d'un plan ou d'un film des Bobines, ou depuis le Scénario
+    if (sequenceModifiee && !confirm(`La séquence ouverte au Montage${sequenceCourante?.titre ? ` (« ${sequenceCourante.titre} »)` : ""} `
+        + "a des changements non enregistrés : les abandonner ?")) return false;
     document.querySelector('.onglet[data-vue="montage"]').click();
     document.querySelector('input[name="mode-montage"][value="sequence"]').click();
     await preparerSequence();
@@ -391,9 +392,10 @@ async function tournerSequence(plans = null) {
     if ((sequenceModifiee || !sequenceCourante.id) && !(await enregistrerSequence())) return;
     const indices = plans ?? (aTourner().length ? null : sequenceCourante.plans.map((_, k) => k));
     const estimation = estimationSequence(aTourner(indices ?? []));
+    let commande;
     try {
-        commandeSequence = await api("POST", `/api/sequences/${encodeURIComponent(sequenceCourante.id)}/tourner`,
-                                     { plans: indices });
+        commande = await api("POST", `/api/sequences/${encodeURIComponent(sequenceCourante.id)}/tourner`,
+                             { plans: indices });
     } catch (err) {
         const erreur = document.getElementById("erreur-sequence");
         erreur.textContent = err.message;
@@ -403,8 +405,8 @@ async function tournerSequence(plans = null) {
     bloquerSequence(true);
     document.getElementById("erreur-sequence").hidden = true;  // message d'un tournage précédent (erreur, annulation)
     document.getElementById("progression-sequence").hidden = false;
-    suivreAnnulable(document.getElementById("progression-sequence"), commandeSequence.id);  // après le blocage
-    suivreSequence(Date.now(), estimation);
+    suivreAnnulable(document.getElementById("progression-sequence"), commande.id);  // après le blocage
+    suivreSequence(commande, Date.now(), estimation);
 }
 
 function bloquerSequence(bloque) {
@@ -413,28 +415,36 @@ function bloquerSequence(bloque) {
     if (!bloque) rendrePlans();  // remet les boutons dans leur état normal (↑ du premier plan, etc.)
 }
 
-async function suivreSequence(debut, estimation) {
-    const c = await api("GET", `/api/commandes/${commandeSequence.id}`);
+async function suivreSequence(commande, debut, estimation) {
     const bloc = document.getElementById("progression-sequence");
-    const ecoule = (Date.now() - debut) / 1000;
-    const reste = Math.max(0, estimation - ecoule);
-    bloc.querySelector(".barre div").style.width = `${Math.round(100 * Math.min(1, ecoule / Math.max(estimation, 1)))}%`;
-    bloc.querySelector("span").textContent = c.etat === "attente"
-        ? `En file d'attente… ${enMinutes(ecoule)}`
-        : `${c.etape || "Préparation"} · ${Math.round(100 * c.progression)} % du plan · ${enMinutes(ecoule)}`
-          + (reste > 0 ? ` · encore ≈ ${enMinutes(reste)}` : "");
-    if (["attente", "en_cours"].includes(c.etat)) {
-        setTimeout(() => suivreSequence(debut, estimation), 1500);
-        return;
+    let c = null;
+    let panne = null;
+    try {
+        c = await suivreJusquauBout(commande.id, (r) => {
+            const ecoule = (Date.now() - debut) / 1000;
+            const reste = Math.max(0, estimation - ecoule);
+            bloc.querySelector(".barre div").style.width = `${Math.round(100 * Math.min(1, ecoule / Math.max(estimation, 1)))}%`;
+            bloc.querySelector("span").textContent = r.etat === "attente"
+                ? `En file d'attente… ${enMinutes(ecoule)}`
+                : `${r.etape || "Préparation"} · ${Math.round(100 * r.progression)} % du plan · ${enMinutes(ecoule)}`
+                  + (reste > 0 ? ` · encore ≈ ${enMinutes(reste)}` : "");
+        }, 1500);
+    } catch (err) {
+        panne = err;  // le panneau se débloque quand même : avant, il restait figé jusqu'au rechargement
     }
     bloc.hidden = true;
-    const s = await api("GET", `/api/sequences/${encodeURIComponent(commandeSequence.sequence)}`);
-    afficherSequence(s);  // les plans tournés avant une erreur sont gardés
+    try {
+        afficherSequence(await api("GET", `/api/sequences/${encodeURIComponent(commande.sequence)}`));  // plans déjà tournés
+    } catch {
+        // la séquence reste affichée telle quelle
+    }
     bloquerSequence(false);
     bobines.charger();
-    if (c.etat === "erreur" || c.etat === "annule") {
+    if (panne || c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-sequence");
-        erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "plan") : c.erreur;
+        erreur.textContent = panne
+            ? `Suivi interrompu (${panne.message}) : le tournage continue peut-être, rouvre la séquence dans un moment.`
+            : c.etat === "annule" ? messageAnnulation(c, "plan") : c.erreur;
         erreur.hidden = false;
     } else {
         document.getElementById("film-sequence").scrollIntoView({ behavior: "smooth", block: "center" });
