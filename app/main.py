@@ -1,7 +1,6 @@
 """Serveur FastAPI d'Aria - Studio : sert l'interface web et l'API."""
 
 import asyncio
-import json
 import os
 import re
 import threading
@@ -15,26 +14,23 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
-from app import (assistant, casting, cles, collection, decouvrir, emplacements, garde, listes, mesures, mises_a_jour, modeles, moteurs,
-                 optimiseur, personnages, plateau, prompt, reglages, retouche, rushes, securite, sequences, voix, workflows)
-from app.llm import ErreurLlama
+from app import (assistant, casting, cles, collection, decouvrir, emplacements, garde, mesures, mises_a_jour,
+                 modeles, moteurs, optimiseur, plateau, prompt, reglages, retouche, routes_montage, routes_scenario,
+                 rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
 from app.comfy import ErreurComfy
 from app.config import CONFIG, ROOT, dossier_comfyui_livre
 from app.emplacements import moteur
-from app.orchestrateur import Orchestrateur
 from app.sources import ErreurSource, Fiche, civitai, fiche_depuis_url
-from app.telechargement import ErreurTelechargement, Telechargeur
+from app.telechargement import ErreurTelechargement
 
 WEB = ROOT / "web"
 
-telechargeur = Telechargeur()
-orchestrateur = Orchestrateur()
-plateau_ = plateau.Plateau(orchestrateur)
+# Partagés avec les routeurs (app/routes_*.py) : app/services.py.
+telechargeur, orchestrateur, plateau_ = services.telechargeur, services.orchestrateur, services.plateau_
 fiches: dict[str, Fiche] = {}  # fiches préparées, en attente de confirmation
-banc_actif: casting.Banc | None = None
 _taches_fond: set[asyncio.Task] = set()
 
 
@@ -66,6 +62,8 @@ class InterfaceSansCache(StaticFiles):
 
 app = FastAPI(title="Aria Studio", lifespan=cycle_de_vie)
 app.mount("/static", InterfaceSansCache(directory=WEB), name="static")
+app.include_router(routes_scenario.routeur)
+app.include_router(routes_montage.routeur)
 
 
 def hotes_locaux() -> set[str]:
@@ -298,7 +296,7 @@ def terminer_assistant(d: DemandePacks):
 @app.post("/api/assistant/essai")
 def essai_assistant():
     """Une image rapide (peu de steps) pour vérifier que toute la chaîne tourne ; suivie par /api/commandes."""
-    return _commander(lambda: _assistant(assistant.essayer, plateau_))
+    return services.commander(lambda: _assistant(assistant.essayer, plateau_))
 
 
 class DemandeComfyuiExterne(BaseModel):
@@ -545,26 +543,25 @@ class DemandeBanc(BaseModel):
 @app.get("/api/bancs")
 def liste_bancs(liste: bool = True):
     """`liste=false` : le banc actif seulement (le suivi d'un banc en cours, toutes les 2 s)."""
-    return {"actif": banc_actif.etat_public() if banc_actif else None, "bancs": casting.liste() if liste else None}
+    return {"actif": services.banc_actif.etat_public() if services.banc_actif else None, "bancs": casting.liste() if liste else None}
 
 
 @app.post("/api/bancs")
 async def lancer_banc(demande: DemandeBanc):
-    global banc_actif
-    if banc_actif and banc_actif.etat in ("attente", "en_cours"):
+    if services.banc_en_cours():
         raise HTTPException(409, "Un banc est déjà en cours")
     try:
-        banc_actif = casting.creer(demande.tache, demande.workflows)
+        services.banc_actif = casting.creer(demande.tache, demande.workflows)
     except (casting.ErreurBanc, KeyError) as e:
         raise HTTPException(400, str(e))
-    tache = asyncio.create_task(banc_actif.executer(orchestrateur, telechargeur))
+    tache = asyncio.create_task(services.banc_actif.executer(orchestrateur, telechargeur))
     _taches_fond.add(tache)
     tache.add_done_callback(_taches_fond.discard)
-    return banc_actif.etat_public()
+    return services.banc_actif.etat_public()
 
 
 def _en_cours(id_banc: str) -> bool:
-    return bool(banc_actif and banc_actif.id == id_banc and banc_actif.etat in ("attente", "en_cours"))
+    return bool(services.banc_actif and services.banc_actif.id == id_banc and services.banc_actif.etat in ("attente", "en_cours"))
 
 
 @app.get("/api/bancs/{id_banc}")
@@ -625,212 +622,6 @@ def favori_banc(id_banc: str, demande: DemandeFavori):
 @app.post("/api/bancs/{id_banc}/source")
 def source_banc(id_banc: str, demande: DemandeImage):
     return _modifier_banc(id_banc, lambda: casting.utiliser_comme_source(id_banc, demande.cle, demande.fichier))
-
-
-# Onglet Prompt : listes guidées
-
-@app.get("/api/prompt/listes")
-def listes_prompt(sujet: str | None = None):
-    """Sans sujet : les sujets proposés. Avec : blocs, accordéons, valeurs et incompatibilités."""
-    try:
-        return listes.structure(sujet) if sujet else {"sujets": listes.sujets()}
-    except listes.ErreurListes as e:
-        raise HTTPException(400, str(e))
-
-
-class DemandeAssemblage(BaseModel):
-    sujet: str
-    choix: dict[str, dict[str, str | None]] = {}  # {bloc: {sous-liste: valeur}}
-    age: int | None = None  # âge précis, en plus de la tranche
-    texte: str = ""  # texte à écrire dans l'image
-    precisions: str = ""  # texte libre ajouté tel quel (traduit par Llama s'il est rempli)
-    workflow: str | None = None  # modèle cible, pour son profil de prompt
-    action: str = ""  # vidéo : l'action, déjà traduite en anglais
-    replique: str = ""  # vidéo : les répliques, une par ligne, gardées mot pour mot
-    dialogue: bool | None = None  # case 🗣 Dialogue : False = personne ne parle
-    musique: str = ""  # case 🎵 Musique d'ambiance : sa description, déjà traduite
-    avec_musique: bool | None = None  # False = pas de musique de fond
-
-
-@app.post("/api/prompt/assembler")
-def assembler_prompt(demande: DemandeAssemblage):
-    try:
-        return listes.assembler(demande.sujet, demande.choix, demande.age, demande.texte, demande.precisions,
-                                demande.workflow, demande.action, demande.replique, demande.dialogue,
-                                demande.musique, demande.avec_musique)
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except (listes.ErreurListes, workflows.ErreurWorkflow) as e:
-        raise HTTPException(400, str(e))
-
-
-def _verifier_llm(modele: str | None):
-    if banc_actif and banc_actif.etat in ("attente", "en_cours"):
-        raise HTTPException(409, "Un banc est en cours")
-    if modele and modele not in modeles.llm_disponibles():
-        raise HTTPException(400, f"GGUF absent de modeles/llm : {modele}")
-
-
-class DemandeOptimisation(BaseModel):
-    atelier: str  # image, retouche ou clip (la séquence se découpe : /api/sequences/decouper)
-    idee: str = ""  # le prompteur libre, en français
-    complements: str = ""  # ce que les compléments imposent (prompt assemblé des listes et des cases)
-    images: list[str] = []  # images de référence de l'atelier
-    role: str | None = None  # inspirer, variation, animer, retouche
-    workflow: str | None = None
-    llm: str | None = None
-    duree: int = 5
-
-
-@app.post("/api/prompt/optimiser")
-async def optimiser_prompt(d: DemandeOptimisation):
-    """✨ Optimiser d'un atelier du Scénario : le LLM écrit le meilleur prompt pour le modèle cible, d'après l'idée,
-    les compléments (déjà fixés) et les images, qu'il voit. Retouche : une consigne d'édition sur l'image."""
-    _verifier_llm(d.llm)
-    idee, complements_ = d.idee.strip(), d.complements.strip()
-    if d.atelier not in ("image", "retouche", "clip"):
-        raise HTTPException(400, "Atelier inconnu : image, retouche ou clip")
-    if not (idee or complements_):
-        raise HTTPException(400, "Écris ton idée (ou choisis des compléments)")
-    if len(idee) > 2000 or len(complements_) > 4000 or len(d.images) > 3:
-        raise HTTPException(400, "Idée, compléments ou images en trop")
-    if d.atelier == "retouche" and len(d.images) != 1:
-        raise HTTPException(400, "Choisis l'image à retoucher")
-    texte = f"{idee}\n\nAlso fixed (keep it): {complements_}" if idee and complements_ else idee or complements_
-    try:
-        origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
-        securite.verifier(texte, *origines)
-        vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images]) or None
-        llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
-        regles = workflows.regles_prompt(d.workflow)
-        if d.atelier == "retouche":
-            debut = asyncio.get_running_loop().time()
-            consigne = await prompt.traduire_instruction(orchestrateur, texte, llm, regles, d.workflow, vues[0])
-            r = {"prompt": consigne, "duree_s": round(asyncio.get_running_loop().time() - debut, 2)}
-        else:
-            video = ("animer" if d.role == "animer" else "texte") if d.atelier == "clip" else None
-            r = await prompt.reecrire(orchestrateur, texte, llm, len(vues) if vues and d.role == "inspirer" else 0,
-                                      video=video, duree=d.duree, regles=regles, workflow=d.workflow,
-                                      vues=vues if d.role in ("inspirer", "variation", "animer") else None)
-        securite.verifier(texte, r["prompt"], *origines)
-        return {**r, "mots": len(r["prompt"].split())}
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except (plateau.ErreurPlateau, workflows.ErreurWorkflow) as e:
-        raise HTTPException(400, str(e))
-    except ErreurLlama as e:
-        raise HTTPException(500, str(e))
-
-
-class EchangeLibre(BaseModel):
-    role: str  # user ou assistant (le JSON rendu au tour précédent)
-    content: str
-
-
-class DemandeLibre(BaseModel):
-    echanges: list[EchangeLibre]
-    forme: str = "image"  # image, clip, retouche, sequence (le fil de l'histoire) ou plan (un plan d'une séquence)
-    workflow: str | None = None
-    contexte: str = ""  # ce que les autres onglets du Scénario ont déjà fixé (le prompt assemblé)
-    sequence: dict | None = None  # forme « plan » : la demande du découpage (DemandeDecoupage), « plan » = son numéro
-    images: list[str] = []  # images de référence du Scénario
-    role: str | None = None  # leur rôle : inspirer, variation, animer
-    llm: str | None = None
-    duree: int = 5
-
-
-ECHANGES_LIBRE_MAX, LONGUEUR_ECHANGE_LIBRE = 60, 4000
-
-
-@app.post("/api/prompt/libre")
-async def chat_libre(d: DemandeLibre):
-    """Scénario, onglet Libre : un tour de conversation (questions, fiche « Ce que j'ai compris », prompt)."""
-    _verifier_llm(d.llm)
-    if d.forme not in ("image", "clip", "retouche", "sequence", "plan"):
-        raise HTTPException(400, "Atelier inconnu : image, retouche, clip, séquence ou plan")
-    if d.forme == "plan" and not (d.sequence and isinstance(d.sequence.get("plan"), int)):
-        raise HTTPException(400, "Quel plan de la séquence ?")
-    if not d.echanges or d.echanges[-1].role != "user" or len(d.echanges) > ECHANGES_LIBRE_MAX \
-            or any(e.role not in ("user", "assistant") or len(e.content) > LONGUEUR_ECHANGE_LIBRE for e in d.echanges):
-        raise HTTPException(400, "Conversation invalide ou trop longue : recommence-la")
-    try:
-        contexte, duree, plan_ = d.contexte, d.duree, None
-        if d.forme == "plan":  # 💬 d'un plan : le chat sait ce que sait le découpage, ce plan seul à écrire
-            s = DemandeDecoupage(**d.sequence)
-            desc = listes.description_sequence(s.sujet, s.choix, s.age)
-            plan_ = sequences.preparer_ecriture(s.synopsis, desc["personnage"], desc["decor"], s.plans, s.reference,
-                                                desc["mineur"], s.contrainte, s.musique, s.plan)
-            contexte = f"{plan_['demande']}\nCharacter rule: {plan_['regle_personnage']}"
-            duree = plan_["plans"][s.plan]["duree"]
-        origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
-        entrees = [*origines, *(plan_["entrees"] if plan_ else [])]
-        securite.verifier(*entrees, *(e.content for e in d.echanges if e.role == "user"))
-        vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images[:3]]) or None
-        llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
-        r = await prompt.libre(orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, contexte,
-                               vues, d.role, llm, duree)
-        if plan_ and r["prompt"]:  # les garde-fous du découpage : réplique du plan à son moment, rien d'inventé
-            texte, alertes = sequences.finir_plan(s.plan + 1, plan_["plans"][s.plan], r["prompt"],
-                                                  plan_["personnage"], plan_["source"])
-            r = {**r, "prompt": texte, "alertes": alertes,
-                 "brut": json.dumps({**json.loads(r["brut"]), "prompt": texte}, ensure_ascii=False)}
-        securite.verifier(*entrees, r["prompt"] or "", *r["fiche"].values())
-        return r
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except ValidationError as e:
-        raise HTTPException(400, f"Séquence illisible : {e.errors()[0].get('msg', '')}")
-    except (plateau.ErreurPlateau, workflows.ErreurWorkflow, sequences.ErreurSequence, listes.ErreurListes) as e:
-        raise HTTPException(400, str(e))
-    except ErreurLlama as e:
-        raise HTTPException(500, str(e))
-
-
-class DemandeTraduction(BaseModel):
-    texte: str
-    llm: str | None = None
-
-
-@app.post("/api/prompt/traduire")
-async def traduire_precisions(demande: DemandeTraduction):
-    _verifier_llm(demande.llm)
-    if not demande.texte.strip() or len(demande.texte) > listes.LONGUEUR_PRECISIONS:
-        raise HTTPException(400, f"Précisions vides ou trop longues (plus de {listes.LONGUEUR_PRECISIONS} caractères)")
-    try:
-        return {"texte": await prompt.traduire_precisions(orchestrateur, demande.texte.strip(), demande.llm)}
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except ErreurLlama as e:
-        raise HTTPException(500, str(e))
-
-
-@app.get("/api/prompt/personnages")
-def liste_personnages():
-    return personnages.liste()
-
-
-class DemandePersonnage(BaseModel):
-    choix: dict[str, str | None] = {}  # {sous-liste: valeur} du bloc « personnage »
-    age: int | None = None
-
-
-@app.put("/api/prompt/personnages/{nom}")
-def enregistrer_personnage(nom: str, demande: DemandePersonnage):
-    try:
-        return personnages.enregistrer(nom, demande.choix, demande.age)
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except listes.ErreurListes as e:
-        raise HTTPException(400, str(e))
-
-
-@app.delete("/api/prompt/personnages/{nom}")
-def supprimer_personnage(nom: str):
-    try:
-        personnages.supprimer(nom)
-    except KeyError:
-        raise HTTPException(404, f"Personnage inconnu : {nom}")
-    return {"supprime": nom}
 
 
 # Onglet Réglages : LLM et workflows (data/reglages.yaml)
@@ -906,7 +697,7 @@ def options_plateau():
 
 @app.post("/api/creations")
 def creer(demande: DemandeCreation):
-    if banc_actif and banc_actif.etat in ("attente", "en_cours"):
+    if services.banc_en_cours():
         raise HTTPException(409, "Un banc est en cours")
     if not demande.prompt.strip():
         raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
@@ -956,30 +747,18 @@ class DemandeImport(BaseModel):
     dossier: str | None = None  # dossier des rushes ouvert au moment de l'import
 
 
-def _commander(action):
-    if banc_actif and banc_actif.etat in ("attente", "en_cours"):
-        raise HTTPException(409, "Un banc est en cours")
-    try:
-        return action().to_dict()
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except (plateau.ErreurPlateau, retouche.ErreurRetouche, workflows.ErreurWorkflow, rushes.ErreurRushes,
-            sequences.ErreurSequence, voix.ErreurVoix) as e:
-        raise HTTPException(400, str(e))
-
-
 @app.post("/api/retouches")
 def retoucher(d: DemandeRetouche):
     def action():
         masque = retouche.depuis_data_url(d.masque) if d.masque else None
         return plateau_.commander_retouche(d.source, d.instruction, d.reecrire, d.llm, d.workflow, masque,
                                            d.fondu, d.seed, d.modele, d.loras)
-    return _commander(action)
+    return services.commander(action)
 
 
 @app.post("/api/agrandissements")
 def agrandir(d: DemandeAgrandissement):
-    return _commander(lambda: plateau_.commander_agrandissement(
+    return services.commander(lambda: plateau_.commander_agrandissement(
         d.source, d.largeur, d.hauteur, d.ancrage, d.precision, d.reecrire, d.llm, d.workflow, d.fondu, d.seed,
         d.modele, d.loras))
 
@@ -1032,195 +811,6 @@ def video_creation(id_creation: str):
         return FileResponse(plateau.chemin_video(id_creation), media_type="video/mp4")
     except plateau.ErreurPlateau as e:
         raise HTTPException(404, str(e))
-
-
-class DemandeClip(BaseModel):
-    idee: str = ""
-    prompt: str = ""  # tourné tel quel : le LLM n'écrit qu'au Scénario
-    mode: str = "animer"  # animer (un rush) ou texte
-    source: str | None = None  # rush à animer
-    qualite: str = "compromis"  # rapide, compromis, qualite
-    duree: int = 5
-    format: str = "16:9 (Widescreen)"  # texte → vidéo seulement
-    seed: int | None = None
-    nombre: int = 1
-    dossier: str | None = None
-    modele: str | None = None  # checkpoint de la famille ; absent = le modèle par défaut des réglages
-    loras: list[dict] = []  # [{fichier, force, declencheurs}] de modeles/MiniMax-H3/loras
-    ecrit_par: str | None = None  # le LLM qui a écrit le prompt au Scénario (noté sur la fiche)
-
-
-@app.post("/api/clips")
-def tourner_clip(d: DemandeClip):
-    if not d.prompt.strip():
-        raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
-    return _commander(lambda: plateau_.commander_clip(
-        d.idee or d.prompt, d.prompt, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
-        rushes.valider_dossier(d.dossier), d.modele, d.loras, d.ecrit_par))
-
-
-# Montage, mode Séquence
-
-class DemandeSequence(BaseModel):
-    titre: str
-    qualite: str = "compromis"
-    format: str = "16:9 (Widescreen)"  # si le premier plan ne part pas d'un rush
-    # {personnage: rush, voix: "auto" | clip | "voix:<id>" | None, ambiance: texte, contrainte: texte,
-    #  reference_partout: bool}
-    casting: dict = {}
-    plans: list[dict] = []  # [{id, idee, prompt, duree, enchainement, rush, seed, ambiance}]
-    llm: str | None = None
-    modele: str | None = None  # checkpoint ; absent = défaut des réglages (création) ou celui déjà choisi
-    contrainte_en: dict | None = None  # {fr, en} : traduction faite au découpage du Scénario
-    loras: list[dict] = []  # [{fichier, force, declencheurs}] : les mêmes sur tous les plans
-
-
-class DemandeTournageSequence(BaseModel):
-    plans: list[int] | None = None  # None : les plans pas encore à jour
-
-
-def _sequence(action):
-    try:
-        return action()
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except (sequences.ErreurSequence, plateau.ErreurPlateau, rushes.ErreurRushes) as e:
-        raise HTTPException(404 if "inconnue" in str(e) else 400, str(e))
-
-
-class DemandeDecoupage(BaseModel):
-    synopsis: str = ""  # le fil de l'histoire (facultatif), en français, répliques entre guillemets
-    sujet: str = "personnage"  # l'état du Scénario : le personnage et le décor en sont tirés
-    choix: dict[str, dict[str, str | None]] = {}
-    age: int | None = None
-    plans: list[dict]  # [{enchainement, duree, note, rush, replique, moment, off, prompt (déjà écrit)}]
-    reference: str | None = None  # rush du personnage (galerie du Plateau)
-    contrainte: str = ""  # impérative sur tous les plans
-    llm: str | None = None
-    musique: str | None = None  # case 🎵 Musique d'ambiance : sa description ; None = pas de musique de fond
-    plan: int | None = None  # ✨ d'un plan : son numéro (0 = le premier) ; None = tous les plans
-    contrainte_en: dict | None = None  # {fr, en} : traduction déjà faite de la contrainte, reprise si elle vaut
-
-
-@app.post("/api/sequences/decouper")
-async def decouper_sequence(d: DemandeDecoupage):
-    """Scénario, atelier Séquence : les prompts de tous les plans écrits ensemble par Llama (✨ Tout écrire), ou
-    d'un seul (✨ d'un plan), les autres servant de contexte."""
-    _verifier_llm(d.llm)
-    try:
-        desc = listes.description_sequence(d.sujet, d.choix, d.age)
-        return await sequences.decouper(orchestrateur, d.synopsis, desc["personnage"], desc["decor"], d.plans,
-                                        d.reference, d.llm, desc["mineur"], d.contrainte, musique=d.musique,
-                                        cible=d.plan, contrainte_en=d.contrainte_en)
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except (sequences.ErreurSequence, plateau.ErreurPlateau, listes.ErreurListes) as e:
-        raise HTTPException(400, str(e))
-    except ErreurLlama as e:
-        raise HTTPException(500, str(e))
-
-
-@app.get("/api/sequences")
-def lister_sequences():
-    return sequences.liste()
-
-
-@app.post("/api/sequences")
-def creer_sequence(d: DemandeSequence):
-    return _sequence(lambda: sequences.creer(d.model_dump()))
-
-
-@app.get("/api/sequences/{id_sequence}")
-def lire_sequence(id_sequence: str):
-    return _sequence(lambda: sequences.public(sequences.lire(id_sequence)))
-
-
-@app.put("/api/sequences/{id_sequence}")
-def modifier_sequence(id_sequence: str, d: DemandeSequence):
-    return _sequence(lambda: sequences.modifier(id_sequence, d.model_dump()))
-
-
-@app.delete("/api/sequences/{id_sequence}")
-def supprimer_sequence(id_sequence: str):
-    _sequence(lambda: sequences.supprimer(id_sequence))
-    return {"ok": True}
-
-
-@app.post("/api/sequences/{id_sequence}/tourner")
-def tourner_sequence(id_sequence: str, d: DemandeTournageSequence):
-    return _commander(lambda: plateau_.commander_sequence(id_sequence, d.plans))
-
-
-# Voix de référence des séquences (bibliothèque data/voix)
-
-class DemandeEssaiVoix(BaseModel):
-    phrase: str = ""  # vide : la phrase par défaut
-    description: str = ""  # qui parle et comment (obligatoire sans personnage)
-    personnage: str | None = None  # rush du personnage (le casting de la séquence)
-    seed: int | None = None
-
-
-class DemandeImportVoix(BaseModel):
-    audio: str  # data URL
-    nom: str
-    nom_origine: str = ""
-
-
-class DemandeVoix(BaseModel):
-    nom: str
-
-
-def _voix(action):
-    try:
-        return action()
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except (voix.ErreurVoix, plateau.ErreurPlateau, sequences.ErreurSequence) as e:
-        raise HTTPException(404 if "inconnue" in str(e) else 400, str(e))
-
-
-@app.get("/api/voix")
-def lister_voix():
-    return voix.liste()
-
-
-@app.post("/api/voix/essais")
-def essayer_voix(d: DemandeEssaiVoix):
-    """Un essai de voix dans la file du Plateau ; la commande terminée donne le brouillon (champ voix)."""
-    return _commander(lambda: plateau_.commander_voix(d.phrase, d.description, d.personnage, d.seed))
-
-
-@app.post("/api/voix/import")
-def importer_voix(d: DemandeImportVoix):
-    def action():
-        try:
-            son = retouche.depuis_data_url(d.audio)
-        except retouche.ErreurRetouche:
-            raise voix.ErreurVoix("Données audio invalides")
-        return voix.importer(son, d.nom, d.nom_origine)
-    return _voix(action)
-
-
-@app.get("/api/voix/{id_voix}")
-def lire_voix(id_voix: str):
-    return _voix(lambda: voix.lire(id_voix))
-
-
-@app.put("/api/voix/{id_voix}")
-def garder_voix(id_voix: str, d: DemandeVoix):
-    """Garde un essai sous ce nom, ou renomme une voix."""
-    return _voix(lambda: voix.garder(id_voix, d.nom))
-
-
-@app.delete("/api/voix/{id_voix}")
-def supprimer_voix(id_voix: str):
-    """À la corbeille ; renvoie les séquences repassées en Auto."""
-    return {"sequences": _voix(lambda: voix.supprimer(id_voix))}
-
-
-@app.get("/api/voix/{id_voix}/son")
-def son_voix(id_voix: str):
-    return _voix(lambda: FileResponse(voix.chemin_son(id_voix), media_type=voix.type_mime(id_voix)))
 
 
 @app.get("/api/creations/{id_creation}/image")

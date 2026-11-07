@@ -7,7 +7,7 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from app import main
+from app import main, routes_montage
 
 
 class Plateau(unittest.TestCase):
@@ -47,7 +47,7 @@ class Montage(unittest.TestCase):
             return SimpleNamespace(to_dict=lambda: {"id": "c1"})
 
         with mock.patch.object(main.plateau_, "commander_clip", commander_clip):
-            main.tourner_clip(main.DemandeClip(**champs))
+            routes_montage.tourner_clip(routes_montage.DemandeClip(**champs))
         return appels[0]
 
     def test_prompt_tourne_tel_quel_sans_llm(self):
@@ -60,7 +60,7 @@ class Montage(unittest.TestCase):
         self.assertEqual(e.exception.status_code, 400)
 
     def test_plus_de_champ_llm(self):
-        self.assertNotIn("llm", main.DemandeClip.model_fields)
+        self.assertNotIn("llm", routes_montage.DemandeClip.model_fields)
 
 
 if __name__ == "__main__":
