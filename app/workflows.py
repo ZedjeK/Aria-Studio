@@ -56,16 +56,22 @@ class Workflow:
 
     @property
     def modele_origine(self) -> str:
-        """Le modèle de diffusion livré avec le workflow (dans <Famille>/modeles)."""
+        """Le modèle de diffusion livré avec le workflow (dans <Famille>/modeles) : celui qu'on télécharge quand la
+        famille n'en a aucun, pas un passage obligé."""
         return next(f["nom"] for f in self.fiche["fichiers"] if f["dossier"] == f"{self.famille}/modeles")
 
     def variantes(self) -> list[str]:
-        """Modèles utilisables : l'origine d'abord, puis tout ce qui est déposé dans <Famille>/modeles."""
+        """Checkpoints présents dans <Famille>/modeles, celui d'origine d'abord s'il est là. C'est la famille qui
+        compte : l'origine supprimée, les autres checkpoints de la famille servent toujours."""
         deposes = modeles.fichiers(f"{self.famille}/modeles", modeles.EXTENSIONS_IMAGE)
-        return [self.modele_origine] + [m for m in deposes if m != self.modele_origine]
+        return sorted(deposes, key=lambda m: m != self.modele_origine)
 
     def manquants(self) -> list[dict]:
-        return [f for f in self.fiche["fichiers"] if not modeles.destination(f["dossier"], f["nom"]).is_file()]
+        """Fichiers de la fiche absents. Le checkpoint d'origine n'en est que si la famille n'a aucun checkpoint ; les
+        fichiers communs (encodeurs, VAE, LoRA du workflow) restent nécessaires."""
+        dossier, un_checkpoint = f"{self.famille}/modeles", bool(self.variantes())
+        return [f for f in self.fiche["fichiers"] if not (f["dossier"] == dossier and un_checkpoint)
+                and not modeles.destination(f["dossier"], f["nom"]).is_file()]
 
     def resume(self) -> dict:
         manquants = self.manquants()
@@ -85,6 +91,7 @@ class Workflow:
             "manquants": manquants,
             "a_telecharger": sum(f["taille"] for f in manquants),
             "modeles": self.variantes(),
+            "origine": self.modele_origine,
             "loras": modeles.loras(self.famille),
         }
 
@@ -184,7 +191,8 @@ class Workflow:
         api[ks]["inputs"]["denoise"] = denoise
 
     def choisi(self, modele: str | None) -> str:
-        """Le checkpoint réellement utilisé : celui demandé, sinon le défaut des réglages."""
+        """Le checkpoint réellement utilisé : celui demandé, sinon le défaut des réglages (l'origine si elle est là,
+        sinon le premier checkpoint de la famille)."""
         return modele or reglages.valeurs_workflow(self).get("modele") or self.modele_origine
 
     @staticmethod

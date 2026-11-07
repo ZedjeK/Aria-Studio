@@ -120,8 +120,10 @@ def expliquer_erreur(c: "Commande", message: str) -> str:
     except workflows.ErreurWorkflow:
         return message
     if modele != wf.modele_origine and _CHARGEMENT_RATE.search(message):
+        conseil = (f"Reviens au modèle d'origine ({wf.modele_origine})" if wf.modele_origine in wf.variantes()
+                   else f"Choisis un autre checkpoint de la famille {wf.famille}")
         return (f"Le checkpoint « {modele} » ne se charge pas dans {wf.fiche['nom']} : il n'est sans doute pas de la "
-                f"même architecture. Reviens au modèle d'origine ({wf.modele_origine}). Détail : {message[:200]}")
+                f"même architecture. {conseil}. Détail : {message[:200]}")
     return message
 
 

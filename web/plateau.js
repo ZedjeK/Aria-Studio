@@ -17,12 +17,13 @@ document.getElementById("workflow-retouche").addEventListener("change", () => {
 // Le LLM qui écrit pour un workflow (onglets d'usage de Modèles), sinon le LLM par défaut : le Scénario le propose.
 const llmDuWorkflow = (id, o = optionsPlateau) => o?.llm.par_workflow?.[id] ?? o?.llm.defaut;
 
-// Une ligne par modèle : « workflow::fichier ». Le modèle d'origine d'abord, puis les variantes de la famille.
-const lignesModeles = (tache) => tache.choix.flatMap((w) => w.modeles.map((m) => [
-    `${w.id}::${m}`,
-    (m === w.origine ? `${w.nom}${w.id === tache.defaut ? " ★" : ""}` : `   ↳ ${w.nom} · ${m.replace(/\.safetensors$/, "")}`)
-        + (m === w.modele_defaut && m !== w.origine ? " (défaut)" : ""),
-]));
+// Une ligne par checkpoint : « workflow::fichier ». Celui par défaut de la famille d'abord, sous le nom du workflow
+// (avec son fichier s'il n'est pas celui d'origine), puis les autres checkpoints déposés dans son dossier.
+const nomCheckpoint = (m) => m.replace(/\.safetensors$/, "");
+const lignesModeles = (tache) => tache.choix.flatMap((w) => [w.modele_defaut, ...w.modeles.filter((m) => m !== w.modele_defaut)]
+    .map((m, i) => [`${w.id}::${m}`, i === 0
+        ? `${w.nom}${w.id === tache.defaut ? " ★" : ""}${m === w.origine ? "" : ` · ${nomCheckpoint(m)}`}`
+        : `   ↳ ${w.nom} · ${nomCheckpoint(m)}`]));
 
 // Les listes sont relues à chaque affichage du Plateau : un modèle déposé dans son dossier y apparaît aussitôt.
 async function chargerOptionsPlateau() {
@@ -203,7 +204,7 @@ async function recevoirAuPlateau({ prompt, workflow, images, role, liberte = nul
     const w = listeCreation().choix.find((x) => x.id === workflow);
     if (w && choixModele("workflow-creation").workflow !== workflow) {  // même workflow : on garde la variante
         const select = document.getElementById("workflow-creation");
-        select.value = `${w.id}::${w.origine}`;
+        select.value = `${w.id}::${w.modele_defaut}`;
         select.dispatchEvent(new Event("change"));
     }
     document.getElementById("prompt-plateau").value = prompt;

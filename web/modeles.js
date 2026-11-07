@@ -341,7 +341,6 @@ function carteWorkflow(wf, idUsage, u) {
     const capacites = [wf.references ? `jusqu'à ${wf.references} images de référence` : "", wf.variation ? "variation" : ""]
         .filter(Boolean).join(" · ");
     const nature = idUsage === "video" ? "video" : "image";
-    const origine = wf.modeles[0];
     return `<section class="carte workflow-usage">
         <div class="ligne"><h2>${echapper(wf.nom)}</h2>
             ${wf.pret ? '<span class="ok">prêt ✓</span>'
@@ -360,7 +359,7 @@ function carteWorkflow(wf, idUsage, u) {
                     ${m === wf.modele_defaut ? '<span class="badge ok">par défaut</span>'
                         : `<button type="button" class="petit" data-checkpoint-defaut="${echapper(m)}" data-workflow="${wf.id}"
                                    title="Le checkpoint que ce workflow prend quand rien d'autre n'est choisi">☆ Par défaut</button>`}
-                    ${m === origine ? '<span class="badge">d\'origine</span>' : ""}</li>`).join("")}</ul>
+                    ${m === wf.origine ? '<span class="badge">d\'origine</span>' : ""}</li>`).join("")}</ul>
                 <button type="button" class="petit" data-chercher="${nature}" data-famille="${echapper(wf.famille)}">🔎 Chercher des checkpoints ${echapper(wf.famille)}</button>
             </div>
             <div>

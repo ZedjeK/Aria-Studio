@@ -325,7 +325,9 @@ def params_workflow(wf) -> dict[str, Param]:
     if "mots_max" in (profil := wf.fiche.get("profil_prompt") or {}):
         params.append(Param("mots_max", "Prompt : mots conseillés", "entier", int(profil["mots_max"]), 20, 1000, 10))
     if "modele" in entrees:
-        params.append(Param("modele", "Modèle par défaut", "choix", wf.modele_origine, choix=tuple(wf.variantes()),
+        presents = wf.variantes()  # l'origine d'abord si elle est là, sinon le premier checkpoint de la famille
+        params.append(Param("modele", "Modèle par défaut", "choix", (presents or [wf.modele_origine])[0],
+                            choix=tuple(presents),
                             aide=f"Checkpoint utilisé partout (Plateau, Montage, séquences) quand rien d'autre n'est "
                                  f"choisi. Dépose les tiens dans modeles/{wf.famille}/modeles"))
     return {p.cle: p for p in params}
