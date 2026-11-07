@@ -71,7 +71,7 @@ class Optimiseur(unittest.TestCase):
     def test_alertes_vram_sur_16_go(self):
         _, r = self.propositions()
         self.assertTrue(any("Qwen-Image-Edit 2511" in a and "RAM" in a for a in r["alertes"]))
-        self.assertTrue(any("Krea 2 Turbo" in a and "1 MP" in a for a in r["alertes"]))
+        self.assertTrue(any("Krea 2" in a and "1 MP" in a for a in r["alertes"]))
 
     def test_vram_du_projecteur_comptee(self):
         """La vision est chargée d'office avec le LLM : son projecteur (0,6 Go pour Bonsai 2) occupe la carte aussi."""

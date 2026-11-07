@@ -17,7 +17,7 @@ LORA = {"fichier": STYLE, "force": 0.8, "declencheurs": "cinematic grain"}
 
 
 class ModelesTemporaires:
-    """Un dossier des modèles avec une LoRA H3 et une LoRA Qwen-Image 2.1."""
+    """Un dossier des modèles avec le checkpoint de H3, une LoRA H3 et une LoRA Qwen-Image 2.1."""
 
     def demarrer(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -25,6 +25,8 @@ class ModelesTemporaires:
         for famille, nom in (("MiniMax-H3", STYLE), ("Qwen-Image2.1", "detail.safetensors")):
             (d / "modeles" / famille / "loras").mkdir(parents=True)
             (d / "modeles" / famille / "loras" / nom).write_bytes(b"x")
+        (d / "modeles" / "MiniMax-H3" / "modeles").mkdir()  # sans checkpoint, la famille n'a rien à charger
+        (d / "modeles" / "MiniMax-H3" / "modeles" / workflows.obtenir("minimax_h3_t2v").modele_origine).touch()
         self.patchs_modeles = [mock.patch.object(modeles, "DOSSIER", d / "modeles"),
                                mock.patch.object(modeles, "REGISTRE", d / "modeles.json"),
                                mock.patch.object(modeles, "MEMOIRE_LORAS", d / "loras.json")]

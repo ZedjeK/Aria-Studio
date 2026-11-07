@@ -8,6 +8,7 @@ simulé (un checkpoint déposé, « Dasiwa »), sans dépendre de ce qui est ré
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from app import modeles, plateau, reglages, rushes, sequences, workflows
@@ -21,8 +22,18 @@ DASIWA = "DasiwaMinimaxH3_dasiwaHybridV4Turbo_int8.safetensors"
 
 
 def deposes(dossier, extensions):
-    """modeles.fichiers simulé : un checkpoint déposé pour H3, rien d'autre."""
+    """modeles.fichiers simulé (trié, comme le vrai) : l'origine de H3 et un checkpoint déposé, rien d'autre."""
+    return sorted([ORIGINE_H3, DASIWA]) if dossier == "MiniMax-H3/modeles" else []
+
+
+def sans_origine(dossier, extensions):
+    """L'origine de H3 supprimée : il ne reste que le checkpoint déposé."""
     return [DASIWA] if dossier == "MiniMax-H3/modeles" else []
+
+
+def presents_sauf_checkpoints(dossier, nom):
+    """modeles.destination simulé : les fichiers communs (encodeurs, VAE, LoRA du workflow) sont là."""
+    return SimpleNamespace(is_file=lambda: dossier != "MiniMax-H3/modeles")
 
 
 class Base(unittest.TestCase):
@@ -40,7 +51,7 @@ class Base(unittest.TestCase):
         self.wf = workflows.obtenir(H3)
 
     def tearDown(self):
-        for p in self.patchs:
+        for p in reversed(self.patchs):  # à l'envers : un remplacement empilé rend bien celui d'en dessous
             p.stop()
         self.dossier.cleanup()
 
@@ -70,7 +81,7 @@ class ModeleParDefaut(Base):
 
     def test_checkpoint_supprime_retour_a_l_origine(self):
         reglages.modifier_workflow(H3, {"modele": DASIWA})
-        with mock.patch.object(modeles, "fichiers", return_value=[]):
+        with mock.patch.object(modeles, "fichiers", return_value=[ORIGINE_H3]):
             self.assertEqual(reglages.valeurs_workflow(self.wf)["modele"], ORIGINE_H3)
             self.assertEqual(self.unet(self.preparer()), ORIGINE_H3)
 
@@ -79,6 +90,49 @@ class ModeleParDefaut(Base):
             reglages.modifier_workflow(H3, {"modele": "inconnu.safetensors"})
         with self.assertRaisesRegex(workflows.ErreurWorkflow, "Modèle absent"):
             self.preparer(modele="inconnu.safetensors")
+
+
+class FamilleSansOrigine(Base):
+    """Le checkpoint livré avec le workflow supprimé : la famille suffit, ses autres checkpoints servent toujours."""
+
+    def setUp(self):
+        super().setUp()
+        for p in (mock.patch.object(modeles, "fichiers", side_effect=sans_origine),
+                  mock.patch.object(modeles, "destination", side_effect=presents_sauf_checkpoints)):
+            p.start()
+            self.patchs.append(p)
+
+    def test_pret_avec_un_autre_checkpoint(self):
+        self.assertEqual(self.wf.variantes(), [DASIWA])
+        self.assertEqual(self.wf.manquants(), [])
+        self.assertTrue(self.wf.resume()["pret"])
+        with mock.patch.object(modeles, "fichiers", return_value=[]):  # plus aucun checkpoint : l'origine manque
+            self.assertEqual([f["nom"] for f in self.wf.manquants()], [ORIGINE_H3])
+
+    def test_le_defaut_passe_au_checkpoint_present(self):
+        p = reglages.params_workflow(self.wf)["modele"]
+        self.assertEqual((p.defaut, p.choix), (DASIWA, (DASIWA,)))
+        self.assertEqual(self.wf.choisi(None), DASIWA)
+        self.assertEqual(self.unet(self.preparer()), DASIWA)  # plus le fichier d'origine écrit dans api.json
+
+    def test_defaut_regle_sur_l_origine_supprimee(self):
+        with mock.patch.object(modeles, "fichiers", side_effect=deposes):
+            reglages.modifier_workflow(H3, {"modele": ORIGINE_H3})
+        self.assertEqual(reglages.valeurs_workflow(self.wf)["modele"], DASIWA)
+        with self.assertRaisesRegex(workflows.ErreurWorkflow, "Modèle absent"):
+            self.preparer(modele=ORIGINE_H3)
+
+    def test_options_du_plateau(self):
+        with mock.patch.object(modeles, "llm_disponibles", return_value=[]):
+            t = Plateau(orchestrateur=None).options()["workflows"]["image_vers_video"]
+        w = next(x for x in t["choix"] if x["id"] == H3)
+        self.assertEqual((w["modeles"], w["modele_defaut"]), ([DASIWA], DASIWA))
+
+    def test_conseil_sans_l_origine(self):
+        c = Commande("idée", None, None, H3, "16:9", None, 1, modele=DASIWA, type="clip")
+        message = plateau.expliquer_erreur(c, "UNETLoader : Error(s) in loading state_dict: size mismatch")
+        self.assertIn("autre checkpoint de la famille MiniMax-H3", message)
+        self.assertNotIn(ORIGINE_H3, message)
 
 
 class ReglagesParCheckpoint(Base):
