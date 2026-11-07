@@ -7,7 +7,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
-from app import plateau, sequences
+from app import decoupage, plateau, sequences
 from app.plateau import Plateau
 from app.securite import ErreurSecurite
 from app.sequences import ErreurSequence
@@ -211,7 +211,7 @@ class DecoupageAvecContrainte(Base):
 
     def test_contrainte_envoyee_et_rendue(self):
         llama = FauxLlama(blocs("She walks.", "She smiles."), f"**{EN}**")  # puis la traduction de la contrainte
-        r = asyncio.run(sequences.decouper(llama, "Une pilote marche.", "", "", self.PLANS, None, None, False,
+        r = asyncio.run(decoupage.decouper(llama, "Une pilote marche.", "", "", self.PLANS, None, None, False,
                                            f"  {CONTRAINTE} "))
         self.assertEqual((r["contrainte"], r["contrainte_en"]), (CONTRAINTE, {"fr": CONTRAINTE, "en": EN}))
         self.assertIn(f"Mandatory constraint, respected in EVERY shot: {CONTRAINTE}", llama.messages[0][1]["content"])
@@ -221,7 +221,7 @@ class DecoupageAvecContrainte(Base):
                           "EN: She walks and says \"Quelle belle journée.\" The sun rises.\n"
                           "SHOT 2\nFR: gros plan, elle dit « On décolle ce soir. »\n"
                           "EN: Close-up, she says \"On décolle ce soir.\"")
-        r = asyncio.run(sequences.decouper(llama, "Une pilote marche, puis dit « On décolle ce soir. »", "", "",
+        r = asyncio.run(decoupage.decouper(llama, "Une pilote marche, puis dit « On décolle ce soir. »", "", "",
                                            self.PLANS, None))
         self.assertNotIn("Quelle belle journée", r["plans"][0]["prompt"])
         self.assertNotIn("Quelle belle journée", r["plans"][0]["idee"])
@@ -230,8 +230,8 @@ class DecoupageAvecContrainte(Base):
 
     def test_as18_et_longueur(self):
         with self.assertRaises(ErreurSecurite):
-            asyncio.run(sequences.decouper(FauxLlama(), "Elle danse.", "", "", self.PLANS, None, None, True,
+            asyncio.run(decoupage.decouper(FauxLlama(), "Elle danse.", "", "", self.PLANS, None, None, True,
                                            "elle se déshabille"))
         with self.assertRaisesRegex(ErreurSequence, "Contrainte de 300"):
-            asyncio.run(sequences.decouper(FauxLlama(), "Elle danse.", "", "", self.PLANS, None, None, False,
+            asyncio.run(decoupage.decouper(FauxLlama(), "Elle danse.", "", "", self.PLANS, None, None, False,
                                            "x" * 301))

@@ -2,7 +2,7 @@
 // l'atelier : chacun a son type, sa durée, « ce qui se passe », sa réplique (🗣, mot pour mot, au début, pendant
 // l'action ou à la fin, voix off possible) et son prompt anglais, modifiable. ✨ d'un plan l'écrit seul (le LLM
 // connaît le fil et les plans voisins), 💬 d'un plan ouvre le chat sous ce plan, ✨ Tout écrire écrit tous les plans
-// d'un coup (app/sequences.decouper). À droite, le résumé, puis la séquence créée dans le Montage, prête à tourner.
+// d'un coup (app/decoupage.decouper). À droite, le résumé, puis la séquence créée dans le Montage, prête à tourner.
 
 const TYPES_DEPART = [["texte", "✍️ Départ du texte"], ["rush", "🖼️ Départ de la référence"]];
 const TYPES_SUITE = [["prolonger", "↪ Prolonger"], ["couper", "✂ Couper"], ["transition", "🌀 Transition"]];
@@ -45,7 +45,7 @@ function etatPlan(p) {
     return ["pret", "✅ prompt prêt"];
 }
 
-// Une réplique trop longue pour son plan : le serveur prévient aussi (sequences.MOTS_PAR_SECONDE).
+// Une réplique trop longue pour son plan : le serveur prévient aussi (decoupage.MOTS_PAR_SECONDE).
 function motsReplique(p) {
     const mots = compterMots(p.replique);
     const permis = Math.floor((optionsPlateau?.video.sequence.mots_par_seconde ?? 2.5) * p.duree);

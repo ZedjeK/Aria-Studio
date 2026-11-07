@@ -172,7 +172,7 @@ class Plateau:
 
     def options(self) -> dict:
         """Listes de l'interface, relues à chaque appel : un fichier déposé dans un dossier y apparaît aussitôt."""
-        from app import sequences, voix  # sequences et voix importent plateau
+        from app import decoupage, sequences, voix  # ils importent plateau
         prets = [wf for wf in workflows.catalogue() if not wf.manquants()]
         return {
             "formats": FORMATS,
@@ -200,7 +200,7 @@ class Plateau:
                 # Mode Séquence : de quoi estimer comme le serveur (sequences.estimation).
                 "sequence": {"plans_max": sequences.PLANS_MAX, "surcout": sequences.SURCOUT_SEQUENCE,
                              "surcout_parole": sequences.SURCOUT_PAROLE, "steps_parole": sequences.STEPS_PAROLE,
-                             "mots_par_seconde": sequences.MOTS_PAR_SECONDE},
+                             "mots_par_seconde": decoupage.MOTS_PAR_SECONDE},
                 "voix": voix.options(),
             },
             "references_max": workflows.REFERENCES_MAX,

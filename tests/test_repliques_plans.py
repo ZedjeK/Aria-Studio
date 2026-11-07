@@ -7,7 +7,7 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from app import main, plateau, prompt, sequences
+from app import decoupage, main, plateau, prompt, routes_scenario, sequences, services
 from app.sequences import ErreurSequence
 from tests.test_libre import FauxLlm
 from tests.test_sequences import Base, FauxLlama, blocs
@@ -22,7 +22,7 @@ REPLIQUE = "Tu m'as attendue ?"
 class Repliques(Base):
     def decouper(self, reponse, plans=PLANS, **options):
         llama = FauxLlama(reponse)
-        r = asyncio.run(sequences.decouper(llama, "", "", "", plans, None, **options))
+        r = asyncio.run(decoupage.decouper(llama, "", "", "", plans, None, **options))
         return r, llama.messages[0][1]["content"]
 
     def test_la_replique_du_plan_avec_son_moment(self):
@@ -42,11 +42,11 @@ class Repliques(Base):
                 ("debut", f"Medium shot of the hangar. {dit} She takes off her helmet. She smiles."),
                 ("pendant", f"Medium shot of the hangar. She takes off her helmet. {dit} She smiles."),
                 ("fin", f"Medium shot of the hangar. She takes off her helmet. She smiles. {dit}")):
-            self.assertEqual(sequences.placer_replique(texte, "Salut.", moment, False), attendu, moment)
-        self.assertEqual(sequences.placer_replique("She walks.", "Salut.", "debut", True),
+            self.assertEqual(decoupage.placer_replique(texte, "Salut.", moment, False), attendu, moment)
+        self.assertEqual(decoupage.placer_replique("She walks.", "Salut.", "debut", True),
                          'She walks. In an off-screen voiceover, the character says: "Salut." '
                          "The character's lips stay closed.")
-        self.assertEqual(sequences.placer_replique('She says "Salut."', "Salut.", "debut", False), 'She says "Salut."')
+        self.assertEqual(decoupage.placer_replique('She says "Salut."', "Salut.", "debut", False), 'She says "Salut."')
 
     def test_voix_off_et_longueur(self):
         plans = [dict(p) for p in PLANS]
@@ -78,7 +78,7 @@ class UnSeulPlan(Base):
         plans = [{**PLANS[0], "prompt": "Wide shot, a pilot walks into the hangar."}, PLANS[1],
                  {**PLANS[2], "prompt": "Continuous shot, same scene. She smiles."}]
         llama = FauxLlama("SHOT 2\nFR: elle retire son casque\nEN: Close-up, she takes off her helmet.")
-        r = asyncio.run(sequences.decouper(llama, "Une pilote rentre.", "", "", plans, None, cible=1,
+        r = asyncio.run(decoupage.decouper(llama, "Une pilote rentre.", "", "", plans, None, cible=1,
                                            contrainte="cheveux attachés",
                                            contrainte_en={"fr": "cheveux attachés", "en": "hair tied up"}))
         demande = llama.messages[0][1]["content"]
@@ -91,21 +91,21 @@ class UnSeulPlan(Base):
         self.assertEqual(len(llama.messages), 1)
 
     def test_bloc_mal_numerote_pris_quand_meme(self):
-        self.assertEqual(sequences.lire_blocs("SHOT 1\nFR: a\nEN: b", [3], exact=False), [("a", "b")])
-        self.assertEqual(sequences.lire_blocs("SHOT 1\nFR: a\nEN: b\nSHOT 3\nFR: c\nEN: d", [3], exact=False),
+        self.assertEqual(decoupage.lire_blocs("SHOT 1\nFR: a\nEN: b", [3], exact=False), [("a", "b")])
+        self.assertEqual(decoupage.lire_blocs("SHOT 1\nFR: a\nEN: b\nSHOT 3\nFR: c\nEN: d", [3], exact=False),
                          [("c", "d")])
 
     def test_plan_vide_sans_fil(self):
         with self.assertRaisesRegex(ErreurSequence, "Plan 3 : écris ce qui s'y passe"):
-            asyncio.run(sequences.decouper(FauxLlama(), "", "", "", [PLANS[0], PLANS[1], {**PLANS[2], "note": ""}],
+            asyncio.run(decoupage.decouper(FauxLlama(), "", "", "", [PLANS[0], PLANS[1], {**PLANS[2], "note": ""}],
                                            None, cible=2))
 
 
 class AideDUnPlan(Base):
     def appeler(self, reponse, **sequence):
         o = FauxLlm(json.dumps(reponse))
-        with mock.patch.object(main, "orchestrateur", o), mock.patch.object(plateau, "textes_origine", lambda ids: []):
-            r = asyncio.run(main.chat_libre(main.DemandeLibre(
+        with mock.patch.object(services, "orchestrateur", o), mock.patch.object(plateau, "textes_origine", lambda ids: []):
+            r = asyncio.run(routes_scenario.chat_libre(routes_scenario.DemandeLibre(
                 echanges=[{"role": "user", "content": "Elle est fatiguée"}], forme="plan", workflow="minimax_h3_t2v",
                 sequence={"synopsis": "Une pilote rentre.", "plans": PLANS, "plan": 1, **sequence})))
         return r, o.appels[0][0][0]["content"]
@@ -128,4 +128,4 @@ class AideDUnPlan(Base):
 
     def test_sequence_obligatoire(self):
         with self.assertRaises(HTTPException):
-            asyncio.run(main.chat_libre(main.DemandeLibre(echanges=[{"role": "user", "content": "x"}], forme="plan")))
+            asyncio.run(routes_scenario.chat_libre(routes_scenario.DemandeLibre(echanges=[{"role": "user", "content": "x"}], forme="plan")))

@@ -10,7 +10,7 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from app import main, plateau, prompt
+from app import main, plateau, prompt, routes_scenario
 from app.securite import ErreurSecurite
 
 TOUR = {"message": "Je note le chat.", "fiche": {"Sujet": "un chat roux", "Réplique": "None"},
@@ -144,11 +144,11 @@ class Optimiser(unittest.TestCase):
             appels.append(("retouche", instruction, vue))
             return "Make the sky orange; keep everything else unchanged."
 
-        with (mock.patch.object(main.prompt, "reecrire", reecrire),
-              mock.patch.object(main.prompt, "traduire_instruction", traduire_instruction),
+        with (mock.patch.object(prompt, "reecrire", reecrire),
+              mock.patch.object(prompt, "traduire_instruction", traduire_instruction),
               mock.patch.object(plateau, "vue", lambda i: f"vue:{i}"),
               mock.patch.object(plateau, "textes_origine", lambda ids: [])):
-            r = asyncio.run(main.optimiser_prompt(main.DemandeOptimisation(**champs)))
+            r = asyncio.run(routes_scenario.optimiser_prompt(routes_scenario.DemandeOptimisation(**champs)))
         return r, appels[0]
 
     def test_image_avec_les_complements(self):
@@ -175,8 +175,8 @@ class Route(unittest.TestCase):
         async def libre(*args, **_):
             return {"message": "ok", "fiche": {}, "questions": [], "prompt": None, "brut": "{}"}
 
-        with mock.patch.object(main.prompt, "libre", libre), mock.patch.object(plateau, "textes_origine", lambda ids: []):
-            return asyncio.run(main.chat_libre(main.DemandeLibre(**champs)))
+        with mock.patch.object(prompt, "libre", libre), mock.patch.object(plateau, "textes_origine", lambda ids: []):
+            return asyncio.run(routes_scenario.chat_libre(routes_scenario.DemandeLibre(**champs)))
 
     def test_conversation_controlee(self):
         self.assertEqual(self.appeler(echanges=[{"role": "user", "content": "Un chat"}])["message"], "ok")

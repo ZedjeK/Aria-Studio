@@ -1,9 +1,9 @@
-"""Séquence : musique d'ambiance du Scénario et absence de dialogue, données au découpage (sequences.decouper).
+"""Séquence : musique d'ambiance du Scénario et absence de dialogue, données au découpage (decoupage.decouper).
 Les répliques des plans sont testées dans test_repliques_plans. Le LLM est remplacé par un faux : rien n'est lancé."""
 
 import asyncio
 
-from app import sequences
+from app import decoupage, sequences
 from tests.test_sequences import Base, FauxLlama, blocs
 
 PLANS = [{"enchainement": "texte", "duree": 5, "note": ""}, {"enchainement": "couper", "duree": 5, "note": ""}]
@@ -12,7 +12,7 @@ PLANS = [{"enchainement": "texte", "duree": 5, "note": ""}, {"enchainement": "co
 class CasesDuScenario(Base):
     def decouper(self, reponse, synopsis="Une pilote rentre au hangar.", **options):
         llama = FauxLlama(reponse)
-        r = asyncio.run(sequences.decouper(llama, synopsis, "", "", PLANS, None, **options))
+        r = asyncio.run(decoupage.decouper(llama, synopsis, "", "", PLANS, None, **options))
         return r, llama.messages[0][1]["content"]
 
     def test_sans_replique_ni_musique(self):

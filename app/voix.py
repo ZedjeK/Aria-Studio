@@ -236,7 +236,7 @@ def valider_essai(phrase: str, description: str, personnage: str | None) -> tupl
 
 def prompt_essai(phrase: str, description: str, avec_personnage: bool) -> str:
     """Le prompt de l'essai V2 : gros plan en cabine, la phrase dans sa langue, le silence autour."""
-    from app import sequences  # sequences importe voix
+    from app import decoupage, sequences  # ils importent voix
     replique = phrase.replace("«", "").replace("»", "").strip().strip('"“”').strip()
     morceaux = []
     if avec_personnage:
@@ -247,7 +247,7 @@ def prompt_essai(phrase: str, description: str, avec_personnage: bool) -> str:
                     "plain dark background, soft studio light. The character looks at the camera and says: "
                     f"\"{replique}\"")
     voix = f", with this voice: {description}" if avec_personnage and description else ""
-    morceaux.append(f"The character speaks {sequences.langue(replique)}{voix}.")
+    morceaux.append(f"The character speaks {decoupage.langue(replique)}{voix}.")
     morceaux.append(SILENCE)
     return " ".join(morceaux)
 
@@ -280,7 +280,7 @@ def graphe_essai(prompt: str, seed: int, duree: int, personnage: str | None) -> 
 
 async def tourner_essai(p_: "plateau.Plateau", c: "plateau.Commande"):
     """Commande « voix » du Plateau : un essai de voix, enregistré comme brouillon (c.voix)."""
-    from app import sequences  # sequences importe voix
+    from app import decoupage, sequences  # ils importent voix
     _nettoyer()
     securite.verifier(c.idee, c.description, *c.textes_origine)
     prompt = prompt_essai(c.idee, c.description, bool(c.parent))
@@ -295,5 +295,5 @@ async def tourner_essai(p_: "plateau.Plateau", c: "plateau.Commande"):
         raise ErreurVoix("ComfyUI n'a pas renvoyé le son de l'essai")
     c.voix = _nouvelle(son, "flac", {
         "nom": None, "gardee": False, "source": "essai", "phrase": c.idee, "description": c.description,
-        "langue": sequences.langue(c.idee), "personnage": c.parent, "prompt": prompt, "seed": seed,
+        "langue": decoupage.langue(c.idee), "personnage": c.parent, "prompt": prompt, "seed": seed,
         "duree": c.duree, "duree_s": round(time.perf_counter() - debut, 2)})["id"]

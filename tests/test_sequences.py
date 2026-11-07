@@ -11,7 +11,7 @@ from unittest import mock
 
 from PIL import Image
 
-from app import plateau, rushes, sequences
+from app import decoupage, plateau, rushes, sequences
 from app.plateau import ErreurPlateau, Plateau
 from app.securite import ErreurSecurite
 from app.sequences import ErreurSequence
@@ -335,14 +335,14 @@ class Decoupage(Base):
 
     def decouper(self, llama, plans=None, reference=None, synopsis=None, mineur=False):
         import asyncio
-        return asyncio.run(sequences.decouper(llama, synopsis or self.SYNOPSIS, self.PERSO, self.DECOR,
+        return asyncio.run(decoupage.decouper(llama, synopsis or self.SYNOPSIS, self.PERSO, self.DECOR,
                                               plans or self.PLANS, reference, None, mineur))
 
     def test_demande_envoyee(self):
         plans = [dict(p) for p in self.PLANS]
         plans[3]["rush"] = self.neon
-        propres = sequences._valider_decoupage(self.SYNOPSIS, self.PERSO, self.DECOR, plans, None)
-        texte = sequences.demande_decoupage(self.SYNOPSIS, self.PERSO, self.DECOR, propres, None)
+        propres = decoupage._valider_decoupage(self.SYNOPSIS, self.PERSO, self.DECOR, plans, None)
+        texte = decoupage.demande_decoupage(self.SYNOPSIS, self.PERSO, self.DECOR, propres, None)
         self.assertIn("Story: Une pilote", texte)
         self.assertIn("Character: A young woman", texte)
         self.assertIn("Setting and look: In a dim orange-lit hangar.", texte)
@@ -351,31 +351,31 @@ class Decoupage(Base):
         self.assertIn("1. start, 5 s", texte)
         self.assertIn("2. continue, 5 s, note: elle se lève", texte)
         self.assertIn("4. transition, 5 s, arrival: une enseigne néon", texte)  # idée d'origine du rush
-        avec_ref = sequences.demande_decoupage(self.SYNOPSIS, self.PERSO, self.DECOR, propres, self.pilote)
+        avec_ref = decoupage.demande_decoupage(self.SYNOPSIS, self.PERSO, self.DECOR, propres, self.pilote)
         self.assertIn("Character: shown by the reference picture", avec_ref)
 
     def test_etiquettes_recopiees_retirees(self):  # vu avec Ministral (2026-10-21)
-        self.assertEqual(sequences.sans_etiquette("Cut: medium shot, the character walks."), "Medium shot, the character walks.")
-        self.assertEqual(sequences.sans_etiquette("Transition: extreme wide shot."), "Extreme wide shot.")
-        self.assertEqual(sequences.sans_etiquette("Wide shot, start from the picture: the character stands."),
+        self.assertEqual(decoupage.sans_etiquette("Cut: medium shot, the character walks."), "Medium shot, the character walks.")
+        self.assertEqual(decoupage.sans_etiquette("Transition: extreme wide shot."), "Extreme wide shot.")
+        self.assertEqual(decoupage.sans_etiquette("Wide shot, start from the picture: the character stands."),
                          "Wide shot, the character stands.")
-        self.assertEqual(sequences.sans_etiquette("A cut on the hand."), "A cut on the hand.")  # rien à retirer
-        self.assertEqual(sequences.sans_etiquette("The character is a woman. A cut shot, low-angle wide of the hangar."),
+        self.assertEqual(decoupage.sans_etiquette("A cut on the hand."), "A cut on the hand.")  # rien à retirer
+        self.assertEqual(decoupage.sans_etiquette("The character is a woman. A cut shot, low-angle wide of the hangar."),
                          "The character is a woman. Low-angle wide of the hangar.")
-        self.assertEqual(sequences.sans_etiquette("A transition shot, craning upward."), "Craning upward.")
+        self.assertEqual(decoupage.sans_etiquette("A transition shot, craning upward."), "Craning upward.")
 
     def test_langue_des_repliques(self):
-        self.assertEqual([sequences.langue(r) for r in ("On décolle ce soir.", "行くぞ！", "가자!", "Поехали")],
+        self.assertEqual([decoupage.langue(r) for r in ("On décolle ce soir.", "行くぞ！", "가자!", "Поехали")],
                          ["French", "Japanese", "Korean", "Russian"])
 
     def test_lecture_de_la_reponse(self):
-        self.assertEqual(sequences.lire_decoupage("SHOT 1\nFR: a\nEN: b c\nSHOT 2:\nFR: d\nEN: e", 2),
+        self.assertEqual(decoupage.lire_decoupage("SHOT 1\nFR: a\nEN: b c\nSHOT 2:\nFR: d\nEN: e", 2),
                          [("a", "b c"), ("d", "e")])
         with self.assertRaisesRegex(ErreurSequence, "1 plan"):
-            sequences.lire_decoupage("SHOT 1\nFR: a\nEN: b", 2)
+            decoupage.lire_decoupage("SHOT 1\nFR: a\nEN: b", 2)
         # Habillage vu avec Ministral (2026-10-21) : étiquettes en gras, séparateurs ---.
         ministral = "SHOT 1\n**FR:** a\n**EN:** b *tap*\n\n---\n\n### SHOT 2\n**FR:** c\n**EN:** **Continuous shot.** d"
-        self.assertEqual(sequences.lire_decoupage(ministral, 2), [("a", "b *tap*"), ("c", "Continuous shot. d")])
+        self.assertEqual(decoupage.lire_decoupage(ministral, 2), [("a", "b *tap*"), ("c", "Continuous shot. d")])
 
     def test_decoupage_et_garde_fous(self):
         llama = FauxLlama(blocs(
