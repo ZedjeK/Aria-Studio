@@ -97,7 +97,8 @@
                     <p class="discret">Tu peux fermer cette fenêtre : le téléchargement continue (onglet Modèles, Téléchargements).</p>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Voilà ce qu'Aria utilisera par défaut. Tu peux tout changer dans l'onglet Réglages.</p>
+                    <p>Voilà ce qu'Aria utilisera par défaut. Tu pourras changer les workflows et leurs checkpoints dans Modèles,
+                        leurs réglages fins dans Réglages.</p>
                     <dl id="recap-assistant" class="machine-assistant"></dl>
                     <p id="manquants-assistant" class="alerte" hidden></p>
                     <div id="bloc-essai-assistant" class="essai-assistant" hidden>
@@ -255,7 +256,9 @@
                 </div>
                 <div class="options-creation">
                     <label>Modèle <select id="workflow-retouche"></select></label>
-                    <label>Fondu <input id="fondu-retouche" type="range" min="0" max="128" value="24"></label>
+                    <label title="Largeur, en pixels, de la transition entre la retouche et l'image d'origine">Fondu
+                        <input id="fondu-retouche" type="range" min="0" max="128" value="24">
+                        <span id="valeur-fondu" class="valeur">24 px</span></label>
                     <button id="lancer-retouche" class="principal" type="button">Lancer</button>
                 </div>
                 <div id="loras-retouche" class="loras"></div>
@@ -288,7 +291,7 @@
                         </div>
                     </div>
                     <div class="options-creation">
-                        <label title="Checkpoint de MiniMax H3 (dépose les tiens dans modeles/MiniMax-H3/modeles ; défaut et réglages dans l'onglet Réglages)">Modèle <select id="modele-montage"></select></label>
+                        <label title="Checkpoint de MiniMax H3 (dépose les tiens dans modeles/MiniMax-H3/modeles ; défaut et réglages dans l'onglet Réglages)">Checkpoint <select id="modele-montage"></select></label>
                         <label>Qualité <select id="qualite-montage"></select></label>
                         <label>Durée <select id="duree-montage"></select></label>
                         <label id="bloc-format-montage" hidden>Format <select id="format-montage"></select></label>
@@ -308,7 +311,8 @@
                         <span id="etat-sequence" class="discret"></span>
                         <button id="enregistrer-sequence" type="button" class="petit">Enregistrer</button>
                         <button id="supprimer-sequence" type="button" class="petit danger">Supprimer</button>
-                        <button id="vers-scenario-sequence" type="button" class="petit">✍️ Écrire une séquence au Scénario</button>
+                        <button id="vers-scenario-sequence" type="button" class="petit"
+                                title="La séquence ouverte part au Scénario pour être retravaillée ; sans séquence, une nouvelle s'y écrit">✍️ Retravailler au Scénario</button>
                     </div>
                     <p class="discret">Les prompts des plans s'écrivent au ✍️ Scénario (histoire, découpage) ; ici, on les
                         retouche si besoin et on tourne. Chaque plan tourne son prompt tel quel.</p>
@@ -330,14 +334,15 @@
                                 </div>
                                 <details id="essai-voix">
                                     <summary>🎙️ Nouvel essai de voix</summary>
-                                    <p class="discret">Un gros plan en cabine silencieuse, avec le personnage du casting : seul le son est gardé.</p>
+                                    <p class="discret">Un gros plan en cabine silencieuse, avec le personnage de la séquence : seul le son est gardé.</p>
                                     <label>Phrase d'essai <input id="phrase-voix" type="text" maxlength="200"></label>
                                     <label>Voix <input id="description-voix" type="text" maxlength="300"
                                                        placeholder="ex. douce, un peu grave, posée (sans personnage : qui parle)"></label>
                                     <button id="lancer-essai-voix" type="button">🎙️ Tourner l'essai</button>
                                     <div id="progression-voix" hidden>
                                         <div class="barre"><div></div></div>
-                                        <span class="discret"></span>
+                                        <div class="ligne suivi-commande"><span class="discret"></span>
+                                            <button type="button" class="petit annuler-commande">✕ Annuler</button></div>
                                     </div>
                                     <div id="resultat-voix" class="ligne" hidden>
                                         <audio controls preload="none"></audio>
@@ -355,7 +360,7 @@
                                 <p id="erreur-voix" class="ko" hidden></p>
                             </div>
                             <div class="options-creation">
-                                <label title="Tous les plans de la séquence sont tournés avec ce checkpoint">Modèle <select id="modele-sequence"></select></label>
+                                <label title="Tous les plans de la séquence sont tournés avec ce checkpoint">Checkpoint <select id="modele-sequence"></select></label>
                                 <label>Qualité <select id="qualite-sequence"></select></label>
                                 <label id="bloc-format-sequence" hidden>Format <select id="format-sequence"></select></label>
                             </div>
@@ -469,9 +474,6 @@
                         <div class="ligne roles-reference" data-atelier-seul="image">
                             <label class="case"><input type="radio" name="role-reference" value="inspirer" checked> 🎭 S'inspirer</label>
                             <label class="case"><input type="radio" name="role-reference" value="variation"> 🎨 Variation</label>
-                            <label id="bloc-liberte-scenario" class="case discret" hidden>Liberté
-                                <input id="liberte-scenario" type="range" min="0.3" max="0.9" step="0.05" value="0.6">
-                                <span id="valeur-liberte-scenario">0,60</span></label>
                         </div>
                         <div id="cases-reference-scenario" class="emplacements" data-atelier-sauf="sequence"></div>
                         <div class="bloc-source reference-sequence" data-atelier-seul="sequence">
@@ -609,6 +611,7 @@
                             <button id="envoyer-prompt" type="button" disabled>→ Envoyer au Plateau</button>
                             <button id="creer-prompt" class="principal" type="button" disabled>Créer</button>
                         </div>
+                        <p id="partira-avec" class="discret"></p>
                     </div>
                     <div id="decoupage-scenario" data-atelier-seul="sequence">
                         <p class="discret">Chaque plan s'écrit avec son ✨ ou son 💬 ; ✨ Tout écrire les écrit tous d'après le fil.
@@ -618,6 +621,8 @@
                         <div class="ligne actions-prompt" id="creation-sequence-scenario">
                             <input id="titre-sequence-scenario" type="text" maxlength="40" placeholder="Titre de la séquence">
                             <button id="creer-sequence-scenario" type="button" class="principal">→ Créer dans le Montage</button>
+                            <button id="nouvelle-sequence-scenario" type="button" class="petit" hidden
+                                    title="Garde la séquence déjà envoyée et en crée une autre">＋ Nouvelle</button>
                         </div>
                         <p id="erreur-sequence-scenario" class="ko" hidden></p>
                     </div>
@@ -724,8 +729,12 @@
         <div class="vue" id="vue-reglages" hidden>
             <div class="ligne entete-reglages">
                 <p class="discret">Seuls tes changements sont enregistrés (data/reglages.yaml) : ↺ ramène une valeur à celle d'origine.</p>
-                <button id="optimiser" type="button" class="principal">⚡ Optimiser</button>
+                <button id="optimiser" type="button" class="principal"
+                        title="Propose des réglages adaptés à ta carte graphique (rien n'est appliqué sans ton accord)">⚡ Adapter à ma machine</button>
             </div>
+            <!-- Système : ce qu'on règle une fois (s'ouvre seul si un moteur manque) -->
+            <details id="systeme-reglages" class="systeme-reglages">
+                <summary><h2>🖥️ Système <span class="discret">moteurs, emplacements, clés d'accès, mises à jour</span></h2></summary>
             <section class="carte" id="carte-moteurs">
                 <div class="ligne entete-assistant">
                     <h2>Moteurs</h2>
@@ -757,6 +766,7 @@
                     <button id="verifier-maj" type="button" class="petit">Vérifier maintenant</button>
                 </div>
             </section>
+            </details>
             <section id="carte-optimiser" class="carte" hidden>
                 <h2>Propositions</h2>
                 <p id="materiel-optimiser" class="discret"></p>
@@ -775,7 +785,7 @@
                     <label class="cible-reglages">Modèle <select id="llm-reglages"></select></label>
                     <p id="note-llm-defaut" class="discret" hidden></p>
                     <div id="params-llm" class="params"></div>
-                    <h3 class="titre-bloc">Consignes</h3>
+                    <h3 class="titre-bloc">Consignes du LLM</h3>
                     <div id="consignes-llm" class="consignes"></div>
                     <p class="clause">🔒 Toujours ajoutée à la fin de chaque consigne, non modifiable :
                         <em id="clause-reglages"></em></p>

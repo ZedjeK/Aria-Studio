@@ -248,8 +248,8 @@ function blocReecriture(wf) {
         <label>LLM <select data-llm-workflow="${wf.id}">${options}</select></label>
         <p class="discret">${choisi
             ? `${echapper(choisi.nom)} réécrit avec sa propre consigne officielle (réflexion, puis un prompt détaillé) : les règles du modèle ne lui sont pas données.`
-            : `Ce modèle attend ${attentes}.`} Le Plateau, le Montage et le Scénario partent de ce LLM ;
-            tu peux toujours en choisir un autre pour une création.</p>
+            : `Ce modèle attend ${attentes}.`} Le Scénario part de ce LLM pour écrire les prompts de ce modèle ;
+            tu peux en choisir un autre dans chaque atelier.</p>
         ${r.ailleurs ? `<p class="alerte">Ce LLM est entraîné pour ${echapper(r.ailleurs.join(", "))} : pour ce workflow,
             Aria passera au LLM par défaut.</p>` : ""}
         ${r.specialistes.map((s) => encartSpecialiste(s, wf.id)).join("")}
@@ -300,12 +300,29 @@ async function choisirLlm(idWorkflow, llm) {
     if (optionsMontage) optionsMontage.llm = (optionsPlateau ?? await api("GET", "/api/plateau/options")).llm;
 }
 
+// ☆ Par défaut sur un checkpoint : le réglage « Modèle par défaut » du workflow (celui de l'onglet Réglages).
+document.getElementById("vue-modeles").addEventListener("click", async (e) => {
+    const bouton = e.target.closest("[data-checkpoint-defaut]");
+    if (!bouton) return;
+    bouton.disabled = true;
+    try {
+        await api("PUT", `/api/reglages/workflows/${encodeURIComponent(bouton.dataset.workflow)}`,
+                  { valeurs: { modele: bouton.dataset.checkpointDefaut } });
+        await chargerUsages();
+        if (optionsPlateau) await chargerOptionsPlateau();  // le Plateau propose aussitôt le nouveau défaut
+        optionsMontage = null;  // le Montage relira ses checkpoints à son prochain affichage
+    } catch (err) {
+        bouton.disabled = false;
+        alert(err.message);
+    }
+});
+
 function rendreUsage(id, u) {
     const nomDe = (wid) => u.workflows.find((w) => w.id === wid)?.nom ?? wid ?? "—";
     const favoris = `<section class="carte"><h2>Par défaut</h2><dl class="machine-assistant">${u.favoris.map((f) =>
         `<dt>${echapper(f.libelle)}</dt><dd>${f.valeur ? `★ ${echapper(nomDe(f.valeur))}` : "—"}</dd>`).join("")}</dl>
         <p class="discret">Le Plateau, le Montage et le Scénario partent de ces workflows. Le checkpoint par défaut de chacun
-            se règle dans Réglages.</p></section>`;
+            se choisit ci-dessous (☆) ; ses réglages fins (steps, CFG…) sont dans Réglages.</p></section>`;
     const variation = u.variation.length
         ? `<p class="discret">🎨 Variation (Plateau, zone Références) : elle part d'une image avec un modèle texte vers image :
             ${echapper(u.variation.join(", "))}.</p>` : "";
@@ -340,7 +357,9 @@ function carteWorkflow(wf, idUsage, u) {
             <div>
                 <h3>Checkpoints <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.famille)}/modeles">📂</button></h3>
                 <ul class="liste">${wf.modeles.map((m) => `<li>${echapper(m)}
-                    ${m === wf.modele_defaut ? '<span class="badge ok">par défaut</span>' : ""}
+                    ${m === wf.modele_defaut ? '<span class="badge ok">par défaut</span>'
+                        : `<button type="button" class="petit" data-checkpoint-defaut="${echapper(m)}" data-workflow="${wf.id}"
+                                   title="Le checkpoint que ce workflow prend quand rien d'autre n'est choisi">☆ Par défaut</button>`}
                     ${m === origine ? '<span class="badge">d\'origine</span>' : ""}</li>`).join("")}</ul>
                 <button type="button" class="petit" data-chercher="${nature}" data-famille="${echapper(wf.famille)}">🔎 Chercher des checkpoints ${echapper(wf.famille)}</button>
             </div>

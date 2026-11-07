@@ -14,9 +14,11 @@ const NOTES_TYPES = {
     transition: "Où la caméra arrive : la rue sous la pluie…",
 };
 const MOMENTS = [["debut", "au début"], ["pendant", "pendant l'action"], ["fin", "à la fin"]];
+const plansOuverts = new WeakSet();  // plans prêts dépliés à la main (ou tout juste écrits) : rien n'est enregistré
 
 const decoupage = { reference: null, contrainte: "", contrainteEn: null, plans: [], alertes: [],
-                    avecMusique: false, musique: "", aidePlan: null };  // aidePlan : le plan dont le chat est ouvert
+                    avecMusique: false, musique: "", aidePlan: null,  // aidePlan : le plan dont le chat est ouvert
+                    sequenceId: null };  // la séquence du Montage qu'un nouvel envoi mettra à jour
 let decoupagePret = false;
 
 const enSequence = () => formeScenario === "sequence";
@@ -26,6 +28,7 @@ const normaliserPlan = (p = {}) => ({
     enchainement: p.enchainement ?? "couper", duree: p.duree ?? 5, note: p.note ?? "", rush: p.rush ?? null,
     dialogue: Boolean(p.dialogue), replique: p.replique ?? "", moment: p.moment ?? "pendant", off: Boolean(p.off),
     prompt: p.prompt ?? "", idee: p.idee ?? "", ecrit: p.ecrit ?? null, echanges: p.echanges ?? [], dernier: p.dernier ?? null,
+    idMontage: p.idMontage ?? null,  // le plan correspondant dans la séquence du Montage (mise à jour : garde son clip)
 });
 
 const nouveauPlanDecoupage = (k, enchainement) => normaliserPlan({
@@ -65,6 +68,7 @@ function preparerDecoupage() {
     }
     rendreReference();
     rendrePlansDecoupage();
+    majBoutonsEnvoi();
 }
 
 function caseImage(id, attribut, titre) {
@@ -84,12 +88,18 @@ function rendreReference() {
         : '<span class="numero">👤</span>';
 }
 
+const planOuvert = (p, k) => etatPlan(p)[0] !== "pret" || k === decoupage.aidePlan || plansOuverts.has(p);
+
 function cartePlan(p, k, durees) {
     const types = k === 0 ? TYPES_DEPART : TYPES_SUITE;
     const [classe, etat] = etatPlan(p);
+    const ouvert = planOuvert(p, k);
+    const resume = p.note.trim() || p.idee.trim() || p.prompt.trim();
     const { mots, permis, trop } = motsReplique(p);
-    return `<li class="plan-scenario ${k === decoupage.aidePlan ? "aide-ouverte" : ""}" data-plan="${k}">
+    return `<li class="plan-scenario ${k === decoupage.aidePlan ? "aide-ouverte" : ""} ${ouvert ? "" : "repliee"}" data-plan="${k}">
         <div class="ligne entete-plan-scenario">
+            ${classe === "pret" ? `<button type="button" class="petit replier-plan" data-replier
+                title="${ouvert ? "Replier ce plan" : "Déplier ce plan"}">${ouvert ? "▾" : "▸"}</button>` : ""}
             <strong>Plan ${k + 1}</strong>
             <select data-champ="enchainement">${types.map(([v, t]) => `<option value="${v}"
                 ${v === p.enchainement ? "selected" : ""} ${v === "rush" && !decoupage.reference ? "disabled" : ""}>${t}</option>`).join("")}</select>
@@ -101,6 +111,7 @@ function cartePlan(p, k, durees) {
                 <button type="button" class="petit" data-aide-plan title="Le LLM te pose ses questions sur ce plan">💬 Aide</button>
             </span>
         </div>
+        <p class="resume-plan discret">${echapper(resume.length > 120 ? `${resume.slice(0, 120)}…` : resume)}</p>
         <div class="corps-plan-scenario">
             ${p.enchainement === "transition"
                 ? caseImage(p.rush, "data-arrivee", "Rush d'arrivée (facultatif : sinon, à choisir dans le Montage)") : ""}
@@ -188,6 +199,7 @@ function planChange(k) {
 function poserPlan(k, ecrit) {
     const p = decoupage.plans[k];
     if (!p) return;
+    plansOuverts.add(p);  // tout juste écrit : il reste ouvert, pour être relu
     p.prompt = ecrit.prompt;
     if (ecrit.idee) p.idee = ecrit.idee;
     if (!p.note.trim() && ecrit.idee) p.note = ecrit.idee;
@@ -361,6 +373,11 @@ plansScenario.addEventListener("click", (e) => {
     const k = indexPlan(e);
     const p = decoupage.plans[k];
     if (!p) return;
+    if (e.target.closest("[data-replier]")) {
+        if (planOuvert(p, k)) plansOuverts.delete(p);
+        else plansOuverts.add(p);
+        return rendrePlansDecoupage();
+    }
     if (e.target.closest("[data-optimiser-plan]")) return ecrirePlan(k);
     if (e.target.closest("[data-aide-plan]")) return ouvrirAidePlan(k);
     if (!e.target.closest("[data-arrivee]")) return;
@@ -385,9 +402,10 @@ document.getElementById("resume-sequence").addEventListener("click", (e) => {
     carte.querySelector('[data-champ="note"]').focus({ preventScroll: true });
 });
 
-// Création de la séquence dans le Montage : les prompts des plans sont imposés (pas de nouvelle réécriture).
+// Envoi au Montage : la première fois, la séquence est créée ; ensuite, elle est mise à jour (ses réglages du Montage,
+// voix, qualité, LoRA, restent, et un plan dont le prompt n'a pas changé garde son clip). Les prompts sont imposés.
 
-document.getElementById("creer-sequence-scenario").addEventListener("click", async () => {
+async function envoyerSequence(mettreAJour) {
     const titre = document.getElementById("titre-sequence-scenario");
     const erreur = document.getElementById("erreur-sequence-scenario");
     erreur.hidden = true;
@@ -402,20 +420,83 @@ document.getElementById("creer-sequence-scenario").addEventListener("click", asy
     }
     const enValide = decoupage.contrainteEn?.fr === decoupage.contrainte.trim().replace(/\s+/g, " ");
     try {
-        const s = await api("POST", "/api/sequences", {
-            titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmAtelier(),
-            casting: { personnage: decoupage.reference, voix: "auto", ambiance: "",
-                       contrainte: decoupage.contrainte.trim(), reference_partout: true },
-            contrainte_en: enValide ? decoupage.contrainteEn : null,  // traduite à l'écriture : le tournage s'en sert
-            plans: decoupage.plans.map((p, k) => ({
-                idee: p.idee || p.note || `Plan ${k + 1}`, prompt: p.prompt, duree: p.duree,
-                // Départ de la référence : l'image du personnage est le rush du plan 1 (le serveur l'exige).
-                enchainement: p.enchainement, rush: p.enchainement === "rush" ? decoupage.reference : p.rush,
-                ambiance: true,
-            })),
-        });
+        let existante = null;
+        if (mettreAJour && decoupage.sequenceId) {
+            existante = await api("GET", `/api/sequences/${encodeURIComponent(decoupage.sequenceId)}`)
+                .catch(() => null);  // supprimée depuis : une nouvelle est créée
+        }
+        const avant = Object.fromEntries((existante?.plans ?? []).map((p) => [p.id, p]));
+        const plans = decoupage.plans.map((p, k) => ({
+            ...(avant[p.idMontage] ? { id: p.idMontage, seed: avant[p.idMontage].seed } : {}),
+            idee: p.idee || p.note || `Plan ${k + 1}`, prompt: p.prompt, duree: p.duree,
+            // Départ de la référence : l'image du personnage est le rush du plan 1 (le serveur l'exige).
+            enchainement: p.enchainement, rush: p.enchainement === "rush" ? decoupage.reference : p.rush,
+            ambiance: true,
+        }));
+        const contrainteEn = enValide ? decoupage.contrainteEn : null;  // traduite à l'écriture : le tournage s'en sert
+        const s = existante
+            ? await api("PUT", `/api/sequences/${encodeURIComponent(existante.id)}`, {
+                titre: titre.value.trim(), qualite: existante.qualite, format: existante.format, llm: llmAtelier(),
+                modele: existante.modele, loras: existante.loras ?? [], contrainte_en: contrainteEn, plans,
+                casting: { ...existante.casting, personnage: decoupage.reference, contrainte: decoupage.contrainte.trim() },
+            })
+            : await api("POST", "/api/sequences", {
+                titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmAtelier(),
+                casting: { personnage: decoupage.reference, voix: "auto", ambiance: "",
+                           contrainte: decoupage.contrainte.trim(), reference_partout: true },
+                contrainte_en: contrainteEn, plans,
+            });
+        decoupage.sequenceId = s.id;  // la prochaine fois : mise à jour
+        s.plans.forEach((plan, k) => { if (decoupage.plans[k]) decoupage.plans[k].idMontage = plan.id; });
+        majBoutonsEnvoi();
+        garderBrouillon();
         await ouvrirSequence(s.id);
     } catch (err) {
         afficherErreur(erreur, err.message);
     }
+}
+
+function majBoutonsEnvoi() {
+    const titre = document.getElementById("titre-sequence-scenario").value.trim();
+    document.getElementById("creer-sequence-scenario").textContent = decoupage.sequenceId
+        ? `→ Mettre à jour${titre ? ` « ${titre} »` : ""}` : "→ Créer dans le Montage";
+    document.getElementById("nouvelle-sequence-scenario").hidden = !decoupage.sequenceId;
+}
+
+document.getElementById("creer-sequence-scenario").addEventListener("click", () => envoyerSequence(true));
+document.getElementById("nouvelle-sequence-scenario").addEventListener("click", () => envoyerSequence(false));
+document.getElementById("titre-sequence-scenario").addEventListener("input", () => {
+    majBoutonsEnvoi();
+    garderBrouillon();
 });
+
+// ✍️ du Montage : la séquence ouverte là-bas revient au Scénario pour être retravaillée (ses plans, leurs prompts,
+// la référence et la contrainte ; les répliques sont dans les prompts). Le prochain envoi la met à jour.
+function chargerSequenceAuScenario(s) {
+    const remplis = decoupage.plans.some((p) => p.note.trim() || p.prompt.trim());
+    if (remplis && decoupage.sequenceId !== s.id
+        && !confirm(`Le Scénario a déjà une séquence en cours d'écriture : la remplacer par « ${s.titre} » ?`)) return false;
+    const premier = s.plans[0];
+    decoupage.sequenceId = s.id;
+    decoupage.reference = s.casting.personnage ?? (premier?.enchainement === "rush" ? premier.rush : null);
+    decoupage.contrainte = s.casting.contrainte ?? "";
+    decoupage.contrainteEn = s.contrainte_en ?? null;
+    decoupage.alertes = [];
+    decoupage.aidePlan = null;
+    decoupage.plans = s.plans.map((p, k) => {
+        const plan = normaliserPlan({
+            enchainement: k === 0 && p.enchainement === "rush" && !decoupage.reference ? "texte" : p.enchainement,
+            duree: p.duree, note: p.idee ?? "", idee: p.idee ?? "", prompt: p.prompt ?? "", idMontage: p.id,
+            rush: p.enchainement === "transition" ? p.rush : null,
+        });
+        plan.ecrit = signature(plan);  // ses prompts sont prêts tels quels
+        return plan;
+    });
+    // Le Montage accepte un seul plan, le Scénario en veut deux au moins : un plan vide complète.
+    while (decoupage.plans.length < 2) decoupage.plans.push(nouveauPlanDecoupage(decoupage.plans.length));
+    document.getElementById("titre-sequence-scenario").value = s.titre;
+    document.getElementById("contrainte-scenario").value = decoupage.contrainte;
+    decoupagePret = false;  // les listes (nombre de plans) se refont à l'ouverture de l'atelier
+    garderBrouillon();
+    return true;
+}

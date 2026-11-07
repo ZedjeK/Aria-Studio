@@ -121,6 +121,16 @@ def accueil():
     return HTMLResponse(page, headers=SANS_CACHE)
 
 
+def commande_en_cours() -> dict | None:
+    """Ce que fait la file du Plateau (image, retouche, clip, séquence, essai de voix) : la barre d'état le montre."""
+    actives = [c for c in plateau_.commandes.values() if c.etat in ("attente", "en_cours")]
+    if not actives:
+        return None
+    c = next((c for c in actives if c.etat == "en_cours"), actives[0])
+    return {"type": c.type, "etat": c.etat, "etape": c.etape, "progression": round(c.progression, 2),
+            "file": len(actives)}
+
+
 @app.get("/api/etat")
 def etat_direct():
     """Pastilles de la barre d'onglets : chaque moteur est chargé, en veille ou introuvable, plus la VRAM."""
@@ -143,6 +153,7 @@ def etat_direct():
         "llama": {"etat": etat(llama.process, sante_["llama"]["installe"]),
                   "modele": favoris.get(llama.modele.name, llama.modele.stem) if llama.modele else None},
         **vram,
+        "commande": commande_en_cours(),
         # Garde-VRAM : une demande attend la carte (bandeau), ou une autre appli la tient (pastille orange).
         "garde": {"attente": orchestrateur.garde.attente,
                   "alerte": None if orchestrateur.garde.attente else garde.alerte(orchestrateur.actif)},
@@ -885,6 +896,7 @@ class DemandeCreation(BaseModel):
     mode_reference: str | None = None  # inspirer, variation
     liberte: float = 0.6  # Variation : 0,05 (copie) à 1 (libre)
     dossier: str | None = None  # dossier des rushes où ranger les images
+    ecrit_par: str | None = None  # le LLM qui a écrit le prompt au Scénario (noté sur la fiche, rien n'est réécrit)
 
 
 @app.get("/api/plateau/options")
@@ -899,7 +911,7 @@ def creer(demande: DemandeCreation):
     if not demande.prompt.strip():
         raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
     try:
-        commande = plateau_.commander(demande.idee or demande.prompt, demande.prompt.strip(), None, demande.workflow,
+        commande = plateau_.commander(demande.idee or demande.prompt, demande.prompt.strip(), demande.ecrit_par, demande.workflow,
                                       demande.format, demande.seed, demande.nombre, demande.parent, demande.modele,
                                       demande.loras, demande.references, demande.mode_reference, demande.liberte,
                                       rushes.valider_dossier(demande.dossier))
@@ -1035,6 +1047,7 @@ class DemandeClip(BaseModel):
     dossier: str | None = None
     modele: str | None = None  # checkpoint de la famille ; absent = le modèle par défaut des réglages
     loras: list[dict] = []  # [{fichier, force, declencheurs}] de modeles/MiniMax-H3/loras
+    ecrit_par: str | None = None  # le LLM qui a écrit le prompt au Scénario (noté sur la fiche)
 
 
 @app.post("/api/clips")
@@ -1043,7 +1056,7 @@ def tourner_clip(d: DemandeClip):
         raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
     return _commander(lambda: plateau_.commander_clip(
         d.idee or d.prompt, d.prompt, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
-        rushes.valider_dossier(d.dossier), d.modele, d.loras))
+        rushes.valider_dossier(d.dossier), d.modele, d.loras, d.ecrit_par))
 
 
 # Montage, mode Séquence

@@ -240,7 +240,9 @@ class Plateau:
             securite.verifier(idee, prompt_force, *textes)
         loras = self._valider_loras(wf, loras, idee, textes)
         return self._mettre_en_file(Commande(
-            idee, prompt_force, None if prompt_force is not None else llm, workflow, format, seed, nombre,
+            # Prompt écrit au Scénario : son LLM est seulement noté sur la fiche (rien n'est réécrit ici).
+            idee, prompt_force, (str(llm)[:200] if llm else None) if prompt_force is not None else llm, workflow,
+            format, seed, nombre,
             parent or (references[0] if references else None), modele, loras,
             references=references, mode_reference=mode_reference, liberte=liberte, textes_origine=textes,
             dossier=dossier, imposees={k: v for k, v in (imposees or {}).items() if k in wf.fiche["entrees"]}))
@@ -270,7 +272,8 @@ class Plateau:
 
     def commander_clip(self, idee: str, prompt_clip: str, mode: str, source: str | None, qualite: str, duree: int,
                        format: str, seed: int | None, nombre: int, dossier: str | None = None,
-                       modele: str | None = None, loras: list[dict] | None = None) -> Commande:
+                       modele: str | None = None, loras: list[dict] | None = None,
+                       ecrit_par: str | None = None) -> Commande:
         """Montage : un clip H3 (avec le son), en animant un rush ou à partir d'un texte. Le prompt est tourné tel
         quel : il s'écrit au Scénario. `modele` : un checkpoint de la famille ; None = le défaut des réglages.
         `loras` : celles de la famille (modeles/MiniMax-H3/loras), leurs mots déclencheurs en tête du prompt."""
@@ -297,7 +300,7 @@ class Plateau:
         securite.verifier(idee, prompt_clip, *textes)
         loras = self._valider_loras(wf, loras, f"{idee} {prompt_clip}", textes)
         return self._mettre_en_file(Commande(
-            idee, prompt_clip.strip(), None, workflow, format, seed, nombre,
+            idee, prompt_clip.strip(), str(ecrit_par)[:200] if ecrit_par else None, workflow, format, seed, nombre,
             source if mode == "animer" else None, modele, loras, type="clip", mode_video=mode, qualite=qualite,
             duree=duree, textes_origine=textes, dossier=dossier))
 

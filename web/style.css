@@ -442,6 +442,38 @@ body.large main {
     color: var(--discret);
 }
 
+/* Barre d'état : une génération en cours. */
+.pastille.en-cours {
+    color: var(--action);
+}
+
+/* Réglages : la section Système, repliable. */
+.systeme-reglages {
+    margin-bottom: 16px;
+}
+
+.systeme-reglages > summary {
+    cursor: pointer;
+    margin-bottom: 12px;
+}
+
+.systeme-reglages > summary h2 {
+    display: inline;
+}
+
+/* LoRAs repliées : le titre dit combien sont actives. */
+.choix-loras > summary {
+    cursor: pointer;
+}
+
+.choix-loras > summary h3 {
+    display: inline;
+}
+
+.compte-loras {
+    color: var(--accent);
+}
+
 .lora {
     display: grid;
     grid-template-columns: minmax(160px, 1.2fr) minmax(120px, 0.8fr) 3.5em minmax(160px, 2fr);
@@ -1101,7 +1133,7 @@ button.de:hover:not(:disabled) {
 
 .grille-reglages {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
     gap: 16px;
     align-items: start;
 }
@@ -2058,6 +2090,23 @@ button.onglet-scenario.actif {
 
 .place-chat-plan:empty {
     display: none;
+}
+
+/* Plan prêt, replié : son en-tête et une ligne de résumé. */
+.resume-plan {
+    margin: 0;
+    font-size: 0.82rem;
+}
+
+.plan-scenario:not(.repliee) .resume-plan,
+.plan-scenario.repliee .corps-plan-scenario,
+.plan-scenario.repliee .dialogue-plan,
+.plan-scenario.repliee .prompt-plan {
+    display: none;
+}
+
+.replier-plan {
+    padding: 0 6px;
 }
 
 /* À droite : le résumé de la séquence, un plan par ligne. */

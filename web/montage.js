@@ -43,6 +43,7 @@ function checkpointsVideo() {
 }
 
 let preparationMontage = null;
+let envoiScenarioClip = null;  // le prompt reçu du Scénario, son idée et son LLM (fiche du clip)
 
 function preparerMontage() {
     preparationMontage ??= preparerMontageMaintenant().finally(() => { preparationMontage = null; });
@@ -107,7 +108,8 @@ function rendreSource() {
 }
 
 // Le Scénario envoie un prompt prêt : il part tel quel, sur le rush à animer s'il y en a un, sinon du texte seul.
-async function recevoirAuMontage({ prompt, images, role, duree, lancer }) {
+async function recevoirAuMontage({ prompt, images, role, duree, lancer, idee = "", llm = null }) {
+    envoiScenarioClip = { prompt: prompt.trim(), idee, llm };
     if (!optionsMontage) await preparerMontage();  // remplit les listes du Montage avant d'y poser nos valeurs
     const animer = role === "animer";
     document.querySelector(`input[name="mode-montage"][value="${animer ? "animer" : "texte"}"]`).click();
@@ -244,7 +246,9 @@ async function tourner(corps) {
 // Le prompt part tel quel : le LLM n'écrit qu'au Scénario.
 document.getElementById("form-montage").addEventListener("submit", (e) => {
     e.preventDefault();
-    tourner({ prompt: document.getElementById("prompt-clip").value.trim(), ...reglagesMontage() });
+    const prompt = document.getElementById("prompt-clip").value.trim();
+    const meta = envoiScenarioClip?.prompt === prompt ? { idee: envoiScenarioClip.idee, ecrit_par: envoiScenarioClip.llm } : {};
+    tourner({ prompt, ...meta, ...reglagesMontage() });
 });
 
 // Clips suivis en ce moment (tournage, variante) : comme au Plateau, chacun garde son id.
@@ -380,7 +384,6 @@ document.getElementById("ouvrir-sequence-clip").addEventListener("click", () => 
 });
 
 document.getElementById("corbeille-clip").addEventListener("click", async () => {
-    if (!confirm("Mettre ce clip à la corbeille ? Tu pourras le restaurer tant que la corbeille n'est pas vidée.")) return;
     await api("DELETE", `/api/creations/${encodeURIComponent(clipOuvert.id)}`);
     fermerClip();
     bobines.charger();

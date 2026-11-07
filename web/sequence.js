@@ -4,7 +4,8 @@
 // tel quel. Un plan modifié n'est plus « à jour » et sera retourné, avec les plans qui partent de lui.
 // La voix vient de la bibliothèque data/voix (essais tournés en cabine silencieuse, ou fichiers importés ; app/voix.py).
 
-const ENCHAINEMENTS_DEPART = [["rush", "🖼️ Depuis un rush"], ["texte", "✍️ Depuis le texte"]];
+// Les mêmes mots qu'au Scénario (decoupage.js) : « Départ… », Prolonger, Couper, Transition.
+const ENCHAINEMENTS_DEPART = [["rush", "🖼️ Départ d'une image"], ["texte", "✍️ Départ du texte"]];
 const ENCHAINEMENTS_SUITE = [["prolonger", "↪ Prolonger"], ["couper", "✂ Couper"], ["transition", "🌀 Transition"]];
 const AIDE_ENCHAINEMENT = {
     rush: "Le plan anime ce rush.",
@@ -159,7 +160,7 @@ function rendrePlans() {
                 ${avecRush ? caseRush(p.rush, k === 0 ? "Rush de départ" : "Rush d'arrivée") : ""}
                 <div class="textes-plan">
                     <input data-champ="idee" type="text" maxlength="1000" value="${echapper(p.idee)}"
-                           placeholder="Résumé du plan, pour s'y retrouver (facultatif)">
+                           placeholder="Ce qui se passe (un résumé, pour s'y retrouver ; facultatif)">
                     <textarea data-champ="prompt" rows="4" class="${p.prompt ? "" : "manquant"}"
                               placeholder="Prompt du plan, tourné tel quel : il arrive du ✍️ Scénario (découpage), ou écris-le ici (en anglais).">${echapper(p.prompt ?? "")}</textarea>
                 </div>
@@ -230,7 +231,14 @@ document.getElementById("reference-partout-sequence").addEventListener("change",
     sequenceCourante.casting.reference_partout = e.target.checked;
     modifiee(true);
 });
-document.getElementById("vers-scenario-sequence").addEventListener("click", () => ouvrirScenario("sequence"));
+document.getElementById("vers-scenario-sequence").addEventListener("click", async () => {
+    // Une séquence ouverte (et enregistrée) part au Scénario pour être retravaillée ; le prochain envoi la met à jour.
+    if (sequenceCourante?.id) {
+        if (sequenceModifiee && !(await enregistrerSequence())) return;
+        if (!chargerSequenceAuScenario(sequenceCourante)) return;  // decoupage.js
+    }
+    ouvrirScenario("sequence");
+});
 [["voix-sequence", (v) => { sequenceCourante.casting.voix = v || null; majEcouteVoix(); }],
  ["modele-sequence", (v) => { sequenceCourante.modele = v || null; }],
  ["qualite-sequence", (v) => { sequenceCourante.qualite = v; }],
@@ -536,6 +544,7 @@ async function lancerEssaiVoix() {
     document.getElementById("resultat-voix").hidden = true;
     document.getElementById("lancer-essai-voix").disabled = true;
     document.getElementById("progression-voix").hidden = false;
+    suivreAnnulable(document.getElementById("progression-voix"), commande.id);
     suivreEssaiVoix(commande.id, Date.now());
 }
 
@@ -555,8 +564,8 @@ async function suivreEssaiVoix(id, debut) {
     }
     bloc.hidden = true;
     document.getElementById("lancer-essai-voix").disabled = false;
-    if (c.etat === "erreur") {
-        erreurVoix(c.erreur);
+    if (c.etat === "erreur" || c.etat === "annule") {
+        erreurVoix(c.etat === "annule" ? "Essai annulé." : c.erreur);
         return;
     }
     brouillonVoix = c.voix;
