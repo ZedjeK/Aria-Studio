@@ -543,8 +543,9 @@ class DemandeBanc(BaseModel):
 
 
 @app.get("/api/bancs")
-def liste_bancs():
-    return {"actif": banc_actif.etat_public() if banc_actif else None, "bancs": casting.liste()}
+def liste_bancs(liste: bool = True):
+    """`liste=false` : le banc actif seulement (le suivi d'un banc en cours, toutes les 2 s)."""
+    return {"actif": banc_actif.etat_public() if banc_actif else None, "bancs": casting.liste() if liste else None}
 
 
 @app.post("/api/bancs")
@@ -727,7 +728,7 @@ async def ecrire_avec_images(demande: DemandeEcriture):
     try:
         origines = plateau.textes_origine(demande.images)  # AS-18 : un rush né d'un mineur le reste
         securite.verifier(demande.prompt, *origines)
-        vues = [plateau.vue(i) for i in demande.images]
+        vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in demande.images])  # images lourdes : à côté
         llm = demande.llm or (workflows.llm_de(demande.workflow) if demande.workflow else None)
         r = await prompt.reecrire(orchestrateur, demande.prompt, llm,
                                   len(vues) if demande.role == "inspirer" else 0,
@@ -773,7 +774,7 @@ async def optimiser_prompt(d: DemandeOptimisation):
     try:
         origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
         securite.verifier(texte, *origines)
-        vues = [plateau.vue(i) for i in d.images] or None
+        vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images]) or None
         llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
         regles = workflows.regles_prompt(d.workflow)
         if d.atelier == "retouche":
@@ -838,7 +839,7 @@ async def chat_libre(d: DemandeLibre):
         origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
         entrees = [*origines, *(plan_["entrees"] if plan_ else [])]
         securite.verifier(*entrees, *(e.content for e in d.echanges if e.role == "user"))
-        vues = [plateau.vue(i) for i in d.images[:3]] or None
+        vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images[:3]]) or None
         llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
         r = await prompt.libre(orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, contexte,
                                vues, d.role, llm, duree)

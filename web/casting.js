@@ -49,7 +49,7 @@ function afficherProgression(actif) {
 }
 
 async function suivreBanc() {
-    const { actif } = await api("GET", "/api/bancs");
+    const { actif } = await api("GET", "/api/bancs?liste=false");  // le banc en cours seulement
     afficherProgression(actif);
 }
 

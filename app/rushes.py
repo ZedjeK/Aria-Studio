@@ -36,10 +36,12 @@ def _ecrire(f: dict):
     (plateau.DOSSIER / f"{f['id']}.json").write_text(json.dumps(f, indent=4, ensure_ascii=False), encoding="utf-8")
 
 
-def dossiers() -> list[str]:
+def dossiers(fiches: list[dict] | None = None) -> list[str]:
+    """`fiches` : déjà lues par l'appelant (etat), pour ne pas relire toute la galerie une seconde fois."""
     noms = json.loads(FICHIER_DOSSIERS.read_text(encoding="utf-8")) if FICHIER_DOSSIERS.is_file() else []
     # Un dossier noté dans une fiche mais absent de la liste (fichier effacé à la main) réapparaît.
-    return noms + sorted({f["dossier"] for f in _fiches() if f.get("dossier") and f["dossier"] not in noms})
+    return noms + sorted({f["dossier"] for f in (_fiches() if fiches is None else fiches)
+                          if f.get("dossier") and f["dossier"] not in noms})
 
 
 def _ecrire_dossiers(noms: list[str]):
@@ -80,11 +82,12 @@ def liste(vue: str = "tous", dossier: str | None = None, limite: int = 500, genr
 
 def etat(genre: str = "images") -> dict:
     """Compteurs pour les pastilles de rangement (les dossiers sont communs aux deux genres)."""
-    fiches = [f for f in _fiches() if _du_genre(f, _genre_valide(genre))]
+    toutes = _fiches()
+    fiches = [f for f in toutes if _du_genre(f, _genre_valide(genre))]
     compte = lambda vue, dossier=None: sum(_visible(f, vue, dossier) for f in fiches)
     return {"tous": compte("tous"), "non_ranges": compte("non_ranges"), "archives": compte("archives"),
             "corbeille": compte("corbeille"),
-            "dossiers": [{"nom": d, "nombre": compte("tous", d)} for d in dossiers()]}
+            "dossiers": [{"nom": d, "nombre": compte("tous", d)} for d in dossiers(toutes)]}
 
 
 def _nom_valide(nom: str) -> str:

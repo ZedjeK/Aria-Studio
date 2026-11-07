@@ -257,7 +257,7 @@ async def installer(id_moteur: str, dans: Path = MOTEURS, dossier_archives: Path
     nouveau, extrait = dossier.with_name(dossier.name + ".new"), dossier.with_name(dossier.name + ".extrait")
     for reste in (nouveau, extrait):
         if reste.exists():
-            shutil.rmtree(reste)  # une installation précédente interrompue
+            await asyncio.to_thread(shutil.rmtree, reste)  # une installation précédente interrompue
     try:
         for archive, fichier in zip(m["archives"], fichiers):
             if progression:
@@ -266,8 +266,8 @@ async def installer(id_moteur: str, dans: Path = MOTEURS, dossier_archives: Path
             source = extrait / archive["racine"] if archive.get("racine") else extrait
             if not source.is_dir():
                 raise ErreurMoteur(f"{fichier.name} ne contient pas le dossier {archive['racine']}")
-            _verser(source, nouveau)
-            shutil.rmtree(extrait)
+            await asyncio.to_thread(_verser, source, nouveau)
+            await asyncio.to_thread(shutil.rmtree, extrait)
         if not (nouveau / m["preuve"]).is_file():
             raise ErreurMoteur(f"{m['preuve']} absent après extraction : l'archive ne ressemble pas à {m['nom']}")
         fiche = {"id": id_moteur, "version": m["version"], "installe_le": datetime.now().isoformat(timespec="seconds"),
@@ -278,11 +278,11 @@ async def installer(id_moteur: str, dans: Path = MOTEURS, dossier_archives: Path
         async with verrou() if verrou else contextlib.nullcontext():
             if occupe(id_moteur):
                 raise ErreurMoteur(f"{m['nom']} tourne encore (lancé par une autre appli ?) : rien n'a changé")
-            _echanger(dossier, nouveau)
+            await asyncio.to_thread(_echanger, dossier, nouveau)
     finally:
         for reste in (nouveau, extrait):
             if reste.exists():
-                shutil.rmtree(reste, ignore_errors=True)
+                await asyncio.to_thread(shutil.rmtree, reste, True)  # ignore_errors
     return fiche
 
 

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-from app import fiches
+from app import fiches, memo
 from app.config import CONFIG, ROOT
 from app.emplacements import DATA, MODELES
 
@@ -35,14 +35,18 @@ class ErreurModele(ValueError):
     pass
 
 
+_familles = memo.SelonFichiers()
+
+
 def familles() -> list[str]:
-    """Familles déclarées par les fiches de workflow (lues sans importer app.workflows)."""
-    noms = set()
-    for f in (ROOT / "workflows").glob("*/fiche.yaml"):
-        famille = (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("famille")
-        if famille:
-            noms.add(famille)
-    return sorted(noms)
+    """Familles déclarées par les fiches de workflow (lues sans importer app.workflows), relues seulement quand une
+    fiche change : destination() s'en sert pour chaque fichier vérifié."""
+    chemins = sorted((ROOT / "workflows").glob("*/fiche.yaml"))
+
+    def lire() -> list[str]:
+        return sorted({f for f in ((memo.lire_yaml(c) or {}).get("famille") for c in chemins) if f})
+
+    return list(_familles.lire(memo.empreinte(chemins), lire))
 
 
 def dossiers() -> list[str]:

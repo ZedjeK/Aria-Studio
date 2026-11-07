@@ -416,6 +416,22 @@ def modifier_workflow(id_workflow: str, changements: dict) -> dict:
 
 # Pour l'interface
 
+def _etat_workflow(wf, modeles) -> dict:
+    """Un workflow de l'onglet Réglages : ses paramètres, et ceux de chaque checkpoint de sa famille. Les valeurs sont
+    calculées une fois (avant : une fois par paramètre, ce qui relisait les réglages des dizaines de fois)."""
+    valeurs = valeurs_workflow(wf)
+
+    def variante(fichier: str) -> dict:
+        v = valeurs_variante(wf, fichier)
+        return {"fichier": fichier, "origine": fichier == wf.modele_origine,
+                "connue": fichier == wf.modele_origine or modeles.connu(f"{wf.famille}/modeles", fichier),
+                "params": [p.public(v[cle]) for cle, p in params_variante(wf).items()]}
+
+    return {"id": wf.id, "nom": wf.fiche["nom"], "tache": wf.fiche["tache"], "famille": wf.famille,
+            "params": [p.public(valeurs[cle]) for cle, p in params_workflow(wf).items()],
+            "variantes": [variante(f) for f in wf.variantes()] if "modele" in wf.fiche["entrees"] else []}
+
+
 def etat() -> dict:
     from app import modeles, prompt, workflows
     favoris = {m["fichier"]: m["nom"] for m in CONFIG["llama"].get("modeles_au_choix", [])}
@@ -431,12 +447,13 @@ def etat() -> dict:
             elif p["cle"] == "vision":
                 p["aide"] = (f"En service : {projecteur}, {pourquoi}. " if projecteur
                              else f"Aveugle : {pourquoi}. ") + p["aide"]
+        consignes = {nom: consigne_llm(fichier, nom) for nom in CONSIGNES}
         llms.append({
             "fichier": fichier, "nom": favoris.get(fichier, fichier.removesuffix(".gguf")),
             "params": params,
             "consignes": [{"cle": nom, "defaut": prompt.CONSIGNES_DEFAUT[nom],
-                           "valeur": consigne_llm(fichier, nom) or prompt.CONSIGNES_DEFAUT[nom],
-                           "modifie": consigne_llm(fichier, nom) is not None} for nom in CONSIGNES],
+                           "valeur": valeur or prompt.CONSIGNES_DEFAUT[nom],
+                           "modifie": valeur is not None} for nom, valeur in consignes.items()],
         })
     return {
         "llm": llms,
@@ -446,13 +463,6 @@ def etat() -> dict:
         f"{CONFIG['llama']['modele']} n'est plus dans modeles/llm : {modeles.llm_defaut()} le remplace comme LLM "
         "par défaut (workflows sans LLM choisi, Scénario, traductions).",
         "clause_mineurs": prompt.CLAUSE_MINEURS,
-        "workflows": [{"id": wf.id, "nom": wf.fiche["nom"], "tache": wf.fiche["tache"], "famille": wf.famille,
-                       "params": [p.public(valeurs_workflow(wf)[cle]) for cle, p in params_workflow(wf).items()],
-                       "variantes": [{"fichier": f, "origine": f == wf.modele_origine,
-                                      "connue": f == wf.modele_origine or modeles.connu(f"{wf.famille}/modeles", f),
-                                      "params": [p.public(valeurs_variante(wf, f)[cle])
-                                                 for cle, p in params_variante(wf).items()]}
-                                     for f in wf.variantes()] if "modele" in wf.fiche["entrees"] else []}
-                      for wf in workflows.catalogue()],
+        "workflows": [_etat_workflow(wf, modeles) for wf in workflows.catalogue()],
         "samplers_de_comfyui": FICHIER_SAMPLERS.is_file(),
     }

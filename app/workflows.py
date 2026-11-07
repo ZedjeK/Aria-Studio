@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from app import emplacements, fiches, modeles, reglages, securite
+from app import emplacements, fiches, memo, modeles, reglages, securite
 from app.config import CONFIG, ROOT
 
 DOSSIER = ROOT / "workflows"
@@ -223,23 +223,36 @@ class Workflow:
 
 
 def _charger(dossier: Path) -> Workflow:
-    fiche = yaml.safe_load((dossier / "fiche.yaml").read_text(encoding="utf-8"))
+    fiche = memo.lire_yaml(dossier / "fiche.yaml")
     if problemes := fiches.problemes_workflow(fiche):
         raise ErreurWorkflow(f"Fiche {dossier.name} : " + " ; ".join(problemes))
     api = json.loads((dossier / "api.json").read_text(encoding="utf-8"))
     return Workflow(fiche, api)
 
 
+_lus = memo.SelonFichiers()
+
+
+def _lire(dossier: Path) -> tuple[dict | None, dict | None, str | None]:
+    try:
+        wf = _charger(dossier)
+        return wf.fiche, wf.api, None
+    except ErreurWorkflow as e:
+        return None, None, str(e)
+
+
+def _fiches_lues() -> list[tuple[dict | None, dict | None, str | None]]:
+    """(fiche, api, erreur) de chaque dossier de workflow, relus seulement quand un fichier change."""
+    dossiers = [d for d in sorted(DOSSIER.iterdir()) if (d / "fiche.yaml").is_file()]
+    cle = memo.empreinte([f for d in dossiers for f in (d / "fiche.yaml", d / "api.json")])
+    return _lus.lire(cle, lambda: [_lire(d) for d in dossiers])
+
+
 def catalogue() -> list[Workflow]:
-    """Les workflows aux fiches valides ; une fiche invalide (ajoutée à la main) est écartée, et dite par erreurs()."""
-    valides = []
-    for d in sorted(DOSSIER.iterdir()):
-        if (d / "fiche.yaml").is_file():
-            try:
-                valides.append(_charger(d))
-            except ErreurWorkflow:
-                pass
-    return valides
+    """Les workflows aux fiches valides ; une fiche invalide (ajoutée à la main) est écartée, et dite par erreurs().
+    Chaque appel rend ses propres fiches (copiées) : les modifier ne touche pas le cache. Le graphe api.json est
+    partagé : preparer() en fait toujours une copie avant d'y écrire."""
+    return [Workflow(copy.deepcopy(fiche), api) for fiche, api, erreur in _fiches_lues() if erreur is None]
 
 
 # Familles : ce que les fiches en disent, pour ranger et chercher un modèle (onglet Modèles).
@@ -311,14 +324,7 @@ def choisir_llm(id_workflow: str, llm: str | None):
 
 def erreurs() -> list[str]:
     """Pourquoi certaines fiches sont écartées du catalogue."""
-    sortie = []
-    for d in sorted(DOSSIER.iterdir()):
-        if (d / "fiche.yaml").is_file():
-            try:
-                _charger(d)
-            except ErreurWorkflow as e:
-                sortie.append(str(e))
-    return sortie
+    return [erreur for _, _, erreur in _fiches_lues() if erreur]
 
 
 def regles_prompt(id_workflow: str | None) -> list[str]:
@@ -332,7 +338,7 @@ def regles_prompt(id_workflow: str | None) -> list[str]:
 
 
 def obtenir(id_workflow: str) -> Workflow:
-    for wf in catalogue():
-        if wf.id == id_workflow:
-            return wf
+    for fiche, api, erreur in _fiches_lues():
+        if erreur is None and fiche["id"] == id_workflow:
+            return Workflow(copy.deepcopy(fiche), api)
     raise ErreurWorkflow(f"Workflow inconnu : {id_workflow}")

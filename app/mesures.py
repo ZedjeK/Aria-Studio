@@ -7,12 +7,20 @@ import psutil
 import pynvml
 
 _initialise = False
+_echec: Exception | None = None  # NVML injoignable (pas de carte NVIDIA) : on ne le réessaie plus à chaque appel
+_totale: int | None = None
 
 
 def _gpu():
-    global _initialise
+    global _initialise, _echec
+    if _echec is not None:
+        raise _echec
     if not _initialise:
-        pynvml.nvmlInit()
+        try:
+            pynvml.nvmlInit()
+        except pynvml.NVMLError as e:
+            _echec = e
+            raise
         _initialise = True
     return pynvml.nvmlDeviceGetHandleByIndex(0)
 
@@ -23,7 +31,10 @@ def vram_utilisee() -> int:
 
 
 def vram_totale() -> int:
-    return pynvml.nvmlDeviceGetMemoryInfo(_gpu()).total
+    global _totale
+    if _totale is None:
+        _totale = pynvml.nvmlDeviceGetMemoryInfo(_gpu()).total
+    return _totale
 
 
 def nom_gpu() -> str:

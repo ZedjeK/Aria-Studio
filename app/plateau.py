@@ -478,27 +478,30 @@ class Plateau:
     async def _retoucher(self, c: Commande):
         """Retouche (avec ou sans masque) ou agrandissement d'une image de la galerie."""
         debut = time.perf_counter()
-        source = retouche.ouvrir(chemin_image(c.parent).read_bytes())
+        # Ouverture, masque, encodage et recollage des images se font à côté : la barre d'état et les autres
+        # demandes ne gèlent plus pendant ce temps.
+        source = await asyncio.to_thread(lambda: retouche.ouvrir(chemin_image(c.parent).read_bytes()))
         if c.prompt is None:
             c.etape = "Traduction de la consigne"
             traduction = await prompt.traduire_instruction(
                 self.orchestrateur, c.idee, c.llm, workflows.regles_prompt(c.workflow), c.workflow,
-                vue(c.parent) if c.type == "retouche" else None)  # le LLM voit l'image à retoucher, ou lit sa fiche
+                await asyncio.to_thread(vue, c.parent) if c.type == "retouche" else None)  # il voit l'image
             c.prompt = traduction if c.type == "retouche" else f"{CONSIGNE_AGRANDISSEMENT} {traduction}"
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
 
         if c.type == "agrandissement":
-            entree, position = retouche.canevas_agrandi(source, c.largeur, c.hauteur, c.ancrage)
+            entree, position = await asyncio.to_thread(retouche.canevas_agrandi, source, c.largeur, c.hauteur,
+                                                       c.ancrage)
             masque = None
         else:
             entree, position = source, None
-            masque = retouche.masque_net(c.masque, source.size) if c.masque else None
+            masque = await asyncio.to_thread(retouche.masque_net, c.masque, source.size) if c.masque else None
 
         seed = c.seed if c.seed is not None else random.randrange(2**48)
         wf = workflows.obtenir(c.workflow)
         c.etape = "Agrandissement" if c.type == "agrandissement" else "Retouche"
         async with self.orchestrateur.comfyui() as comfy:
-            nom = await comfy.televerser((f"aria_{c.id}.png", retouche.png(entree)))
+            nom = await comfy.televerser((f"aria_{c.id}.png", await asyncio.to_thread(retouche.png, entree)))
             images = await comfy.executer(
                 wf.preparer({"prompt": self._avec_declencheurs(c), "image": nom, "seed": seed, "modele": c.modele,
                              "loras": c.loras, "prefixe": "aria_plateau"}),
@@ -508,15 +511,19 @@ class Plateau:
             raise ErreurPlateau("ComfyUI n'a renvoyé aucune image")
 
         c.etape = "Recollage"
-        resultat = retouche.ouvrir(images[0][1])
-        if c.type == "agrandissement":
-            resultat = resultat.resize(entree.size, retouche.Image.Resampling.LANCZOS)
-            final = retouche.recoller_agrandissement(source, position, resultat, c.fondu)
-        elif masque is not None:
-            final = retouche.recoller(source, resultat, masque, c.fondu)
-        else:
-            final = resultat.resize(source.size, retouche.Image.Resampling.LANCZOS)
-        c.images.append(enregistrer(retouche.png(final), {
+
+        def recoller() -> bytes:
+            resultat = retouche.ouvrir(images[0][1])
+            if c.type == "agrandissement":
+                resultat = resultat.resize(entree.size, retouche.Image.Resampling.LANCZOS)
+                final = retouche.recoller_agrandissement(source, position, resultat, c.fondu)
+            elif masque is not None:
+                final = retouche.recoller(source, resultat, masque, c.fondu)
+            else:
+                final = resultat.resize(source.size, retouche.Image.Resampling.LANCZOS)
+            return retouche.png(final)
+
+        c.images.append(enregistrer(await asyncio.to_thread(recoller), {
             "type": c.type,
             "idee": c.idee,
             "prompt": c.prompt,
