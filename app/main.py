@@ -100,7 +100,7 @@ async def local_seulement(requete: Request, suite):
 
 @app.exception_handler(garde.ErreurGarde)
 async def attente_annulee(_requete, e: garde.ErreurGarde):
-    """Jérémy a annulé une demande qui attendait la carte (réécriture, peaufinage…)."""
+    """L'utilisateur a annulé une demande qui attendait la carte (réécriture, peaufinage…)."""
     return JSONResponse(status_code=409, content={"detail": str(e)})
 
 
@@ -932,7 +932,7 @@ class DemandeReglagesWorkflow(BaseModel):
 
 @app.get("/api/reglages/optimiser")
 def optimiser_reglages():
-    """Propositions seulement : rien n'est appliqué sans l'accord de Jérémy (routes PUT ci-dessus et dessous)."""
+    """Propositions seulement : rien n'est appliqué sans l'accord de l'utilisateur (routes PUT ci-dessus et dessous)."""
     return optimiseur.propositions()
 
 

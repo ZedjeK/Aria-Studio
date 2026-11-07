@@ -31,7 +31,7 @@ llama:
     # GGUF envoyés d'office à PrismML (en plus de la détection).
     serveurs_specifiques:
         Ternary-Bonsai-2-27B-PTQ1_0.gguf: llama-prism/llama-server.exe
-    # Réflexion (« thinking ») des modèles qui la proposent : active pour tous (choix de Jérémy, 2026-11-02), avec son
+    # Réflexion (« thinking ») des modèles qui la proposent : active pour tous (choix de l'auteur, 2026-11-02), avec son
     # propre budget en plus de la longueur de réponse (app/llm.py). Se coupe par LLM dans Réglages.
     reflexion: true
 
@@ -62,7 +62,7 @@ generation:
     retouche: "qwen_image_edit_2511"
     # Créer depuis des références (S'inspirer) : garde le mieux le personnage et le style (essais du 2026-10-20).
     references: "qwen_image_2_1_edit"
-    # Vidéo : MiniMax H3, vainqueur du Casting vidéo (LTX-2.5 retiré à la demande de Jérémy).
+    # Vidéo : MiniMax H3, vainqueur du Casting vidéo (LTX-2.5 retiré à la demande de l'auteur).
     image_vers_video: "minimax_h3_i2v"
     texte_vers_video: "minimax_h3_t2v"
 

@@ -3,7 +3,7 @@
 modeles/
 services/
 
-# Créations, séquences, voix, réglages, bancs et journaux de Jérémy : restent sur sa machine
+# Créations, séquences, voix, réglages, bancs et journaux de l'utilisateur : restent sur sa machine
 data/
 
 __pycache__/

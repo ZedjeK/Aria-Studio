@@ -91,7 +91,7 @@ class ReglagesParCheckpoint(Base):
         self.assertEqual(self.noeuds(api, "BasicGuider")[0]["inputs"]["model"], [chargeur, 0])  # rebranché
         self.assertTrue(self.noeuds(self.preparer(modele=ORIGINE_H3), "LoraLoaderModelOnly"))  # l'origine la garde
 
-    def test_lora_choisie_par_jeremy_gardee(self):
+    def test_lora_choisie_par_l_utilisateur_gardee(self):
         reglages.modifier_variante(H3, DASIWA, {"lora_workflow": False})
         with mock.patch.object(modeles, "fichiers", side_effect=lambda d, e: ["style.safetensors"]
                                if d == "MiniMax-H3/loras" else deposes(d, e)):

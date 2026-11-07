@@ -1,6 +1,7 @@
 # Moteurs d'Aria - Studio : versions épinglées, celles testées ensemble (app/moteurs.py).
 # Chaque archive vient d'une release GitHub officielle ; taille et SHA-256 relevés le 2026-11-01 (identiques aux
-# empreintes publiées par GitHub et aux archives qui tournent chez Jérémy). On n'avance une épingle qu'après un Casting.
+# empreintes publiées par GitHub et aux archives qui tournent chez l'auteur). On n'avance une épingle qu'après
+# un Casting.
 #
 # dossier : sous-dossier des moteurs (config.yaml s'y réfère : comfyui, llama/llama-server.exe…)
 # preuve  : fichier dont la présence montre que le moteur est installé

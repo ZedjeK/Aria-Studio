@@ -1,8 +1,9 @@
 """Recherche d'une nouvelle version : la dernière release du dépôt GitHub public, comparée à app.VERSION.
 
 Une requête anonyme vers l'API GitHub, au plus une fois par jour (au démarrage, puis quand l'interface le demande),
-sauf « Vérifier maintenant ». Le résultat est gardé dans data/mise_a_jour.json avec le choix de Jérémy (vérifier ou
-non). Rien n'est jamais téléchargé ni installé : l'interface montre la version, ses notes et le lien de la release.
+sauf « Vérifier maintenant ». Le résultat est gardé dans data/mise_a_jour.json avec le choix de l'utilisateur
+(vérifier ou non). Rien n'est jamais téléchargé ni installé : l'interface montre la version, ses notes et le lien de
+la release.
 Sans réseau, sans release publiée ou avec un dépôt inaccessible, rien ne s'affiche en erreur : l'état le dit.
 """
 

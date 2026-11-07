@@ -14,7 +14,7 @@ Une fiche de workflow a en plus :
     hugging_face   facultatif : bases (dépôts d'origine, ex. Qwen/Qwen-Image-2.1 : Rechercher filtre les dérivés par
                    leur tag « base_model »)
 
-Pourquoi des minimums mesurés à part : sur la carte de 16 Go de Jérémy, le pic de VRAM relevé par le Casting tombe
+Pourquoi des minimums mesurés à part : sur la carte de 16 Go de l'auteur, le pic de VRAM relevé par le Casting tombe
 toujours entre 15,7 et 15,9 Go, quel que soit le modèle (ComfyUI occupe la carte disponible) : il mesure la carte,
 pas le besoin du modèle (constaté le 2026-10-26).
 """

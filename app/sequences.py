@@ -53,8 +53,8 @@ _REPLIQUES = re.compile(r"«\s*([^»]+?)\s*»|\"([^\"]+)\"|“([^”]+)”")
 # Mesuré le 2026-10-21 (4 plans Rapide de 5 s : 8 min 14) : guides, références et premier chargement
 # coûtent environ 40 % de plus qu'un clip seul du Montage.
 SURCOUT_SEQUENCE = 1.4
-# « Audio needs 12+ steps » (doc H3) : à l'écoute (2026-10-21, même prompt et seed), Jérémy trouve la voix plus naturelle
-# en 12 qu'en 8 steps. Les plans avec une réplique montent à 12 steps ; mesuré +17 % de temps sur un plan.
+# « Audio needs 12+ steps » (doc H3) : à l'écoute (2026-10-21, même prompt et seed), l'auteur trouve la voix plus
+# naturelle en 12 qu'en 8 steps. Les plans avec une réplique montent à 12 steps ; mesuré +17 % de temps sur un plan.
 STEPS_PAROLE = 12
 SURCOUT_PAROLE = 1.17
 # Ce qui, s'il change, oblige à retourner le plan (et ceux qui en dépendent). Le résumé (idee) et l'ancienne case
@@ -98,7 +98,7 @@ def dimensions_sequence(s: dict) -> tuple[int, int]:
 
 
 def estimation(s: dict, indices: list[int]) -> float:
-    """Secondes de calcul sur la carte de Jérémy (mesures du Montage), assemblage compris."""
+    """Secondes de calcul sur la carte de l'auteur (mesures du Montage), assemblage compris."""
     q = plateau.QUALITES_VIDEO[s["qualite"]]
 
     def cout(plan):
@@ -443,7 +443,7 @@ def graphe_plan(s: dict, k: int, prompt_plan: str, seed: int, fichiers: dict) ->
                "steps": steps_plan(s, p), "prefixe": "aria_sequence"}
     if p["enchainement"] == "rush":
         valeurs["image"] = fichiers["rush"]
-    api = wf.preparer(valeurs)  # AS-18 sur le prompt, réglages de Jérémy, qualité
+    api = wf.preparer(valeurs)  # AS-18 sur le prompt, réglages de l'utilisateur, qualité
     i2v = reglages.noeud_unique(api, "MiniMaxH3ImageToVideo")
     guider = reglages.noeud_unique(api, "BasicGuider")
     vae, vae_audio = _vaes(api)
@@ -554,7 +554,7 @@ def _simple(texte: str) -> str:
 
 def langue(replique: str) -> str:
     """Langue d'une réplique d'après son écriture ; à l'essai, Ministral faisait parler en coréen une réplique française
-    parce que le personnage est coréen. Écriture latine : le français, langue de Jérémy."""
+    parce que le personnage est coréen. Écriture latine : le français, langue de l'utilisateur."""
     if re.search(r"[぀-ヿ]", replique):
         return "Japanese"
     if re.search(r"[가-힯]", replique):
@@ -861,7 +861,8 @@ def _extrait(texte: str, longueur: int = 400) -> str:
 
 def contrainte_tournage(s: dict) -> str | None:
     """La contrainte à ajouter à chaque plan : sa traduction faite au découpage (s["contrainte_en"]) si elle vaut
-    toujours, sinon le texte de Jérémy tel quel (H3 lit aussi le français) ; le LLM n'est plus appelé au tournage."""
+    toujours, sinon le texte de l'utilisateur tel quel (H3 lit aussi le français) ; le LLM n'est plus appelé
+    au tournage."""
     contrainte = s["casting"].get("contrainte")
     if not contrainte:
         return None

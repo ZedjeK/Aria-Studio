@@ -75,7 +75,7 @@ class Commande:
 
 MODES_REFERENCE = ("inspirer", "variation")
 
-# Montage : qualités de MiniMax H3 (mesurées sur la RTX 4080 de Jérémy pour 5 s, à chaud) et durées proposées.
+# Montage : qualités de MiniMax H3 (mesurées sur la RTX 4080 de l'auteur pour 5 s, à chaud) et durées proposées.
 QUALITES_VIDEO = {
     "rapide": {"nom": "⚡ Rapide", "megapixels": 0.4, "steps": 8, "estimation_s": 80},
     "compromis": {"nom": "⚖️ Compromis", "megapixels": 0.6, "steps": 12, "estimation_s": 170},

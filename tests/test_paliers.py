@@ -19,7 +19,7 @@ MESURES = {16: {"etat": "ok", "temps_s": 40.0}, 12: {"etat": "ok", "temps_s": 55
 
 class Calculs(unittest.TestCase):
     def test_libre_vise(self):
-        totale = 16376 * 2**20  # la RTX 4080 SUPER de Jérémy
+        totale = 16376 * 2**20  # la RTX 4080 SUPER de l'auteur
         self.assertEqual(paliers.libre_vise(8, totale, int(1.5 * GO)), 8188 * 2**20 - int(1.5 * GO))
         self.assertEqual(paliers.libre_vise(12, totale, 0), 12282 * 2**20)
 

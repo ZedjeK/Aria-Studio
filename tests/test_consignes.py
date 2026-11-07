@@ -1,7 +1,7 @@
 """Consignes v2 (app/prompt.py) : fidélité d'abord, contenu adulte gardé, longueur de la fiche du modèle cible.
 
-Origine : le LLM déformait le brouillon (médium, sons et caméra inventés, idée adoucie, consignes de Jérémy recopiées
-ou ignorées). Rien n'est lancé : on lit seulement le texte envoyé au LLM.
+Origine : le LLM déformait le brouillon (médium, sons et caméra inventés, idée adoucie, consignes de l'utilisateur
+recopiées ou ignorées). Rien n'est lancé : on lit seulement le texte envoyé au LLM.
 """
 
 import unittest

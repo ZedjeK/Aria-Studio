@@ -435,8 +435,9 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
 
 
 # Scénario, onglet Libre : le prompt s'écrit en conversation. Le LLM pose les questions essentielles (avec des réponses
-# à cliquer) au lieu de deviner ce que Jérémy n'a pas dit, tient une fiche de ce qu'il a compris, puis écrit le prompt
-# et l'ajuste. Chaque tour rend un objet JSON ; la conversation est gardée par l'interface (brouillon du Scénario).
+# à cliquer) au lieu de deviner ce que l'utilisateur n'a pas dit, tient une fiche de ce qu'il a compris, puis écrit le
+# prompt et l'ajuste. Chaque tour rend un objet JSON ; la conversation est gardée par l'interface (brouillon du
+# Scénario).
 
 CONSIGNE_LIBRE = f"""You help a French-speaking adult user write ONE prompt for a generation model, together, through a short conversation in French.
 

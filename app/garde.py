@@ -2,12 +2,12 @@
 l'occupent pas déjà. Sinon la demande attend, au lieu de déborder en mémoire partagée Windows (très lent).
 
 Vu trois fois en une semaine (2026-10-22 à 25) : le llama-server d'Aria-Home ou d'Aria-Pilote tenait 9 à 13 Go.
-Au repos, le bureau de Jérémy (Opera, Steam, Wallpaper Engine…) en occupe 1 à 2.
+Au repos, le bureau de l'auteur (Opera, Steam, Wallpaper Engine…) en occupe 1 à 2.
 
 Windows (pilote WDDM) ne donne pas la VRAM de chaque processus : NVML répond « inconnu » pour tous (vérifié le
 2026-10-25). La VRAM occupée se mesure donc globalement, nos moteurs déjà libérés ; le coupable, lui, se devine
 (moteurs connus et gros consommateurs de RAM parmi les processus qui utilisent la carte) et s'annonce « probablement ».
-Le garde ne ferme jamais un processus : c'est Jérémy qui décide. Il peut forcer le départ, ou annuler.
+Le garde ne ferme jamais un processus : c'est l'utilisateur qui décide. Il peut forcer le départ, ou annuler.
 """
 
 import asyncio
@@ -102,8 +102,8 @@ class Garde:
         return self._annuler
 
     async def attendre(self, moteur: str, exclus: set[int] | None = None):
-        """Rend la main dès que la VRAM occupée (nos moteurs déjà libérés) passe sous le seuil, ou si Jérémy force ;
-        lève ErreurGarde s'il annule. Sans GPU NVIDIA lisible, ne bloque rien."""
+        """Rend la main dès que la VRAM occupée (nos moteurs déjà libérés) passe sous le seuil, ou si
+        l'utilisateur force ; lève ErreurGarde s'il annule. Sans GPU NVIDIA lisible, ne bloque rien."""
         self._forcer = self._annuler = False
         etape = self.commande.etape if self.commande is not None else None
         debut = time.monotonic()
