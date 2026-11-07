@@ -19,10 +19,11 @@ toujours entre 15,7 et 15,9 Go, quel que soit le modèle (ComfyUI occupe la cart
 pas le besoin du modèle (constaté le 2026-10-26).
 """
 
+import copy
 import datetime
 
-import yaml
 
+from app import memo
 from app.config import ROOT
 
 FORMAT = 2
@@ -164,16 +165,27 @@ def problemes_llm(fiche: dict) -> list[str]:
         + problemes_specialiste(fiche.get("specialiste"))
 
 
+_catalogue = memo.SelonFichiers()
+
+
+def _donnees_llm() -> dict:
+    """catalogue/llm.yaml lu et validé, relu seulement quand il change (llm_defaut() le consultait pour chaque GGUF)."""
+    def lire() -> dict:
+        donnees = memo.lire_yaml(CATALOGUE_LLM) or {}
+        if donnees.get("format") != FORMAT:
+            raise ValueError(f"{CATALOGUE_LLM.name} : format {FORMAT} attendu")
+        for fiche in donnees.get("llm") or []:
+            if p := problemes_llm(fiche):
+                raise ValueError(f"{CATALOGUE_LLM.name}, {fiche.get('id', '?')} : " + " ; ".join(p))
+        return donnees
+
+    return _catalogue.lire(memo.empreinte([CATALOGUE_LLM]), lire)
+
+
 def catalogue_llm() -> list[dict]:
-    """Les fiches des LLM ; une fiche invalide fait échouer le chargement (le catalogue est livré avec Aria)."""
-    donnees = yaml.safe_load(CATALOGUE_LLM.read_text(encoding="utf-8")) or {}
-    if donnees.get("format") != FORMAT:
-        raise ValueError(f"{CATALOGUE_LLM.name} : format {FORMAT} attendu")
-    fiches = donnees.get("llm") or []
-    for fiche in fiches:
-        if p := problemes_llm(fiche):
-            raise ValueError(f"{CATALOGUE_LLM.name}, {fiche.get('id', '?')} : " + " ; ".join(p))
-    return fiches
+    """Les fiches des LLM (copiées : les modifier ne touche pas le cache) ; une fiche invalide fait échouer le
+    chargement (le catalogue est livré avec Aria)."""
+    return copy.deepcopy(_donnees_llm().get("llm") or [])
 
 
 def fiche_llm(fichier: str) -> dict | None:
@@ -192,5 +204,4 @@ def specialistes(id_workflow: str) -> list[dict]:
 
 def a_venir(id_workflow: str) -> list[dict]:
     """Spécialistes connus pour ce workflow mais pas encore utilisables (pas de GGUF)."""
-    donnees = yaml.safe_load(CATALOGUE_LLM.read_text(encoding="utf-8")) or {}
-    return [a for a in donnees.get("a_venir") or [] if id_workflow in a.get("workflows", [])]
+    return [copy.deepcopy(a) for a in _donnees_llm().get("a_venir") or [] if id_workflow in a.get("workflows", [])]

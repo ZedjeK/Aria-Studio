@@ -99,6 +99,7 @@ document.querySelectorAll(".onglet").forEach((bouton) => {
 const ETATS_MOTEUR = { actif: "chargé", veille: "en veille", absent: "introuvable" };
 
 async function majEtatDirect() {
+    if (document.hidden) return;  // onglet caché : la barre d'état n'interroge plus le serveur pour rien
     const zone = document.getElementById("etat-direct");
     let e;
     try {
@@ -143,6 +144,7 @@ const enDuree = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60).pa
 
 majEtatDirect();
 const suiviEtat = setInterval(majEtatDirect, 3000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) majEtatDirect(); });  // à jour au retour
 
 // ⏻ Quitter : arrête le serveur d'Aria, qui coupe ComfyUI et Llama en partant (app/main.py, /api/quitter).
 document.getElementById("quitter-appli").addEventListener("click", async () => {

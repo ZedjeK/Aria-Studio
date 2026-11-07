@@ -30,7 +30,14 @@ function sequenceVide() {
              loras: [], plans: [nouveauPlan("rush")] };
 }
 
-async function preparerSequence() {
+let preparationSequence = null;
+
+function preparerSequence() {
+    preparationSequence ??= preparerSequenceMaintenant().finally(() => { preparationSequence = null; });
+    return preparationSequence;
+}
+
+async function preparerSequenceMaintenant() {
     if (!optionsMontage) await preparerMontage();
     const v = optionsMontage.video;
     remplirSelect("qualite-sequence", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.megapixels} MP`]), "rapide");

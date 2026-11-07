@@ -75,8 +75,10 @@ class ComfyUI:
         parent n'existe plus (ou dont le numéro a été repris par un processus plus jeune). Le ComfyUI d'une Aria
         vivante n'en est jamais un, même si elle partage les moteurs."""
         dossier, sortie = _chemin(self.dossier), []
-        for p in psutil.process_iter():
+        for p in psutil.process_iter(["name"]):
             try:
+                if not (p.info["name"] or "").lower().startswith("python"):
+                    continue
                 if self.process is not None and p.pid == self.process.pid:
                     continue
                 cmd = p.cmdline()
@@ -212,7 +214,7 @@ class ComfyUI:
     async def televerser(self, image: Path | tuple[str, bytes]) -> str:
         """Copie une image, une vidéo ou un son (fichier, ou (nom, octets)) dans le dossier input de ComfyUI ;
         renvoie le nom à donner à LoadImage, LoadVideo ou LoadAudio."""
-        nom, octets = (image.name, image.read_bytes()) if isinstance(image, Path) else image
+        nom, octets = (image.name, await asyncio.to_thread(image.read_bytes)) if isinstance(image, Path) else image
         type_mime = TYPES_MIME.get(nom.rsplit(".", 1)[-1].lower(), "image/png")
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.post(

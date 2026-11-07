@@ -42,7 +42,14 @@ function checkpointsVideo() {
     };
 }
 
-async function preparerMontage() {
+let preparationMontage = null;
+
+function preparerMontage() {
+    preparationMontage ??= preparerMontageMaintenant().finally(() => { preparationMontage = null; });
+    return preparationMontage;
+}
+
+async function preparerMontageMaintenant() {
     optionsMontage = await api("GET", "/api/plateau/options");
     const v = optionsMontage.video;
     const ck = checkpointsVideo();

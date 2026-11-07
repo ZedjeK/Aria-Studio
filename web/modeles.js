@@ -297,7 +297,8 @@ async function choisirLlm(idWorkflow, llm) {
         await chargerOptionsPlateau();
         if (document.getElementById("workflow-prompt").value) remplirLlms();  // Scénario : le LLM du modèle a changé
     }
-    if (optionsMontage) optionsMontage.llm = (await api("GET", "/api/plateau/options")).llm;
+    // Le Montage reprend les options que le Plateau vient de lire (une seule requête au lieu de deux).
+    if (optionsMontage) optionsMontage.llm = (optionsPlateau ?? await api("GET", "/api/plateau/options")).llm;
 }
 
 function rendreUsage(id, u) {
