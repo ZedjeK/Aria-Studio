@@ -80,8 +80,8 @@ h1 {
 }
 
 h1 .logo {
-    width: 56px;
-    height: 56px;
+    width: 48px;   /* taille commune du logo d'en-tête des applis Aria */
+    height: 48px;
 }
 
 h1 span {
