@@ -578,7 +578,7 @@ function point(e) {
 function tracer(depuis, vers) {
     const echelle = canevas.width / canevas.getBoundingClientRect().width;
     ctx.globalCompositeOperation = gomme ? "destination-out" : "source-over";
-    ctx.strokeStyle = "#ff2e88";
+    ctx.strokeStyle = "#7df9ff";  // --accent de la palette Aria
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.lineWidth = Number(document.getElementById("taille-pinceau").value) * echelle;

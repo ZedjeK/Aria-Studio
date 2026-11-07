@@ -562,7 +562,7 @@ function afficherMiseAJour(e) {
     const d = e.derniere;
     bandeau.hidden = !(e.disponible && d && majIgnoree() !== d.version);
     if (!bandeau.hidden) {
-        bandeau.querySelector("span").textContent = `✨ Aria - Studio ${d.version} est disponible (tu as la ${e.version})`
+        bandeau.querySelector("span").textContent = `✨ Aria Studio ${d.version} est disponible (tu as la ${e.version})`
             + (d.date ? ` · publiée le ${new Date(d.date).toLocaleDateString("fr-FR")}` : "");
         document.getElementById("lien-maj").href = d.url;
         const notes = document.getElementById("notes-maj");

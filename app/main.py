@@ -64,7 +64,7 @@ class InterfaceSansCache(StaticFiles):
         return reponse
 
 
-app = FastAPI(title="Aria - Studio", lifespan=cycle_de_vie)
+app = FastAPI(title="Aria Studio", lifespan=cycle_de_vie)
 app.mount("/static", InterfaceSansCache(directory=WEB), name="static")
 
 
