@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from app import fiches, modeles, prompt, reglages, retouche, securite, workflows
+from app.comfy import video_et_affiche
 from app.config import CONFIG
 from app.emplacements import DATA
 from app.orchestrateur import Orchestrateur
@@ -134,6 +135,25 @@ def avec_declencheurs(prompt_: str, loras: list[dict] | None) -> str:
     return f"{declencheurs}, {prompt_}" if declencheurs else prompt_
 
 
+
+def valider_loras(wf: workflows.Workflow, loras: list[dict] | None, texte: str, origine=()) -> list[dict]:
+    """Normalise les LoRAs choisies, vérifie qu'elles sont de la famille et que leur force est dans les bornes, et
+    passe leurs mots déclencheurs au filtre AS-18 avec le texte de la demande. N'écrit rien."""
+    if not loras:
+        return []
+    disponibles = modeles.fichiers(f"{wf.famille}/loras", modeles.EXTENSIONS_IMAGE)
+    propres = []
+    for lora in loras:
+        if lora.get("fichier") not in disponibles:
+            raise ErreurPlateau(f"LoRA absente de modeles/{wf.famille}/loras : {lora.get('fichier')}")
+        force = float(lora.get("force", 1.0))
+        if not modeles.FORCE_LORA[0] <= force <= modeles.FORCE_LORA[1]:
+            raise ErreurPlateau(f"Force de LoRA entre {modeles.FORCE_LORA[0]:g} et {modeles.FORCE_LORA[1]:g} : {force}")
+        propres.append({"fichier": lora["fichier"], "force": force,
+                        "declencheurs": str(lora.get("declencheurs") or "").strip()})
+    securite.verifier(texte, *origine, *(l["declencheurs"] for l in propres))
+    return propres
+
 class Plateau:
     def __init__(self, orchestrateur: Orchestrateur):
         self.orchestrateur = orchestrateur
@@ -184,6 +204,7 @@ class Plateau:
                 "voix": voix.options(),
             },
             "references_max": workflows.REFERENCES_MAX,
+            "lora_force_max": modeles.FORCE_LORA[1],  # curseurs de force des LoRA (Plateau, Montage, Ma collection)
             "llm": {"defaut": modeles.llm_defaut(), "choix": llm_au_choix(),
                     "par_workflow": {wf.id: workflows.llm_de(wf.id) for wf in prets}},
         }
@@ -376,22 +397,10 @@ class Plateau:
     @staticmethod
     def _valider_loras(wf: workflows.Workflow, loras: list[dict] | None, texte: str,
                        origine: list[str] = ()) -> list[dict]:
-        """Normalise les LoRAs choisies, vérifie qu'elles sont de la famille, passe leurs mots déclencheurs
-        au filtre AS-18 avec le texte de la demande, et retient les réglages pour la prochaine fois."""
-        if not loras:
-            return []
-        disponibles = modeles.fichiers(f"{wf.famille}/loras", modeles.EXTENSIONS_IMAGE)
-        propres = []
-        for lora in loras:
-            if lora.get("fichier") not in disponibles:
-                raise ErreurPlateau(f"LoRA absente de modeles/{wf.famille}/loras : {lora.get('fichier')}")
-            force = float(lora.get("force", 1.0))
-            if not 0 <= force <= 2:
-                raise ErreurPlateau(f"Force de LoRA entre 0 et 2 : {force}")
-            propres.append({"fichier": lora["fichier"], "force": force,
-                            "declencheurs": str(lora.get("declencheurs") or "").strip()})
-        securite.verifier(texte, *origine, *(l["declencheurs"] for l in propres))
-        modeles.memoriser_loras(wf.famille, propres)
+        """Les LoRAs d'une commande, validées (valider_loras), puis leurs réglages retenus pour la prochaine fois."""
+        propres = valider_loras(wf, loras, texte, origine)
+        if propres:
+            modeles.memoriser_loras(wf.famille, propres)
         return propres
 
     @staticmethod
@@ -566,8 +575,7 @@ class Plateau:
                 api = wf.preparer(valeurs)
                 wf.ajouter_affiche(api, "aria_montage")
                 fichiers = await comfy.executer(api, progression=self._suivi(c))
-            video = next((o for n, o in fichiers if n.lower().endswith(".mp4")), None)
-            affiche = next((o for n, o in fichiers if n.lower().endswith(".png")), None)
+            video, affiche = video_et_affiche(fichiers)
             if not (video and affiche):
                 raise ErreurPlateau("ComfyUI n'a pas renvoyé la vidéo attendue")
             c.images.append(enregistrer_clip(video, affiche, {

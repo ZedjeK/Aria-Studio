@@ -119,7 +119,6 @@ function elementCollection(e) {
 // LoRA : mots déclencheurs et force, proposés ensuite au Plateau. Par défaut, ceux de la source : les mots déclarés
 // par l'auteur et la force médiane de ses images d'exemple (Civitai n'a pas de champ « force conseillée »).
 
-const virgule = (x) => Number(x).toFixed(2).replace(".", ",");
 
 function origineLora(l) {
     if (l.regle) return "Réglée par toi (au Plateau ou ici).";
@@ -137,7 +136,7 @@ function reglageLora(cle, l) {
                 <input type="text" data-champ="declencheurs" maxlength="300" value="${echapper(l.declencheurs)}"
                        placeholder="${l.civitai ? "aucun déclaré par l'auteur (souvent normal)" : "facultatif"}"></label>
             <label class="force-lora">Force
-                <input type="range" data-champ="force" min="0" max="2" step="0.05" value="${l.force}">
+                <input type="range" data-champ="force" min="0" max="${forceMaxLora()}" step="0.05" value="${l.force}">
                 <span class="valeur">${virgule(l.force)}</span></label>
             <button type="button" class="petit" data-lora="enregistrer">Enregistrer</button>
             ${l.regle ? '<button type="button" class="petit" data-lora="oublier" title="Revenir aux valeurs de la source">↺ Source</button>' : ""}
@@ -174,7 +173,7 @@ document.getElementById("groupes-collection").addEventListener("click", async (e
                 force: Number(bloc.querySelector('[data-champ="force"]').value) })
             : await api("POST", `/api/collection/lora/${bouton.dataset.lora}`, { cle });
         bloc.outerHTML = reglageLora(cle, l);
-        if (typeof chargerOptionsPlateau === "function" && optionsPlateau) chargerOptionsPlateau();  // le Plateau suit
+        if (optionsPlateau) chargerOptionsPlateau();  // le Plateau suit
     } catch (err) {
         bouton.disabled = false;
         alert(err.message);

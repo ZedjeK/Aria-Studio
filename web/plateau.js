@@ -9,7 +9,8 @@ let optionsPlateau = null;
 // le Plateau (création, retouche), un clip du Montage et une séquence (famille MiniMax-H3).
 const tousWorkflows = () => optionsPlateau
     ? [...optionsPlateau.workflows.texte_vers_image.choix, ...optionsPlateau.workflows.retouche.choix] : [];
-const FORCE_MAX_LORA = 2;  // comme le serveur (plateau._valider_loras)
+// La force maximale d'une LoRA, donnée par le serveur avec les options (modeles.FORCE_LORA).
+const forceMaxLora = () => (optionsPlateau ?? optionsMontage)?.lora_force_max ?? 2;
 
 function afficherLoras(idConteneur, idSelect) {
     const { workflow } = choixModele(idSelect);
@@ -32,8 +33,8 @@ function rendreLoras(idConteneur, w, choisies = null) {
             const force = a ? a.force : l.force;
             return `<div class="lora ${a?.actif ? "active" : ""}" data-fichier="${echapper(l.fichier)}">
                 <label title="${echapper(l.fichier)}"><input type="checkbox" ${a?.actif ? "checked" : ""}> ${echapper(l.nom)}</label>
-                <input type="range" min="0" max="${FORCE_MAX_LORA}" step="0.05" value="${force}">
-                <span class="valeur">${Number(force).toFixed(2)}</span>
+                <input type="range" min="0" max="${forceMaxLora()}" step="0.05" value="${force}">
+                <span class="valeur">${virgule(force)}</span>
                 <input type="text" placeholder="mots déclencheurs (facultatif)" value="${echapper(a ? a.declencheurs : l.declencheurs)}">
             </div>`;
         }).join("") + `<p class="conseil-loras" hidden>💡 Plusieurs LoRAs cochées : baisse un peu la force de chacune
@@ -65,7 +66,7 @@ function brancherLoras(id, quandChange = null) {
     conteneur.addEventListener("input", (e) => {
         const ligne = e.target.closest(".lora");
         if (!ligne) return;
-        if (e.target.type === "range") ligne.querySelector(".valeur").textContent = Number(e.target.value).toFixed(2);
+        if (e.target.type === "range") ligne.querySelector(".valeur").textContent = virgule(e.target.value);
         if (e.target.type === "checkbox") {
             ligne.classList.toggle("active", e.target.checked);
             majConseilLoras(conteneur);
@@ -105,15 +106,14 @@ const lignesModeles = (tache) => tache.choix.flatMap((w) => w.modeles.map((m) =>
 async function chargerOptionsPlateau() {
     const o = await api("GET", "/api/plateau/options");
     optionsPlateau = o;
-    const remplir = remplirSelect;
     const t2i = o.workflows.texte_vers_image;
     remplirModelesCreation();
     const edit = o.workflows.retouche;
     const origineEdit = edit.choix.find((w) => w.id === edit.defaut);
-    remplir("workflow-retouche", lignesModeles(edit), origineEdit && `${origineEdit.id}::${origineEdit.modele_defaut}`);
+    remplirSelect("workflow-retouche", lignesModeles(edit), origineEdit && `${origineEdit.id}::${origineEdit.modele_defaut}`);
     const choisi = t2i.choix.find((w) => w.id === choixModele("workflow-creation").workflow);
-    remplir("format-creation", o.formats.map((f) => [f, f]), choisi?.format ?? o.formats[0]);
-    remplir("nombre-creation", Array.from({ length: o.nombre_max }, (_, i) => [String(i + 1), String(i + 1)]), "1");
+    remplirSelect("format-creation", o.formats.map((f) => [f, f]), choisi?.format ?? o.formats[0]);
+    remplirSelect("nombre-creation", Array.from({ length: o.nombre_max }, (_, i) => [String(i + 1), String(i + 1)]), "1");
     afficherLoras("loras-creation", "workflow-creation");
     afficherLoras("loras-retouche", "workflow-retouche");
     rendreReferences();
@@ -201,7 +201,7 @@ document.querySelectorAll('input[name="mode-reference"]').forEach((radio) => {
 });
 
 document.getElementById("liberte-reference").addEventListener("input", (e) => {
-    document.getElementById("valeur-liberte").textContent = Number(e.target.value).toFixed(2).replace(".", ",");
+    document.getElementById("valeur-liberte").textContent = virgule(e.target.value);
 });
 
 const emplacements = document.getElementById("emplacements-references");
@@ -271,7 +271,7 @@ async function recevoirAuPlateau({ prompt, workflow, images, role, liberte, lanc
     }
     if (role === "variation") {
         document.getElementById("liberte-reference").value = liberte;
-        document.getElementById("valeur-liberte").textContent = Number(liberte).toFixed(2).replace(".", ",");
+        document.getElementById("valeur-liberte").textContent = virgule(liberte);
     }
     rendreReferences();  // refait la liste des modèles : édition pour s'inspirer, variation, texte vers image
     const w = listeCreation().choix.find((x) => x.id === workflow);
@@ -319,8 +319,7 @@ async function lancerCommande(corps, url = "/api/creations", erreur = document.g
     try {
         commande = await api("POST", url, corps);
     } catch (err) {
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
         return false;
     }
     document.getElementById("erreur-creation").hidden = true;
@@ -350,8 +349,7 @@ async function suivreCommande(id, debut) {
         }, 700);
     } catch (err) {
         const erreur = document.getElementById("erreur-creation");
-        erreur.textContent = `Suivi interrompu (${err.message}) : la génération continue peut-être, regarde les rushes.`;
-        erreur.hidden = false;
+        afficherErreur(erreur, `Suivi interrompu (${err.message}) : la génération continue peut-être, regarde les rushes.`);
     } finally {
         suiviesPlateau.splice(suiviesPlateau.indexOf(id), 1);
         if (suiviesPlateau.length) {
@@ -364,8 +362,7 @@ async function suivreCommande(id, debut) {
     if (!c) return;
     if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-creation");
-        erreur.textContent = c.etat === "annule" ? messageAnnulation(c, "image", true) : c.erreur;
-        erreur.hidden = false;
+        afficherErreur(erreur, c.etat === "annule" ? messageAnnulation(c, "image", true) : c.erreur);
         if (!c.images.length) return;
         afficherResultat(c.images, c.prompt ?? "", c.type);
         chargerGalerie();
@@ -488,7 +485,7 @@ function reprendreReglages(f) {
     }
     if (f.liberte) {
         document.getElementById("liberte-reference").value = f.liberte;
-        document.getElementById("valeur-liberte").textContent = Number(f.liberte).toFixed(2).replace(".", ",");
+        document.getElementById("valeur-liberte").textContent = virgule(f.liberte);
     }
     rendreReferences();
     const select = document.getElementById("workflow-creation");

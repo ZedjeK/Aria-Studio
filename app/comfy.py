@@ -29,6 +29,13 @@ def _chemin(p: Path | str) -> str:
     return os.path.normcase(os.path.realpath(p))
 
 
+
+def video_et_affiche(fichiers: list[tuple[str, bytes]]) -> tuple[bytes | None, bytes | None]:
+    """La vidéo (.mp4) et son affiche (.png) parmi les fichiers rendus par ComfyUI ; None pour ce qui manque."""
+    def trouver(extension: str) -> bytes | None:
+        return next((octets for nom, octets in fichiers if nom.lower().endswith(extension)), None)
+    return trouver(".mp4"), trouver(".png")
+
 class ComfyUI:
     """Le ComfyUI d'Aria. Un seul à la fois : celui qu'elle a lancé (`process`), ou celui qu'une Aria précédente a
     laissé orphelin (`adopte`, fermeture brutale) ; elle arrête l'un comme l'autre en quittant.

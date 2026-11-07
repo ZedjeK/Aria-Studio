@@ -53,7 +53,7 @@ class Optimiseur(unittest.TestCase):
         self.assertEqual((qwen["actuel"], qwen["propose"]), (25, 40))
         self.assertTrue(qwen["source"].startswith("https://"))
         self.assertEqual(props[("qwen_image_edit_2511", "shift")]["propose"], 3.0)
-        self.assertEqual(props[(LLM, "temperature_peaufinage")]["propose"], 0.05)
+        self.assertEqual(props[(LLM, "temperature_traduction")]["propose"], 0.05)
         self.assertEqual(props[(BONSAI, "presence_penalty")]["propose"], 1.5)
         self.assertNotIn(("krea2_turbo", "steps"), props)  # déjà à la valeur recommandée : rien à proposer
         self.assertEqual(r["materiel"]["gpu"], "GPU de test")

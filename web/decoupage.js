@@ -44,13 +44,12 @@ function etatPlan(p) {
 
 // Une réplique trop longue pour son plan : le serveur prévient aussi (sequences.MOTS_PAR_SECONDE).
 function motsReplique(p) {
-    const mots = p.replique.trim() ? p.replique.trim().split(/\s+/).length : 0;
+    const mots = compterMots(p.replique);
     const permis = Math.floor((optionsPlateau?.video.sequence.mots_par_seconde ?? 2.5) * p.duree);
     return { mots, permis, trop: mots > permis };
 }
 
 function majForme() {
-    document.getElementById("vue-scenario").classList.toggle("forme-sequence", enSequence());
     if (enSequence()) preparerDecoupage();
     placerChat();
 }
@@ -124,7 +123,7 @@ function cartePlan(p, k, durees) {
             </div>` : ""}
         </div>
         <label class="prompt-plan"><span class="discret">Prompt du plan, en anglais, tourné tel quel
-            <small class="mots-plan">${p.prompt.trim() ? `· ${p.prompt.trim().split(/\s+/).length} mots` : ""}</small></span>
+            <small class="mots-plan">${compterMots(p.prompt) ? `· ${compterMots(p.prompt)} mots` : ""}</small></span>
             <textarea data-champ="prompt" rows="3"
                       placeholder="✨ ou 💬 l'écrivent ici ; tu peux le retoucher, ou l'écrire toi-même.">${echapper(p.prompt)}</textarea>
         </label>
@@ -151,7 +150,7 @@ function majCartePlan(k) {
     const badge = li.querySelector(".etat-plan");
     badge.className = `etat-plan ${classe}`;
     badge.textContent = etat;
-    li.querySelector(".mots-plan").textContent = p.prompt.trim() ? `· ${p.prompt.trim().split(/\s+/).length} mots` : "";
+    li.querySelector(".mots-plan").textContent = compterMots(p.prompt) ? `· ${compterMots(p.prompt)} mots` : "";
     const compteur = li.querySelector(".mots-replique");
     if (compteur) {
         const { mots, permis, trop } = motsReplique(p);
@@ -181,8 +180,7 @@ function rendreResume() {
 }
 
 function planChange(k) {
-    if (k !== undefined) majCartePlan(k);
-    else rendreResume();
+    majCartePlan(k);
     garderBrouillon();
 }
 
@@ -276,11 +274,6 @@ function ouvrirAidePlan(k) {
     const p = decoupage.plans[k];
     if (!p.echanges.length) envoyerLibre(p.note.trim() || `Aide-moi à écrire le plan ${k + 1}.`);
     else document.getElementById("message-libre").focus();
-}
-
-// Le fil a changé (saisie, ou écrit par 💬 Aide) : rien à recalculer, il sert de contexte à chaque écriture.
-function histoireModifiee() {
-    garderBrouillon();
 }
 
 // Événements : référence, plans, musique, contraintes
@@ -403,8 +396,7 @@ document.getElementById("creer-sequence-scenario").addEventListener("click", asy
         ? "Donne un titre à la séquence : ses plans seront rangés dans un dossier à son nom."
         : manquant >= 0 ? `Plan ${manquant + 1} : pas encore de prompt (✨ Optimiser, 💬 Aide, ou écris-le).` : "";
     if (probleme) {
-        erreur.textContent = probleme;
-        erreur.hidden = false;
+        afficherErreur(erreur, probleme);
         if (!titre.value.trim()) titre.focus();
         return;
     }
@@ -424,7 +416,6 @@ document.getElementById("creer-sequence-scenario").addEventListener("click", asy
         });
         await ouvrirSequence(s.id);
     } catch (err) {
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
     }
 });

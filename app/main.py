@@ -100,7 +100,7 @@ async def local_seulement(requete: Request, suite):
 
 @app.exception_handler(garde.ErreurGarde)
 async def attente_annulee(_requete, e: garde.ErreurGarde):
-    """L'utilisateur a annulé une demande qui attendait la carte (réécriture, peaufinage…)."""
+    """L'utilisateur a annulé une demande qui attendait la carte (réécriture, découpage…)."""
     return JSONResponse(status_code=409, content={"detail": str(e)})
 
 
@@ -413,17 +413,6 @@ def annuler_telechargement(id_tache: str):
     return telechargeur.taches[id_tache].to_dict()
 
 
-@app.get("/api/workflows")
-def liste_workflows():
-    return [wf.resume() for wf in workflows.catalogue()]
-
-
-@app.get("/api/workflows/erreurs")
-def erreurs_workflows():
-    """Fiches écartées du catalogue (ajoutées à la main, format incomplet) et pourquoi."""
-    return workflows.erreurs()
-
-
 # Onglet Modèles : Ma collection, usages (Texte → image, Image → image, Vidéo), sources retrouvées (app/collection.py)
 
 def _collection(action, *args):
@@ -627,12 +616,6 @@ def source_banc(id_banc: str, demande: DemandeImage):
     return _modifier_banc(id_banc, lambda: casting.utiliser_comme_source(id_banc, demande.cle, demande.fichier))
 
 
-@app.get("/api/llm/modeles")
-def modeles_llm():
-    """Tous les GGUF de modeles/llm (favoris d'abord), et celui présélectionné."""
-    return {"defaut": modeles.llm_defaut(), "choix": [{**m, "present": True} for m in plateau.llm_au_choix()]}
-
-
 # Onglet Prompt : listes guidées
 
 @app.get("/api/prompt/listes")
@@ -675,74 +658,6 @@ def _verifier_llm(modele: str | None):
         raise HTTPException(409, "Un banc est en cours")
     if modele and modele not in modeles.llm_disponibles():
         raise HTTPException(400, f"GGUF absent de modeles/llm : {modele}")
-
-
-class DemandePeaufinage(BaseModel):
-    prompt: str
-    llm: str | None = None
-    workflow: str | None = None  # pour la longueur conseillée du modèle cible
-    duree: int = 5  # vidéo : durée du clip, en secondes
-
-
-@app.post("/api/prompt/peaufiner")
-async def peaufiner_prompt(demande: DemandePeaufinage):
-    _verifier_llm(demande.llm)
-    try:
-        mots_max = reglages.valeurs_workflow(workflows.obtenir(demande.workflow)).get("mots_max") \
-            if demande.workflow else None
-        duree = demande.duree if listes.est_video(demande.workflow) else None
-        llm = demande.llm or (workflows.llm_de(demande.workflow) if demande.workflow else None)
-        if not duree and prompt.specialiste_pour(llm, "creation", demande.workflow):
-            # 🎯 Le LLM entraîné pour ce modèle (prompt enhancer officiel) écrit avec sa propre consigne.
-            r = await prompt.reecrire(orchestrateur, demande.prompt, llm, workflow=demande.workflow)
-            return {**r, "mots": len(r["prompt"].split())}
-        return await prompt.peaufiner(orchestrateur, demande.prompt, llm, mots_max, duree,
-                                      workflows.regles_prompt(demande.workflow))
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except workflows.ErreurWorkflow as e:
-        raise HTTPException(400, str(e))
-    except ErreurLlama as e:
-        raise HTTPException(500, str(e))
-
-
-class DemandeEcriture(BaseModel):
-    prompt: str  # le prompt assemblé par le Scénario
-    role: str  # inspirer (références), variation (image de départ), animer (première image du clip)
-    images: list[str]  # rushes, dans l'ordre : Picture 1, 2, 3
-    llm: str | None = None
-    workflow: str | None = None  # modèle cible : ses règles et sa longueur
-    duree: int = 5  # animer : durée du clip, en secondes
-
-
-ROLES_REFERENCE = {"inspirer": 3, "variation": 1, "animer": 1}  # rôle → nombre d'images au plus
-
-
-@app.post("/api/prompt/ecrire")
-async def ecrire_avec_images(demande: DemandeEcriture):
-    """Scénario avec une image de référence : le LLM voit les images (ou lit leur fiche) et écrit le prompt qui s'en
-    sert : instruction « Picture 1… » pour s'inspirer, image de départ d'une variation, première image d'un clip."""
-    _verifier_llm(demande.llm)
-    if demande.role not in ROLES_REFERENCE or not 1 <= len(demande.images) <= ROLES_REFERENCE[demande.role]:
-        raise HTTPException(400, "Images de référence : 1 à 3 pour s'inspirer, une seule pour une variation ou un clip")
-    try:
-        origines = plateau.textes_origine(demande.images)  # AS-18 : un rush né d'un mineur le reste
-        securite.verifier(demande.prompt, *origines)
-        vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in demande.images])  # images lourdes : à côté
-        llm = demande.llm or (workflows.llm_de(demande.workflow) if demande.workflow else None)
-        r = await prompt.reecrire(orchestrateur, demande.prompt, llm,
-                                  len(vues) if demande.role == "inspirer" else 0,
-                                  video="animer" if demande.role == "animer" else None, duree=demande.duree,
-                                  regles=workflows.regles_prompt(demande.workflow), workflow=demande.workflow,
-                                  vues=vues)
-        securite.verifier(demande.prompt, r["prompt"], *origines)
-        return {**r, "mots": len(r["prompt"].split())}
-    except ErreurSecurite as e:
-        raise HTTPException(422, str(e))
-    except (plateau.ErreurPlateau, workflows.ErreurWorkflow) as e:
-        raise HTTPException(400, str(e))
-    except ErreurLlama as e:
-        raise HTTPException(500, str(e))
 
 
 class DemandeOptimisation(BaseModel):
@@ -833,7 +748,7 @@ async def chat_libre(d: DemandeLibre):
             s = DemandeDecoupage(**d.sequence)
             desc = listes.description_sequence(s.sujet, s.choix, s.age)
             plan_ = sequences.preparer_ecriture(s.synopsis, desc["personnage"], desc["decor"], s.plans, s.reference,
-                                                desc["mineur"], s.contrainte, True, [], s.musique, s.plan)
+                                                desc["mineur"], s.contrainte, s.musique, s.plan)
             contexte = f"{plan_['demande']}\nCharacter rule: {plan_['regle_personnage']}"
             duree = plan_["plans"][s.plan]["duree"]
         origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
@@ -916,7 +831,7 @@ def lire_reglages():
 
 class DemandeReglagesLlm(BaseModel):
     valeurs: dict = {}  # {réglage: valeur} ; None = valeur d'origine
-    consignes: dict[str, str | None] = {}  # {reecriture|retouche|peaufinage|precisions: texte} ; None = d'origine
+    consignes: dict[str, str | None] = {}  # {reecriture|retouche|precisions|…: texte} ; None = d'origine
 
 
 @app.put("/api/reglages/llm/{fichier}")
@@ -1169,8 +1084,6 @@ class DemandeDecoupage(BaseModel):
     reference: str | None = None  # rush du personnage (galerie du Plateau)
     contrainte: str = ""  # impérative sur tous les plans
     llm: str | None = None
-    dialogue: bool = True  # case 🗣 Dialogue : False = personne ne parle dans le film
-    repliques: list[str] = []  # répliques à placer, mot pour mot (en plus de celles du synopsis)
     musique: str | None = None  # case 🎵 Musique d'ambiance : sa description ; None = pas de musique de fond
     plan: int | None = None  # ✨ d'un plan : son numéro (0 = le premier) ; None = tous les plans
     contrainte_en: dict | None = None  # {fr, en} : traduction déjà faite de la contrainte, reprise si elle vaut
@@ -1184,8 +1097,8 @@ async def decouper_sequence(d: DemandeDecoupage):
     try:
         desc = listes.description_sequence(d.sujet, d.choix, d.age)
         return await sequences.decouper(orchestrateur, d.synopsis, desc["personnage"], desc["decor"], d.plans,
-                                        d.reference, d.llm, desc["mineur"], d.contrainte, d.dialogue, d.repliques,
-                                        d.musique, d.plan, d.contrainte_en)
+                                        d.reference, d.llm, desc["mineur"], d.contrainte, musique=d.musique,
+                                        cible=d.plan, contrainte_en=d.contrainte_en)
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (sequences.ErreurSequence, plateau.ErreurPlateau, listes.ErreurListes) as e:

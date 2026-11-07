@@ -59,7 +59,7 @@ function rendreReferencesScenario() {
     document.getElementById("bloc-liberte-scenario").hidden = seule !== "variation";
     document.querySelector(`input[name="role-reference"][value="${refsScenario.role}"]`).checked = true;
     document.getElementById("liberte-scenario").value = refsScenario.liberte;
-    document.getElementById("valeur-liberte-scenario").textContent = refsScenario.liberte.toFixed(2).replace(".", ",");
+    document.getElementById("valeur-liberte-scenario").textContent = virgule(refsScenario.liberte);
     document.getElementById("aide-reference-scenario").textContent =
         AIDES_REFERENCE[formeScenario === "image" ? refsScenario.role : formeScenario];
 }
@@ -102,6 +102,6 @@ document.querySelectorAll('input[name="role-reference"]').forEach((radio) => rad
 
 document.getElementById("liberte-scenario").addEventListener("input", (e) => {
     refsScenario.liberte = Number(e.target.value);
-    document.getElementById("valeur-liberte-scenario").textContent = refsScenario.liberte.toFixed(2).replace(".", ",");
+    document.getElementById("valeur-liberte-scenario").textContent = virgule(refsScenario.liberte);
     garderBrouillon();
 });

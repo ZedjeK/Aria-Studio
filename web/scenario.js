@@ -57,13 +57,12 @@ let promptPret = false;
 let personnagesEnregistres = [];
 
 const etatPrompt = () => (etatsPrompt[sujetPrompt] ??=
-    { choix: {}, age: null, texte: "", precisions: "", traduction: null, action: "", traductionAction: null, replique: "",
+    { choix: {}, age: null, texte: "", replique: "",
       toutes: false, dialogue: false, avecMusique: false, musique: "", traductionMusique: null });
 const cle = (...morceaux) => morceaux.join("|");
 // Un LLM par atelier ; par défaut celui du modèle cible (onglet Modèles), sinon le défaut. 👁 : il voit les images.
 const llmsChoisis = {};  // atelier → GGUF choisi à la main (gardé dans le brouillon)
 const llmAtelier = () => document.getElementById("llm-atelier").value || null;
-const llmPrompt = llmAtelier;  // decoupage.js, libre.js
 const nomLlm = () => document.getElementById("llm-atelier").selectedOptions[0]?.textContent
     .replace(/ [★👁]/g, "").trim() || "Le LLM";
 
@@ -94,13 +93,13 @@ async function ouvrirScenario(forme, { animer = null, retoucher = null } = {}) {
 }
 
 async function preparer() {
-    if (!promptPret) {
-        promptPret = true;
+    if (!promptPret) {  // posé à la fin : un échec (serveur occupé) laisse réessayer au prochain affichage
         const { sujets } = await api("GET", "/api/prompt/listes");
         document.getElementById("sujets-prompt").innerHTML = sujets.map((s) =>
             `<button type="button" data-sujet="${echapper(s.id)}">${echapper(LIBELLES_SUJETS[s.id] ?? s.nom)}</button>`).join("");
         if (!optionsPlateau) await chargerOptionsPlateau();
         relireBrouillon();
+        promptPret = true;
     }
     await chargerModelesPrompt();
     await chargerPersonnages();
@@ -134,7 +133,6 @@ function majAtelier() {
         b.classList.toggle("actif", b.dataset.atelier === formeScenario));
     document.querySelectorAll("[data-atelier-seul]").forEach((e) => { e.hidden = e.dataset.atelierSeul !== formeScenario; });
     document.querySelectorAll("[data-atelier-sauf]").forEach((e) => { e.hidden = e.dataset.atelierSauf === formeScenario; });
-    document.querySelectorAll("[data-bloc-video]").forEach((b) => { b.hidden = !cibleVideo(); });
     const [titre, exemple] = IDEES[formeScenario];
     document.getElementById("titre-idee").textContent = titre;
     const idee = document.getElementById("idee-scenario");
@@ -176,7 +174,7 @@ function poserFinal(texte) {
 
 function majFinal() {
     const texte = atelier().final.trim();
-    const mots = texte ? texte.split(/\s+/).length : 0;
+    const mots = compterMots(texte);
     const max = assemblagePrompt?.mots_max;
     const compte = document.getElementById("mots-final");
     compte.textContent = mots ? `${mots} mots${max ? ` / ${max} conseillés` : ""}` : "";
@@ -296,7 +294,7 @@ function rendreBlocsPrompt() {
         document.querySelector(`[data-onglet-blocs="${onglet}"]`).innerHTML = groupes.map(([b, g]) => {
             const id = cle(sujetPrompt, b.id, g.nom);
             return `<details data-groupe="${echapper(id)}" ${groupesOuvertsPrompt.has(id) ? "open" : ""}
-                     ${b.video ? `data-bloc-video data-clip-seul ${cibleVideo() ? "" : "hidden"}` : ""}>
+                     ${b.video ? `data-atelier-seul="clip" ${formeScenario === "clip" ? "" : "hidden"}` : ""}>
                 <summary>${b.video ? "🎞️ " : ""}${echapper(g.nom)} <span class="discret compte"></span></summary>
                 <div class="sous-listes">${g.sous_listes.map((sl) => `
                     <div class="sous-liste" data-bloc="${echapper(b.id)}" data-sl="${echapper(sl.nom)}">
@@ -544,8 +542,7 @@ async function assemblerPrompt() {
     } catch (err) {
         if (numero !== numeroAssemblage) return;
         assemblagePrompt = null;
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
         majBoutonsPrompt();
         return;
     }
@@ -577,8 +574,7 @@ async function avecLlama(action) {
         });
     } catch (err) {
         statut.hidden = true;
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
     } finally {
         occupePrompt = false;
         majBoutonsPrompt();
@@ -800,7 +796,6 @@ document.getElementById("llm-atelier").addEventListener("change", (e) => {
 
 document.getElementById("idee-scenario").addEventListener("input", (e) => {
     atelier().idee = e.target.value;
-    if (formeScenario === "sequence") histoireModifiee(e.target.value);  // decoupage.js
     garderBrouillon();
 });
 

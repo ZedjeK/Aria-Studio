@@ -93,7 +93,6 @@ async function envoyerLibre(texte) {
         } else if (r.prompt && forme === "sequence") {  // le fil rejoint l'idée, que ✨ Tout écrire répartit
             a.idee = r.prompt;
             if (formeScenario === forme) document.getElementById("idee-scenario").value = r.prompt;
-            histoireModifiee(r.prompt);
         } else if (r.prompt && formeScenario === forme) {
             poserFinal(r.prompt);
         } else if (r.prompt) {
@@ -104,8 +103,7 @@ async function envoyerLibre(texte) {
     } catch (err) {
         a.echanges.pop();  // ta réponse reste dans le champ : renvoie-la
         if (texte !== ECRIRE_LIBRE) document.getElementById("message-libre").value = texte;
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
         statut.textContent = "";
     } finally {
         occupePrompt = false;

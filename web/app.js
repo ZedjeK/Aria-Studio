@@ -14,8 +14,19 @@ async function api(methode, url, corps) {
         headers: corps ? { "Content-Type": "application/json" } : {},
         body: corps ? JSON.stringify(corps) : undefined,
     });
-    const donnees = await reponse.json();
-    if (!reponse.ok) throw new Error(donnees.detail ?? `HTTP ${reponse.status}`);
+    // Une erreur 500 brute arrive en texte, une erreur de validation avec une liste : le message reste lisible.
+    const texte = await reponse.text();
+    let donnees = null;
+    try {
+        donnees = texte ? JSON.parse(texte) : null;
+    } catch {
+        donnees = null;
+    }
+    if (!reponse.ok) {
+        const detail = donnees?.detail;
+        throw new Error(Array.isArray(detail) ? detail.map((d) => d.msg ?? String(d)).join(" ; ")
+            : detail ?? (texte.trim().slice(0, 200) || `HTTP ${reponse.status}`));
+    }
     return donnees;
 }
 
@@ -41,6 +52,18 @@ document.addEventListener("click", async (e) => {
 });
 
 const attendre = (ms) => new Promise((fin) => setTimeout(fin, ms));
+
+// Petits outils partagés par toutes les pages.
+const virgule = (x, chiffres = 2) => Number(x).toFixed(chiffres).replace(".", ",");  // 0,80 : la décimale française
+const compterMots = (texte) => {
+    const t = (texte ?? "").trim();
+    return t ? t.split(/\s+/).length : 0;
+};
+
+function afficherErreur(element, message) {
+    element.textContent = message;
+    element.hidden = false;
+}
 
 // Suit une commande jusqu'au bout et rend la commande finie. Chaque suivi garde son propre id : une variante lancée
 // pendant une génération ne détourne plus le suivi de la première. Un relevé raté (serveur occupé, réseau) est
@@ -176,8 +199,7 @@ document.getElementById("form-fiche").addEventListener("submit", async (e) => {
         const fiche = await api("POST", "/api/modeles/fiche", { url: document.getElementById("url-modele").value });
         afficherFiche(fiche);
     } catch (err) {
-        erreur.textContent = err.message;
-        erreur.hidden = false;
+        afficherErreur(erreur, err.message);
     }
 });
 
@@ -225,8 +247,7 @@ function afficherFiche(fiche) {
             chargerTelechargements();
         } catch (err) {
             const erreur = document.getElementById("erreur-fiche");
-            erreur.textContent = err.message;
-            erreur.hidden = false;
+            afficherErreur(erreur, err.message);
             majBouton();
         }
     });
@@ -421,7 +442,7 @@ document.getElementById("liste-cles").addEventListener("click", async (ev) => {
         } else if (confirm("Supprimer la clé enregistrée dans Aria ? (Elle reste valable chez la source.)")) {
             afficherCles(await api("DELETE", `/api/cles/${source}`));
         }
-        if (typeof jetonsDecouvrir !== "undefined") jetonsDecouvrir = await api("GET", "/api/jetons");  // web/decouvrir.js
+        jetonsDecouvrir = await api("GET", "/api/jetons");  // web/decouvrir.js
     } catch (err) {
         dire(err.message, false);
     }

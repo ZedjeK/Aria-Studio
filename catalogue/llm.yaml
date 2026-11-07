@@ -29,12 +29,9 @@ llm:
     recommandations:
         source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
         valeurs:
-        -   cle: temperature_peaufinage
-            valeur: 0.05
-            note: « Use a temperature below 0.1 for daily-driver and production environments » ; tâche de fidélité
         -   cle: temperature_traduction
             valeur: 0.05
-            note: Même recommandation ; une traduction doit être fidèle
+            note: « Use a temperature below 0.1 for daily-driver and production environments » ; une traduction doit être fidèle
         -   cle: temperature_retouche
             valeur: 0.05
             note: Même recommandation ; une consigne de retouche doit être fidèle
@@ -90,7 +87,7 @@ llm:
 
 # LLM spécialisés : entraînés par l'auteur d'un modèle d'image pour lui écrire ses prompts. Ils gardent leur propre
 # consigne (livrée avec eux, téléchargée et vérifiée comme le GGUF) et ne servent qu'à la réécriture des workflows
-# listés ; pour tout le reste (découpage, peaufinage, traduction), Aria passe au LLM par défaut. Le filtre AS-18
+# listés ; pour tout le reste (découpage, traduction), Aria passe au LLM par défaut. Le filtre AS-18
 # contrôle leur prompt comme celui de n'importe quel LLM. Fiches relevées le 2026-11-02 (API Hugging Face).
 # GGUF : conversions communautaires (prithivMLmods) des modèles officiels de Qwen ; le SHA-256 vérifie le fichier,
 # pas sa fidélité à l'original (à juger au Casting).
