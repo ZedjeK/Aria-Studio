@@ -21,6 +21,7 @@ from app import fiches, modeles, reglages, securite, workflows
 from app.llm import ErreurLlama
 from app.modeles import DOSSIER as MODELES
 from app.orchestrateur import Orchestrateur
+from app.repliques import vers_balises
 
 CLAUSE_MINEURS = """Non-negotiable rule: never make a character younger than described. If a character is a child or a teenager, show them fully clothed in a wholesome, non-suggestive scene."""
 
@@ -102,7 +103,7 @@ The user describes, often in French, a short video clip. Rewrite it as ONE Engli
 Rules:
 1. A short production brief in the present tense, following the timeline: opening state, the action as it starts, how it develops, the result.
 2. Camera: use the user's camera choice if there is one (a fixed shot stays fixed). Otherwise one simple named movement with its speed, or a static shot, whichever serves the action. One continuous take: no cuts, no fade to black, unless the user asks for them.
-3. Dialogue: keep every spoken line EXACTLY as the user wrote it, in its original language, inside double quotes. Say who speaks, in which language and with which tone. Never translate the lines. If the user asks you to invent a line, write one short line in the language they ask for, inside double quotes.
+3. Dialogue: describe the speaker the first time (role, age range, gender, voice pitch, timbre, pace or accent) and give them an ID in parentheses, (S1), kept for that speaker. Write every spoken line inside a <d> tag that starts with its language: The young woman with a quiet, breathy voice (S1) says: <d>[French] Je descends ici.</d> Keep each line EXACTLY as the user wrote it, words and punctuation, in its original language; never translate it, no ellipses. Double quotes are only for text visible on screen (a sign), never for a spoken line. If the user asks you to invent a line, write one short line in the language they ask for, in the same tag.
 4. Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background music unless the user asks for it.
 5. Fit the clip duration: few actions, at most one or two short lines of dialogue.
 6. {GENRE}
@@ -120,7 +121,7 @@ The user gives, often in French, a short story, the look of the character and of
 Rules for every shot:
 1. A short production brief in the present tense: shot size, what the character does, the setting, ONE named camera movement with its speed, then concrete sounds. 40 to {mots_max} words, plain prose.
 2. One continuous take: never write "cut to", never switch place or angle inside a shot (the next shot does that).
-3. Dialogue: use only the lines in quotes from the story or the shot notes, and each shot's "line", word for word, inside double quotes; say who speaks, in which language and with which tone. A shot's "line" belongs to that shot, at the moment it gives: tie it to the visible action in the timeline of the brief (at the start: the character speaks, then the action begins; in the middle: the line falls during the action; at the end: after the action, as a reaction), never to timecodes. A line is spoken in the language it is written in (a French line is spoken in French), whatever the character's origin. Never translate a line, never invent one: a shot without a line has nobody speaking, nobody murmurs or says anything.
+3. Dialogue: use only the lines in quotes from the story or the shot notes, and each shot's "line", word for word. Write every spoken line inside a <d> tag that starts with its language, after the speaker's description and an ID in parentheses, (S1) for the character: The character (S1) says: <d>[French] Je descends ici.</d> No ellipses; double quotes are only for text visible on screen, never for a spoken line. A shot's "line" belongs to that shot, at the moment it gives: tie it to the visible action in the timeline of the brief (at the start: the character speaks, then the action begins; in the middle: the line falls during the action; at the end: after the action, as a reaction), never to timecodes. A line is spoken in the language it is written in (a French line is spoken in French), whatever the character's origin. Never translate a line, never invent one: a shot without a line has nobody speaking, nobody murmurs or says anything.
 4. Tell the story in order, spread over the shots; follow each shot's note when there is one. Few actions per shot: fit its duration.
 5. Shot types:
 - start: the first shot; it sets up the character and the place.
@@ -380,6 +381,8 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
                                       max_tokens=regle["max_tokens"], **reglages.echantillonnage(modele))
         duree = time.perf_counter() - debut
     texte = nettoyer_markdown(reponse.texte)  # **gras**, *italique*, titres : ni ComfyUI ni H3 n'en veulent
+    if video and workflows.dialogue_en_balise(workflow):
+        texte = vers_balises(texte)  # une réplique entre guillemets passe dans la balise <d> de H3
     # Idée et prompt ensemble : le LLM peut avoir ajouté un terme sensible à une idée avec un mineur.
     securite.verifier(idee, texte)
     return {
@@ -536,6 +539,8 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
                 messages_ += [{"role": "assistant", "content": reponse.texte},
                               {"role": "user", "content": "Answer ONLY with the JSON object described."}]
         duree_s = time.perf_counter() - debut
+    if tour["prompt"] and forme in ("clip", "plan") and workflows.dialogue_en_balise(workflow):
+        tour = {**tour, "prompt": vers_balises(tour["prompt"])}  # les répliques dans la balise <d> de H3
     securite.verifier(contexte, *textes, *tour["fiche"].values(), tour["prompt"] or "")
     return {**tour, "brut": json.dumps({k: tour[k] for k in ("message", "fiche", "questions", "prompt")},
                                        ensure_ascii=False),

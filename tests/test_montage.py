@@ -123,7 +123,9 @@ class Consigne(unittest.TestCase):
         asyncio.run(prompt.reecrire(SimpleNamespace(llm=llm), "elle murmure « On décolle ce soir. »", None,
                                     video="animer", duree=8))
         systeme, utilisateur = appels[0]
-        self.assertIn("Never translate the lines", systeme["content"])
+        self.assertIn("never translate it", systeme["content"])
+        self.assertIn("<d>[French]", systeme["content"])  # la balise de H3 (guide officiel §4.4)
+        self.assertIn("never for a spoken line", systeme["content"])  # les guillemets sont pour le texte visible
         self.assertTrue(systeme["content"].endswith(prompt.CLAUSE_MINEURS))
         self.assertIn("(Clip: 8 s, animate the provided image)", utilisateur["content"])
 

@@ -14,7 +14,7 @@ const AIDE_ENCHAINEMENT = {
     couper: "Nouveau plan : le personnage et la voix de référence gardent la ressemblance.",
     transition: "Le plan part de la dernière image du précédent et finit exactement sur ce rush.",
 };
-const REPLIQUE = /[«"“]/;
+const REPLIQUE = /<d>|[«"“]/i;  // comme sequences._REPLIQUE : la balise <d> de H3, ou des guillemets
 
 let sequenceCourante = null;
 let sequencesConnues = [];

@@ -85,7 +85,8 @@ class Reecriture(unittest.TestCase):
         idee = "elle lève les yeux et dit « On décolle ce soir. »"
         perdu = "A medium close-up of the pilot, her voice calm yet steady."
         self.assertEqual(sequences.garder_repliques(idee, perdu),
-                         'A medium close-up of the pilot, her voice calm yet steady. The character says: "On décolle ce soir."')
+                         'A medium close-up of the pilot, her voice calm yet steady. '
+                         "The character (S1) says: <d>[French] On décolle ce soir.</d>")
         garde = 'She says in French: "On décolle, ce soir !"'  # ponctuation retouchée : la réplique est là
         self.assertEqual(sequences.garder_repliques(idee, garde), garde)
         self.assertEqual(sequences.repliques('il dit "Hop" puis “Allez”'), ["Hop", "Allez"])
@@ -346,8 +347,8 @@ class Decoupage(Base):
         self.assertIn("Story: Une pilote", texte)
         self.assertIn("Character: A young woman", texte)
         self.assertIn("Setting and look: In a dim orange-lit hangar.", texte)
-        self.assertIn('Spoken lines, each in this language: "On décolle ce soir." (French); "Moteurs au vert." (French)',
-                      texte)
+        self.assertIn("Spoken lines, each in its <d> tag with its language: <d>[French] On décolle ce soir.</d>; "
+                      "<d>[French] Moteurs au vert.</d>", texte)
         self.assertIn("1. start, 5 s", texte)
         self.assertIn("2. continue, 5 s, note: elle se lève", texte)
         self.assertIn("4. transition, 5 s, arrival: une enseigne néon", texte)  # idée d'origine du rush
@@ -392,7 +393,8 @@ class Decoupage(Base):
         self.assertTrue(r["plans"][1]["prompt"].startswith("Continuous shot, same scene."))
         self.assertEqual(r["plans"][2]["prompt"],  # description remise, Markdown retiré, réplique de la note remise
                          "The character is a young woman in her early twenties, Korean, wearing a flight suit. "
-                         'Close-up in the cockpit, the character flips two switches. The character says: "Moteurs au vert."')
+                         "Close-up in the cockpit, the character flips two switches. "
+                         "The character (S1) says: <d>[French] Moteurs au vert.</d>")
         self.assertFalse(r["plans"][3]["prompt"].startswith("The character is"))  # transition : « the character »
         self.assertEqual([p["idee"] for p in r["plans"]], ["plan 1", "plan 2", "plan 3", "plan 4"])
         self.assertEqual(r["alertes"], [])
@@ -406,7 +408,8 @@ class Decoupage(Base):
         self.assertIn("1. start from the picture", llama.messages[0][1]["content"])
         self.assertNotIn("Korean", llama.messages[0][1]["content"])  # la description n'est pas envoyée
         self.assertEqual(r["plans"][0]["rush"], self.pilote)
-        self.assertEqual(r["plans"][2]["prompt"], 'A shot. The character says: "Moteurs au vert."')  # rien d'imposé
+        self.assertEqual(r["plans"][2]["prompt"],  # rien d'imposé
+                         "A shot. The character (S1) says: <d>[French] Moteurs au vert.</d>")
         self.assertTrue(any("« On décolle ce soir. » absente" in a for a in r["alertes"]))
 
     def test_reponse_mal_formee_redemandee_une_fois(self):

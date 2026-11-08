@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app import emplacements, fiches, memo, modeles, reglages, securite
 from app.config import ROOT
+from app.repliques import vers_balises
 
 DOSSIER = ROOT / "workflows"
 # Valeurs acceptées par le nœud ResolutionSelector de ComfyUI (comfy_extras/nodes_resolution.py).
@@ -118,6 +119,8 @@ class Workflow:
         # Point de passage obligé de tout prompt vers ComfyUI (génération, retouche, casting).
         if "prompt" in tout:
             securite.verifier(str(tout["prompt"]))
+            if self.profil.get("balise_dialogue"):  # H3 : une réplique entre guillemets part dans sa balise <d>
+                tout["prompt"] = vers_balises(str(tout["prompt"]))
         for cle, valeur in tout.items():
             if cle not in entrees:
                 raise ErreurWorkflow(f"{self.id} n'a pas d'entrée « {cle} »")
@@ -341,6 +344,16 @@ def regles_prompt(id_workflow: str | None) -> list[str]:
         return list(obtenir(id_workflow).profil.get("regles") or [])
     except ErreurWorkflow:
         return []
+
+
+def dialogue_en_balise(id_workflow: str | None) -> bool:
+    """Ce modèle lit les répliques dans une balise <d>[Langue] …</d> (profil_prompt.balise_dialogue de sa fiche)."""
+    if not id_workflow:
+        return False
+    try:
+        return bool(obtenir(id_workflow).profil.get("balise_dialogue"))
+    except ErreurWorkflow:
+        return False
 
 
 def obtenir(id_workflow: str) -> Workflow:

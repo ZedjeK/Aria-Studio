@@ -176,7 +176,7 @@ class RepliquesInventees(Base):
         # Une réplique déformée est retirée… puis garder_repliques remet celle de l'idée, mot pour mot.
         deformee, retirees = sequences.sans_repliques_inventees(idee, 'She says "Allez, on y va !" She smiles.')
         self.assertEqual((deformee, retirees), ("She smiles.", ["Allez, on y va !"]))
-        self.assertIn('"On y va. Accroche-toi !"', sequences.garder_repliques(idee, deformee))
+        self.assertIn("<d>[French] On y va. Accroche-toi !</d>", sequences.garder_repliques(idee, deformee))
 
     def test_plusieurs_inventees(self):
         texte, retirees = sequences.sans_repliques_inventees("elle marche", 'She says "Bonjour." He answers “Salut.” '
@@ -225,7 +225,7 @@ class DecoupageAvecContrainte(Base):
                                            self.PLANS, None))
         self.assertNotIn("Quelle belle journée", r["plans"][0]["prompt"])
         self.assertNotIn("Quelle belle journée", r["plans"][0]["idee"])
-        self.assertIn('"On décolle ce soir."', r["plans"][1]["prompt"])
+        self.assertIn("<d>[French] On décolle ce soir.</d>", r["plans"][1]["prompt"])  # écrite entre guillemets : convertie
         self.assertIn("Plan 1 : réplique inventée par Llama, retirée : « Quelle belle journée. »", r["alertes"])
 
     def test_as18_et_longueur(self):
