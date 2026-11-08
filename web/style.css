@@ -3565,3 +3565,68 @@ select.liste-question {
     border-radius: 999px;
     font-size: 0.85rem;
 }
+
+/* 🧭 Me guider (guide.js) : le déroulé en bulles. */
+.conversation-guide .section-guide {
+    margin: 6px 0 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.conversation-guide .bulle {
+    max-width: 92%;
+}
+
+form.libre-guide {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+form.libre-guide input {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.actions-etape {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.actions-etape .principal {
+    margin-left: auto;
+}
+
+select.liste-guide {
+    flex: none;
+    width: auto;
+    max-width: 100%;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.recap-guide {
+    margin: 4px 0 0;
+    padding-left: 1.2em;
+}
+
+.conversation-guide .bulle-toi {
+    min-width: 5.5rem;
+}
+
+button.onglet-idee {
+    white-space: nowrap;
+}
+
+.onglets-idee {
+    flex-wrap: wrap;
+}

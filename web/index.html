@@ -559,14 +559,9 @@
                             <p id="erreur-libre" class="ko" hidden></p>
                         </section>
                         </div>
-                        <!-- 🧭 Me guider : les listes des compléments, adaptées à l'atelier (web/scenario.js, majGuide). -->
+                        <!-- 🧭 Me guider : un déroulé fixe en bulles, sans LLM (web/guide.js). -->
                         <div id="place-guide" class="place-guide" hidden>
-                            <p id="aide-guide" class="discret"></p>
-                            <div id="emplacement-guide"></div>
-                            <div class="ligne actions-guide">
-                                <button id="utiliser-guide" type="button" class="principal"
-                                        title="Ajoute tes choix dans le champ de la conversation, que tu peux compléter avant d'envoyer">Utiliser dans la conversation</button>
-                            </div>
+                            <div id="conversation-guide" class="conversation-libre conversation-guide" aria-live="polite"></div>
                         </div>
                     </div>
 
@@ -911,6 +906,7 @@
     <script src="/static/scenario.js"></script>
     <script src="/static/references.js"></script>
     <script src="/static/libre.js"></script>
+    <script src="/static/guide.js"></script>
     <script src="/static/reglages.js"></script>
     <script src="/static/montage.js"></script>
     <script src="/static/sequence.js"></script>

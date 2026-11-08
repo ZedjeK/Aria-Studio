@@ -171,9 +171,10 @@ function majAtelier() {
     majFinal();
 }
 
-// 🧭 Me guider : un onglet de « 2 · Ton idée » (Image et Clip) qui reprend les listes des compléments, sans LLM, adaptées
-// à l'atelier. « Utiliser dans la conversation » les range dans le champ du chat. Séquence : les compléments restent
-// un volet à part ; Retouche : pas de listes.
+// 🧭 Me guider : un onglet de « 2 · Ton idée » (Image et Clip), à côté de la conversation. Un déroulé fixe en bulles, sans
+// LLM (guide.js) : le sujet, puis le décor et l'ambiance, puis la mise en scène, une question par liste. « Utiliser dans la
+// conversation » range les réponses dans le champ du chat. Séquence : les compléments restent un volet à part ; Retouche :
+// pas de listes.
 let ongletIdee = "conversation";  // ou « guide »
 const guidable = () => formeScenario === "image" || formeScenario === "clip";
 // Mélanger et Redessiner : le sujet vient des images, pas des listes (Décor, ambiance, mise en scène, pose et action restent).
@@ -234,16 +235,9 @@ function majGuide() {
     });
     document.getElementById("place-chat-atelier").hidden = voirGuide;
     document.getElementById("place-guide").hidden = !voirGuide;
-    // Les compléments vivent dans le guide (Image, Clip) ou dans leur volet d'origine (Séquence).
-    const volet = document.getElementById("complements");
-    const cible = document.getElementById(guide ? "emplacement-guide" : "place-complements");
-    if (volet.parentElement !== cible) cible.appendChild(volet);
-    volet.classList.toggle("en-guide", guide);
-    if (guide) volet.open = true;
-    const sans = sansSujet();
-    document.querySelector('.onglet-liste[data-liste="sujet"]').hidden = sans;
-    if (sans && ongletListe === "sujet") choisirListe("decor");
-    document.getElementById("aide-guide").textContent = AIDES_GUIDE[formeScenario === "clip" ? "clip" : refsScenario.role];
+    // Image et Clip : le guide en bulles (guide.js) remplace le volet Compléments, que Séquence garde.
+    document.getElementById("place-complements").hidden = guide;
+    if (voirGuide) rendreGuide();  // guide.js
 }
 
 function choisirOngletIdee(nom) {
@@ -253,35 +247,6 @@ function choisirOngletIdee(nom) {
 }
 
 document.querySelectorAll(".onglet-idee").forEach((b) => b.addEventListener("click", () => choisirOngletIdee(b.dataset.idee)));
-
-// Tes choix des listes, une ligne « liste : valeur » chacun (comme les propositions du chat), sans ceux du sujet quand
-// le sujet vient des images.
-function resumeGuide() {
-    const duSujet = new Set(sansSujet() ? (structurePrompt?.blocs ?? []).flatMap((b) => b.groupes
-        .filter((g) => g.onglet === "sujet").flatMap((g) => g.sous_listes.map((sl) => cle(b.id, sl.nom)))) : []);
-    const etat = etatPrompt();
-    const lignes = [];
-    Object.entries(etat.choix).forEach(([bloc, sous]) => Object.entries(sous ?? {}).forEach(([sl, valeur]) => {
-        if (valeur && !duSujet.has(cle(bloc, sl))) lignes.push(`${sl} : ${valeur}`);
-    }));
-    if (formeScenario === "image" && etat.texte?.trim()) lignes.push(`Texte dans l'image : ${etat.texte.trim()}`);
-    return lignes;
-}
-
-document.getElementById("utiliser-guide").addEventListener("click", () => {
-    const champ = document.getElementById("message-libre");
-    const lignes = resumeGuide();
-    if (!lignes.length) {
-        document.getElementById("erreur-prompt").hidden = true;
-        afficherErreur(document.getElementById("erreur-libre"), "Rien n'est choisi dans les listes.");
-        choisirOngletIdee("conversation");
-        return;
-    }
-    const deja = champ.value.split("\n").map((l) => l.trim()).filter(Boolean);
-    champ.value = [...deja, ...lignes.filter((l) => !deja.includes(l))].join("\n");
-    document.getElementById("erreur-libre").hidden = true;
-    choisirOngletIdee("conversation");
-});
 
 function choisirListe(onglet) {
     ongletListe = onglet;
