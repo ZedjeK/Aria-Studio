@@ -4,6 +4,7 @@ Le fichier data/reglages.yaml est remplacé par un fichier temporaire : les vrai
 """
 
 import asyncio
+import os
 import tempfile
 import unittest
 from contextlib import asynccontextmanager
@@ -33,6 +34,29 @@ class AvecFichierTemporaire(unittest.TestCase):
         for p in self.patchs:
             p.stop()
         self.dossier.cleanup()
+
+
+class Cache(AvecFichierTemporaire):
+    def test_deux_ecritures_a_la_meme_date_ne_se_perdent_pas(self):
+        """Sous Windows l'horloge des fichiers est grossière : deux écritures rapprochées portent la même date.
+        Le cache ne doit pas resservir l'ancien contenu (une modification était perdue, au hasard)."""
+        reglages.modifier_workflow("minimax_h3_t2v", {"steps": 10})
+        fige = reglages.FICHIER.stat()
+        vraie_stat = Path.stat
+
+        def stat_figee(chemin, *a, **k):
+            r = vraie_stat(chemin, *a, **k)
+            if chemin != reglages.FICHIER:
+                return r
+            return os.stat_result((r.st_mode, r.st_ino, r.st_dev, r.st_nlink, r.st_uid, r.st_gid, r.st_size,
+                                   r.st_atime, fige.st_mtime, fige.st_ctime, r.st_atime_ns, fige.st_mtime_ns,
+                                   fige.st_ctime_ns))
+
+        with mock.patch.object(Path, "stat", stat_figee):
+            reglages.modifier_workflow("minimax_h3_t2v", {"steps": 11})
+            reglages.modifier_workflow("minimax_h3_t2v", {"sampler": "euler"})
+            valeurs = reglages.valeurs_workflow(workflows.obtenir("minimax_h3_t2v"))
+        self.assertEqual((valeurs["steps"], valeurs["sampler"]), (11, "euler"))
 
 
 class Workflows(AvecFichierTemporaire):

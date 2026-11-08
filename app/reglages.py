@@ -87,14 +87,17 @@ class _Dumper(yaml.SafeDumper):
 _Dumper.add_representer(str, lambda d, s: d.represent_scalar(
     "tag:yaml.org,2002:str", s, style="|" if "\n" in s else None))
 
-_cache: tuple[int, dict] | None = None
+_cache: tuple[tuple[int, int], dict] | None = None
 
 
 def lire() -> dict:
     global _cache
     if not FICHIER.is_file():
         return {"llm": {}, "workflows": {}}
-    empreinte = FICHIER.stat().st_mtime_ns
+    # Date ET taille : sous Windows l'horloge des fichiers est grossière, deux écritures rapprochées peuvent
+    # porter la même date et un cache clé sur la date seule resservirait l'ancien contenu.
+    stat = FICHIER.stat()
+    empreinte = (stat.st_mtime_ns, stat.st_size)
     if _cache is None or _cache[0] != empreinte:
         donnees = yaml.safe_load(FICHIER.read_text(encoding="utf-8")) or {}
         _cache = (empreinte, {"llm": donnees.get("llm") or {}, "workflows": donnees.get("workflows") or {}})
@@ -109,6 +112,8 @@ def _ecrire(donnees: dict):
                           + yaml.dump(propre, Dumper=_Dumper, allow_unicode=True, sort_keys=False, width=120),
                           encoding="utf-8")
     temporaire.replace(FICHIER)
+    global _cache
+    _cache = None  # ce que nous venons d'écrire fait foi : la prochaine lecture relit le fichier
 
 
 def _appliquer(section: dict, params: dict[str, Param], changements: dict):
