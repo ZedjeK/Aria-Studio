@@ -37,6 +37,7 @@ class DemandeAssemblage(BaseModel):
     dialogue: bool | None = None  # case 🗣 Dialogue : False = personne ne parle
     musique: str = ""  # case 🎵 Musique d'ambiance : sa description, déjà traduite
     avec_musique: bool | None = None  # False = pas de musique de fond
+    sans_sujet: bool = False  # Mélanger / Redessiner : le sujet vient des images, pas de sujet par défaut
 
 
 @routeur.post("/api/prompt/assembler")
@@ -44,7 +45,7 @@ def assembler_prompt(demande: DemandeAssemblage):
     try:
         return listes.assembler(demande.sujet, demande.choix, demande.age, demande.texte, demande.precisions,
                                 demande.workflow, demande.action, demande.replique, demande.dialogue,
-                                demande.musique, demande.avec_musique)
+                                demande.musique, demande.avec_musique, demande.sans_sujet)
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (listes.ErreurListes, workflows.ErreurWorkflow) as e:

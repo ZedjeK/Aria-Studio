@@ -502,6 +502,12 @@
                     <!-- 2 · Ton idée : le prompteur libre de l'atelier -->
                     <div class="bloc-atelier">
                         <h3 class="titre-bloc" id="titre-idee">2 · Ton idée</h3>
+                        <!-- Image et Clip : la conversation avec le LLM, ou 🧭 Me guider (les listes, sans LLM). -->
+                        <div id="onglets-idee" class="onglets-idee" role="tablist" hidden>
+                            <button type="button" class="onglet-idee actif" role="tab" data-idee="conversation">Conversation</button>
+                            <button type="button" class="onglet-idee" role="tab" data-idee="guide"
+                                    title="Choisis dans des listes : sujet, décor et ambiance, mise en scène">Me guider</button>
+                        </div>
                         <!-- Image, Retouche, Clip : tout passe par le chat ci-dessous (la première réponse est ton idée).
                              Séquence : le fil de l'histoire se garde ici, avec ✨ Tout écrire et 💬. -->
                         <div class="idee-sequence" data-atelier-seul="sequence">
@@ -550,6 +556,15 @@
                             <p id="erreur-libre" class="ko" hidden></p>
                         </section>
                         </div>
+                        <!-- 🧭 Me guider : les listes des compléments, adaptées à l'atelier (web/scenario.js, majGuide). -->
+                        <div id="place-guide" class="place-guide" hidden>
+                            <p id="aide-guide" class="discret"></p>
+                            <div id="emplacement-guide"></div>
+                            <div class="ligne actions-guide">
+                                <button id="utiliser-guide" type="button" class="principal"
+                                        title="Ajoute tes choix dans le champ de la conversation, que tu peux compléter avant d'envoyer">Utiliser dans la conversation</button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Séquence, 3 · Les plans : chacun son prompteur (✨, 💬), sa réplique et son prompt -->
@@ -576,6 +591,7 @@
                     </div>
 
                     <!-- 3 · Compléments : propres à l'atelier, puis les listes à cliquer -->
+                    <div id="place-complements">
                     <details class="bloc-atelier complements" id="complements" data-atelier-sauf="retouche">
                         <summary><h3 class="titre-bloc"><span id="numero-complements">3</span> · Compléments <span class="discret">(facultatif : précise ce que tu veux imposer)</span></h3></summary>
                         <div class="sous-listes">
@@ -630,6 +646,7 @@
                             <ul id="alertes-prompt" class="alertes-prompt"></ul>
                         </div>
                     </details>
+                    </div>
                 </section>
 
                 <aside class="carte apercu-prompt">

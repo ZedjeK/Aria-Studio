@@ -375,14 +375,26 @@ def _qui_parle(sujet: str, genre: str | None) -> str:
     return "The creature says" if sujet == "creature" else "A voice-over says"
 
 
+def _onglet_de(sujet: str, id_bloc: str, nom_sl: str) -> str:
+    """L'onglet du Scénario d'une sous-liste (sujet, decor ou scene), rangée comme structure() la range."""
+    sous_listes = _sous_listes(sujet, id_bloc)
+    groupes = {nom: [n for n in noms if n in sous_listes] for nom, noms in GROUPES.get(id_bloc, {}).items()}
+    for nom, noms in groupes.items():
+        if nom_sl in noms:
+            return onglet(id_bloc, nom)
+    return onglet(id_bloc, "Autres" if groupes else blocs()[id_bloc].titre)
+
+
 def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", precisions: str = "",
               workflow: str | None = None, action: str = "", replique: str = "", dialogue: bool | None = None,
-              musique: str = "", avec_musique: bool | None = None) -> dict:
+              musique: str = "", avec_musique: bool | None = None, sans_sujet: bool = False) -> dict:
     """Prompt anglais assemblé à partir des choix {bloc: {sous-liste: valeur}}, après contrôle des règles.
     Pour un modèle vidéo, le prompt devient un brief de production : rendu, sujet, action, caméra, réplique, sons.
     `action` arrive déjà traduite en anglais ; `replique` (une par ligne) est gardée mot pour mot, dans sa langue.
     Cases du Scénario : `dialogue` False écrit que personne ne parle, `avec_musique` False qu'il n'y a pas de musique
-    de fond (H3 en invente sinon) ; True prend `musique` (déjà traduite), sinon la liste Musique. None : la liste."""
+    de fond (H3 en invente sinon) ; True prend `musique` (déjà traduite), sinon la liste Musique. None : la liste.
+    `sans_sujet` (images, Scénario « Mélanger » et « Redessiner » : le sujet vient des images) : les choix de l'onglet
+    Sujet sont écartés et aucun sujet par défaut n'est écrit ; Décor, ambiance, mise en scène, pose et action restent."""
     definition = _sujet(sujet)
     video = est_video(workflow)
     choix = dict(choix or {})
@@ -390,6 +402,11 @@ def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", 
         choix.pop(PLAN, None)  # le Plan reste en mémoire dans l'interface, mais ne compte que pour la vidéo
         action = replique = ""
     selection = _selection(sujet, choix, video)
+    sans_sujet = bool(sans_sujet) and not video
+    if sans_sujet:
+        age = None  # l'âge précis est un choix de sujet
+        selection = {(b, n): v for (b, n), v in selection.items()
+                     if not (b == sujet and _onglet_de(sujet, b, n) == "sujet")}
     texte, precisions, action, replique = texte.strip(), precisions.strip(), action.strip(), replique.strip()
     musique = " ".join(str(musique or "").split())
     if len(musique) > LONGUEUR_MUSIQUE:
@@ -448,7 +465,9 @@ def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", 
                 alertes.append(f"{cible} (« {remplacee.nom} ») remplacé par « {v.nom} »")
 
     # Sujet
-    if sujet == "personnage":
+    if sans_sujet:
+        nom, ignorees = None, set()
+    elif sujet == "personnage":
         if tranche:
             nom = tranche.prompts_genre[genre or "androgyne"]
         else:
@@ -489,7 +508,10 @@ def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", 
     phrases = []
     if style := selection.get(STYLE):
         phrases.append(_majuscule(style.prompt) + ".")
-    sujet_phrase = _majuscule(", ".join([_article(nom), *details])) + "."
+    if sans_sujet:  # pas de sujet par défaut : seulement ce qui a été choisi (pose, action…)
+        sujet_phrase = phrase(", ".join(details)) if details else ""
+    else:
+        sujet_phrase = _majuscule(", ".join([_article(nom), *details])) + "."
     if video:
         # Brief de production (bonnes pratiques H3) : le cadrage d'abord, puis le sujet, l'action, la caméra et le son.
         if rendu:
@@ -525,7 +547,8 @@ def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", 
         elif avec_musique:
             phrases.append("Background music that fits the scene.")  # cochée sans rien préciser
     else:
-        phrases.append(sujet_phrase)
+        if sujet_phrase:
+            phrases.append(sujet_phrase)
         if rendu:
             phrases.append(_majuscule(", ".join(rendu)) + ".")
         if texte:
