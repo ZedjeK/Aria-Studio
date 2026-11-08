@@ -3,7 +3,7 @@
 // Ranger ne déplace aucun fichier : la fiche note son dossier, son archivage ou sa mise à la corbeille.
 //
 // Le balisage d'une galerie porte des data-role : compte, vues, selectionner, barre, compte-selection,
-// ranger-dans, vignettes, pied-corbeille, vider-corbeille (voir index.html).
+// ranger-dans, vignettes (voir index.html). « Vider la corbeille » est dans la rangée des vues, vue Corbeille.
 
 const ACTIONS_DEPOT = { non_ranges: ["ranger", null], archives: ["archiver"], corbeille: ["corbeille"] };
 const actionDepot = (cle) => (cle?.startsWith("dossier:") ? ["ranger", cle.slice(8)] : ACTIONS_DEPOT[cle]);
@@ -43,7 +43,11 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir }) {
                 ? `<span class="outils-dossier"><button type="button" class="petit" data-renommer-dossier="1">✎ Renommer</button>
                    <button type="button" class="petit" data-supprimer-dossier="1">✕ Supprimer le dossier</button></span>` : "")
             + '<span class="separateur"></span>'
-            + pastille("archives", "📦 Archives", e.archives) + pastille("corbeille", "🗑 Corbeille", e.corbeille);
+            + pastille("archives", "📦 Archives", e.archives) + pastille("corbeille", "🗑 Corbeille", e.corbeille)
+            // Dans la corbeille, le bouton qui la vide est ici, avec les autres : plus besoin de tout dérouler.
+            + (actif === "corbeille" && e.corbeille
+                ? `<button type="button" class="petit danger" data-vider-corbeille="1"
+                    title="Ce qui est dans la corbeille reste restaurable jusqu'à ce que tu la vides">Vider la corbeille</button>` : "");
     }
 
     function rendre() {
@@ -52,7 +56,6 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir }) {
             ? g.fiches.map((f) => vignette(f, g.selection.has(f.id))).join("")
             : `<p class="discret">${vides[g.vue.dossier ? "dossier" : g.vue.vue]}</p>`;
         $("vignettes").classList.toggle("en-selection", g.modeSelection);
-        $("pied-corbeille").hidden = g.vue.vue !== "corbeille" || !g.fiches.length;
         majBarre();
     }
 
@@ -139,6 +142,12 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir }) {
                 const d = await api("PUT", `/api/rushes/dossiers/${encodeURIComponent(g.vue.dossier)}`, { nom: nom.trim() });
                 changerVue(`dossier:${d.nom}`);
             }
+            if (bouton.dataset.viderCorbeille) {
+                const n = g.etat.corbeille;
+                if (!confirm(`Supprimer définitivement ${pluriel(n)} de la corbeille ? C'est sans retour.`)) return;
+                await api("DELETE", `/api/rushes/corbeille?genre=${genre}`);
+                await g.charger();
+            }
             if (bouton.dataset.supprimerDossier
                 && confirm(`Supprimer le dossier « ${g.vue.dossier} » ? Ses images et ses clips ne sont pas supprimés : `
                     + "ils retournent dans « Non rangés ».")) {
@@ -173,13 +182,6 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir }) {
         if (!id) return;
         e.dataTransfer.setData("text/aria-rush", id);
         e.dataTransfer.effectAllowed = "copy";
-    });
-
-    $("vider-corbeille").addEventListener("click", async () => {
-        const n = g.etat.corbeille;
-        if (!confirm(`Supprimer définitivement ${pluriel(n)} de la corbeille ? C'est sans retour.`)) return;
-        await api("DELETE", `/api/rushes/corbeille?genre=${genre}`);
-        g.charger();
     });
 
     $("vignettes").addEventListener("click", async (e) => {
