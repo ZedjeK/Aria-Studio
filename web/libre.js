@@ -17,6 +17,23 @@ const toursLibre = (a) => a.echanges.filter((e) => e.role === "user").length;
 const questionCourte = (question) => (question ?? "").replace(/\s*\?\s*$/, "").trim();
 const ligneChoix = (question, choix) => `${questionCourte(question)} : ${choix}`;
 
+// Une question sur une rubrique du guide : toute la liste de la rubrique, en liste déroulante, à côté des propositions.
+function valeursRubrique(nom) {
+    for (const b of structurePrompt?.blocs ?? []) for (const g of b.groupes) {
+        const sl = g.sous_listes.find((s) => s.nom === nom);
+        if (sl) return sl.valeurs.filter((v) => !v.remplace?.length).map((v) => v.nom);
+    }
+    return [];
+}
+
+function listeDeroulante(q, i) {
+    const valeurs = valeursRubrique(q.liste).filter((v) => !q.choix.includes(v));
+    if (!valeurs.length) return "";
+    return `<select class="liste-question" data-question="${i}" aria-label="${echapper(q.liste)}">
+        <option value="" selected disabled>Toute la liste : ${echapper(q.liste)}…</option>
+        ${valeurs.map((v) => `<option value="${echapper(v)}">${echapper(v)}</option>`).join("")}</select>`;
+}
+
 const lireTour = (contenu) => {
     try {
         return JSON.parse(contenu);
@@ -64,7 +81,8 @@ function rendreLibre() {
         const corps = k === dernierLlm && enAttente
             ? questions.map((q, i) => `<div class="question-libre"><strong>${echapper(q.question)}</strong>
                 <div class="choix-libre">${[...q.choix, "Je te laisse choisir"].map((c) => `<button type="button"
-                    class="petit" data-question="${i}" data-choix="${echapper(c)}">${echapper(c)}</button>`).join("")}</div>
+                    class="petit" data-question="${i}" data-choix="${echapper(c)}">${echapper(c)}</button>`).join("")}${
+                    listeDeroulante(q, i)}</div>
               </div>`).join("")
             : questions.length ? `<ul class="questions-passees">${questions.map((q) =>
                 `<li>${echapper(q.question)}</li>`).join("")}</ul>` : "";
@@ -396,13 +414,22 @@ document.getElementById("conversation-libre").addEventListener("click", (e) => {
         return;
     }
     const bouton = e.target.closest("[data-choix]");
-    if (!bouton) return;
-    const question = conversationActive().dernier?.questions?.[Number(bouton.dataset.question)]?.question;
-    const ligne = ligneChoix(question, bouton.dataset.choix);
+    if (bouton) repondreQuestion(Number(bouton.dataset.question), bouton.dataset.choix);
+});
+
+// La réponse à une question (proposition ou valeur de la liste) devient une ligne du champ, qui remplace l'ancienne.
+function repondreQuestion(i, choix) {
+    const question = conversationActive().dernier?.questions?.[i]?.question;
+    const ligne = ligneChoix(question, choix);
     const champ = document.getElementById("message-libre");
     const lignes = champ.value.split("\n").map((l) => l.trim()).filter(Boolean);
     const restantes = lignes.filter((l) => !l.startsWith(`${questionCourte(question)} : `));
     champ.value = [...restantes, ...(lignes.includes(ligne) ? [] : [ligne])].join("\n");
     majChoixLibre();
     champ.focus();
+}
+
+document.addEventListener("change", (e) => {
+    const liste = e.target.closest?.("select.liste-question");
+    if (liste?.value) repondreQuestion(Number(liste.dataset.question), liste.value);
 });

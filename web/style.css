@@ -3555,3 +3555,13 @@ select option:hover {
     text-transform: none;
     letter-spacing: normal;
 }
+
+/* Question sur une rubrique du guide : la liste complète, à côté des propositions. */
+select.liste-question {
+    flex: none;
+    width: auto;
+    max-width: 100%;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+}

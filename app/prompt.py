@@ -438,7 +438,7 @@ Each turn:
 7. "message": one or two friendly French sentences to the user (what you understood, or what you changed). No question in it: questions go in "questions". Always say « tu » to the user, never « vous ».
 
 Answer ONLY with one JSON object, no markdown, nothing before or after:
-{{{{"message": "...", "fiche": {{{{"Sujet": "..."}}}}, "questions": [{{{{"question": "...", "choix": ["...", "..."]}}}}], "prompt": null}}}}"""
+{{{{"message": "...", "fiche": {{{{"Sujet": "..."}}}}, "questions": [{{{{"question": "...", "choix": ["...", "..."], "liste": "optional guide topic"}}}}], "prompt": null}}}}"""
 
 ECRIRE = "ÉCRIS LE PROMPT"
 # Les images de référence du Scénario, vues par le LLM du chat : ce qu'il en fait selon leur rôle.
@@ -485,16 +485,12 @@ VALEURS_GUIDE_MAX = 8  # valeurs montrées par rubrique : de quoi proposer des c
 CONTEXTE_CATALOGUE = 8192  # en dessous, le catalogue ne garde que les noms de rubriques (4096 tokens : consigne comprise)
 
 
-def catalogue_guide(sujet: str | None, sans_sujet: bool = False, video: bool = False, compact: bool = False) -> str:
-    """Les rubriques de « Me guider » pour cet atelier, dites au LLM : il pose ses questions sur ces rubriques et tire les
-    choix de chaque question de leur liste, pour que la conversation et le guide parlent des mêmes choses. Seules les
-    rubriques utiles à la cible : pas de Sujet quand il vient des images, pas de Caméra / Voix / Son pour une image.
-    Les choix déjà faits ailleurs sont dans « Already fixed » : le LLM n'y revient pas."""
+def _rubriques_guide(sujet: str | None, sans_sujet: bool, video: bool):
+    """(sous-liste, nom du groupe, noms de ses valeurs) des rubriques de « Me guider » utiles à cette cible."""
     try:
         structure = listes.structure(sujet or "personnage")
     except listes.ErreurListes:
-        return ""
-    lignes = []
+        return
     for bloc in structure["blocs"]:
         if bloc["video"] and not video:
             continue
@@ -502,17 +498,31 @@ def catalogue_guide(sujet: str | None, sans_sujet: bool = False, video: bool = F
             if sans_sujet and groupe["onglet"] == "sujet":
                 continue
             for sl in groupe["sous_listes"]:
-                valeurs = [v["nom"] for v in sl["valeurs"] if not v.get("remplace")]
-                if not valeurs:
-                    continue
-                suite = ", …" if len(valeurs) > VALEURS_GUIDE_MAX else ""
-                lignes.append(f"- {sl['nom']} ({groupe['nom']})" if compact
-                              else f"- {sl['nom']} ({groupe['nom']}): {', '.join(valeurs[:VALEURS_GUIDE_MAX])}{suite}")
+                if valeurs := [v["nom"] for v in sl["valeurs"] if not v.get("remplace")]:
+                    yield sl, groupe["nom"], valeurs
+
+
+def noms_guide(sujet: str | None, sans_sujet: bool = False, video: bool = False) -> set[str]:
+    return {sl["nom"] for sl, _, _ in _rubriques_guide(sujet, sans_sujet, video)}
+
+
+def catalogue_guide(sujet: str | None, sans_sujet: bool = False, video: bool = False, compact: bool = False) -> str:
+    """Les rubriques de « Me guider » pour cet atelier, dites au LLM : il pose ses questions sur ces rubriques et tire les
+    choix de chaque question de leur liste, pour que la conversation et le guide parlent des mêmes choses. Seules les
+    rubriques utiles à la cible : pas de Sujet quand il vient des images, pas de Caméra / Voix / Son pour une image.
+    Les choix déjà faits ailleurs sont dans « Already fixed » : le LLM n'y revient pas."""
+    lignes = []
+    for sl, groupe, valeurs in _rubriques_guide(sujet, sans_sujet, video):
+        suite = ", …" if len(valeurs) > VALEURS_GUIDE_MAX else ""
+        lignes.append(f"- {sl['nom']} ({groupe})" if compact
+                      else f"- {sl['nom']} ({groupe}): {', '.join(valeurs[:VALEURS_GUIDE_MAX])}{suite}")
     if not lignes:
         return ""
-    choix = ("Take the answer choices of a question from the matching list below (2 to 4 of its values, written "
-             "exactly as listed, in French); the user may also answer freely with another value, and that is fine."
-             if not compact else "Write the answer choices of each question yourself, in French.")
+    liste = ('When a question is about one of these topics, add "liste": "<topic name exactly as written>" to it: the '
+             "user then gets the whole list as a drop-down, and your 2 to 4 choices are shown first as suggestions. ")
+    choix = (liste + "Take the choices of such a question from its list below (written exactly as listed, in French); "
+             "the user may also answer freely with another value, and that is fine."
+             if not compact else liste + "Write the choices of each question yourself, in French.")
     return ("Guide topics. The user can also pick these in the « Me guider » tab, so ask your questions about these "
             f"topics, in this spirit. {choix} Ask about a topic only when it matters for the target and nothing in the "
             "fiche or the fixed part already covers it:\n" + "\n".join(lignes))
@@ -539,7 +549,7 @@ def cadre_format(format_: str | None) -> str:
             "written for, adapt its framing and composition to the new frame and give the whole new prompt.")
 
 
-def lire_libre(texte: str) -> dict:
+def lire_libre(texte: str, rubriques: set[str] | None = None) -> dict:
     """L'objet JSON d'un tour, vérifié : message, fiche (texte → texte), 0 à 3 questions à 2-4 choix, prompt ou None."""
     texte = texte.rpartition("</think>")[2]
     try:
@@ -555,7 +565,10 @@ def lire_libre(texte: str) -> dict:
     for q in (d.get("questions") or [])[:3] if isinstance(d.get("questions"), list) else []:
         if isinstance(q, dict) and str(q.get("question") or "").strip():
             choix = [" ".join(str(c).split()) for c in (q.get("choix") or []) if str(c).strip()][:4]
-            questions.append({"question": " ".join(str(q["question"]).split()), "choix": choix})
+            question = {"question": " ".join(str(q["question"]).split()), "choix": choix}
+            if (liste := " ".join(str(q.get("liste") or "").split())) in (rubriques or ()):
+                question["liste"] = liste  # une rubrique du guide : l'interface en fait une liste déroulante
+            questions.append(question)
     prompt_ = d.get("prompt")
     prompt_ = nettoyer_markdown(str(prompt_)) if isinstance(prompt_, str) and prompt_.strip() else None
     return {"message": " ".join(str(d.get("message") or "").split()), "fiche": fiche, "questions": questions,
@@ -605,6 +618,7 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     if forme != "sequence" and (regles := workflows.regles_prompt(workflow)):
         systeme += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
     systeme += f"\n\n{CLAUSE_MINEURS}"
+    rubriques = noms_guide(sujet, sans_sujet, forme == "clip") if forme in ("image", "clip") else set()
     ecrire = bool(echanges) and echanges[-1]["role"] == "user" and echanges[-1]["content"].strip() == ECRIRE
     regle = reglages.valeurs_llm(modele)
     async with orchestrateur.llm(modele) as llama:
@@ -620,7 +634,7 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
             reponse = await llama.generer(messages_, temperature=regle["temperature_reecriture"], max_tokens=1200,
                                           reflechir=ecrire, **reglages.echantillonnage(modele))
             try:
-                tour = lire_libre(reponse.texte)
+                tour = lire_libre(reponse.texte, rubriques)
                 break
             except ErreurLibre:
                 if essai:
