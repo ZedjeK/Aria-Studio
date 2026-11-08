@@ -1575,11 +1575,6 @@ button.danger:not(:disabled) {
     box-shadow: 0 0 12px rgba(125, 249, 255, 0.6);
 }
 
-.pied-corbeille {
-    align-items: center;
-    justify-content: space-between;
-}
-
 /* Montage */
 
 .modes-montage {
