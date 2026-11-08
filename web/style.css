@@ -3630,3 +3630,29 @@ button.onglet-idee {
 .onglets-idee {
     flex-wrap: wrap;
 }
+
+/* Me guider : le même cadre que le chat, pour bien le séparer du reste de la page. */
+.place-guide {
+    margin-top: 12px;
+    border: 1px solid var(--bord);
+    background: var(--surface);
+}
+
+.place-guide[hidden] {
+    display: none;
+}
+
+/* Tes réponses ne se coupent plus au milieu d'un mot (« Eurasien / ne »). */
+.conversation-guide .message-toi .bulle-toi {
+    width: max-content;
+    max-width: 80%;
+    overflow-wrap: break-word;
+}
+
+/* La liste complète garde une largeur lisible, même dans une bulle étroite. */
+select.liste-guide,
+select.liste-question {
+    min-width: 14rem;
+    max-width: 100%;
+    text-overflow: ellipsis;
+}
