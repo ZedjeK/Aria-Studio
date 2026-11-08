@@ -332,7 +332,7 @@ async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, m
             temperature=regle["temperature_retouche"], max_tokens=200, reflechir=False,
             **reglages.echantillonnage(modele),
         )
-    texte = nettoyer_markdown(reponse.texte)
+    texte = garde_cjk(nettoyer_markdown(reponse.texte), instruction)
     securite.verifier(instruction, texte)
     return texte
 
@@ -347,8 +347,9 @@ async def traduire_precisions(orchestrateur: Orchestrateur, precisions: str, mod
             temperature=regle["temperature_traduction"], max_tokens=200, reflechir=False,
             **reglages.echantillonnage(modele),
         )
-    securite.verifier(precisions, reponse.texte)
-    return reponse.texte
+    texte = garde_cjk(reponse.texte, precisions)
+    securite.verifier(precisions, texte)
+    return texte
 
 
 def _voit(llama) -> bool:
@@ -403,7 +404,7 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
         reponse = await llama.generer(echanges, temperature=regle["temperature_reecriture"],
                                       max_tokens=regle["max_tokens"], **reglages.echantillonnage(modele))
         duree = time.perf_counter() - debut
-    texte = nettoyer_markdown(reponse.texte)  # **gras**, *italique*, titres : ni ComfyUI ni H3 n'en veulent
+    texte = garde_cjk(nettoyer_markdown(reponse.texte), idee)  # **gras**, *italique*, titres : ni ComfyUI ni H3 n'en veulent
     if video and workflows.dialogue_en_balise(workflow):
         texte = vers_balises(texte)  # une réplique entre guillemets passe dans la balise <d> de H3
     # Idée et prompt ensemble : le LLM peut avoir ajouté un terme sensible à une idée avec un mineur.
@@ -575,6 +576,36 @@ def lire_libre(texte: str, rubriques: set[str] | None = None) -> dict:
             "prompt": prompt_}
 
 
+# Garde-fou : certains LLM (Qwen surtout) glissent du chinois ou du japonais dans une réponse française ou anglaise.
+_CJK = re.compile("[\u2e80-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]")
+
+
+def cjk_inattendu(sortie: list[str], entrees: list[str]) -> bool:
+    """Vrai si la sortie du LLM contient du chinois, du japonais ou du coréen alors que rien de ce que l'utilisateur
+    a écrit n'en contient (un mot en japonais voulu par l'utilisateur reste donc permis)."""
+    return any(_CJK.search(t) for t in sortie) and not any(_CJK.search(t) for t in entrees)
+
+
+def _sans_cjk(valeur):
+    if isinstance(valeur, str):
+        return " ".join(_CJK.sub(" ", valeur).split())
+    if isinstance(valeur, list):
+        return [_sans_cjk(v) for v in valeur]
+    if isinstance(valeur, dict):
+        return {k: _sans_cjk(v) for k, v in valeur.items()}
+    return valeur
+
+
+def garde_cjk(texte: str, *entrees: str) -> str:
+    """Le texte sans caractères CJK que le LLM a ajoutés de lui-même (les mots voulus par l'utilisateur restent)."""
+    return _sans_cjk(texte) if cjk_inattendu([texte], list(entrees)) else texte
+
+
+def _textes_du_tour(tour: dict) -> list[str]:
+    q = [t for x in tour["questions"] for t in [x["question"], *x["choix"]]]
+    return [tour["message"], *tour["fiche"].values(), *q, tour["prompt"] or ""]
+
+
 async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, workflow: str | None,
                 contexte: str = "", vues: list[Vue] | None = None, role: str | None = None,
                 modele: str | None = None, duree: int = 5, format_: str | None = None,
@@ -635,12 +666,20 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
                                           reflechir=ecrire, **reglages.echantillonnage(modele))
             try:
                 tour = lire_libre(reponse.texte, rubriques)
+                if cjk_inattendu(_textes_du_tour(tour), [contexte, *textes]):
+                    if essai:  # toujours là au second essai : on retire les caractères, plutôt que d'échouer
+                        tour = _sans_cjk(tour)
+                        break
+                    raise ErreurLibre("caractères chinois, japonais ou coréens inattendus")
                 break
-            except ErreurLibre:
+            except ErreurLibre as err:
                 if essai:
                     raise
+                rappel = ("Answer ONLY with the JSON object described, and write ONLY in French or English: "
+                          "no Chinese, Japanese or Korean characters." if "inattendus" in str(err)
+                          else "Answer ONLY with the JSON object described.")
                 messages_ += [{"role": "assistant", "content": reponse.texte},
-                              {"role": "user", "content": "Answer ONLY with the JSON object described."}]
+                              {"role": "user", "content": rappel}]
         duree_s = time.perf_counter() - debut
     if tour["prompt"] and forme in ("clip", "plan") and workflows.dialogue_en_balise(workflow):
         tour = {**tour, "prompt": vers_balises(tour["prompt"])}  # les répliques dans la balise <d> de H3

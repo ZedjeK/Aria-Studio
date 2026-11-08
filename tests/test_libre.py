@@ -275,3 +275,31 @@ class QuestionEnListe(unittest.TestCase):
         self.assertIn('"liste"', prompt.catalogue_guide("lieu"))
         self.assertIn("Type de lieu", prompt.noms_guide("lieu"))
         self.assertNotIn("Caméra", prompt.noms_guide("lieu"))
+
+
+class GardeCjk(unittest.TestCase):
+    """Un LLM qui glisse du chinois ou du japonais dans sa réponse est redemandé une fois, puis nettoyé."""
+
+    def test_redemande_puis_reponse_propre(self):
+        mauvais = {**TOUR, "message": "Je note le chat 猫."}
+        o = FauxLlm(json.dumps(mauvais), json.dumps(TOUR))
+        r = tour(o, [{"role": "user", "content": "un chat"}])
+        self.assertEqual(r["message"], "Je note le chat.")
+        self.assertEqual(len(o.appels), 2)
+        self.assertIn("no Chinese", o.appels[1][0][-1]["content"])
+
+    def test_nettoye_si_il_insiste(self):
+        mauvais = {**TOUR, "message": "Je note le chat 猫."}
+        r = tour(FauxLlm(json.dumps(mauvais), json.dumps(mauvais)), [{"role": "user", "content": "un chat"}])
+        self.assertEqual(r["message"], "Je note le chat .")
+
+    def test_mot_voulu_par_l_utilisateur_conserve(self):
+        voulu = {**TOUR, "message": "Je note 猫."}
+        o = FauxLlm(json.dumps(voulu))
+        r = tour(o, [{"role": "user", "content": "un chat, écrit 猫 sur le mur"}])
+        self.assertIn("猫", r["message"])
+        self.assertEqual(len(o.appels), 1)
+
+    def test_garde_sur_texte_simple(self):
+        self.assertEqual(prompt.garde_cjk("a cat 猫 sitting", "un chat"), "a cat sitting")
+        self.assertEqual(prompt.garde_cjk("a cat 猫", "un chat 猫"), "a cat 猫")
