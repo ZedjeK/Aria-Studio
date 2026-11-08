@@ -1,11 +1,11 @@
-"""Routes du Scénario (onglet ✍️) : listes guidées, assemblage, ✨ Optimiser, 💬 Aide, traductions,
+"""Routes du Scénario (onglet ✍️) : listes guidées, assemblage, ✨ Écrire le prompt, 💬 M'aider à préciser, traductions,
 personnages enregistrés, et l'écriture des plans d'une séquence. Ce qu'elles partagent avec les autres routes
 est dans app/services.py."""
 
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ValidationError
 
 from app import decoupage, listes, personnages, plateau, prompt, securite, sequences, services, workflows
@@ -63,9 +63,10 @@ class DemandeOptimisation(BaseModel):
 
 
 @routeur.post("/api/prompt/optimiser")
-async def optimiser_prompt(d: DemandeOptimisation):
-    """✨ Optimiser d'un atelier du Scénario : le LLM écrit le meilleur prompt pour le modèle cible, d'après l'idée,
-    les compléments (déjà fixés) et les images, qu'il voit. Retouche : une consigne d'édition sur l'image."""
+async def optimiser_prompt(d: DemandeOptimisation, requete: Request = None):
+    """✨ Écrire le prompt d'un atelier du Scénario (et ✍️ Écris-le du chat, avec ce qu'il a compris) : le LLM écrit
+    le meilleur prompt pour le modèle cible, d'après l'idée, les compléments (déjà fixés) et les images, qu'il voit.
+    Retouche : une consigne d'édition sur l'image. Un LLM spécialisé du modèle cible écrit avec sa propre consigne."""
     services.verifier_llm(d.llm)
     idee, complements_ = d.idee.strip(), d.complements.strip()
     if d.atelier not in ("image", "retouche", "clip"):
@@ -77,7 +78,8 @@ async def optimiser_prompt(d: DemandeOptimisation):
     if d.atelier == "retouche" and len(d.images) != 1:
         raise HTTPException(400, "Choisis l'image à retoucher")
     texte = f"{idee}\n\nAlso fixed (keep it): {complements_}" if idee and complements_ else idee or complements_
-    try:
+
+    async def ecrire():
         origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
         securite.verifier(texte, *origines)
         vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images]) or None
@@ -94,6 +96,9 @@ async def optimiser_prompt(d: DemandeOptimisation):
                                       vues=vues if d.role in ("inspirer", "variation", "animer") else None)
         securite.verifier(texte, r["prompt"], *origines)
         return {**r, "mots": len(r["prompt"].split())}
+
+    try:
+        return await services.tant_que_connecte(requete, ecrire())
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (plateau.ErreurPlateau, workflows.ErreurWorkflow) as e:
@@ -123,8 +128,9 @@ ECHANGES_LIBRE_MAX, LONGUEUR_ECHANGE_LIBRE = 60, 4000
 
 
 @routeur.post("/api/prompt/libre")
-async def chat_libre(d: DemandeLibre):
-    """Scénario, onglet Libre : un tour de conversation (questions, fiche « Ce que j'ai compris », prompt)."""
+async def chat_libre(d: DemandeLibre, requete: Request = None):
+    """Scénario, 💬 M'aider à préciser : un tour de conversation (questions, fiche « Ce que j'ai compris », prompt).
+    ✕ Annuler coupe la connexion : le LLM s'arrête (services.tant_que_connecte)."""
     services.verifier_llm(d.llm)
     if d.forme not in ("image", "clip", "retouche", "sequence", "plan"):
         raise HTTPException(400, "Atelier inconnu : image, retouche, clip, séquence ou plan")
@@ -147,8 +153,9 @@ async def chat_libre(d: DemandeLibre):
         securite.verifier(*entrees, *(e.content for e in d.echanges if e.role == "user"))
         vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images[:3]]) or None
         llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
-        r = await prompt.libre(services.orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, contexte,
-                               vues, d.role, llm, duree)
+        r = await services.tant_que_connecte(requete, prompt.libre(
+            services.orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, contexte, vues, d.role,
+            llm, duree))
         if plan_ and r["prompt"]:  # les garde-fous du découpage : réplique du plan à son moment, rien d'inventé
             texte, alertes = decoupage.finir_plan(s.plan + 1, plan_["plans"][s.plan], r["prompt"],
                                                   plan_["personnage"], plan_["source"])
@@ -228,15 +235,15 @@ class DemandeDecoupage(BaseModel):
 
 
 @routeur.post("/api/sequences/decouper")
-async def decouper_sequence(d: DemandeDecoupage):
+async def decouper_sequence(d: DemandeDecoupage, requete: Request = None):
     """Scénario, atelier Séquence : les prompts de tous les plans écrits ensemble par Llama (✨ Tout écrire), ou
-    d'un seul (✨ d'un plan), les autres servant de contexte."""
+    d'un seul (✨ d'un plan), les autres servant de contexte. ✕ Annuler coupe la connexion : le LLM s'arrête."""
     services.verifier_llm(d.llm)
     try:
         desc = listes.description_sequence(d.sujet, d.choix, d.age)
-        return await decoupage.decouper(services.orchestrateur, d.synopsis, desc["personnage"], desc["decor"], d.plans,
-                                        d.reference, d.llm, desc["mineur"], d.contrainte, musique=d.musique,
-                                        cible=d.plan, contrainte_en=d.contrainte_en)
+        return await services.tant_que_connecte(requete, decoupage.decouper(
+            services.orchestrateur, d.synopsis, desc["personnage"], desc["decor"], d.plans, d.reference, d.llm,
+            desc["mineur"], d.contrainte, musique=d.musique, cible=d.plan, contrainte_en=d.contrainte_en))
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (sequences.ErreurSequence, plateau.ErreurPlateau, listes.ErreurListes) as e:

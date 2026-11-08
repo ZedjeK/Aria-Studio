@@ -1,7 +1,7 @@
 // Scénario, 1 · Départ : les images dont part l'atelier. Image : 1 à 3 rushes dont s'inspirer (« Picture 1… »
 // pour un modèle d'édition) ou une image de départ pour une variation ; Retouche : l'image à retoucher ; Clip : le
-// rush à animer ; Séquence : le personnage de référence (decoupage.js). Le LLM les voit quand il écrit (✨ Optimiser,
-// 💬 Aide), et elles partent avec le prompt vers le Plateau, le panneau de retouche ou le Montage.
+// rush à animer ; Séquence : le personnage de référence (decoupage.js). Le LLM les voit quand il écrit (✨ Écrire le
+// prompt, 💬 M'aider à préciser), et elles partent avec le prompt vers le Plateau, le panneau de retouche ou le Montage.
 
 const refsScenario = { role: "inspirer", inspirer: [], variation: null, liberte: 0.6, animer: null, retouche: null };
 
