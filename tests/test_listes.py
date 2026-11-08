@@ -495,13 +495,14 @@ class Video(unittest.TestCase):
         p = r["prompt"]
         self.assertTrue(p.startswith("Medium shot, waist up. A young woman"), p)
         morceaux = ["She slowly turns toward the camera.", "The camera slowly pushes in.",
-                    'She says in Japanese, in a soft whisper: "On décolle ce soir."',
+                    'She says in Japanese, in a soft whisper: <d>[Japanese] On décolle ce soir.</d>',
                     "Sounds: rain pattering on the pavement.", "Music: slow retro synthwave."]
         positions = [p.index(m) for m in morceaux]
         self.assertEqual(positions, sorted(positions))
 
     def test_qui_parle_et_valeurs_par_defaut(self):
-        self.assertIn('They say in French: "Salut."', assembler(P, {}, workflow=H3, replique="Salut.")["prompt"])
+        self.assertIn("They say in French: <d>[French] Salut.</d>",
+                      assembler(P, {}, workflow=H3, replique="Salut.")["prompt"])  # la balise de H3, pas des guillemets
         self.assertIn("A voice-over says", assembler("lieu", {}, workflow=H3, replique="Bienvenue.")["prompt"])
         r = assembler(P, {"video": {"Ton": "Doux", "Musique": "Aucune"}}, workflow=H3)
         self.assertTrue(r["prompt"].endswith("No music."))
@@ -516,7 +517,7 @@ class Video(unittest.TestCase):
         self.assertTrue(r.endswith("No background music."))  # la liste Musique ne compte plus
         r = assembler(P, {}, workflow=H3, replique="Prêt pour le décollage ?\n\n On y va. ", dialogue=True,
                       avec_musique=True, musique="soft solo piano, slow tempo.")["prompt"]
-        self.assertIn('They say in French: "Prêt pour le décollage ?" Then: "On y va."', r)
+        self.assertIn("They say in French: <d>[French] Prêt pour le décollage ?</d> Then: <d>[French] On y va.</d>", r)
         self.assertTrue(r.endswith("Background music: soft solo piano, slow tempo."))
         r = assembler(P, {"video": {"Musique": "Synthwave"}}, workflow=H3, avec_musique=True)["prompt"]
         self.assertTrue(r.endswith("Music: slow retro synthwave."))  # cochée sans description : la liste

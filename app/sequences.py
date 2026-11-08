@@ -30,6 +30,7 @@ import uuid
 from datetime import datetime
 
 from app import modeles, plateau, reglages, rushes, securite, voix, workflows
+from app import repliques as repliques_h3  # le nom « repliques » est celui de la fonction ci-dessous
 from app.comfy import video_et_affiche
 from app.config import CONFIG
 from app.emplacements import DATA
@@ -47,8 +48,7 @@ LONGUEUR_MUSIQUE = 200
 # Ajouts au casting (2026-10-24) : une séquence plus ancienne les reçoit par défaut, sans être « à retourner ».
 CASTING_DEFAUT = {"contrainte": "", "reference_partout": True}
 _ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
-_REPLIQUE = re.compile(r"[«\"“]")
-_REPLIQUES = re.compile(r"«\s*([^»]+?)\s*»|\"([^\"]+)\"|“([^”]+)”")
+_REPLIQUE, _REPLIQUES = repliques_h3.UNE_REPLIQUE, repliques_h3.REPLIQUES  # balise <d> et guillemets (app/repliques.py)
 # Mesuré le 2026-10-21 (4 plans Rapide de 5 s : 8 min 14) : guides, références et premier chargement
 # coûtent environ 40 % de plus qu'un clip seul du Montage.
 SURCOUT_SEQUENCE = 1.4
@@ -119,18 +119,19 @@ def steps_plan(s: dict, plan: dict) -> int:
 
 
 def repliques(texte: str) -> list[str]:
-    """Répliques entre « », "" ou “”."""
-    return [next(g for g in m.groups() if g).strip() for m in _REPLIQUES.finditer(texte)]
+    """Répliques, sans leurs guillemets ni leur balise : <d>[Langue] …</d>, « », "" ou “”."""
+    return repliques_h3.contenus(texte)
 
 
 def garder_repliques(idee: str, prompt_plan: str) -> str:
-    """Remet, mot pour mot, les répliques de l'idée que Llama aurait perdues (vu à l'essai du 2026-10-21)."""
+    """Remet, mot pour mot, les répliques de l'idée que Llama aurait perdues (vu à l'essai du 2026-10-21), dans la
+    balise de H3."""
     simple = lambda t: " ".join(re.sub(r"[^\w\s]", " ", t.casefold()).split())
     manquantes = [r for r in repliques(idee) if simple(r) not in simple(prompt_plan)]
-    return " ".join([prompt_plan.rstrip()] + [f'The character says: "{r}"' for r in manquantes])
+    return " ".join([prompt_plan.rstrip()] + [f"The character (S1) says: {repliques_h3.balise(r)}" for r in manquantes])
 
 
-_FIN_PHRASE = re.compile(r"[.!?…][\"”»]?(?:\s|$)")  # fin de phrase, guillemet fermant compris
+_FIN_PHRASE = repliques_h3.FIN_PHRASE  # fin de phrase, guillemet fermant ou balise fermante compris
 
 
 def sans_repliques_inventees(source: str, prompt_plan: str) -> tuple[str, list[str]]:
@@ -146,7 +147,8 @@ def sans_repliques_inventees(source: str, prompt_plan: str) -> tuple[str, list[s
             return " ".join(prompt_plan.split()), retirees
         avant = [f.end() for f in _FIN_PHRASE.finditer(prompt_plan, 0, inventee.start())]
         debut = avant[-1] if avant else 0
-        fin = _FIN_PHRASE.search(prompt_plan, inventee.end() - 2)  # la réplique peut finir la phrase (« Salut. »)
+        # la réplique peut finir la phrase (« Salut. » ou « Salut.</d> ») : on repart avant son point
+        fin = _FIN_PHRASE.search(prompt_plan, inventee.end() - (6 if inventee.group(1) else 2))
         retirees.append(next(g for g in inventee.groups() if g).strip())
         prompt_plan = prompt_plan[:debut] + " " + prompt_plan[fin.end() if fin else len(prompt_plan):]
 

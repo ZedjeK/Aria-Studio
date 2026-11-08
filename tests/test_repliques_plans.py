@@ -29,22 +29,23 @@ class Repliques(Base):
         r, demande = self.decouper(blocs("She walks in.", f'She takes off her helmet and says "{REPLIQUE}"',
                                          "She smiles."))
         self.assertIn("Story: told by the shots below, in order.", demande)  # sans fil
-        self.assertIn(f'2. cut, 5 s, note: elle retire son casque, line (French, word for word): "{REPLIQUE}", '
-                      "spoken at the end of the shot, after the action, as a reaction", demande)
+        self.assertIn(f"2. cut, 5 s, note: elle retire son casque, line, word for word, in its <d> tag: "
+                      f"<d>[French] {REPLIQUE}</d>, spoken at the end of the shot, after the action, as a reaction", demande)
         self.assertNotIn("Nobody speaks", demande)
-        self.assertEqual(r["plans"][1]["prompt"], f'She takes off her helmet and says "{REPLIQUE}"')
+        # le LLM l'a écrite entre guillemets : le filet la passe dans la balise de H3
+        self.assertEqual(r["plans"][1]["prompt"], f"She takes off her helmet and says: <d>[French] {REPLIQUE}</d>")
         self.assertEqual(r["alertes"], [])
 
     def test_replique_perdue_remise_a_son_moment(self):
         texte = "Medium shot of the hangar. She takes off her helmet. She smiles."
-        dit = 'The character says: "Salut."'
+        dit = "The character (S1) says: <d>[French] Salut.</d>"
         for moment, attendu in (
                 ("debut", f"Medium shot of the hangar. {dit} She takes off her helmet. She smiles."),
                 ("pendant", f"Medium shot of the hangar. She takes off her helmet. {dit} She smiles."),
                 ("fin", f"Medium shot of the hangar. She takes off her helmet. She smiles. {dit}")):
             self.assertEqual(decoupage.placer_replique(texte, "Salut.", moment, False), attendu, moment)
         self.assertEqual(decoupage.placer_replique("She walks.", "Salut.", "debut", True),
-                         'She walks. In an off-screen voiceover, the character says: "Salut." '
+                         "She walks. The character (S1) says in an off-screen voiceover: <d>[French] Salut.</d> "
                          "The character's lips stay closed.")
         self.assertEqual(decoupage.placer_replique('She says "Salut."', "Salut.", "debut", False), 'She says "Salut."')
 
@@ -86,7 +87,8 @@ class UnSeulPlan(Base):
         self.assertIn("Shot 1 as already written: Wide shot, a pilot walks into the hangar.", demande)
         self.assertIn("Shot 3 as already written: Continuous shot", demande)
         self.assertEqual((len(r["plans"]), r["cible"]), (1, 1))
-        self.assertEqual(r["plans"][0]["prompt"], f'Close-up, she takes off her helmet. The character says: "{REPLIQUE}"')
+        self.assertEqual(r["plans"][0]["prompt"],
+                         f"Close-up, she takes off her helmet. The character (S1) says: <d>[French] {REPLIQUE}</d>")
         self.assertEqual(r["contrainte_en"], {"fr": "cheveux attachés", "en": "hair tied up"})  # pas retraduite
         self.assertEqual(len(llama.messages), 1)
 
@@ -116,10 +118,10 @@ class AideDUnPlan(Base):
         r, systeme = self.appeler(tour)
         self.assertIn("ONE shot of a video sequence", systeme)
         self.assertIn("Write ONLY shot 2", systeme)
-        self.assertIn(f'"{REPLIQUE}", spoken at the end of the shot', systeme)
+        self.assertIn(f"<d>[French] {REPLIQUE}</d>, spoken at the end of the shot", systeme)
         self.assertIn(prompt.REGLE_SANS_REFERENCE[:40], systeme)
         self.assertIn(prompt.ENTETE_REGLES, systeme)  # les règles de H3 écrivent ce prompt-là
-        self.assertTrue(r["prompt"].endswith(f'The character says: "{REPLIQUE}"'))  # remise à la fin
+        self.assertTrue(r["prompt"].endswith(f"The character (S1) says: <d>[French] {REPLIQUE}</d>"))  # remise à la fin
         self.assertEqual(json.loads(r["brut"])["prompt"], r["prompt"])
 
     def test_sans_question_ni_prompt(self):

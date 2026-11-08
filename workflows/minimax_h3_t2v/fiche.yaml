@@ -88,24 +88,26 @@ materiel:
 profil_prompt:
     style: brief_video
     langue: en
-    mots_max: 110  # borne haute de la consigne vidéo (40 à 110 mots)
+    mots_max: 110  # borne haute de la consigne vidéo (40 à 110 mots) : un choix d'Aria, aucun guide n'en donne
+    balise_dialogue: true  # les répliques vont dans <d>[Langue] …</d> (guide officiel §4.4) : app/repliques.py
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
     # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
     regles:
     - 'Begin with the visual style and the opening framing ("Live-action, cinematic, a medium-wide shot frames ..."), then follow the timeline: opening state, start of the action, development, result.'
     - 'Name the camera movement by its type (push in, pull out, pan, truck, tilt, pedestal, arc, tracking, static, POV), adding amplitude (small or large) and speed (slow or fast) only when they matter, as a natural sentence.'
-    - 'Before a speaker''s first line, identify them by what is visible and audible: role, age range, gender, voice pitch, timbre, pace or accent.'
+    - 'Before a speaker''s first line, identify them by what is visible and audible: role, age range, gender, voice pitch, timbre, pace or accent, then an ID in parentheses, (S1), kept for that speaker in every shot.'
+    - 'Every spoken line goes in a <d> tag with its language, outside any quotation marks: "(S1) says: <d>[French] Je descends ici.</d>". The words and punctuation stay exactly as the user wrote them; no ellipses; never translate.'
     - 'Off-screen narration: write "says in an off-screen voiceover" and add that the visible character''s lips stay closed.'
-    - 'Visible text (signs, labels, neon) goes in double quotes, verbatim.'
+    - 'Double quotes are only for text visible on screen (signs, labels, neon), verbatim, never for a spoken line.'
     - 'Background music only if asked: describe instruments, tempo and dynamics, not mood words.'
     regles_sources:
     - 'https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA (VIDEO_PROMPT_WRITING_GUIDE_base_en.md)'
     conseils:
     - 'Un court brief de production : sujet, action, décor, caméra, son.'
     - Un seul mouvement de caméra, nommé précisément, avec sa vitesse (slow push-in, slow pan…).
-    - 'Répliques courtes : qui parle, la phrase entre guillemets, la langue et le ton ; 1 à 2 phrases par plan.'
+    - 'Répliques courtes : qui parle, puis la phrase dans la balise <d>[Langue] …</d> (jamais entre guillemets : ils sont pour le texte visible) ; 1 à 2 phrases par plan.'
     - Sons concrets liés à l'action ; la musique de fond à part, jamais mélangée aux bruitages.
-    - 'Scènes complexes : chronologie par segments ([0s-2s], [2s-4s]).'
+    - 'Scènes complexes : le guide officiel donne un temps de coupe unique à chaque plan suivant (« At 00:03.500, the camera cuts to… »), pas de tranches [0s-2s] ; le premier plan n''en a pas.'
     - Éviter les consignes contradictoires (plan continu ET coupes).
     sources:
     - https://docs.comfy.org/tutorials/video/minimax/minimax-h3

@@ -9,6 +9,7 @@ import time
 
 from app import plateau, prompt, reglages, securite, workflows
 from app.config import CONFIG
+from app.repliques import balise, langue, vers_balises  # langue : aussi lue par voix.py (decoupage.langue)
 from app.sequences import (DEPARTS, ENCHAINEMENTS, LONGUEUR_CONTRAINTE, LONGUEUR_MUSIQUE, PLANS_MAX, ErreurSequence,
                            _extrait, _FIN_PHRASE, _simple, garder_repliques, repliques, sans_repliques_inventees)
 
@@ -17,20 +18,6 @@ LONGUEUR_NOTE = 500
 TYPES_DECOUPAGE = {"rush": "start from the picture", "texte": "start", "prolonger": "continue", "couper": "cut",
                    "transition": "transition"}
 _BLOC_PLAN = re.compile(r"SHOT\s+(\d+)\s*:?\s*\n\s*FR\s*:\s*(.+?)\n\s*EN\s*:\s*(.+?)(?=\n\s*SHOT\s+\d+|\Z)", re.S | re.I)
-
-
-def langue(replique: str) -> str:
-    """Langue d'une réplique d'après son écriture ; à l'essai, Ministral faisait parler en coréen une réplique française
-    parce que le personnage est coréen. Écriture latine : le français, langue de l'utilisateur."""
-    if re.search(r"[぀-ヿ]", replique):
-        return "Japanese"
-    if re.search(r"[가-힯]", replique):
-        return "Korean"
-    if re.search(r"[一-鿿]", replique):
-        return "Mandarin Chinese"
-    if re.search(r"[Ѐ-ӿ]", replique):
-        return "Russian"
-    return "French"
 
 
 LONGUEUR_REPLIQUE = 300  # la réplique d'un plan
@@ -94,7 +81,7 @@ def _valider_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[
 def ligne_replique(p: dict) -> str:
     """La réplique d'un plan, telle que le LLM la reçoit : mot pour mot, sa langue, son moment, la voix off."""
     off = ", as an off-screen voiceover (the character's lips stay closed)" if p["off"] else ""
-    return f'line ({langue(p["replique"])}, word for word): "{p["replique"]}", spoken {MOMENTS[p["moment"]]}{off}'
+    return f'line, word for word, in its <d> tag: {balise(p["replique"])}, spoken {MOMENTS[p["moment"]]}{off}'
 
 
 def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[dict], reference: str | None,
@@ -112,8 +99,7 @@ def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[d
     if not parlent:
         lignes.append("Nobody speaks in the whole film: no dialogue, no voice-over.")
     elif toutes:
-        lignes.append("Spoken lines, each in this language: "
-                      + "; ".join(f'"{r}" ({langue(r)})' for r in toutes))
+        lignes.append("Spoken lines, each in its <d> tag with its language: " + "; ".join(balise(r) for r in toutes))
     lignes.append(f"Background music for the whole film, the same in every shot: {musique}" if musique
                   else "No background music.")
     lignes.append("Shots:")
@@ -182,8 +168,8 @@ def placer_replique(texte: str, replique: str, moment: str, off: bool) -> str:
     chronologie du brief, après la phrase d'ouverture (début), au milieu (pendant l'action) ou à la fin."""
     if not replique or _simple(replique) in _simple(texte):
         return texte
-    dit = (f'In an off-screen voiceover, the character says: "{replique}" The character\'s lips stay closed.'
-           if off else f'The character says: "{replique}"')
+    dit = (f"The character (S1) says in an off-screen voiceover: {balise(replique)} The character's lips stay closed."
+           if off else f"The character (S1) says: {balise(replique)}")
     fins = [m.end() for m in _FIN_PHRASE.finditer(texte)]
     if moment == "fin" or len(fins) < 2:
         coupure = len(texte)
@@ -222,6 +208,7 @@ def finir_plan(k: int, p: dict, en: str, personnage_: str, source: str) -> tuple
         texte = avec_personnage(personnage_, texte)
     texte = garder_repliques(p["note"], texte)  # une réplique de la note est à sa place, mot pour mot
     texte = placer_replique(texte, p["replique"], p["moment"], p["off"])
+    texte = vers_balises(texte)  # filet : une réplique que le LLM a écrite entre guillemets passe dans la balise
     return texte, alertes + alerte_replique(k, p)
 
 

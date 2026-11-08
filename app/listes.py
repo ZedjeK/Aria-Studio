@@ -25,6 +25,7 @@ from pathlib import Path
 
 from app import reglages, securite, workflows
 from app.config import ROOT
+from app.repliques import balise
 
 DOSSIER = ROOT / "prompt" / "listes"
 
@@ -503,10 +504,11 @@ def assembler(sujet: str, choix: dict, age: int | None = None, texte: str = "", 
             phrases.append(phrase(plan["Caméra"]))
         lignes = [l.strip().replace(chr(34), chr(39)) for l in replique.splitlines() if l.strip()] \
             if dialogue is not False else []
-        if lignes:
+        if lignes:  # la balise de H3 (guide officiel, §4.4) : <d>[Langue] réplique</d>
             ton = f", {plan['Ton']}" if "Ton" in plan else ""
-            suite = "".join(f' Then: "{l}"' for l in lignes[1:])
-            phrases.append(f'{_qui_parle(sujet, genre)} in {plan.get("Langue", "French")}{ton}: "{lignes[0]}"{suite}')
+            parle_en = plan.get("Langue", "French")
+            suite = "".join(f" Then: {balise(l, parle_en)}" for l in lignes[1:])
+            phrases.append(f"{_qui_parle(sujet, genre)} in {parle_en}{ton}: {balise(lignes[0], parle_en)}{suite}")
         elif dialogue is False:
             phrases.append("Nobody speaks.")
         elif "Langue" in plan or "Ton" in plan:
