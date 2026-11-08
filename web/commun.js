@@ -67,6 +67,32 @@ const compterMots = (texte) => {
 
 const estAnnulation = (err) => err?.name === "AbortError";
 
+// Un champ « nombre » (Images du Plateau, Clips du Montage) : toujours un entier entre 1 et son max, celui du serveur
+// (champ.max, posé au chargement des options) ; 1 si le champ est vide ou illisible. Ce qui est tapé hors limites
+// est ramené dans les limites quand on quitte le champ.
+function nombreDuChamp(id) {
+    const champ = document.getElementById(id);
+    const max = Number(champ.max) || 1;
+    const n = Math.floor(Number(champ.value));
+    return Number.isFinite(n) && champ.value !== "" ? Math.min(max, Math.max(1, n)) : 1;
+}
+
+function brancherNombre(id, quandChange = () => {}) {
+    const champ = document.getElementById(id);
+    champ.addEventListener("input", quandChange);  // l'estimation suit pendant la frappe
+    champ.addEventListener("change", () => {
+        champ.value = String(nombreDuChamp(id));
+        quandChange();
+    });
+}
+
+// Pose le max d'un champ nombre (celui du serveur) et le réaffiche dans les limites ; la valeur déjà tapée reste.
+function poserMaxNombre(id, max) {
+    const champ = document.getElementById(id);
+    champ.max = String(max);
+    champ.value = String(nombreDuChamp(id));
+}
+
 function afficherErreur(element, message) {
     element.textContent = message;
     element.hidden = false;

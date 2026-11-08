@@ -183,10 +183,10 @@ function majPartiraAvec() {
     const actives = (id) => document.querySelectorAll(`#${id} .lora input[type=checkbox]:checked`).length;
     const loras = (id) => (actives(id) ? ` · ${actives(id)} LoRA` : "");
     const lignes = {
-        image: () => `${texteDe("nombre-creation") || 1} image(s) · ${texteDe("format-creation") || "format du Plateau"}`
+        image: () => `${nombreDuChamp("nombre-creation")} image(s) · ${texteDe("format-creation") || "format du Plateau"}`
             + `${loras("loras-creation")}`,
         retouche: () => `le masque et le fondu se règlent au panneau de retouche${loras("loras-retouche")}`,
-        clip: () => `${texteDe("nombre-montage") || 1} clip(s) · ${dureeClip()} s · ${texteDe("qualite-montage")
+        clip: () => `${nombreDuChamp("nombre-montage")} clip(s) · ${dureeClip()} s · ${texteDe("qualite-montage")
             .split(" · ")[0] || "qualité du Montage"}${loras("loras-montage")}`,
     };
     const ligne = lignes[formeScenario];

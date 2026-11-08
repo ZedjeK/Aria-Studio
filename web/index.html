@@ -135,7 +135,8 @@
                         <label>Modèle <select id="workflow-creation"></select></label>
                         <label>Format <select id="format-creation"></select></label>
                         <label>Seed <input id="seed-creation" type="number" min="0" placeholder="aléatoire"></label>
-                        <label>Images <select id="nombre-creation"></select></label>
+                        <label>Images <input id="nombre-creation" class="nombre" type="number" min="1" max="1" step="1" value="1"
+                                             inputmode="numeric" title="Combien d'images à la suite (le maximum vient du serveur)"></label>
                         <button type="submit" class="principal">Créer</button>
                     </div>
                     <div id="loras-creation" class="loras"></div>
@@ -292,7 +293,8 @@
                         <label>Durée <select id="duree-montage"></select></label>
                         <label id="bloc-format-montage" hidden>Format <select id="format-montage"></select></label>
                         <label>Seed <input id="seed-montage" type="number" min="0" placeholder="aléatoire"></label>
-                        <label>Clips <select id="nombre-montage"></select></label>
+                        <label>Clips <input id="nombre-montage" class="nombre" type="number" min="1" max="1" step="1" value="1"
+                                            inputmode="numeric" title="Combien de clips à la suite (le maximum vient du serveur)"></label>
                         <button type="submit" class="principal">Tourner</button>
                     </div>
                     <div id="loras-montage" class="loras"></div>

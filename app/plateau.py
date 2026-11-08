@@ -19,7 +19,9 @@ from app.orchestrateur import Orchestrateur
 DOSSIER = DATA / "creations"
 
 FORMATS = workflows.FORMATS
-NOMBRE_MAX = 4
+# Images d'une même commande : un champ à taper (Plateau), plafonné contre une faute de frappe (« 400 »). Une commande
+# trop longue s'arrête avec ✕ Annuler, et ce qui est déjà produit reste dans les Rushes.
+NOMBRE_MAX = 50
 _ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
 
 
@@ -84,7 +86,7 @@ QUALITES_VIDEO = {
 }
 DUREES_VIDEO = (5, 8, 10, 15)  # H3 est entraîné de 5 à 15 s
 MODES_VIDEO = {"animer": "image_vers_video", "texte": "texte_vers_video"}
-CLIPS_MAX = 3
+CLIPS_MAX = 20  # clips d'une même commande (Montage) : environ 1 min 20 chacun à 0,4 MP, l'estimation de la page le dit
 LIBERTE = (0.05, 1.0)
 
 CONSIGNE_AGRANDISSEMENT = (
