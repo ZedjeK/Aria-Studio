@@ -9,7 +9,9 @@ Une fiche de workflow (workflows/<id>/fiche.yaml) et une fiche de LLM (catalogue
 Une fiche de workflow a en plus :
     profil_prompt  style (prose, instruction, brief_video), langue, mots_max (facultatif), negatif, regles (ajoutées
                    à la consigne de Llama quand ce modèle est la cible), conseils et sources (documentation),
-                   balise_dialogue (facultatif : le modèle lit les répliques dans <d>[Langue] …</d>, app/repliques.py)
+                   balise_dialogue (facultatif : le modèle lit les répliques dans <d>[Langue] …</d>, app/repliques.py),
+                   nom_image (facultatif : comment le modèle désigne ses images de référence dans un prompt, avec {n} ;
+                   « Picture {n} » sans cette clé)
     civitai        facultatif : bases (valeurs « baseModel » de Civitai qui vont dans cette famille), nom_contient
                    (facultatif : la base ne suffit pas, le nom du modèle doit contenir ce mot, ex. « edit »)
     hugging_face   facultatif : bases (dépôts d'origine, ex. Qwen/Qwen-Image-2.1 : Rechercher filtre les dérivés par

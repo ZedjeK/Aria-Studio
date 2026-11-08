@@ -126,7 +126,7 @@ class Chemin(unittest.TestCase):
         llama.texte = "A woman from Picture 1 on a beach."
         asyncio.run(prompt.reecrire(orch, "elle à la plage", "pe.gguf", references=1, workflow="qwen_image_2_1"))
         self.assertEqual(orch.charges[-1], "general.gguf")
-        self.assertIn("Picture 1", llama.appels[-1][0][0]["content"])
+        self.assertIn("<image1>", llama.appels[-1][0][0]["content"])  # Qwen-Image 2.1 désigne ses images ainsi
 
     def test_generaliste_markdown_nettoye_et_genre_dans_la_consigne(self):
         llama = FauxLlama('A cyberpunk alley, a **"Ramen 24h"** sign above *her* katana.')

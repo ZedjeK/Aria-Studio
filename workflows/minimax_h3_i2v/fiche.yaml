@@ -119,7 +119,7 @@ recommandations:
     -   cle: steps
         valeur: 12
         source: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
-        note: 'Turbo : 8 steps en T2V/I2V, mais « Audio needs 12+ steps » (le son est le maillon faible à 8)'
+        note: 'Réglage d''Aria, à l''écoute (2026-10-21) : la voix est plus naturelle à 12 qu''à 8. La doc ComfyUI donne 20 steps par défaut (25 pour le mouvement) et dit du turbo à 8 « slightly softer motion/audio » (relu le 2026-11-08).'
     -   cle: sampler
         valeur: res_multistep
         source: https://docs.comfy.org/tutorials/video/minimax/minimax-h3

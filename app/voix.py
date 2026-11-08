@@ -28,6 +28,7 @@ from io import BytesIO
 from app import plateau, reglages, securite, workflows
 from app.config import CONFIG
 from app.emplacements import DATA
+from app.repliques import balise
 
 DOSSIER = DATA / "voix"
 PREFIXE = "voix:"  # valeur du casting d'une séquence : « voix:<id> »
@@ -243,9 +244,10 @@ def prompt_essai(phrase: str, description: str, avec_personnage: bool) -> str:
         morceaux.append("The main character is the person from <Picture 1>.")
     elif description:
         morceaux.append(f"The character: {description}.")
+    # La phrase dans la balise <d>[Langue] …</d> du guide du mode références de H3 (§5.1), pas entre guillemets.
     morceaux.append("A close-up portrait of the character in a small recording booth lined with acoustic foam, "
                     "plain dark background, soft studio light. The character looks at the camera and says: "
-                    f"\"{replique}\"")
+                    f"{balise(replique)}")
     voix = f", with this voice: {description}" if avec_personnage and description else ""
     morceaux.append(f"The character speaks {decoupage.langue(replique)}{voix}.")
     morceaux.append(SILENCE)

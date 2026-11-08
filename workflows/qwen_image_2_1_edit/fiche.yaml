@@ -62,6 +62,7 @@ materiel:
 profil_prompt:
     style: instruction
     langue: en
+    nom_image: '<image{n}>'  # doc ComfyUI de Qwen-Image 2.1 et PE-I2I (« the rewritten instruction MUST use <image1> »)
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
     # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
     regles:
