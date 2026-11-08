@@ -22,6 +22,18 @@ const bobines = creerGalerie({
     vignette: (f, choisi) => `<video src="${urlVideo(f.id)}" poster="${urlImage(f.id)}" muted loop playsinline
         preload="none" draggable="true" data-creation="${echapper(f.id)}" class="${choisi ? "choisi" : ""}"></video>`,
     ouvrir: (f) => ouvrirClip(f),
+    actions: (f) => {
+        const via = (bouton) => () => {
+            ouvrirClip(f);
+            document.getElementById(bouton).click();
+        };
+        return [
+            ...(f.sequence ? [["📽️ Ouvrir la séquence", via("ouvrir-sequence-clip")]]
+                : [["Variante", via("variante-clip")], ["Réutiliser le prompt", via("reutiliser-clip")]]),
+            ["Télécharger", () => Object.assign(document.createElement("a"),
+                { href: urlVideo(f.id), download: `aria-${f.id}.mp4` }).click()],
+        ];
+    },
 });
 
 // Le workflow vidéo dont la famille donne checkpoints et LoRA (image et texte vers vidéo partagent MiniMax-H3).

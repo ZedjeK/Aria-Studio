@@ -340,6 +340,22 @@ const rushes = creerGalerie({
     vignette: (f, choisi) => `<img src="${urlImage(f.id)}" alt="" loading="lazy" draggable="true"
         data-creation="${echapper(f.id)}" class="${choisi ? "choisi" : ""}">`,
     ouvrir: (f) => ouvrirFiche(f),
+    // Clic droit : on ouvre la fiche en coulisse puis on déclenche le bouton correspondant, une seule logique.
+    actions: (f) => {
+        const via = (bouton) => () => {
+            ouvrirFiche(f);
+            document.getElementById(bouton).click();
+        };
+        return [
+            ...(f.type === "creation" ? [["Variante", via("variante")], ["Réutiliser le prompt", via("reutiliser")]] : []),
+            ["Comme référence", via("comme-reference")],
+            ["🎞️ Animer", via("animer-rush")],
+            ["Retoucher", via("ouvrir-retouche")],
+            ["Agrandir", via("ouvrir-agrandir")],
+            ["Télécharger", () => Object.assign(document.createElement("a"),
+                { href: urlImage(f.id), download: `aria-${f.id}.png` }).click()],
+        ];
+    },
 });
 
 async function chargerGalerie() {
