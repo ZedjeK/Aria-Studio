@@ -507,6 +507,9 @@
                             <button type="button" class="onglet-idee actif" role="tab" data-idee="conversation">Conversation</button>
                             <button type="button" class="onglet-idee" role="tab" data-idee="guide"
                                     title="Choisis dans des listes : sujet, décor et ambiance, mise en scène">Me guider</button>
+                            <!-- Le format du Plateau (image) ou du Montage (clip), choisi ici : le LLM le sait. -->
+                            <label id="bloc-format-scenario" class="format-scenario" hidden>Format
+                                <select id="format-scenario" title="Le LLM adapte le cadrage au format choisi"></select></label>
                         </div>
                         <!-- Image, Retouche, Clip : tout passe par le chat ci-dessous (la première réponse est ton idée).
                              Séquence : le fil de l'histoire se garde ici, avec ✨ Tout écrire et 💬. -->

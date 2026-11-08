@@ -216,7 +216,8 @@ async function envoyerLibre(texte) {
                 ? { echanges: pourServeur(a.echanges), forme, workflow: ciblePrompt(), llm,
                     sequence: { ...demandeSequence(), plan } }
                 : { echanges: pourServeur(a.echanges), forme, workflow: ciblePrompt(), contexte: complements(),
-                    images: imagesReference(), role: roleReference(), llm, duree: dureeClip() }, signal);
+                    images: imagesReference(), role: roleReference(), llm, duree: dureeClip(),
+                    format: formatScenario() }, signal);
         },
         () => {
             a.echanges.pop();  // ta réponse revient dans le champ : renvoie-la

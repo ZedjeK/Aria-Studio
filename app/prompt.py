@@ -479,6 +479,27 @@ class ErreurLibre(ErreurLlama):
     pass
 
 
+def cadre_format(format_: str | None) -> str:
+    """Le format choisi au Scénario, dit au LLM : « 16:9 (Widescreen) » → rapport, orientation et ce que ça change à la
+    composition. Vide sans format (Retouche, Redessiner : l'image garde le sien)."""
+    m = re.match(r"\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)", format_ or "")
+    if not m:
+        return ""
+    largeur, hauteur = float(m[1]), float(m[2])
+    if largeur == hauteur:
+        forme = "square"
+        conseil = "centered, balanced compositions work best"
+    elif largeur > hauteur:
+        forme = "landscape (wider than tall)"
+        conseil = "spread the scene horizontally, give room to the setting on the sides"
+    else:
+        forme = "portrait (taller than wide)"
+        conseil = "stack the scene vertically, favour a tall framing of the subject"
+    return (f"Output frame chosen by the user: {format_.strip()}, {forme}. Compose the prompt for this frame ({conseil}). "
+            "It is fixed: never ask about it. If a prompt already exists and the frame differs from the one it was "
+            "written for, adapt its framing and composition to the new frame and give the whole new prompt.")
+
+
 def lire_libre(texte: str) -> dict:
     """L'objet JSON d'un tour, vérifié : message, fiche (texte → texte), 0 à 3 questions à 2-4 choix, prompt ou None."""
     texte = texte.rpartition("</think>")[2]
@@ -504,7 +525,7 @@ def lire_libre(texte: str) -> dict:
 
 async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, workflow: str | None,
                 contexte: str = "", vues: list[Vue] | None = None, role: str | None = None,
-                modele: str | None = None, duree: int = 5) -> dict:
+                modele: str | None = None, duree: int = 5, format_: str | None = None) -> dict:
     """Un tour du chat Libre. `echanges` : [{role: user|assistant, content}], les tours d'assistant étant les objets
     JSON déjà rendus. Seul le tour « ÉCRIS LE PROMPT » réfléchit : les questions et les ajustements partent en
     quelques secondes. `vues`, `role` : les images de référence du Scénario (animer, inspirer, variation)."""
@@ -534,6 +555,8 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
         langue_prompt=langue_prompt, longueur=f"At most {mots} words." if mots else "")
     if vues and role in IMAGES_LIBRE:
         systeme += f"\n\n{avec_noms_images(IMAGES_LIBRE[role], workflow)}"
+    if forme in ("image", "clip") and (cadre := cadre_format(format_)):
+        systeme += f"\n\n{cadre}"
     # Les règles du modèle cible écrivent ses prompts ; l'histoire d'une séquence n'en est pas un (le découpage
     # les applique ensuite plan par plan). À l'essai, elles en faisaient un brief anglais en plans.
     if forme != "sequence" and (regles := workflows.regles_prompt(workflow)):

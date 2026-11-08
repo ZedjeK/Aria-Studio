@@ -3510,3 +3510,48 @@ details.complements.en-guide > summary {
     justify-content: flex-end;
     margin-top: 12px;
 }
+
+/* Listes déroulantes : le menu natif suit le thème sombre (fond sombre, option active en cyan). */
+select {
+    color-scheme: dark;
+}
+
+select option,
+select optgroup {
+    background-color: var(--surface);
+    color: var(--text);
+}
+
+select option:checked,
+select option:hover {
+    background-color: var(--accent);
+    color: #04121a;
+}
+
+/* Format, à droite de Conversation / Me guider. */
+.onglets-idee {
+    align-items: center;
+}
+
+.format-scenario {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    color: var(--discret);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.format-scenario[hidden] {
+    display: none;
+}
+
+.format-scenario select {
+    flex: none;
+    width: 17rem;
+    padding: 5px 10px;
+    text-transform: none;
+    letter-spacing: normal;
+}
