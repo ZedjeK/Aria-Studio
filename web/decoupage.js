@@ -107,8 +107,8 @@ function cartePlan(p, k, durees) {
                 `<option value="${d}" ${d === p.duree ? "selected" : ""}>${d} s</option>`).join("")}</select>
             <span class="etat-plan ${classe}">${etat}</span>
             <span class="actions-plan">
-                <button type="button" class="petit" data-optimiser-plan title="Le LLM écrit le prompt de ce plan">✨ Optimiser</button>
-                <button type="button" class="petit" data-aide-plan title="Le LLM te pose ses questions sur ce plan">💬 Aide</button>
+                <button type="button" class="petit" data-optimiser-plan title="Le LLM écrit le prompt de ce plan">✨ Écrire</button>
+                <button type="button" class="petit" data-aide-plan title="Le LLM te pose ses questions sur ce plan">💬 Préciser</button>
             </span>
         </div>
         <p class="resume-plan discret">${echapper(resume.length > 120 ? `${resume.slice(0, 120)}…` : resume)}</p>
@@ -234,9 +234,9 @@ function decouperSequence() {
     const ecrits = decoupage.plans.filter((p) => p.prompt.trim()).length;
     if (ecrits && !confirm(`✨ Tout écrire réécrit aussi ${ecrits > 1 ? `les ${ecrits} plans` : "le plan"} qui `
         + `${ecrits > 1 ? "ont" : "a"} déjà un prompt, tes retouches à la main comprises. Continuer ?`)) return;
-    avecLlama(async (statut) => {
+    avecLlama(async (statut, signal) => {
         statut(`${nomLlm()} écrit tous les plans… (le premier appel charge le modèle)`);
-        const r = await api("POST", "/api/sequences/decouper", { ...demandeSequence(), llm: llmAtelier() });
+        const r = await api("POST", "/api/sequences/decouper", { ...demandeSequence(), llm: llmAtelier() }, signal);
         r.plans.forEach((ecrit, k) => poserPlan(k, ecrit));
         majAlertes(r.alertes);
         decoupage.contrainteEn = r.contrainte_en;
@@ -248,9 +248,10 @@ function decouperSequence() {
 
 // ✨ d'un plan : ce plan seul, en continuité avec ses voisins.
 function ecrirePlan(k) {
-    avecLlama(async (statut) => {
+    avecLlama(async (statut, signal) => {
         statut(`${nomLlm()} écrit le plan ${k + 1}… (le premier appel charge le modèle)`);
-        const r = await api("POST", "/api/sequences/decouper", { ...demandeSequence(), plan: k, llm: llmAtelier() });
+        const r = await api("POST", "/api/sequences/decouper", { ...demandeSequence(), plan: k, llm: llmAtelier() },
+            signal);
         poserPlan(k, r.plans[0]);
         majAlertes(r.alertes, k);
         decoupage.contrainteEn = r.contrainte_en;
@@ -412,7 +413,7 @@ async function envoyerSequence(mettreAJour) {
     const manquant = decoupage.plans.findIndex((p) => !p.prompt.trim());
     const probleme = !titre.value.trim()
         ? "Donne un titre à la séquence : ses plans seront rangés dans un dossier à son nom."
-        : manquant >= 0 ? `Plan ${manquant + 1} : pas encore de prompt (✨ Optimiser, 💬 Aide, ou écris-le).` : "";
+        : manquant >= 0 ? `Plan ${manquant + 1} : pas encore de prompt (✨ Écrire, 💬 Préciser, ou écris-le).` : "";
     if (probleme) {
         afficherErreur(erreur, probleme);
         if (!titre.value.trim()) titre.focus();

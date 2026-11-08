@@ -11,11 +11,13 @@ const taille = (octets) => {
     return `${Math.round(octets / 2 ** 10)} Ko`;
 };
 
-async function api(methode, url, corps) {
+// `signal` (AbortController) : ✕ Annuler coupe la connexion, et le serveur arrête le LLM (services.tant_que_connecte).
+async function api(methode, url, corps, signal) {
     const reponse = await fetch(url, {
         method: methode,
         headers: corps ? { "Content-Type": "application/json" } : {},
         body: corps ? JSON.stringify(corps) : undefined,
+        signal,
     });
     // Une erreur 500 brute arrive en texte, une erreur de validation avec une liste : le message reste lisible.
     const texte = await reponse.text();
@@ -62,6 +64,8 @@ const compterMots = (texte) => {
     const t = (texte ?? "").trim();
     return t ? t.split(/\s+/).length : 0;
 };
+
+const estAnnulation = (err) => err?.name === "AbortError";
 
 function afficherErreur(element, message) {
     element.textContent = message;

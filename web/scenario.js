@@ -1,5 +1,5 @@
 // Scénario : la seule place où le LLM écrit. Quatre ateliers sur le même gabarit (Image, Retouche, Clip, Séquence) :
-// 1 Départ (images de référence, references.js), 2 Ton idée, le prompteur libre (✨ Optimiser, 💬 Aide : libre.js),
+// 1 Départ (images de référence, references.js), 2 Ton idée (✨ Écrire le prompt, 💬 M'aider à préciser : libre.js),
 // 3 Compléments (cases de l'atelier et listes à cliquer de prompt/listes), et à droite le prompt final, modifiable,
 // qui part tel quel vers le Plateau, le panneau de retouche ou le Montage. Chaque atelier garde son brouillon.
 // Les règles des listes (genre, âge, remplacements, incompatibilités) sont appliquées ici en direct pour guider,
@@ -65,7 +65,7 @@ const cle = (...morceaux) => morceaux.join("|");
 const llmsChoisis = {};  // atelier → GGUF choisi à la main (gardé dans le brouillon)
 const llmAtelier = () => document.getElementById("llm-atelier").value || null;
 const nomLlm = () => document.getElementById("llm-atelier").selectedOptions[0]?.textContent
-    .replace(/ [★👁]/g, "").trim() || "Le LLM";
+    .replace(/ (★|👁)️?/gu, "").trim() || "Le LLM";  // u : 👁 tient sur deux unités, sans u il en restait une
 
 function remplirLlms() {
     if (!optionsPlateau) return;
@@ -139,7 +139,8 @@ function majAtelier() {
     const idee = document.getElementById("idee-scenario");
     idee.placeholder = exemple;
     idee.value = a.idee;
-    document.getElementById("optimiser-scenario").textContent = formeScenario === "sequence" ? "✨ Tout écrire" : "✨ Optimiser";
+    document.getElementById("optimiser-scenario").textContent = formeScenario === "sequence" ? "✨ Tout écrire"
+        : "✨ Écrire le prompt";
     document.getElementById("numero-complements").textContent = formeScenario === "sequence" ? "4" : "3";
     document.getElementById("titre-final").textContent = formeScenario === "sequence" ? "Ta séquence" : "Prompt final";
     document.getElementById("tel-quel-scenario").hidden = formeScenario === "sequence";
@@ -151,8 +152,9 @@ function majAtelier() {
         document.getElementById("creer-prompt").textContent = lancer;
     }
     document.getElementById("prompt-final").value = a.final;
-    document.getElementById("chat-libre").hidden = !conversationActive().echanges.length;  // libre.js
-    rendreLibre();
+    document.getElementById("chat-libre").hidden = !conversationActive().echanges.length
+        || (planAide() === null && Boolean(a.chatReplie));  // replié : la conversation reste, 💬 la rouvre
+    rendreLibre();  // libre.js
     rendreEtiquettes();
     rendreReferencesScenario();  // references.js
     majForme();  // Séquence (decoupage.js)
@@ -165,7 +167,8 @@ function choisirListe(onglet) {
     document.querySelectorAll(".volet-liste").forEach((v) => { v.hidden = v.dataset.voletListe !== onglet; });
 }
 
-// Le prompt final : ce qui part, tel quel. ✨ Optimiser, 💬 Aide ou « Utiliser tel quel » le posent ; tu le retouches.
+// Le prompt final : ce qui part, tel quel. ✨ Écrire le prompt, ✍️ Écris-le du chat ou « Utiliser tel quel » le
+// posent ; tu le retouches.
 function poserFinal(texte, llm = null) {
     atelier().final = texte;
     atelier().llm = llm;
@@ -585,12 +588,17 @@ async function assemblerPrompt() {
 
 // Le LLM : optimiser, aider (libre.js), traduire la musique d'un clip
 
+// ✨ (écrire, tout écrire, un plan) : `action(statut, signal)`. ✕ Annuler coupe la connexion, le LLM s'arrête.
 async function avecLlama(action) {
     const statut = document.getElementById("statut-prompt");
     const erreur = document.getElementById("erreur-prompt");
+    const annuler = document.getElementById("annuler-prompt");
+    const controleur = new AbortController();
     occupePrompt = true;
     majBoutonsPrompt();
     erreur.hidden = true;
+    annuler.onclick = () => controleur.abort();
+    annuler.hidden = false;
     // Pendant que le LLM écrit, le message compte les secondes ; le message final (durée, mots) reste tel quel.
     let message = "";
     const debut = Date.now();
@@ -603,14 +611,16 @@ async function avecLlama(action) {
         await action((m) => {
             message = m;
             afficher(true);
-        });
+        }, controleur.signal);
         clearInterval(minuteur);
         afficher(false);
     } catch (err) {
         clearInterval(minuteur);
-        statut.hidden = true;
-        afficherErreur(erreur, err.message);
+        message = estAnnulation(err) ? "Annulé." : "";
+        afficher(false);
+        if (!estAnnulation(err)) afficherErreur(erreur, err.message);
     } finally {
+        annuler.hidden = true;
         occupePrompt = false;
         majBoutonsPrompt();
     }
@@ -632,33 +642,40 @@ async function traduireSiBesoin(statut) {
 
 const dureeClip = () => Number(document.getElementById("duree-prompt").value) || 5;
 
-// ✨ Optimiser : le LLM écrit le meilleur prompt pour le modèle cible, d'après ton idée, tes compléments et tes
-// images (il les voit). En séquence, c'est le découpage en plans (decoupage.js).
+// ✨ Écrire le prompt : le seul rédacteur d'un atelier (Image, Retouche, Clip). Le bouton ✨ lui passe ton idée,
+// ✍️ Écris-le du chat (libre.js) ton idée et ce que le chat a compris ; il ajoute tes compléments et tes images (il
+// les voit), et un LLM spécialisé du modèle cible écrit avec sa propre consigne. Rend la réponse sans la poser :
+// l'appelant sait pour quel atelier il écrivait.
+async function ecrirePrompt(idee, statut, signal) {
+    await traduireSiBesoin(statut);
+    const comp = complements();
+    if (!idee && !comp) {
+        throw new Error(formeScenario === "retouche" ? "Écris ce que tu veux changer"
+            : "Écris ton idée (ou choisis des compléments)");
+    }
+    const images = imagesReference();
+    statut(`${nomLlm()} ${images.length ? "regarde l'image et écrit" : "écrit"}… (le premier appel charge le modèle)`);
+    return api("POST", "/api/prompt/optimiser", {
+        atelier: formeScenario, idee, complements: comp, images, role: roleReference(), workflow: ciblePrompt(),
+        llm: llmAtelier(), duree: dureeClip(),
+    }, signal);
+}
+
+// En séquence, ✨ Tout écrire découpe l'histoire en plans (decoupage.js).
 document.getElementById("optimiser-scenario").addEventListener("click", () => {
     if (formeScenario === "sequence") {
         decouperSequence();
         return;
     }
-    avecLlama(async (statut) => {
-        await traduireSiBesoin(statut);
-        const idee = atelier().idee.trim();
-        const comp = complements();
-        if (!idee && !comp) {
-            throw new Error(formeScenario === "retouche" ? "Écris ce que tu veux changer"
-                : "Écris ton idée (ou choisis des compléments)");
-        }
-        const images = imagesReference();
-        statut(`${nomLlm()} ${images.length ? "regarde l'image et écrit" : "écrit"}… (le premier appel charge le modèle)`);
-        const r = await api("POST", "/api/prompt/optimiser", {
-            atelier: formeScenario, idee, complements: comp, images, role: roleReference(), workflow: ciblePrompt(),
-            llm: llmAtelier(), duree: dureeClip(),
-        });
-        poserFinal(r.prompt, llmAtelier());
+    avecLlama(async (statut, signal) => {
+        const llm = llmAtelier();
+        const r = await ecrirePrompt(atelier().idee.trim(), statut, signal);
+        poserFinal(r.prompt, llm);
         statut(`${nomLlm()} · ${r.duree_s} s · ${r.mots} mots`);
     });
 });
 
-document.getElementById("aide-scenario").addEventListener("click", () => ouvrirAide());  // libre.js
+document.getElementById("aide-scenario").addEventListener("click", () => basculerAide());  // libre.js
 
 document.getElementById("tel-quel-scenario").addEventListener("click", () => avecLlama(async (statut) => {
     await traduireSiBesoin(statut);

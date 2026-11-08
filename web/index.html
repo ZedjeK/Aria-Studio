@@ -449,7 +449,7 @@
 
         <div class="vue" id="vue-scenario" hidden>
             <!-- Scénario (web/scenario.js, references.js, libre.js, decoupage.js) : la seule place où le LLM écrit.
-                 Quatre ateliers sur le même gabarit : 1 Départ, 2 Ton idée (✨ Optimiser, 💬 Aide), 3 Compléments,
+                 Quatre ateliers sur le même gabarit : 1 Départ, 2 Ton idée (✨ Écrire le prompt, 💬 M'aider à préciser), 3 Compléments,
                  et à droite le prompt final, modifiable, qui part vers le Plateau ou le Montage. -->
             <section class="carte barre-scenario">
                 <div class="onglets-scenario" role="tablist">
@@ -489,35 +489,47 @@
                         <h3 class="titre-bloc" id="titre-idee">2 · Ton idée</h3>
                         <textarea id="idee-scenario" rows="4" maxlength="2000"></textarea>
                         <div class="ligne actions-idee">
-                            <button id="optimiser-scenario" type="button" class="principal">✨ Optimiser</button>
-                            <button id="aide-scenario" type="button" title="Le LLM te pose les questions qui manquent">💬 Aide</button>
+                            <button id="optimiser-scenario" type="button" class="principal"
+                                    title="Le LLM écrit le prompt d'après ton idée, tes compléments et tes images">✨ Écrire le prompt</button>
+                            <button id="aide-scenario" type="button"
+                                    title="Le LLM te pose les questions qui manquent, puis écrit le prompt">💬 M'aider à préciser</button>
                             <button id="tel-quel-scenario" type="button" class="petit"
                                     title="Ton idée et tes compléments, sans passer par le LLM">Utiliser tel quel</button>
                             <span id="statut-prompt" class="discret" hidden></span>
+                            <button id="annuler-prompt" type="button" class="petit" hidden>✕ Annuler</button>
                         </div>
                         <p id="erreur-prompt" class="ko" hidden></p>
                         <div id="place-chat-atelier">
-                        <div id="chat-libre" hidden>
-                            <div class="libre">
-                                <div id="conversation-libre" class="conversation-libre"></div>
-                                <aside class="fiche-libre">
-                                    <h3 class="titre-bloc">Ce que j'ai compris</h3>
-                                    <dl id="fiche-libre"></dl>
-                                    <p id="fiche-vide-libre" class="discret">Rien encore.</p>
-                                </aside>
-                            </div>
-                            <form id="form-libre" class="ligne form-libre">
-                                <textarea id="message-libre" rows="2" maxlength="2000"
-                                          placeholder="Tes réponses (clique sur une proposition pour l'ajouter ici)…"></textarea>
-                                <button type="submit" class="principal">Envoyer</button>
-                            </form>
-                            <div class="ligne actions-libre">
-                                <button id="ecrire-libre" type="button">✍️ Écris-le maintenant</button>
-                                <button id="recommencer-libre" type="button" class="petit">🔄 Recommencer la conversation</button>
+                        <!-- 💬 M'aider à préciser (web/libre.js) : sous l'idée, ou sous un plan de la séquence. -->
+                        <section id="chat-libre" class="chat-libre" hidden>
+                            <div class="entete-chat">
+                                <strong id="titre-chat">💬 Préciser</strong>
                                 <span id="statut-libre" class="discret"></span>
+                                <span class="actions-chat">
+                                    <button id="retour-libre" type="button" class="petit"
+                                            title="Retire ta dernière réponse et ce que le LLM y a répondu ; ta réponse revient dans le champ">↩️ Un tour en arrière</button>
+                                    <button id="recommencer-libre" type="button" class="petit">🔄 Recommencer</button>
+                                    <button id="replier-libre" type="button" class="petit"
+                                            title="Replier le chat : la conversation est gardée">▴ Replier</button>
+                                </span>
                             </div>
+                            <div class="fiche-libre" title="Ce que le LLM a retenu ; ✕ retire une ligne fausse (il la reposera)">
+                                <span class="discret">Compris :</span>
+                                <ul id="fiche-libre" class="etiquettes-fiche"></ul>
+                                <span id="fiche-vide-libre" class="discret">rien encore</span>
+                            </div>
+                            <div id="conversation-libre" class="conversation-libre" aria-live="polite"></div>
+                            <form id="form-libre" class="form-libre">
+                                <textarea id="message-libre" rows="2" maxlength="2000"
+                                          placeholder="Ta réponse… Clique une proposition pour l'ajouter ici · Entrée envoie, Maj+Entrée va à la ligne"></textarea>
+                                <div class="boutons-libre">
+                                    <button type="submit" class="principal">Envoyer</button>
+                                    <button id="ecrire-libre" type="button"
+                                            title="Assez de questions : le LLM écrit avec ce qu'il a compris">✍️ Écris-le</button>
+                                </div>
+                            </form>
                             <p id="erreur-libre" class="ko" hidden></p>
-                        </div>
+                        </section>
                         </div>
                     </div>
 
@@ -605,7 +617,7 @@
                     <h2 id="titre-final">Prompt final</h2>
                     <div data-atelier-sauf="sequence">
                         <textarea id="prompt-final" rows="12"
-                                  placeholder="✨ Optimiser, 💬 Aide ou « Utiliser tel quel » le posent ici ; tu peux le retoucher."></textarea>
+                                  placeholder="✨ Écrire le prompt, le chat 💬 ou « Utiliser tel quel » le posent ici ; tu peux le retoucher."></textarea>
                         <span id="mots-final" class="discret"></span>
                         <div class="ligne actions-prompt">
                             <button id="envoyer-prompt" type="button" disabled>→ Envoyer au Plateau</button>
