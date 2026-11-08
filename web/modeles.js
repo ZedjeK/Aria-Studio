@@ -324,7 +324,7 @@ function rendreUsage(id, u) {
         <p class="discret">Le Plateau, le Montage et le Scénario partent de ces workflows. Le checkpoint par défaut de chacun
             se choisit ci-dessous (☆) ; ses réglages fins (steps, CFG…) sont dans Réglages.</p></section>`;
     const variation = u.variation.length
-        ? `<p class="discret">🎨 Variation (Plateau, zone Références) : elle part d'une image avec un modèle texte vers image :
+        ? `<p class="discret">🎨 Redessiner une image (Plateau, zone Références) : elle part d'une image avec un modèle texte vers image :
             ${echapper(u.variation.join(", "))}.</p>` : "";
     return favoris + u.workflows.map((wf) => carteWorkflow(wf, id, u)).join("") + variation
         + (u.workflows.length ? "" : '<p class="discret">Aucun workflow pour cet usage.</p>');
@@ -338,7 +338,7 @@ function carteWorkflow(wf, idUsage, u) {
                title="${wf.pret ? "" : "Télécharge d'abord ce qui manque"}">☆ Par défaut pour « ${echapper(libelle(cle))} »</button>`)).join(" ");
     const vram = wf.vram_min_go
         ? `VRAM mesurée : ${wf.vram_min_go} Go minimum` : `VRAM estimée ${wf.vram_estimee_go} Go`;
-    const capacites = [wf.references ? `jusqu'à ${wf.references} images de référence` : "", wf.variation ? "variation" : ""]
+    const capacites = [wf.references ? `jusqu'à ${wf.references} images de référence` : "", wf.variation ? "redessiner une image" : ""]
         .filter(Boolean).join(" · ");
     const nature = idUsage === "video" ? "video" : "image";
     return `<section class="carte workflow-usage">

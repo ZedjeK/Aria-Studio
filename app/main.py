@@ -131,12 +131,15 @@ def commande_en_cours() -> dict | None:
 
 @app.get("/api/etat")
 def etat_direct():
-    """Pastilles de la barre d'onglets : chaque moteur est chargé, en veille ou introuvable, plus la VRAM."""
+    """Pastilles de la barre d'onglets : chaque moteur est chargé, en veille ou introuvable, plus la VRAM.
+
+    « actif » = le moteur qui tient la carte (orchestrateur.actif), pas seulement un processus en vie : ComfyUI reste
+    lancé quand un LLM prend la main (sa VRAM est vidée, son processus non), et doit alors s'afficher en veille."""
     sante_ = sante()
 
-    def etat(processus, installe: bool) -> str:
+    def etat(nom: str, processus, installe: bool) -> str:
         if processus is not None and processus.poll() is None:
-            return "actif"
+            return "actif" if orchestrateur.actif == nom else "veille"
         return "veille" if installe else "absent"
 
     llama = orchestrateur.llama
@@ -147,8 +150,8 @@ def etat_direct():
     except Exception:  # pas de GPU NVIDIA lisible : on affiche seulement les moteurs
         vram = {"vram_utilisee_go": None, "vram_totale_go": None}
     return {
-        "comfyui": {"etat": etat(orchestrateur.comfy.process, sante_["comfyui"]["installe"])},
-        "llama": {"etat": etat(llama.process, sante_["llama"]["installe"]),
+        "comfyui": {"etat": etat("comfyui", orchestrateur.comfy.process, sante_["comfyui"]["installe"])},
+        "llama": {"etat": etat("llama", llama.process, sante_["llama"]["installe"]),
                   "modele": favoris.get(llama.modele.name, llama.modele.stem) if llama.modele else None},
         **vram,
         "commande": commande_en_cours(),

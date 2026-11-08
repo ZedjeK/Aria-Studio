@@ -28,6 +28,7 @@
     --on-action: #1a0b00;
     --warn: #ffd166;
     --danger: #ff5c7a;
+    --vert: #4ade80;      /* le moteur qui tient la carte (pastilles ComfyUI / Llama) */
     --font-display: "Space Grotesk", system-ui, sans-serif;
     --font-body: "IBM Plex Mono", ui-monospace, monospace;
 
@@ -1975,6 +1976,79 @@ button.onglet-scenario.actif {
     margin: 0 0 12px;
 }
 
+/* Scénario, 1 · Départ : trois cartes (Depuis un texte, Mélanger des images, Redessiner une image) au lieu de boutons. */
+.cartes-mode {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 14px;
+}
+
+.cartes-mode[hidden] {
+    display: none;
+}
+
+label.carte-mode {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 12px 14px;
+    border: 1px solid var(--bord);
+    border-radius: 12px;
+    background: var(--surface-sunken);
+    color: var(--discret);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.15s;
+}
+
+label.carte-mode:hover {
+    border-color: var(--line-strong);
+    background: var(--hover);
+}
+
+label.carte-mode input {  /* le radio reste atteignable au clavier, mais invisible : la carte entière est le bouton */
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+label.carte-mode .icone-mode {
+    font-size: 1.5rem;
+    line-height: 1.2;
+}
+
+label.carte-mode strong {
+    color: var(--texte);
+    font-family: var(--font-display);
+    font-size: 0.98rem;
+}
+
+label.carte-mode small {
+    color: var(--discret);
+    line-height: 1.35;
+}
+
+label.carte-mode:has(input:checked) {
+    border-color: var(--neon);
+    background: var(--hover);
+    box-shadow: 0 0 0 1px var(--neon), 0 6px 22px -10px var(--neon);
+}
+
+label.carte-mode:has(input:focus-visible) {
+    outline: 2px solid var(--neon);
+    outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+    .cartes-mode {
+        grid-template-columns: 1fr;
+    }
+}
+
 .plans-scenario {
     list-style: none;
     margin: 8px 0 12px;
@@ -2970,4 +3044,426 @@ button.onglet-liste.actif {
 #loras-montage,
 #loras-sequence {
     margin-top: 10px;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Refonte « Synthwave aux couleurs d'Aria » : coins coupés, filets fins, halos cyan. Mêmes couleurs et mêmes
+   polices que les autres applis Aria ; seule la forme change. Ces règles viennent en dernier et priment sur les
+   anciennes (onglets soulignés, boutons arrondis, texte « ATELIER » supprimé).
+   ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* En-tête : la marque et l'état des moteurs, puis les onglets sur leur propre ligne. */
+.entete-studio {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 22px;
+}
+
+.entete-haut {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 24px;
+}
+
+.marque .sous-titre {
+    margin: 2px 0 0;
+    font-size: 0.8rem;
+}
+
+.entete-droite {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px 16px;
+}
+
+.entete-studio nav {
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--bord);
+    gap: 8px 14px;
+}
+
+.etiquette-famille {
+    color: var(--discret);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-right: 4px;
+    align-self: center;
+}
+
+.famille-onglets {
+    align-items: center;
+    gap: 6px;
+}
+
+.famille-onglets + .famille-onglets {
+    padding-left: 18px;
+    border-left: 1px solid var(--line-strong);
+}
+
+/* Onglets du studio : parallélogramme, majuscules. */
+button.onglet {
+    padding: 7px 20px;
+    border-radius: 0;
+    background: transparent;
+    color: var(--discret);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+button.onglet.actif {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: var(--accent);
+    color: var(--texte);
+    font-weight: 600;
+}
+
+/* Pastilles des moteurs : rectangle, point lumineux, nom, détail. Vert = celui qui tient la carte. */
+.etat-direct {
+    margin-left: 0;
+    gap: 12px;
+}
+
+.etat-direct .pastille {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: 1px solid var(--bord);
+    background: var(--surface);
+    color: var(--discret);
+    font-size: 0.75rem;
+    text-shadow: none;
+}
+
+.etat-direct .pastille b {
+    font-family: var(--font-display);
+    font-weight: 600;
+}
+
+.etat-direct .point {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--line-strong);
+}
+
+.etat-direct .pastille.actif {
+    border-color: var(--vert);
+    background: color-mix(in srgb, var(--vert) 10%, transparent);
+    color: var(--texte);
+}
+
+.etat-direct .pastille.actif .point {
+    background: var(--vert);
+    box-shadow: 0 0 8px var(--vert);
+}
+
+.etat-direct .pastille.actif .detail-pastille {
+    color: color-mix(in srgb, var(--vert) 70%, white);
+}
+
+.etat-direct .pastille.veille .detail-pastille {
+    color: var(--discret);
+}
+
+.etat-direct .pastille.absent {
+    border-color: var(--ko);
+    background: color-mix(in srgb, var(--ko) 8%, transparent);
+    color: var(--texte);
+}
+
+.etat-direct .pastille.absent .point {
+    background: var(--ko);
+}
+
+.etat-direct .pastille.en-cours {
+    border-color: var(--action);
+    color: var(--action);
+}
+
+.detail-pastille {
+    max-width: 16ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vram-direct {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 92px;
+    font-size: 0.72rem;
+    color: var(--texte);
+}
+
+.jauge-vram {
+    display: block;
+    height: 3px;
+    background: var(--line);
+}
+
+.jauge-vram > span {
+    display: block;
+    height: 3px;
+    background: var(--vert);
+}
+
+.vram-direct.alerte-vram .jauge-vram > span {
+    background: var(--warn);
+}
+
+/* ⏻ Quitter : rouge, au bout de la ligne du haut. */
+button.quitter-appli {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-color: color-mix(in srgb, var(--ko) 55%, transparent);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ko);
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+button.quitter-appli:hover {
+    border-color: var(--ko);
+    background: color-mix(in srgb, var(--ko) 10%, transparent);
+    color: var(--ko);
+}
+
+/* Scénario : la barre d'ateliers n'est plus une carte, juste une ligne sous un filet. Pilules rectangulaires. */
+.barre-scenario {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 20px;
+    padding: 14px 0 0;
+    margin-bottom: 18px;
+    border: 0;
+    border-top: 1px solid var(--bord);
+    border-radius: 0;
+    background: transparent;
+}
+
+.onglets-scenario {
+    margin: 0;
+    gap: 10px;
+    border: 0;
+}
+
+button.onglet-scenario {
+    padding: 7px 20px;
+    border: 1px solid var(--line-strong);
+    border-radius: 0;
+    background: transparent;
+    color: var(--discret);
+    font-family: var(--font-display);
+}
+
+button.onglet-scenario:hover:not(.actif) {
+    border-color: var(--accent);
+    color: var(--texte);
+}
+
+button.onglet-scenario.actif {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+}
+
+.barre-scenario .options-creation {
+    margin-left: auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.barre-scenario .options-creation label {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 6px 4px 14px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--discret);
+    font-family: var(--font-display);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.barre-scenario .options-creation select {
+    flex: none;
+    width: 12rem;
+    border: 0;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* 1 · Départ : cartes à coin coupé, badge « Actif » sur la carte choisie. */
+label.carte-mode {
+    padding: 30px 18px 18px;
+    gap: 6px;
+    border-radius: 0;
+    background: var(--surface);
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+}
+
+label.carte-mode strong {
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+label.carte-mode:has(input:checked) {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent),
+                                color-mix(in srgb, var(--accent-2) 8%, transparent)), var(--surface);
+    box-shadow: inset 0 0 18px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+label.carte-mode:has(input:checked)::after {
+    content: "Actif";
+    position: absolute;
+    top: 10px;
+    right: 24px;
+    padding: 2px 8px;
+    background: var(--accent);
+    color: var(--bg);
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* Tout réinitialiser, sous Générer. */
+button.reinitialiser {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px;
+    border-color: var(--line-strong);
+    border-radius: 0;
+    background: transparent;
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* 2 · Ton idée : le dialogue avec le LLM. Sa bulle à gauche, la tienne à droite en bleu du logo ; au survol de la
+   tienne : Réessayer, Modifier, Copier. */
+.chat-libre {
+    border-radius: 0;
+    background: var(--surface);
+}
+
+.bulle {
+    padding: 10px 14px;
+}
+
+.bulle-llm {
+    border-radius: 14px 14px 14px 4px;
+    background: var(--hover);
+}
+
+.bulle-toi {
+    border: 0;
+    border-radius: 14px 14px 4px 14px;
+    background: var(--accent-2);
+    color: var(--bg);
+    font-weight: 500;
+}
+
+.bulle-toi .auteur {
+    color: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.message-toi {
+    align-self: flex-end;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    max-width: 80%;
+}
+
+.message-toi .bulle {
+    max-width: 100%;
+}
+
+.actions-bulle {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.message-toi:hover .actions-bulle,
+.message-toi:focus-within .actions-bulle {
+    opacity: 1;
+}
+
+@media (hover: none) {  /* écran tactile : pas de survol, les actions restent visibles */
+    .actions-bulle {
+        opacity: 1;
+    }
+}
+
+.actions-bulle button.petit {
+    border-radius: 0;
+    border-color: var(--line-strong);
+    background: var(--surface);
+    color: var(--discret);
+    font-size: 0.72rem;
+}
+
+.actions-bulle button.petit:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.boutons-libre button {
+    border-radius: 0;
+    font-family: var(--font-display);
+    font-weight: 600;
+}
+
+.boutons-libre button.principal {
+    border-color: var(--accent-2);
+    background: var(--accent-2);
+    color: var(--bg);
+}
+
+.boutons-libre button#ecrire-libre {
+    border-color: var(--accent);
+    background: transparent;
+    color: var(--accent);
 }

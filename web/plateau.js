@@ -82,7 +82,7 @@ function remplirModelesCreation() {
     const variation = referencesActives().length > 0 && modeReference === "variation";
     const format = document.getElementById("format-creation");
     format.disabled = variation;
-    format.title = variation ? "Une variation garde le format de son image de référence" : "";
+    format.title = variation ? "Redessiner une image garde son format" : "";
 }
 
 const liberteReference = () => Number(document.getElementById("liberte-reference").value);
@@ -104,7 +104,7 @@ function rendreReferences() {
     }).join("");
     const n = referencesActives().length;
     document.getElementById("compte-references").textContent = n
-        ? `· ${n} image${n > 1 ? "s" : ""} · ${modeReference === "inspirer" ? "s'inspirer" : "variation"}` : "";
+        ? `· ${n} image${n > 1 ? "s" : ""} · ${modeReference === "inspirer" ? "mélanger" : "redessiner"}` : "";
     document.getElementById("bloc-liberte").hidden = modeReference !== "variation";
     const aide = AIDES_REFERENCES[modeReference];
     document.getElementById("aide-references").textContent = typeof aide === "function" ? aide() : aide;
@@ -377,7 +377,7 @@ function ouvrirFiche(f) {
     }
     if (f.references?.length) {
         lignes.push(["Références", `${f.references.length} image${f.references.length > 1 ? "s" : ""} · `
-            + (f.mode_reference === "variation" ? `variation, liberté ${f.liberte}` : "s'inspirer")]);
+            + (f.mode_reference === "variation" ? `redessiner, liberté ${f.liberte}` : "mélanger des images")]);
     }
     lignes.push(["Date", f.date.replace("T", " ")]);
     if (f.parent) lignes.push(["Issue de", f.parent]);

@@ -18,15 +18,16 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 
 - **Scénario** : la seule place où le LLM écrit. Tu choisis Image, Clip ou Séquence et le modèle cible, puis tu
   remplis ce que tu veux :
-  - **Image de référence** : les images dont s'inspirer, l'image de départ d'une variation, le rush à animer ou le
-    personnage d'une séquence. Le LLM les voit quand il écrit.
+  - **Départ** : *Depuis un texte* (aucune image), *Mélanger des images* (jusqu'à 10, pour une nouvelle scène) ou
+    *Redessiner une image* (une seule, refaite plus ou moins fort) ; ou bien le rush à animer, l'image à retoucher ou
+    le personnage d'une séquence. Le LLM voit les images quand il écrit.
   - **Sujet** (facultatif), **Décor et ambiance**, **Mise en scène** : des listes à cliquer, assemblées mot pour mot.
   - **Histoire** (séquence) : le synopsis, les contraintes et les plans ; le LLM écrit le prompt de chaque plan.
   - **Libre** : un chat où le LLM te pose les questions qui manquent (avec des réponses à cliquer), tient une fiche
     de ce qu'il a compris, puis écrit le prompt avec toi et l'ajuste.
 
   Le prompt final, toujours visible et modifiable, part vers le Plateau ou le Montage.
-- **Plateau** : il tourne ce prompt tel quel, avec ses réglages (modèle, format, LoRA, références, variation). Il
+- **Plateau** : il tourne ce prompt tel quel, avec ses réglages (modèle, format, LoRA, références, redessiner une image). Il
   retouche aussi une image (avec ou sans masque : le LLM traduit ta consigne en voyant l'image) et l'agrandit.
 - **Montage** : des clips vidéo avec le son (MiniMax H3), en animant un rush ou depuis le texte, et les séquences :
   il tourne les plans écrits au Scénario, avec la voix de référence de ta bibliothèque, puis assemble le film.
