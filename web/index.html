@@ -782,12 +782,23 @@
 
         <div class="vue" id="vue-reglages" hidden>
             <div class="ligne entete-reglages">
-                <p class="discret">Seuls tes changements sont enregistrés (data/reglages.yaml) : ↺ ramène une valeur à celle d'origine.</p>
+                <label class="recherche-reglages">🔎 <input id="recherche-reglages" type="search"
+                       placeholder="Chercher un réglage…" autocomplete="off"></label>
+                <label class="case"><input type="checkbox" id="modifies-reglages"> Modifiés seulement <span id="nb-modifies" class="badge" hidden></span></label>
+                <span class="discret aide-reglages">Seuls tes changements sont enregistrés (data/reglages.yaml) : ↺ ramène une valeur à celle d'origine.</span>
                 <button id="optimiser" type="button" class="principal"
                         title="Propose des réglages adaptés à ta carte graphique (rien n'est appliqué sans ton accord)">⚡ Adapter à ma machine</button>
             </div>
+            <div class="mise-reglages">
+            <nav class="nav-reglages" aria-label="Sections des réglages">
+                <button type="button" class="actif" data-section="tout">Tout</button>
+                <button type="button" data-section="systeme">🖥️ Système</button>
+                <button type="button" data-section="llm">💬 LLM <i class="point-modifie" hidden></i></button>
+                <button type="button" data-section="workflows">🎨 Modèles image <i class="point-modifie" hidden></i></button>
+            </nav>
+            <div class="contenu-reglages">
             <!-- Système : ce qu'on règle une fois (s'ouvre seul si un moteur manque) -->
-            <details id="systeme-reglages" class="systeme-reglages">
+            <details id="systeme-reglages" class="systeme-reglages" data-section="systeme">
                 <summary><h2>🖥️ Système <span class="discret">moteurs, emplacements, clés d'accès, mises à jour</span></h2></summary>
             <section class="carte" id="carte-moteurs">
                 <div class="ligne entete-assistant">
@@ -834,7 +845,7 @@
                 </div>
             </section>
             <div class="grille-reglages">
-                <section class="carte">
+                <section class="carte" data-section="llm">
                     <h2>LLM</h2>
                     <label class="cible-reglages">Modèle <select id="llm-reglages"></select></label>
                     <p id="note-llm-defaut" class="discret" hidden></p>
@@ -848,8 +859,8 @@
                         <button id="enregistrer-llm" class="principal" type="button" disabled>Enregistrer</button>
                     </div>
                 </section>
-                <section class="carte">
-                    <h2>Workflows</h2>
+                <section class="carte" data-section="workflows">
+                    <h2>Modèles image <span class="discret">workflows et échantillonnage</span></h2>
                     <label class="cible-reglages">Workflow <select id="workflow-reglages"></select></label>
                     <div id="params-workflow" class="params"></div>
                     <div id="variantes-workflow" hidden>
@@ -869,20 +880,34 @@
                     </div>
                 </section>
             </div>
+            </div>
+            </div>
         </div>
 
         <div class="vue" id="vue-casting" hidden>
             <section class="carte">
                 <h2>Lancer un casting</h2>
-                <div class="ligne">
-                    <select id="tache-banc">
-                        <option value="texte_vers_image">Texte vers image</option>
-                        <option value="retouche">Retouche</option>
-                        <option value="reecriture">Écriture (LLM)</option>
-                        <option value="image_vers_video">Image vers vidéo</option>
-                        <option value="texte_vers_video">Texte vers vidéo</option>
-                    </select>
-                    <button id="lancer-banc" class="principal">Lancer</button>
+                <div class="pastilles-taches" id="taches-banc" role="tablist" aria-label="Tâche à comparer">
+                    <button type="button" class="actif" data-tache="texte_vers_image">🖼️ Texte vers image</button>
+                    <button type="button" data-tache="retouche">🖌️ Retouche</button>
+                    <button type="button" data-tache="reecriture">💬 Écriture (LLM)</button>
+                    <button type="button" data-tache="image_vers_video">🎬 Image vers vidéo</button>
+                    <button type="button" data-tache="texte_vers_video">🎞️ Texte vers vidéo</button>
+                </div>
+                <select id="tache-banc" hidden>
+                    <option value="texte_vers_image">Texte vers image</option>
+                    <option value="retouche">Retouche</option>
+                    <option value="reecriture">Écriture (LLM)</option>
+                    <option value="image_vers_video">Image vers vidéo</option>
+                    <option value="texte_vers_video">Texte vers vidéo</option>
+                </select>
+                <details class="options-casting">
+                    <summary>⚙️ Options du casting</summary>
+                    <p class="discret">Pour l'instant, le casting compare tous les modèles installés de la tâche choisie.
+                        Les futures options (choix des modèles à comparer, nombre de seeds, prompts de test) arriveront ici.</p>
+                </details>
+                <div class="ligne pied-casting">
+                    <button id="lancer-banc" class="principal">Lancer le casting</button>
                 </div>
                 <div id="progression-banc" hidden>
                     <div class="barre"><div></div></div>
@@ -892,8 +917,13 @@
             </section>
 
             <section class="carte">
+                <h2>Historique</h2>
+                <div id="historique-bancs" class="historique-bancs"></div>
+                <select id="liste-bancs" hidden></select>
+            </section>
+
+            <section class="carte">
                 <h2>Résultats</h2>
-                <select id="liste-bancs"></select>
                 <div id="banc"></div>
             </section>
         </div>
