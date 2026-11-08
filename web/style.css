@@ -427,6 +427,10 @@ body.large main {
     width: 9em;
 }
 
+.options-creation input[type="number"].nombre {
+    width: 5em;  /* Images (Plateau), Clips (Montage) : un nombre court, à taper */
+}
+
 .options-creation button {
     margin-left: auto;
 }

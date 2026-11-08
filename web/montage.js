@@ -59,7 +59,7 @@ async function preparerMontageMaintenant() {
         v.defaut_qualite);
     remplirSelect("duree-montage", v.durees.map((d) => [String(d), `${d} s`]), "5");
     remplirSelect("format-montage", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
-    remplirSelect("nombre-montage", Array.from({ length: v.nombre_max }, (_, i) => [String(i + 1), String(i + 1)]), "1");
+    poserMaxNombre("nombre-montage", v.nombre_max);  // un champ à taper : le max vient du serveur
     rendreLoras("loras-montage", workflowVideo());  // plateau.js : ce qui est déjà coché reste coché
     rendreSource();
     majEstimation();
@@ -71,7 +71,7 @@ function estimationSecondes() {
     const q = optionsMontage?.video.qualites.find((x) => x.cle === document.getElementById("qualite-montage").value);
     if (!q) return 0;
     const duree = Number(document.getElementById("duree-montage").value);
-    return q.estimation_s * (duree / 5) ** 1.25 * Number(document.getElementById("nombre-montage").value);
+    return q.estimation_s * (duree / 5) ** 1.25 * nombreDuChamp("nombre-montage");
 }
 
 const enMinutes = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, "0")}` : `${Math.round(s)} s`);
@@ -80,8 +80,9 @@ function majEstimation() {
     document.getElementById("estimation-montage").textContent = `≈ ${enMinutes(estimationSecondes())} sur ta carte`
         + " (à chaud ; le premier clip charge le modèle)";
 }
-["qualite-montage", "duree-montage", "nombre-montage"].forEach((id) =>
+["qualite-montage", "duree-montage"].forEach((id) =>
     document.getElementById(id).addEventListener("change", majEstimation));
+brancherNombre("nombre-montage", majEstimation);  // l'estimation suit le nombre de clips pendant la frappe
 
 // Mode et source
 
@@ -223,7 +224,7 @@ function reglagesMontage() {
         modele: document.getElementById("modele-montage").value || null,
         duree: Number(document.getElementById("duree-montage").value),
         format: document.getElementById("format-montage").value,
-        nombre: Number(document.getElementById("nombre-montage").value),
+        nombre: nombreDuChamp("nombre-montage"),
         seed: seed === "" ? null : Number(seed),
         dossier: bobines.dossierOuvert(),  // tourné depuis un dossier ouvert : tous les clips y sont rangés
         loras: lorasChoisies("loras-montage"),  // mots déclencheurs en tête du prompt, au tournage

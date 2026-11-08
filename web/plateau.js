@@ -36,7 +36,7 @@ async function chargerOptionsPlateau() {
     remplirSelect("workflow-retouche", lignesModeles(edit), origineEdit && `${origineEdit.id}::${origineEdit.modele_defaut}`);
     const choisi = t2i.choix.find((w) => w.id === choixModele("workflow-creation").workflow);
     remplirSelect("format-creation", o.formats.map((f) => [f, f]), choisi?.format ?? o.formats[0]);
-    remplirSelect("nombre-creation", Array.from({ length: o.nombre_max }, (_, i) => [String(i + 1), String(i + 1)]), "1");
+    poserMaxNombre("nombre-creation", o.nombre_max);  // un champ à taper : le max vient du serveur
     afficherLoras("loras-creation", "workflow-creation");
     afficherLoras("loras-retouche", "workflow-retouche");
     rendreReferences();
@@ -228,12 +228,14 @@ function choixModele(idSelect) {
     return { workflow, modele };
 }
 
+brancherNombre("nombre-creation");  // un nombre hors limites est ramené dans les limites en quittant le champ
+
 function optionsFormulaire() {
     const seed = document.getElementById("seed-creation").value;
     return {
         ...choixModele("workflow-creation"),
         format: document.getElementById("format-creation").value,
-        nombre: Number(document.getElementById("nombre-creation").value),
+        nombre: nombreDuChamp("nombre-creation"),
         seed: seed === "" ? null : Number(seed),
         dossier: rushes.dossierOuvert(),  // créé depuis un dossier ouvert : toutes les images y sont rangées
         ...optionsReferences(),

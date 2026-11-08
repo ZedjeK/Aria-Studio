@@ -53,7 +53,8 @@ class Commandes(Base):
 
     def test_validations(self):
         for options, message in (({"mode": "collage"}, "Mode"), ({"qualite": "ultra"}, "Qualité"), ({"duree": 7}, "Durée"),
-                                 ({"nombre": 4}, "clips"), ({"mode": "animer"}, "rush"), ({"format": "5:4"}, "Format")):
+                                 ({"nombre": plateau.CLIPS_MAX + 1}, "clips"), ({"mode": "animer"}, "rush"),
+                                 ({"format": "5:4"}, "Format")):
             with self.assertRaisesRegex(ErreurPlateau, message, msg=options):
                 self.clip(**options)
 
