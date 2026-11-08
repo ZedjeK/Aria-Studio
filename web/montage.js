@@ -148,6 +148,21 @@ function animerRush(id) {
 document.getElementById("vers-scenario-montage").addEventListener("click", () =>
     ouvrirScenario("clip", { animer: modeMontage === "animer" ? sourceMontage : null }));
 
+// ✨ Écrire avec le LLM : même geste que dans le Plateau (brancherEcriture, plateau.js), pour un prompt de clip.
+brancherEcriture({
+    suffixe: "montage", champ: "prompt-clip", atelier: "clip",
+    corps: () => {
+        const animer = modeMontage === "animer" && sourceMontage;
+        const t = optionsMontage?.workflows[animer ? "image_vers_video" : "texte_vers_video"];
+        return {
+            workflow: t ? (t.defaut ?? t.choix[0]?.id ?? null) : null,
+            images: animer ? [sourceMontage] : [], role: animer ? "animer" : null,
+            duree: Number(document.getElementById("duree-montage").value) || 5,
+        };
+    },
+    retenir: (envoi) => { envoiScenarioClip = envoi; },
+});
+
 document.getElementById("source-montage").addEventListener("click", (e) => {
     if (e.target.closest("[data-retirer]")) {
         sourceMontage = null;

@@ -324,6 +324,62 @@ document.getElementById("form-creation").addEventListener("submit", (e) => {
 
 document.getElementById("vers-scenario").addEventListener("click", () => ouvrirScenario("image"));
 
+// ✨ Écrire avec le LLM, sans quitter l'onglet : le texte du champ (une idée en français, ou un prompt à améliorer) part au
+// LLM du modèle cible, comme le ✨ du Scénario ; le résultat remplace le texte, que ↩ rend. Partagé avec le Montage.
+function brancherEcriture({ suffixe, champ, atelier, corps, retenir }) {
+    const bouton = document.getElementById(`ecrire-${suffixe}`);
+    const retour = document.getElementById(`annuler-ecriture-${suffixe}`);
+    const statut = document.getElementById(`statut-ecriture-${suffixe}`);
+    let avant = null;
+    const dire = (texte, erreur = false) => {
+        statut.textContent = texte;
+        statut.hidden = !texte;
+        statut.classList.toggle("ko", erreur);
+    };
+    bouton.addEventListener("click", async () => {
+        const zone = document.getElementById(champ);
+        const idee = zone.value.trim();
+        if (!idee) {
+            dire("Écris d'abord ton idée dans le champ, le LLM la transforme en prompt.", true);
+            return;
+        }
+        bouton.disabled = true;
+        dire("Le LLM écrit… (le premier appel charge le modèle)");
+        try {
+            const llm = typeof llmAtelier === "function" ? llmAtelier() : null;
+            const r = await api("POST", "/api/prompt/optimiser", { atelier, idee, llm, ...corps() });
+            avant = idee;
+            zone.value = r.prompt;
+            retenir?.({ prompt: r.prompt.trim(), idee, llm });
+            retour.hidden = false;
+            dire(`Écrit par le LLM · ${r.duree_s} s · ${r.mots} mots. Retouche-le si besoin avant de lancer.`);
+        } catch (err) {
+            dire(err.message, true);
+        } finally {
+            bouton.disabled = false;
+        }
+    });
+    retour.addEventListener("click", () => {
+        if (avant === null) return;
+        document.getElementById(champ).value = avant;
+        retenir?.(null);
+        retour.hidden = true;
+        dire("");
+    });
+}
+
+brancherEcriture({
+    suffixe: "plateau", champ: "prompt-plateau", atelier: "image",
+    corps: () => {
+        const images = referencesActives();
+        return {
+            workflow: choixModele("workflow-creation").workflow || null,
+            images, role: images.length ? (modeReference === "variation" ? "variation" : "inspirer") : null,
+        };
+    },
+    retenir: (envoi) => { envoiScenario = envoi; },  // l'idée et le LLM suivent le prompt jusque dans la fiche
+});
+
 // Rushes : galerie rangée partagée avec les Bobines du Montage (web/galerie.js).
 
 const rushes = creerGalerie({

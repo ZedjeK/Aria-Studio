@@ -138,11 +138,18 @@
                 <h2>Créer</h2>
                 <form id="form-creation">
                     <div class="ligne entete-prompt-plateau">
-                        <label class="discret" for="prompt-plateau">Prompt, tourné tel quel par le modèle</label>
-                        <button id="vers-scenario" type="button" class="petit">✍️ L'écrire au Scénario</button>
+                        <label class="discret" for="prompt-plateau">Prompt (tourné tel quel par le modèle)</label>
+                        <span class="actions-ecriture">
+                            <button id="ecrire-plateau" type="button" class="petit principal"
+                                    title="Le LLM du modèle réécrit ce texte en un prompt prêt pour lui, sans quitter le Plateau">✨ Écrire avec le LLM</button>
+                            <button id="annuler-ecriture-plateau" type="button" class="petit" hidden>↩ Retrouver mon texte</button>
+                            <button id="vers-scenario" type="button" class="petit"
+                                    title="Ouvre le Scénario (conversation, listes, images) ; le prompt revient ici quand il est écrit">↗ Ouvrir le Scénario</button>
+                        </span>
                     </div>
+                    <p id="statut-ecriture-plateau" class="discret" hidden></p>
                     <textarea id="prompt-plateau" rows="4" required
-                              placeholder="Le prompt arrive du ✍️ Scénario ; tu peux le retoucher ici, ou l'écrire toi-même (en anglais)."></textarea>
+                              placeholder="Décris ton image (en français ou en anglais) puis ✨ Écrire avec le LLM, ou écris le prompt toi-même ; le ↗ Scénario va plus loin."></textarea>
                     <div class="options-creation">
                         <label>Modèle <select id="workflow-creation"></select></label>
                         <label>Format <select id="format-creation"></select></label>
@@ -279,10 +286,16 @@
             <section class="carte">
                 <h2>Tourner un clip</h2>
                 <form id="form-montage">
-                    <div class="ligne modes-montage">
-                        <label class="case"><input type="radio" name="mode-montage" value="animer" checked> 🎬 Animer un rush</label>
-                        <label class="case"><input type="radio" name="mode-montage" value="texte"> ✍️ Texte → vidéo</label>
-                        <label class="case"><input type="radio" name="mode-montage" value="sequence"> 📽️ Séquence</label>
+                    <div class="modes-montage" role="radiogroup" aria-label="Comment tourner">
+                        <label class="mode-carte"><input type="radio" name="mode-montage" value="animer" checked>
+                            <span class="icone">🎬</span>
+                            <span class="texte"><strong>Animer un rush</strong><small>Une image de ton Plateau devient un clip</small></span></label>
+                        <label class="mode-carte"><input type="radio" name="mode-montage" value="texte">
+                            <span class="icone">✍️</span>
+                            <span class="texte"><strong>Texte → vidéo</strong><small>Tu décris, le modèle tourne tout</small></span></label>
+                        <label class="mode-carte"><input type="radio" name="mode-montage" value="sequence">
+                            <span class="icone">📽️</span>
+                            <span class="texte"><strong>Séquence</strong><small>Plusieurs plans enchaînés, découpés pour toi</small></span></label>
                     </div>
                     <div class="ligne grille-montage">
                         <div id="bloc-source-montage" class="bloc-source">
@@ -293,10 +306,17 @@
                         <div class="champ-prompt-clip">
                             <div class="ligne entete-prompt-plateau">
                                 <label class="discret" for="prompt-clip">Prompt, tourné tel quel par le modèle</label>
-                                <button id="vers-scenario-montage" type="button" class="petit">✍️ L'écrire au Scénario</button>
+                                <span class="actions-ecriture">
+                                    <button id="ecrire-montage" type="button" class="petit principal"
+                                            title="Le LLM du modèle réécrit ce texte en un prompt de clip prêt pour lui, sans quitter le Montage">✨ Écrire avec le LLM</button>
+                                    <button id="annuler-ecriture-montage" type="button" class="petit" hidden>↩ Retrouver mon texte</button>
+                                    <button id="vers-scenario-montage" type="button" class="petit"
+                                            title="Ouvre le Scénario (conversation, listes, images) ; le prompt revient ici quand il est écrit">↗ Ouvrir le Scénario</button>
+                                </span>
                             </div>
+                            <p id="statut-ecriture-montage" class="discret" hidden></p>
                             <textarea id="prompt-clip" rows="4" required
-                                      placeholder="Le prompt arrive du ✍️ Scénario (avec le rush à animer) ; tu peux le retoucher ici, ou l'écrire toi-même (en anglais)."></textarea>
+                                      placeholder="Décris ton clip (en français ou en anglais) puis ✨ Écrire avec le LLM, ou écris le prompt toi-même ; le ↗ Scénario va plus loin."></textarea>
                         </div>
                     </div>
                     <div class="options-creation">
