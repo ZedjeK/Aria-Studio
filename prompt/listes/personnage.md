@@ -175,6 +175,18 @@ origine: "Allure des personas - Aria Compagnon v1.1, reprise et étendue"
 | Violet (fantasy)        | violet eyes                               |                                           |
 | Doré lumineux (fantasy) | luminous golden eyes                      |                                           |
 | Cybernétiques           | glowing cybernetic eyes                   |                                           |
+| Brun très sombre, anneau lumineux bleu | very dark brown eyes with a thin glowing blue ring around each iris |  |
+| Anneau lumineux cyan | eyes with a thin glowing cyan ring around the iris |  |
+| Bleu électrique lumineux | luminous electric blue eyes |  |
+| Vert émeraude | emerald green eyes | europe, moyen-orient |
+| Marron clair | light brown eyes |  |
+| Miel | honey-colored eyes | europe, moyen-orient, asie-sud, ameriques |
+| Argent (fantasy) | silver eyes |  |
+| Blanc lumineux (fantasy) | glowing white eyes |  |
+| Rose (fantasy) | pink eyes |  |
+| Turquoise (fantasy) | turquoise eyes |  |
+| Bleu glacier | icy pale blue eyes | europe |
+| Pupilles fendues (fantasy) | slit pupils |  |
 
 ## Expression du regard
 
@@ -373,6 +385,21 @@ origine: "Allure des personas - Aria Compagnon v1.1, reprise et étendue"
 | Bandeau                       | hair held back with a headband   |       | Très courts, Courts, Carré, Carré plongeant, Mi-longs, Longs, Très longs |
 | Ramenés sur une épaule        | hair swept over one shoulder     |       | Mi-longs, Longs, Très longs                                              |
 | Chignon tenu par une baguette | bun held with a hair stick       |       | Mi-longs, Longs, Très longs                                              |
+| Queue de cheval tirée en arrière, mèches échappées | hair pulled back in a ponytail with loose strands escaping |  | Mi-longs, Longs, Très longs |
+| Chignon bas | low bun |  | Mi-longs, Longs, Très longs |
+| Chignon haut | high top bun |  | Mi-longs, Longs, Très longs |
+| Couronne de tresses | braided crown |  | Longs, Très longs |
+| Tresse sur le côté | side braid |  | Mi-longs, Longs, Très longs |
+| Tresse en épi | fishtail braid |  | Longs, Très longs |
+| Pompadour | pompadour | homme | Courts |
+| Mohawk | mohawk |  | Très courts, Courts |
+| Coupe garçonne (pixie) | pixie cut |  | Très courts, Courts |
+| Hime cut | hime cut with straight side locks |  | Longs, Très longs |
+| Cheveux mouillés plaqués | wet slicked hair |  | Très courts, Courts, Carré, Carré plongeant, Mi-longs, Longs, Très longs |
+| Afro | afro hairstyle |  | Courts, Mi-longs |
+| Queue de cheval haute avec frange | high ponytail with bangs |  | Mi-longs, Longs, Très longs |
+| Cheveux en bataille | tousled messy hair |  | Courts, Carré, Carré plongeant, Mi-longs, Longs |
+| Boucles lâchées | loose curls |  | Mi-longs, Longs, Très longs |
 
 ## Signe particulier
 
@@ -463,6 +490,32 @@ origine: "Allure des personas - Aria Compagnon v1.1, reprise et étendue"
 | Tenue de soirée                        | elegant evening wear                           |        |
 | Tenue de sport                         | sports outfit                                  |        |
 | Pyjama                                 | pajamas                                        |        |
+| Look Aria (jupe écossaise, porte-jarretelles, bottines) | tartan mini skirt, garter belt with stockings, ankle boots, tank top with a low neckline | oui |
+| Tenue de coureuse urbaine (parkour) | urban parkour runner outfit, fitted athletic wear, running shoes |  |
+| Cottagecore | cottagecore style |  |
+| Y2K | Y2K fashion |  |
+| Dark academia | dark academia style |  |
+| Kawaii | kawaii style |  |
+| Harajuku | Harajuku fashion |  |
+| Gyaru | gyaru fashion |  |
+| Punk | punk style, tartan, studs and leather |  |
+| Grunge | grunge style |  |
+| Western | western style |  |
+| Steampunk | steampunk outfit with brass details |  |
+| Pirate | pirate outfit |  |
+| Cosplay | elaborate cosplay outfit |  |
+| Tenue militaire tactique | modern tactical military gear |  |
+| Tenue de survie | survival gear, rugged outdoor clothing |  |
+| Tenue de pilote d'avion | aviator flight suit and leather jacket |  |
+| Tenue de motarde | motorcycle rider gear in black leather |  |
+| Tenue de plage | beachwear |  |
+| Tenue de ville d'hiver | stylish winter city outfit with a long coat and scarf |  |
+| Tenue de randonnée | hiking outfit |  |
+| Tenue d'artiste | artist's smock and paint-stained clothes |  |
+| Tenue de cuisinier | chef's whites |  |
+| Tenue de médecin | medical scrubs and white coat |  |
+| Tenue de mécanicienne | mechanic overalls |  |
+| Tenue de cow-girl | cowgirl outfit |  |
 
 ## Haut
 
@@ -485,6 +538,32 @@ origine: "Allure des personas - Aria Compagnon v1.1, reprise et étendue"
 | Robe de soirée          | evening gown               | Bas      |        |
 | Petite robe noire       | little black dress         | Bas      | oui    |
 | Combinaison             | jumpsuit                   | Bas      |        |
+| Débardeur à décolleté | tank top with a low scoop neckline |  | oui |
+| Col roulé | turtleneck sweater |  |  |
+| Pull col V | v-neck sweater |  |  |
+| Cardigan | cardigan |  |  |
+| Blazer | tailored blazer |  |  |
+| Chemise à carreaux | flannel plaid shirt |  |  |
+| Veste en jean | denim jacket |  |  |
+| Parka | parka coat |  |  |
+| Coupe-vent | windbreaker jacket |  |  |
+| Cape | long cape |  |  |
+| Poncho | poncho |  |  |
+| Blouse de laboratoire | white lab coat |  |  |
+| Veste tactique | tactical jacket |  |  |
+| Gilet pare-balles tactique | tactical plate carrier vest |  |  |
+| Corset | corset top |  | oui |
+| Bustier | bustier top |  | oui |
+| Top noué | knotted crop shirt |  | oui |
+| Brassière de sport | sports bra |  | oui |
+| Chemise nouée à la taille | shirt tied at the waist |  |  |
+| Veste de survêtement | track jacket |  |  |
+| Kimono court (haori) | short haori jacket |  |  |
+| Robe cheongsam | cheongsam dress | Bas | oui |
+| Robe de cocktail | cocktail dress | Bas |  |
+| Robe longue fendue | long dress with a high slit | Bas | oui |
+| Robe pull | sweater dress | Bas |  |
+| Salopette-robe | pinafore dress | Bas |  |
 
 ## Bas
 
@@ -500,6 +579,25 @@ origine: "Allure des personas - Aria Compagnon v1.1, reprise et étendue"
 | Short               | shorts                |        |
 | Legging             | leggings              |        |
 | Jogging             | sweatpants            |        |
+| Jupe courte écossaise | short tartan plaid mini skirt | oui |
+| Jupe écossaise mi-longue | knee-length tartan skirt |  |
+| Kilt | kilt |  |
+| Jupe crayon | pencil skirt |  |
+| Jupe en cuir | leather skirt | oui |
+| Jupe en jean | denim skirt |  |
+| Jupe à volants | ruffled skirt |  |
+| Jupe patineuse | skater skirt |  |
+| Pantalon en cuir | leather pants | oui |
+| Pantalon large | wide-leg trousers |  |
+| Short en jean | denim shorts |  |
+| Pantalon tactique | tactical pants |  |
+| Bermuda | bermuda shorts |  |
+| Salopette | dungarees |  |
+| Hakama | hakama trousers |  |
+| Collants opaques | opaque tights |  |
+| Pantalon de yoga | yoga pants |  |
+| Short de cycliste | cycling shorts |  |
+| Pantalon de parachutiste | baggy cargo pants |  |
 
 ## Chaussures
 
@@ -514,6 +612,21 @@ origine: "Allure des personas - Aria Compagnon v1.1, reprise et étendue"
 | Geta             | wooden geta sandals   |        |
 | Mocassins        | loafers               |        |
 | Pieds nus        | barefoot              |        |
+| Bottines à talons | heeled ankle boots | oui |
+| Bottines à lacets | lace-up ankle boots |  |
+| Bottes en cuir | leather boots |  |
+| Bottes de pluie | rain boots |  |
+| Tongs | flip-flops |  |
+| Sabots | clogs |  |
+| Baskets et chaussettes hautes | sneakers with knee-high socks |  |
+| Bottes tactiques | tactical boots |  |
+| Bottes à plateforme | platform boots | oui |
+| Ballerines | ballet flats |  |
+| Mary Jane | Mary Jane shoes |  |
+| Zori | zori sandals |  |
+| Chaussons | slippers |  |
+| Chaussures de course | running shoes |  |
+| Bottines de moto | motorcycle boots |  |
 
 ## Tenue intime
 
@@ -527,6 +640,16 @@ origine: "Allure des personas - Aria Compagnon v1.1, reprise et étendue"
 | Maillot de bain une pièce | one-piece swimsuit          | Haut, Bas    | oui    |
 | Bikini                   | bikini                       | Haut, Bas    | oui    |
 | Chemise d'homme trop grande | oversized men's shirt as a dress | Haut, Bas | oui |
+| Porte-jarretelles et bas | garter belt and stockings |  | oui |
+| Bas résille | fishnet stockings |  | oui |
+| Bas auto-fixants | thigh-high stockings |  | oui |
+| Jarretières | thigh garters |  | oui |
+| Corset en dentelle | lace corset | Haut | oui |
+| Body en dentelle | lace bodysuit | Haut, Bas | oui |
+| Nuisette courte | short babydoll nightie | Haut, Bas | oui |
+| Ensemble de lingerie noire | black matching lingerie set | Haut, Bas | oui |
+| Maillot de bain deux pièces sportif | sporty two-piece swimsuit | Haut, Bas | oui |
+| Kimono de soie (négligé) | silk robe, loosely tied | Haut, Bas | oui |
 
 ## Accessoires
 
@@ -552,6 +675,30 @@ origine: "Allure des personas - Aria Compagnon v1.1, reprise et étendue"
 | Appareil photo          | camera                        |
 | Livre                   | book                          |
 | Tasse de café           | cup of coffee                 |
+| Collier ras-du-cou | choker necklace |
+| Gants longs | long gloves |
+| Bracelets | bracelets |
+| Bague | ring |
+| Lunettes de vue | prescription glasses |
+| Serre-tête | headband |
+| Rubans dans les cheveux | ribbons in the hair |
+| Ceinture | belt |
+| Bandana | bandana |
+| Foulard de soie | silk scarf |
+| Casque de moto | motorcycle helmet |
+| Écouteurs sans fil | wireless earbuds |
+| Smartphone | smartphone |
+| Sac à main | handbag |
+| Valise | suitcase |
+| Arc | bow and arrows |
+| Bouclier | shield |
+| Lanterne | lantern |
+| Éventail japonais | Japanese folding fan |
+| Ombrelle japonaise | wagasa umbrella |
+| Bandeau de runner | running headband |
+| Harnais et sangles | harness straps |
+| Piercing au nez | nose piercing |
+| Tatouage de bras (manchette) | arm sleeve tattoo |
 
 ## Maquillage
 
