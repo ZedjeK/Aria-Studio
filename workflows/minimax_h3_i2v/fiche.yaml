@@ -88,6 +88,8 @@ profil_prompt:
     style: brief_video
     langue: en
     mots_max: 110  # borne haute de la consigne vidéo (40 à 110 mots) : un choix d'Aria, aucun guide n'en donne
+    # L'image à animer porte déjà le style, la palette, la finition et l'objectif : « Me guider » ne les redemande pas.
+    rubriques_ignorees: [Style, Palette, Finition, Objectif]
     balise_dialogue: true  # les répliques vont dans <d>[Langue] …</d> (guide officiel §4.4) : app/repliques.py
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
     # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.

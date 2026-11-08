@@ -486,7 +486,7 @@ VALEURS_GUIDE_MAX = 8  # valeurs montrées par rubrique : de quoi proposer des c
 CONTEXTE_CATALOGUE = 8192  # en dessous, le catalogue ne garde que les noms de rubriques (4096 tokens : consigne comprise)
 
 
-def _rubriques_guide(sujet: str | None, sans_sujet: bool, video: bool):
+def _rubriques_guide(sujet: str | None, sans_sujet: bool, video: bool, ignorees: set[str] = frozenset()):
     """(sous-liste, nom du groupe, noms de ses valeurs) des rubriques de « Me guider » utiles à cette cible."""
     try:
         structure = listes.structure(sujet or "personnage")
@@ -499,21 +499,25 @@ def _rubriques_guide(sujet: str | None, sans_sujet: bool, video: bool):
             if sans_sujet and groupe["onglet"] == "sujet":
                 continue
             for sl in groupe["sous_listes"]:
+                if sl["nom"] in ignorees:
+                    continue
                 if valeurs := [v["nom"] for v in sl["valeurs"] if not v.get("remplace")]:
                     yield sl, groupe["nom"], valeurs
 
 
-def noms_guide(sujet: str | None, sans_sujet: bool = False, video: bool = False) -> set[str]:
-    return {sl["nom"] for sl, _, _ in _rubriques_guide(sujet, sans_sujet, video)}
+def noms_guide(sujet: str | None, sans_sujet: bool = False, video: bool = False,
+               ignorees: set[str] = frozenset()) -> set[str]:
+    return {sl["nom"] for sl, _, _ in _rubriques_guide(sujet, sans_sujet, video, ignorees)}
 
 
-def catalogue_guide(sujet: str | None, sans_sujet: bool = False, video: bool = False, compact: bool = False) -> str:
+def catalogue_guide(sujet: str | None, sans_sujet: bool = False, video: bool = False, compact: bool = False,
+                    ignorees: set[str] = frozenset()) -> str:
     """Les rubriques de « Me guider » pour cet atelier, dites au LLM : il pose ses questions sur ces rubriques et tire les
     choix de chaque question de leur liste, pour que la conversation et le guide parlent des mêmes choses. Seules les
     rubriques utiles à la cible : pas de Sujet quand il vient des images, pas de Caméra / Voix / Son pour une image.
     Les choix déjà faits ailleurs sont dans « Already fixed » : le LLM n'y revient pas."""
     lignes = []
-    for sl, groupe, valeurs in _rubriques_guide(sujet, sans_sujet, video):
+    for sl, groupe, valeurs in _rubriques_guide(sujet, sans_sujet, video, ignorees):
         suite = ", …" if len(valeurs) > VALEURS_GUIDE_MAX else ""
         lignes.append(f"- {sl['nom']} ({groupe})" if compact
                       else f"- {sl['nom']} ({groupe}): {', '.join(valeurs[:VALEURS_GUIDE_MAX])}{suite}")
@@ -642,14 +646,15 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     if forme in ("image", "clip") and (cadre := cadre_format(format_)):
         systeme += f"\n\n{cadre}"
     if forme in ("image", "clip") and (guide := catalogue_guide(
-            sujet, sans_sujet, forme == "clip", lancement_llm(modele)["contexte"] < CONTEXTE_CATALOGUE)):
+            sujet, sans_sujet, forme == "clip", lancement_llm(modele)["contexte"] < CONTEXTE_CATALOGUE,
+            workflows.rubriques_ignorees(workflow))):
         systeme += f"\n\n{guide}"
     # Les règles du modèle cible écrivent ses prompts ; l'histoire d'une séquence n'en est pas un (le découpage
     # les applique ensuite plan par plan). À l'essai, elles en faisaient un brief anglais en plans.
     if forme != "sequence" and (regles := workflows.regles_prompt(workflow)):
         systeme += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
     systeme += f"\n\n{CLAUSE_MINEURS}"
-    rubriques = noms_guide(sujet, sans_sujet, forme == "clip") if forme in ("image", "clip") else set()
+    rubriques = noms_guide(sujet, sans_sujet, forme == "clip", workflows.rubriques_ignorees(workflow)) if forme in ("image", "clip") else set()
     ecrire = bool(echanges) and echanges[-1]["role"] == "user" and echanges[-1]["content"].strip() == ECRIRE
     regle = reglages.valeurs_llm(modele)
     async with orchestrateur.llm(modele) as llama:
