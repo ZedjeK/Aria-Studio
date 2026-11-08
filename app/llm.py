@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,9 @@ class ErreurLlama(RuntimeError):
 # Banc du 2026-11-06 (Bonsai 2, réécriture Qwen, peaufinage, découpage, 2 seeds) : avec 4096, 5 réponses vides sur 10 ;
 # reasoning_effort medium ou low n'y suffit pas (2 et 3 sur 10) ; avec 8192, aucune, pour 52 s en moyenne au lieu de 45.
 BUDGET_REFLEXION = 8192
+# Contexte minimal d'un LLM qui réfléchit ou qui voit : consigne et images (≈ 600 tokens chacune), le budget de
+# réflexion ci-dessus et la réponse. Aria le relève d'office (orchestrateur.lancement_llm), sans toucher au réglage.
+CONTEXTE_REFLEXION = 16384
 
 
 @dataclass
@@ -155,6 +159,11 @@ class Llama:
             async with client.stream("POST", f"{self.url}/v1/chat/completions", json=corps) as r:
                 if r.status_code != 200:
                     erreur = (await r.aread()).decode(errors="replace")
+                    if r.status_code == 400 and re.search(r"exceed|too large|context", erreur, re.IGNORECASE):
+                        raise ErreurLlama(
+                            f"Le contexte du LLM ({self.contexte_actif} tokens) est trop petit pour cette demande "
+                            "(consigne, images, conversation et réflexion comptent) : augmente-le dans Réglages, "
+                            "ou coupe la Réflexion")
                     raise ErreurLlama(f"Génération refusée ({r.status_code}) : {erreur[:300]}")
                 async for ligne in r.aiter_lines():
                     if ligne.startswith("error:"):

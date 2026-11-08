@@ -65,13 +65,23 @@ class Generer(unittest.TestCase):
     def test_le_contexte_tient_la_reflexion(self):
         """Banc du 2026-11-06 : 4096 tokens de réflexion laissaient 5 réponses vides sur 10 ; il en faut 8192, et le
         contexte d'un LLM qui réfléchit doit les contenir avec la consigne, les images et la réponse."""
-        from app.orchestrateur import CONTEXTE_REFLEXION
+        from app.llm import CONTEXTE_REFLEXION
         self.assertGreaterEqual(BUDGET_REFLEXION, 8192)
         self.assertGreaterEqual(CONTEXTE_REFLEXION, BUDGET_REFLEXION + 4096)
 
     def test_un_specialiste_compte_deja_sa_reflexion(self):
         _, corps = self.generer("{}", reflexion=True, budget_reflexion=0)
         self.assertEqual(corps["max_tokens"], 512)
+
+    def test_contexte_trop_petit_dit_quoi_faire(self):
+        """Un dépassement du contexte n'est plus une erreur 400 brute : le message dit où augmenter."""
+        def repondre(requete):
+            return httpx.Response(400, json={"error": {"message": "request (9000 tokens) exceeds the available context size"}})
+        llama = Llama(Path("llama-server.exe"), 8095, 4096, False)
+        client = lambda **kw: VRAI_CLIENT(transport=httpx.MockTransport(repondre), **kw)  # noqa: E731
+        with mock.patch.object(llm.httpx, "AsyncClient", client):
+            with self.assertRaisesRegex(ErreurLlama, "contexte.*trop petit.*Réglages"):
+                asyncio.run(llama.generer([{"role": "user", "content": "x"}]))
 
     def test_reponse_vide_jamais_en_silence(self):
         """Le Bonsai 2 Heretic, réflexion active, rendait "" après 512 tokens : le Montage tournait sans prompt."""
