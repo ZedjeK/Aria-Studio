@@ -167,13 +167,15 @@ class EssaiDeVoix(Base):
     def test_prompt(self):
         p = voix.prompt_essai("« Bonjour, je suis prête. »", "douce, un peu grave", True)
         self.assertIn("<Picture 1>", p)
-        self.assertIn('says: "Bonjour, je suis prête."', p)
+        self.assertIn("says: <d>[French] Bonjour, je suis prête.</d>", p)  # la balise du guide du mode références
         self.assertIn("speaks French, with this voice: douce, un peu grave", p)
         self.assertIn("no music, no ambient sound", p)
         p = voix.prompt_essai("안녕하세요", "une femme de trente ans, voix grave", False)
         self.assertNotIn("<Picture 1>", p)
         self.assertIn("The character: une femme de trente ans, voix grave.", p)
         self.assertIn("speaks Korean.", p)
+        self.assertIn("says: <d>[Korean] 안녕하세요</d>", p)
+        self.assertNotIn('says: "', p)  # plus de guillemets pour la parole
 
     def test_graphe_son_seul(self):
         api = voix.graphe_essai("A pilot says hello.", 42, 5, "perso.png")

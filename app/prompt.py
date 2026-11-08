@@ -199,11 +199,31 @@ def _image_url(png: bytes) -> dict:
     return {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png).decode()}}
 
 
-def montrer(texte: str, vues: list[Vue] | None, usage: str, voit: bool) -> str | list[dict]:
-    """Le message de l'utilisateur, avec les images si le LLM les voit, sinon ce qu'en disent leurs fiches."""
+NOM_IMAGE_DEFAUT = "Picture {n}"
+
+
+def avec_noms_images(texte: str, workflow: str | None) -> str:
+    """Les « Picture 1, Picture 2… » d'un texte sur les images de référence, dans le nom que le modèle cible leur
+    donne (profil_prompt.nom_image de sa fiche : `<image{n}>` pour Qwen-Image 2.1, d'après la doc ComfyUI et son
+    prompt enhancer d'édition). Sans modèle ou sans nom dans la fiche : « Picture N », le nom d'origine."""
+    nom = NOM_IMAGE_DEFAUT
+    if workflow:
+        try:
+            nom = workflows.obtenir(workflow).profil.get("nom_image") or nom
+        except workflows.ErreurWorkflow:
+            pass
+    if nom == NOM_IMAGE_DEFAUT:
+        return texte
+    return re.sub(r"Picture (\d+)", lambda m: nom.format(n=int(m.group(1))), texte)
+
+
+def montrer(texte: str, vues: list[Vue] | None, usage: str, voit: bool,
+            workflow: str | None = None) -> str | list[dict]:
+    """Le message de l'utilisateur, avec les images si le LLM les voit, sinon ce qu'en disent leurs fiches.
+    `workflow` : le modèle cible, qui nomme ses images à sa façon (avec_noms_images)."""
     if not vues:
         return texte
-    note = NOTES_VUES[usage]
+    note = avec_noms_images(NOTES_VUES[usage], workflow)
     if voit:
         return [*map(_image_url, (v.png for v in vues)), {"type": "text", "text": f"{texte}\n\n({note})"}]
     connues = [(i, v.texte) for i, v in enumerate(vues, 1) if v.texte]
@@ -211,7 +231,7 @@ def montrer(texte: str, vues: list[Vue] | None, usage: str, voit: bool) -> str |
         return texte  # images importées, sans fiche : à l'aveugle
     if len(vues) == 1:
         return f"{texte}\n\n(You cannot see the picture; it was created from this prompt: {connues[0][1]}\n{note})"
-    lignes = "\n".join(f"Picture {i}: {t}" for i, t in connues)
+    lignes = "\n".join(f"{avec_noms_images(f'Picture {i}', workflow)}: {t}" for i, t in connues)
     return f"{texte}\n\n(You cannot see the pictures; they were created from these prompts:\n{lignes}\n{note})"
 
 
@@ -269,12 +289,15 @@ async def _par_specialiste(orchestrateur: Orchestrateur, modele: str, s: dict, t
 
 
 def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
-             regles: list[str] | None = None) -> str:
+             regles: list[str] | None = None, workflow: str | None = None) -> str:
     """Consigne du GGUF (réglée ou d'origine), puis les règles propres au modèle cible (profil_prompt.regles de sa
-    fiche), toujours suivie de la clause verrouillée."""
+    fiche), toujours suivie de la clause verrouillée. `workflow` : le modèle cible, pour nommer ses images de
+    référence (avec_noms_images) ; une consigne réglée à la main y passe aussi."""
     texte = reglages.consigne_llm(modele, nom) or CONSIGNES_DEFAUT[nom]
     texte = (texte.replace("{mots_max}", str(mots_max or MOTS_MAX_DEFAUT.get(nom, 150)))
              .replace("{mots_min}", str(MOTS_MIN))).rstrip()
+    if nom == "references":
+        texte = avec_noms_images(texte, workflow)
     if regles:
         texte += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
     return f"{texte}\n\n{CLAUSE_MINEURS}"
@@ -369,13 +392,13 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
         echanges = [{"role": "system", "content": consigne("video", modele, mots_max_de(workflow), regles)},
                     {"role": "user", "content": f"{idee}\n\n(Clip: {duree} s, {cadre})"}]
     elif references:
-        echanges = [{"role": "system", "content": consigne("references", modele, regles=regles)},
+        echanges = [{"role": "system", "content": consigne("references", modele, regles=regles, workflow=workflow)},
                     {"role": "user", "content": f"{idee}\n\n(Reference pictures: {references})"}]
     else:
         echanges = messages(idee, modele, regles, mots_max_de(workflow))
     usage = "animer" if video else "references" if references else "variation"
     async with orchestrateur.llm(modele) as llama:
-        echanges[-1]["content"] = montrer(echanges[-1]["content"], vues, usage, voit=_voit(llama))
+        echanges[-1]["content"] = montrer(echanges[-1]["content"], vues, usage, voit=_voit(llama), workflow=workflow)
         debut = time.perf_counter()
         reponse = await llama.generer(echanges, temperature=regle["temperature_reecriture"],
                                       max_tokens=regle["max_tokens"], **reglages.echantillonnage(modele))
@@ -510,7 +533,7 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
         essentiels=ESSENTIELS.get(forme, ESSENTIELS["video" if forme == "clip" else "image"]),
         langue_prompt=langue_prompt, longueur=f"At most {mots} words." if mots else "")
     if vues and role in IMAGES_LIBRE:
-        systeme += f"\n\n{IMAGES_LIBRE[role]}"
+        systeme += f"\n\n{avec_noms_images(IMAGES_LIBRE[role], workflow)}"
     # Les règles du modèle cible écrivent ses prompts ; l'histoire d'une séquence n'en est pas un (le découpage
     # les applique ensuite plan par plan). À l'essai, elles en faisaient un brief anglais en plans.
     if forme != "sequence" and (regles := workflows.regles_prompt(workflow)):
@@ -524,7 +547,7 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
             contenu = e["content"]
             if k == 0 and vues:  # les images de référence : il les voit, ou lit leur fiche
                 usage = {"animer": "animer", "variation": "variation", "retouche": "retouche"}.get(role, "references")
-                contenu = montrer(contenu, vues, usage, voit=_voit(llama))
+                contenu = montrer(contenu, vues, usage, voit=_voit(llama), workflow=workflow)
             messages_.append({"role": e["role"], "content": contenu})
         debut = time.perf_counter()
         for essai in range(2):  # une réponse sans JSON est redemandée une fois

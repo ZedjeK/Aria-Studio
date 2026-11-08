@@ -52,8 +52,10 @@ _REPLIQUE, _REPLIQUES = repliques_h3.UNE_REPLIQUE, repliques_h3.REPLIQUES  # bal
 # Mesuré le 2026-10-21 (4 plans Rapide de 5 s : 8 min 14) : guides, références et premier chargement
 # coûtent environ 40 % de plus qu'un clip seul du Montage.
 SURCOUT_SEQUENCE = 1.4
-# « Audio needs 12+ steps » (doc H3) : à l'écoute (2026-10-21, même prompt et seed), l'auteur trouve la voix plus
-# naturelle en 12 qu'en 8 steps. Les plans avec une réplique montent à 12 steps ; mesuré +17 % de temps sur un plan.
+# À l'écoute (2026-10-21, même prompt et seed), l'auteur trouve la voix plus naturelle en 12 qu'en 8 steps. Ce 12
+# est un réglage d'Aria, pas une valeur de la doc : la doc ComfyUI donne 20 steps par défaut (25 pour le mouvement) et
+# dit du turbo à 8 « slightly softer motion/audio » (relu le 2026-11-08 ; la phrase « Audio needs 12+ steps » citée
+# avant n'est dans aucune des pages lues). Les plans avec une réplique montent à 12 steps ; mesuré +17 % de temps.
 STEPS_PAROLE = 12
 SURCOUT_PAROLE = 1.17
 # Ce qui, s'il change, oblige à retourner le plan (et ceux qui en dépendent). Le résumé (idee) et l'ancienne case
