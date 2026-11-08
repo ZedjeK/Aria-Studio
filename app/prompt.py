@@ -17,10 +17,10 @@ from dataclasses import dataclass
 
 from PIL import Image
 
-from app import fiches, modeles, reglages, securite, workflows
+from app import fiches, listes, modeles, reglages, securite, workflows
 from app.llm import ErreurLlama
 from app.modeles import DOSSIER as MODELES
-from app.orchestrateur import Orchestrateur
+from app.orchestrateur import Orchestrateur, lancement_llm
 from app.repliques import vers_balises
 
 CLAUSE_MINEURS = """Non-negotiable rule: never make a character younger than described. If a character is a child or a teenager, show them fully clothed in a wholesome, non-suggestive scene."""
@@ -479,6 +479,45 @@ class ErreurLibre(ErreurLlama):
     pass
 
 
+VALEURS_GUIDE_MAX = 8  # valeurs montrées par rubrique : de quoi proposer des choix sans noyer la consigne
+
+
+CONTEXTE_CATALOGUE = 8192  # en dessous, le catalogue ne garde que les noms de rubriques (4096 tokens : consigne comprise)
+
+
+def catalogue_guide(sujet: str | None, sans_sujet: bool = False, video: bool = False, compact: bool = False) -> str:
+    """Les rubriques de « Me guider » pour cet atelier, dites au LLM : il pose ses questions sur ces rubriques et tire les
+    choix de chaque question de leur liste, pour que la conversation et le guide parlent des mêmes choses. Seules les
+    rubriques utiles à la cible : pas de Sujet quand il vient des images, pas de Caméra / Voix / Son pour une image.
+    Les choix déjà faits ailleurs sont dans « Already fixed » : le LLM n'y revient pas."""
+    try:
+        structure = listes.structure(sujet or "personnage")
+    except listes.ErreurListes:
+        return ""
+    lignes = []
+    for bloc in structure["blocs"]:
+        if bloc["video"] and not video:
+            continue
+        for groupe in bloc["groupes"]:
+            if sans_sujet and groupe["onglet"] == "sujet":
+                continue
+            for sl in groupe["sous_listes"]:
+                valeurs = [v["nom"] for v in sl["valeurs"] if not v.get("remplace")]
+                if not valeurs:
+                    continue
+                suite = ", …" if len(valeurs) > VALEURS_GUIDE_MAX else ""
+                lignes.append(f"- {sl['nom']} ({groupe['nom']})" if compact
+                              else f"- {sl['nom']} ({groupe['nom']}): {', '.join(valeurs[:VALEURS_GUIDE_MAX])}{suite}")
+    if not lignes:
+        return ""
+    choix = ("Take the answer choices of a question from the matching list below (2 to 4 of its values, written "
+             "exactly as listed, in French); the user may also answer freely with another value, and that is fine."
+             if not compact else "Write the answer choices of each question yourself, in French.")
+    return ("Guide topics. The user can also pick these in the « Me guider » tab, so ask your questions about these "
+            f"topics, in this spirit. {choix} Ask about a topic only when it matters for the target and nothing in the "
+            "fiche or the fixed part already covers it:\n" + "\n".join(lignes))
+
+
 def cadre_format(format_: str | None) -> str:
     """Le format choisi au Scénario, dit au LLM : « 16:9 (Widescreen) » → rapport, orientation et ce que ça change à la
     composition. Vide sans format (Retouche, Redessiner : l'image garde le sien)."""
@@ -525,7 +564,8 @@ def lire_libre(texte: str) -> dict:
 
 async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, workflow: str | None,
                 contexte: str = "", vues: list[Vue] | None = None, role: str | None = None,
-                modele: str | None = None, duree: int = 5, format_: str | None = None) -> dict:
+                modele: str | None = None, duree: int = 5, format_: str | None = None,
+                sujet: str | None = None, sans_sujet: bool = False) -> dict:
     """Un tour du chat Libre. `echanges` : [{role: user|assistant, content}], les tours d'assistant étant les objets
     JSON déjà rendus. Seul le tour « ÉCRIS LE PROMPT » réfléchit : les questions et les ajustements partent en
     quelques secondes. `vues`, `role` : les images de référence du Scénario (animer, inspirer, variation)."""
@@ -557,6 +597,9 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
         systeme += f"\n\n{avec_noms_images(IMAGES_LIBRE[role], workflow)}"
     if forme in ("image", "clip") and (cadre := cadre_format(format_)):
         systeme += f"\n\n{cadre}"
+    if forme in ("image", "clip") and (guide := catalogue_guide(
+            sujet, sans_sujet, forme == "clip", lancement_llm(modele)["contexte"] < CONTEXTE_CATALOGUE)):
+        systeme += f"\n\n{guide}"
     # Les règles du modèle cible écrivent ses prompts ; l'histoire d'une séquence n'en est pas un (le découpage
     # les applique ensuite plan par plan). À l'essai, elles en faisaient un brief anglais en plans.
     if forme != "sequence" and (regles := workflows.regles_prompt(workflow)):
