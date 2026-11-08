@@ -209,52 +209,121 @@ origine: "Décors de la mise en scène - Aria Compagnon v1.0, reprise et étendu
 
 ## Moment
 
-| Valeur                | Prompt image            |
-| --------------------- | ----------------------- |
-| À l'aube              | at dawn                 |
-| Le matin              | in the morning          |
-| À midi                | at midday               |
-| L'après-midi          | in the afternoon        |
-| À l'heure dorée       | during golden hour      |
-| Au coucher du soleil  | at sunset               |
-| À l'heure bleue       | during blue hour        |
-| Le soir               | in the evening          |
-| La nuit               | at night                |
-| Tard dans la nuit     | late at night           |
+| Valeur                 | Prompt image                           | Catégorie    |
+| ---------------------- | -------------------------------------- | ------------ |
+| À l'aube               | at dawn                                | Aube et jour |
+| Le matin               | in the morning                         | Aube et jour |
+| À midi                 | at midday                              | Aube et jour |
+| L'après-midi           | in the afternoon                       | Aube et jour |
+| À l'heure dorée        | during golden hour                     | Aube et jour |
+| Au coucher du soleil   | at sunset                              | Soir et nuit |
+| À l'heure bleue        | during blue hour                       | Soir et nuit |
+| Le soir                | in the evening                         | Soir et nuit |
+| La nuit                | at night                               | Soir et nuit |
+| Tard dans la nuit      | late at night                          | Soir et nuit |
+| Juste avant l'aube     | just before dawn, first faint light    | Aube et jour |
+| Au petit matin brumeux | in the early misty morning             | Aube et jour |
+| En fin de matinée      | in late morning                        | Aube et jour |
+| À l'heure du déjeuner  | at lunchtime                           | Aube et jour |
+| En fin d'après-midi    | in the late afternoon                  | Aube et jour |
+| Au crépuscule          | at dusk, fading twilight               | Soir et nuit |
+| Entre chien et loup    | in the dim light between day and night | Soir et nuit |
+| À minuit               | at midnight                            | Soir et nuit |
+| Sous la pleine lune    | under a full moon at night             | Soir et nuit |
+| Sous un ciel étoilé    | under a starry night sky               | Soir et nuit |
+| Dans la nuit profonde  | in the dead of night                   | Soir et nuit |
 
 ## Ambiance
 
-| Valeur              | Prompt image                         |
-| ------------------- | ------------------------------------ |
-| Grand soleil        | bright sunny weather                 |
-| Ciel nuageux        | overcast sky                         |
-| Sous la pluie       | in the rain                          |
-| Pluie battante      | in heavy pouring rain                |
-| Sous la neige       | in falling snow                      |
-| Dans la brume       | in thick mist                        |
-| Un soir d'orage     | during a thunderstorm with lightning |
-| Dans le vent        | on a windy day, hair and clothes blowing |
-| Aux chandelles      | lit by candlelight                   |
-| Sous les néons      | under neon lights                    |
-| Sous les lanternes  | under glowing paper lanterns         |
-| Feux d'artifice     | with fireworks in the sky            |
-| Festive             | festive atmosphere                   |
-| Calme et intime     | calm and intimate atmosphere         |
-| Mélancolique        | melancholic atmosphere               |
-| Mystérieuse         | mysterious atmosphere                |
-| Épique              | epic atmosphere                      |
-| Post-apocalyptique  | post-apocalyptic atmosphere          |
+| Valeur                            | Prompt image                             | Catégorie        | Adulte |
+| --------------------------------- | ---------------------------------------- | ---------------- | ------ |
+| Grand soleil                      | bright sunny weather                     | Météo            |        |
+| Ciel nuageux                      | overcast sky                             | Météo            |        |
+| Sous la pluie                     | in the rain                              | Météo            |        |
+| Pluie battante                    | in heavy pouring rain                    | Météo            |        |
+| Sous la neige                     | in falling snow                          | Météo            |        |
+| Dans la brume                     | in thick mist                            | Météo            |        |
+| Un soir d'orage                   | during a thunderstorm with lightning     | Météo            |        |
+| Dans le vent                      | on a windy day, hair and clothes blowing | Météo            |        |
+| Aux chandelles                    | lit by candlelight                       | Lumière ambiante |        |
+| Sous les néons                    | under neon lights                        | Lumière ambiante |        |
+| Sous les lanternes                | under glowing paper lanterns             | Lumière ambiante |        |
+| Feux d'artifice                   | with fireworks in the sky                | Ciel et nature   |        |
+| Festive                           | festive atmosphere                       | Humeur           |        |
+| Calme et intime                   | calm and intimate atmosphere             | Humeur           |        |
+| Mélancolique                      | melancholic atmosphere                   | Humeur           |        |
+| Mystérieuse                       | mysterious atmosphere                    | Humeur           |        |
+| Épique                            | epic atmosphere                          | Humeur           |        |
+| Post-apocalyptique                | post-apocalyptic atmosphere              | Univers et genre |        |
+| Averse d'été                      | in a sudden summer downpour              | Météo            |        |
+| Brouillard dense                  | in dense fog                             | Météo            |        |
+| Grêle                             | during a hailstorm                       | Météo            |        |
+| Tempête de sable                  | in a swirling sandstorm                  | Météo            |        |
+| Tempête de neige                  | in a blizzard                            | Météo            |        |
+| Canicule                          | in sweltering heat, heat haze            | Météo            |        |
+| Rosée du matin                    | covered in morning dew                   | Météo            |        |
+| Sol mouillé et reflets            | on wet ground full of reflections        | Météo            |        |
+| Arc-en-ciel après la pluie        | with a rainbow after the rain            | Météo            |        |
+| Ciel étoilé                       | under a sky full of stars                | Ciel et nature   |        |
+| Pleine lune                       | under a huge full moon                   | Ciel et nature   |        |
+| Lucioles                          | surrounded by fireflies                  | Ciel et nature   |        |
+| Pétales emportés par le vent      | petals swept by the wind                 | Ciel et nature   |        |
+| Feuilles mortes qui tombent       | falling autumn leaves                    | Ciel et nature   |        |
+| Bulles de savon                   | floating soap bubbles                    | Ciel et nature   |        |
+| Confettis                         | confetti in the air                      | Ciel et nature   |        |
+| Aurore boréale                    | under an aurora borealis                 | Ciel et nature   |        |
+| Lumière à travers les rideaux     | light filtering through the curtains     | Lumière ambiante |        |
+| Poussière dans un rayon de soleil | dust dancing in a sunbeam                | Lumière ambiante |        |
+| Vapeur et buée                    | steam and condensation                   | Lumière ambiante |        |
+| À la lueur d'un écran             | in the glow of a screen                  | Lumière ambiante |        |
+| Romantique                        | romantic atmosphere                      | Humeur           |        |
+| Sensuelle                         | sensual atmosphere, warm and intimate    | Humeur           | oui    |
+| Intense                           | intense, charged atmosphere              | Humeur           |        |
+| Inquiétante                       | unsettling atmosphere                    | Humeur           |        |
+| Nostalgique                       | nostalgic atmosphere                     | Humeur           |        |
+| Onirique                          | dreamlike atmosphere                     | Humeur           |        |
+| Tendue                            | tense atmosphere                         | Humeur           |        |
+| Sereine                           | serene, peaceful atmosphere              | Humeur           |        |
+| Joyeuse et lumineuse              | joyful, bright atmosphere                | Humeur           |        |
+| Triste                            | sad, wistful atmosphere                  | Humeur           |        |
+| Solitaire                         | lonely atmosphere                        | Humeur           |        |
+| Chaotique                         | chaotic scene                            | Humeur           |        |
+| Luxueuse                          | luxurious atmosphere                     | Humeur           |        |
+| Décadente                         | decadent atmosphere                      | Humeur           | oui    |
+| Cosy (hygge)                      | cozy hygge atmosphere                    | Humeur           |        |
+| Futuriste                         | futuristic atmosphere                    | Univers et genre |        |
+| Dystopique                        | dystopian atmosphere                     | Univers et genre |        |
+| Féerique                          | fairytale atmosphere, magical            | Univers et genre |        |
+| Gothique                          | gothic atmosphere                        | Univers et genre |        |
+| Lo-fi                             | lo-fi chill atmosphere                   | Univers et genre |        |
+| Rétro années 80                   | 1980s retro atmosphere                   | Univers et genre |        |
+| Film noir                         | film noir atmosphere                     | Univers et genre |        |
+| Western                           | wild west atmosphere, dusty and sunbaked | Univers et genre |        |
+| Fête foraine                      | funfair atmosphere, colored lights       | Univers et genre |        |
 
 ## Saison
 
-| Valeur                       | Prompt image                              |
-| ---------------------------- | ----------------------------------------- |
-| Printemps                    | in spring                                 |
-| Printemps, cerisiers en fleur | in spring with cherry blossoms in bloom  |
-| Été                          | in summer                                 |
-| Automne                      | in autumn with golden leaves              |
-| Érables rouges d'automne     | among red autumn maple leaves             |
-| Hiver                        | in winter                                 |
+| Valeur                                  | Prompt image                                          | Catégorie |
+| --------------------------------------- | ----------------------------------------------------- | --------- |
+| Printemps                               | in spring                                             | Saisons   |
+| Printemps, cerisiers en fleur           | in spring with cherry blossoms in bloom               | Saisons   |
+| Été                                     | in summer                                             | Saisons   |
+| Automne                                 | in autumn with golden leaves                          | Saisons   |
+| Érables rouges d'automne                | among red autumn maple leaves                         | Saisons   |
+| Hiver                                   | in winter                                             | Saisons   |
+| Début de printemps                      | in early spring, first buds                           | Saisons   |
+| Plein été                               | in high summer                                        | Saisons   |
+| Fin d'automne                           | in late autumn, bare branches                         | Saisons   |
+| Plein hiver                             | in the depths of winter                               | Saisons   |
+| Saison des pluies                       | during the rainy season                               | Saisons   |
+| Fonte des neiges                        | during the spring thaw                                | Saisons   |
+| Hanami (pique-nique sous les cerisiers) | during a hanami picnic under cherry blossoms          | Fêtes     |
+| Matsuri d'été (yukata)                  | at a summer matsuri festival with yukata and lanterns | Fêtes     |
+| Nouvel An lunaire                       | during Lunar New Year with red lanterns               | Fêtes     |
+| Noël                                    | at Christmas, festive decorations and fairy lights    | Fêtes     |
+| Halloween                               | at Halloween, pumpkins and spooky decorations         | Fêtes     |
+| Saint-Valentin                          | on Valentine's Day                                    | Fêtes     |
+| Nouvel An                               | on New Year's Eve                                     | Fêtes     |
 
 ---
 
@@ -304,3 +373,115 @@ origine: "Décors de la mise en scène - Aria Compagnon v1.0, reprise et étendu
 - Lieu : Le pont d'un vaisseau spatial ↔ Ambiance : Sous la pluie
 - Lieu : Une station spatiale ↔ Ambiance : Sous la pluie
 - Lieu : Une station spatiale ↔ Saison : Printemps, cerisiers en fleur
+- Ambiance : Grand soleil ↔ Moment : À minuit
+- Ambiance : Grand soleil ↔ Moment : Dans la nuit profonde
+- Ambiance : Grand soleil ↔ Moment : Sous la pleine lune
+- Ambiance : Grand soleil ↔ Moment : Sous un ciel étoilé
+- Ambiance : Canicule ↔ Moment : La nuit
+- Ambiance : Canicule ↔ Moment : Tard dans la nuit
+- Ambiance : Canicule ↔ Moment : À minuit
+- Ambiance : Canicule ↔ Moment : Dans la nuit profonde
+- Ambiance : Canicule ↔ Moment : Sous la pleine lune
+- Ambiance : Canicule ↔ Moment : Sous un ciel étoilé
+- Ambiance : Arc-en-ciel après la pluie ↔ Moment : La nuit
+- Ambiance : Arc-en-ciel après la pluie ↔ Moment : Tard dans la nuit
+- Ambiance : Arc-en-ciel après la pluie ↔ Moment : À minuit
+- Ambiance : Arc-en-ciel après la pluie ↔ Moment : Dans la nuit profonde
+- Ambiance : Arc-en-ciel après la pluie ↔ Moment : Sous la pleine lune
+- Ambiance : Arc-en-ciel après la pluie ↔ Moment : Sous un ciel étoilé
+- Ambiance : Averse d'été ↔ Moment : La nuit
+- Ambiance : Averse d'été ↔ Moment : Tard dans la nuit
+- Ambiance : Averse d'été ↔ Moment : À minuit
+- Ambiance : Averse d'été ↔ Moment : Dans la nuit profonde
+- Ambiance : Averse d'été ↔ Moment : Sous la pleine lune
+- Ambiance : Averse d'été ↔ Moment : Sous un ciel étoilé
+- Ambiance : Rosée du matin ↔ Moment : La nuit
+- Ambiance : Rosée du matin ↔ Moment : Tard dans la nuit
+- Ambiance : Rosée du matin ↔ Moment : À minuit
+- Ambiance : Rosée du matin ↔ Moment : Dans la nuit profonde
+- Ambiance : Rosée du matin ↔ Moment : Sous la pleine lune
+- Ambiance : Rosée du matin ↔ Moment : Sous un ciel étoilé
+- Ambiance : Joyeuse et lumineuse ↔ Moment : La nuit
+- Ambiance : Joyeuse et lumineuse ↔ Moment : Tard dans la nuit
+- Ambiance : Joyeuse et lumineuse ↔ Moment : À minuit
+- Ambiance : Joyeuse et lumineuse ↔ Moment : Dans la nuit profonde
+- Ambiance : Joyeuse et lumineuse ↔ Moment : Sous la pleine lune
+- Ambiance : Joyeuse et lumineuse ↔ Moment : Sous un ciel étoilé
+- Ambiance : Pleine lune ↔ Moment : Le matin
+- Ambiance : Pleine lune ↔ Moment : À midi
+- Ambiance : Pleine lune ↔ Moment : L'après-midi
+- Ambiance : Pleine lune ↔ Moment : En fin de matinée
+- Ambiance : Pleine lune ↔ Moment : À l'heure du déjeuner
+- Ambiance : Pleine lune ↔ Moment : À l'aube
+- Ambiance : Pleine lune ↔ Moment : Au petit matin brumeux
+- Ambiance : Ciel étoilé ↔ Moment : Le matin
+- Ambiance : Ciel étoilé ↔ Moment : À midi
+- Ambiance : Ciel étoilé ↔ Moment : L'après-midi
+- Ambiance : Ciel étoilé ↔ Moment : En fin de matinée
+- Ambiance : Ciel étoilé ↔ Moment : À l'heure du déjeuner
+- Ambiance : Ciel étoilé ↔ Moment : À l'aube
+- Ambiance : Ciel étoilé ↔ Moment : Au petit matin brumeux
+- Ambiance : Lucioles ↔ Moment : Le matin
+- Ambiance : Lucioles ↔ Moment : À midi
+- Ambiance : Lucioles ↔ Moment : L'après-midi
+- Ambiance : Lucioles ↔ Moment : En fin de matinée
+- Ambiance : Lucioles ↔ Moment : À l'heure du déjeuner
+- Ambiance : Lucioles ↔ Moment : À l'aube
+- Ambiance : Lucioles ↔ Moment : Au petit matin brumeux
+- Ambiance : Aurore boréale ↔ Moment : Le matin
+- Ambiance : Aurore boréale ↔ Moment : À midi
+- Ambiance : Aurore boréale ↔ Moment : L'après-midi
+- Ambiance : Aurore boréale ↔ Moment : En fin de matinée
+- Ambiance : Aurore boréale ↔ Moment : À l'heure du déjeuner
+- Ambiance : Aurore boréale ↔ Moment : À l'aube
+- Ambiance : Aurore boréale ↔ Moment : Au petit matin brumeux
+- Saison : Été ↔ Ambiance : Tempête de neige
+- Saison : Été ↔ Ambiance : Grêle
+- Saison : Plein été ↔ Ambiance : Sous la neige
+- Saison : Plein été ↔ Ambiance : Tempête de neige
+- Saison : Plein été ↔ Ambiance : Grêle
+- Saison : Hiver ↔ Ambiance : Canicule
+- Saison : Hiver ↔ Ambiance : Averse d'été
+- Saison : Plein hiver ↔ Ambiance : Canicule
+- Saison : Plein hiver ↔ Ambiance : Averse d'été
+- Saison : Plein hiver ↔ Ambiance : Grand soleil
+- Saison : Printemps, cerisiers en fleur ↔ Ambiance : Sous la neige
+- Saison : Printemps, cerisiers en fleur ↔ Ambiance : Tempête de neige
+- Saison : Printemps, cerisiers en fleur ↔ Ambiance : Canicule
+- Saison : Début de printemps ↔ Ambiance : Canicule
+- Saison : Matsuri d'été (yukata) ↔ Ambiance : Tempête de neige
+- Saison : Hanami (pique-nique sous les cerisiers) ↔ Ambiance : Tempête de neige
+- Saison : Matsuri d'été (yukata) ↔ Ambiance : Sous la neige
+- Saison : Hanami (pique-nique sous les cerisiers) ↔ Ambiance : Sous la neige
+- Lieu : @Intérieur ↔ Ambiance : Brouillard dense
+- Lieu : @Intérieur ↔ Ambiance : Tempête de sable
+- Lieu : @Intérieur ↔ Ambiance : Grêle
+- Lieu : @Intérieur ↔ Ambiance : Tempête de neige
+- Lieu : @Intérieur ↔ Ambiance : Averse d'été
+- Lieu : @Intérieur ↔ Ambiance : Arc-en-ciel après la pluie
+- Lieu : @Intérieur ↔ Ambiance : Sol mouillé et reflets
+- Lieu : @Intérieur ↔ Ambiance : Canicule
+- Lieu : @Intérieur ↔ Ambiance : Rosée du matin
+- Lieu : @Intérieur ↔ Ambiance : Pleine lune
+- Lieu : @Intérieur ↔ Ambiance : Ciel étoilé
+- Lieu : @Intérieur ↔ Ambiance : Aurore boréale
+- Lieu : @Intérieur ↔ Ambiance : Lucioles
+- Lieu : @Intérieur ↔ Ambiance : Pétales emportés par le vent
+- Lieu : @Intérieur ↔ Ambiance : Feuilles mortes qui tombent
+- Lieu : Une surface lunaire ↔ Ambiance : Pluie battante
+- Lieu : Les fonds marins ↔ Ambiance : Pluie battante
+- Lieu : Une surface lunaire ↔ Ambiance : Tempête de neige
+- Lieu : Les fonds marins ↔ Ambiance : Tempête de neige
+- Lieu : Une surface lunaire ↔ Ambiance : Tempête de sable
+- Lieu : Les fonds marins ↔ Ambiance : Tempête de sable
+- Lieu : Une surface lunaire ↔ Ambiance : Grêle
+- Lieu : Les fonds marins ↔ Ambiance : Grêle
+- Lieu : Une surface lunaire ↔ Ambiance : Brouillard dense
+- Lieu : Les fonds marins ↔ Ambiance : Brouillard dense
+- Lieu : Une surface lunaire ↔ Ambiance : Averse d'été
+- Lieu : Les fonds marins ↔ Ambiance : Averse d'été
+- Lieu : Une surface lunaire ↔ Ambiance : Canicule
+- Lieu : Les fonds marins ↔ Ambiance : Canicule
+- Lieu : Une surface lunaire ↔ Ambiance : Arc-en-ciel après la pluie
+- Lieu : Les fonds marins ↔ Ambiance : Arc-en-ciel après la pluie
+- Saison : Matsuri d'été (yukata) ↔ Moment : Le matin
