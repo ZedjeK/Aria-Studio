@@ -42,7 +42,7 @@ async function chargerOptionsPlateau() {
     rendreReferences();
 }
 
-// Références : 1 à 3 rushes pour S'inspirer (nouvelle scène, format au choix), 1 pour une Variation.
+// Références : 1 à 10 rushes pour S'inspirer (nouvelle scène, format au choix), 1 pour une Variation.
 // Les modèles proposés changent avec le mode : édition (Qwen 2.1 Edit, 2511) ou texte vers image (img2img).
 
 let referencesChoisies = [];  // toutes celles posées, gardées même quand la Variation n'en utilise qu'une
@@ -52,8 +52,9 @@ const maxReferences = () => (modeReference === "variation" ? 1 : (optionsPlateau
 const referencesActives = () => referencesChoisies.filter(Boolean).slice(0, maxReferences());
 
 const AIDES_REFERENCES = {
-    inspirer: "Glisse jusqu'à 3 rushes (ou images de ton disque) dans les cases, ou « Comme référence » dans la fiche "
-        + "d'un rush. Cite-les dans ton idée : « la femme de l'image 1 sur le dragon de l'image 2 ».",
+    inspirer: () => "Glisse jusqu'à " + maxReferences() + " rushes (ou images de ton disque) dans les cases, ou « Comme "
+        + "référence » dans la fiche d'un rush ; une case de plus apparaît quand les autres sont remplies. Cite-les "
+        + "dans ton idée : « la femme de l'image 1 sur le dragon de l'image 2 ».",
     variation: "Une seule image : sa composition est gardée. Plus de liberté = plus de changements. Le format est celui "
         + "de l'image.",
 };
@@ -63,7 +64,7 @@ function listeCreation() {
     const n = referencesActives().length;
     if (n && modeReference === "inspirer") {
         return { ...o.workflows.retouche, defaut: o.references_defaut,
-                 choix: o.workflows.retouche.choix.filter((w) => w.references >= n) };
+                 choix: o.workflows.retouche.choix.filter((w) => w.references >= n && !w.reserve_retouche) };
     }
     if (n && modeReference === "variation") {
         return { ...o.workflows.texte_vers_image, choix: o.workflows.texte_vers_image.choix.filter((w) => w.variation) };
@@ -88,7 +89,8 @@ const liberteReference = () => Number(document.getElementById("liberte-reference
 
 function rendreReferences() {
     referencesChoisies = referencesChoisies.filter(Boolean);
-    const max = maxReferences();
+    // S'inspirer : trois cases au départ, une de plus dès que toutes sont remplies, jusqu'au maximum du modèle.
+    const max = modeReference === "variation" ? 1 : Math.min(maxReferences(), Math.max(3, referencesChoisies.length + 1));
     document.getElementById("emplacements-references").innerHTML = Array.from({ length: max }, (_, i) => {
         const id = referencesChoisies[i];
         return id
@@ -104,7 +106,8 @@ function rendreReferences() {
     document.getElementById("compte-references").textContent = n
         ? `· ${n} image${n > 1 ? "s" : ""} · ${modeReference === "inspirer" ? "s'inspirer" : "variation"}` : "";
     document.getElementById("bloc-liberte").hidden = modeReference !== "variation";
-    document.getElementById("aide-references").textContent = AIDES_REFERENCES[modeReference];
+    const aide = AIDES_REFERENCES[modeReference];
+    document.getElementById("aide-references").textContent = typeof aide === "function" ? aide() : aide;
     remplirModelesCreation();
 }
 

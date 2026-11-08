@@ -27,7 +27,9 @@ ENCODEURS_REFERENCES = {
     "TextEncodeQwenImageEditPlus": ("image{}", 3, "EmptySD3LatentImage"),
     "TextEncodeQwenImage21": ("images.image_{}", 16, "EmptyLatentImage"),
 }
-REFERENCES_MAX = 3  # limite de l'interface (celle du 2511)
+# Plafond d'Aria : 10 images, ce que les modèles ComfyUI officiels de Qwen-Image 2.1 Edit reçoivent (son encodeur a 16
+# entrées, mais seules 10 sont câblées). Chaque workflow garde sa propre limite : le 2511 s'arrête à 3 (son encodeur).
+REFERENCES_MAX = 10
 
 
 @dataclass
@@ -154,6 +156,10 @@ class Workflow:
             "image": api[cv]["inputs"]["images"], "batch_index": 0, "length": 1}}
         api["aria_affiche"] = {"class_type": "SaveImage", "inputs": {
             "images": ["aria_affiche_lot", 0], "filename_prefix": f"{prefixe}_affiche"}}
+
+    def reserve_retouche(self) -> bool:
+        """Réservé à la Retouche (fiche : `reserve: retouche`) : S'inspirer ne le propose pas et ne l'accepte pas."""
+        return self.fiche.get("reserve") == "retouche"
 
     def accepte_variation(self) -> bool:
         return bool(reglages.noeud_unique(self.api, "KSampler") and reglages.noeud_unique(self.api, "VAELoader"))

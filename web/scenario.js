@@ -38,7 +38,7 @@ function tacheCible() {
     const n = imagesReference().length;
     if (n && refsScenario.role === "inspirer") {
         return ["inspirer", { ...w.retouche, defaut: optionsPlateau.references_defaut,
-                              choix: w.retouche.choix.filter((x) => x.references >= n) }];
+                              choix: w.retouche.choix.filter((x) => x.references >= n && !x.reserve_retouche) }];
     }
     if (n) return ["variation", { ...w.texte_vers_image, choix: w.texte_vers_image.choix.filter((x) => x.variation) }];
     return ["image", w.texte_vers_image];

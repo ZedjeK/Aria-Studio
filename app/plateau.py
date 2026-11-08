@@ -47,7 +47,7 @@ class Commande:
     largeur: int | None = None
     hauteur: int | None = None
     ancrage: str = "centre"
-    references: list[str] = field(default_factory=list)  # rushes de référence (S'inspirer : 1 à 3, Variation : 1)
+    references: list[str] = field(default_factory=list)  # rushes de référence (S'inspirer : 1 à 10, selon le modèle ; Variation : 1)
     mode_reference: str | None = None  # inspirer, variation
     liberte: float = 0.6  # Variation : denoise (0 = copie, 1 = libre)
     dossier: str | None = None  # dossier des rushes où ranger toutes les images de la commande
@@ -189,7 +189,8 @@ class Plateau:
                                "modele_defaut": wf.choisi(None),  # réglé dans l'onglet Réglages
                                "loras": modeles.loras(wf.famille),
                                "format": reglages.valeurs_workflow(wf).get("ratio"),  # réglable (onglet Réglages)
-                               "references": wf.accepte_references(), "variation": wf.accepte_variation()}
+                               "references": wf.accepte_references(), "variation": wf.accepte_variation(),
+                               "reserve_retouche": wf.reserve_retouche()}
                               for wf in prets if wf.fiche["tache"] == tache],
                 }
                 # vidéo : modèle cible du Scénario, et checkpoints proposés dans le Montage
@@ -270,6 +271,8 @@ class Plateau:
             return workflow
         workflow = workflow or CONFIG.get("generation", {}).get("references")
         wf = workflows.obtenir(workflow)
+        if wf.reserve_retouche():
+            raise ErreurPlateau(f"{wf.fiche['nom']} est réservé à la retouche : S'inspirer passe par un autre modèle")
         if not 1 <= len(references) <= wf.accepte_references():
             raise ErreurPlateau(f"{wf.fiche['nom']} accepte de 1 à {wf.accepte_references()} images de référence")
         return workflow

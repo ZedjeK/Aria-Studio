@@ -7,6 +7,7 @@ Une fiche de workflow (workflows/<id>/fiche.yaml) et une fiche de LLM (catalogue
     materiel  vram_estimee_go (poids chargés : une estimation), vram_min_go et vram_confort_go (MESURÉS par le banc
               de palier, null tant que ce n'est pas fait), mesure ({carte, date, methode}), cartes_verifiees
 Une fiche de workflow a en plus :
+    reserve        facultatif : « retouche » réserve le workflow à la Retouche (S'inspirer ne le propose pas)
     profil_prompt  style (prose, instruction, brief_video), langue, mots_max (facultatif), negatif, regles (ajoutées
                    à la consigne de Llama quand ce modèle est la cible), conseils et sources (documentation),
                    balise_dialogue (facultatif : le modèle lit les répliques dans <d>[Langue] …</d>, app/repliques.py),
@@ -118,6 +119,8 @@ def problemes_workflow(fiche: dict) -> list[str]:
     if fiche.get("format") != FORMAT:
         return [f"format : {FORMAT} attendu (fiche d'un ancien format)"]
     p = [f"{c} manquant" for c in ("id", "nom", "tache", "famille", "fichiers", "entrees") if not fiche.get(c)]
+    if "reserve" in fiche and not (fiche["reserve"] == "retouche" and fiche.get("tache") == "retouche"):
+        p.append("reserve : « retouche », et seulement sur un workflow de tâche retouche (ou retire la clé)")
     return p + problemes_licence(fiche.get("licence")) + problemes_materiel(fiche.get("materiel")) \
         + problemes_profil(fiche.get("profil_prompt")) + problemes_civitai(fiche.get("civitai")) \
         + problemes_hugging_face(fiche.get("hugging_face"))
