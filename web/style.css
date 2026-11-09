@@ -185,6 +185,8 @@ textarea {
     margin-bottom: 8px;
     resize: vertical;
     font: inherit;
+    max-height: 70vh;
+    overflow-y: auto;
 }
 
 input,

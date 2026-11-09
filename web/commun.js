@@ -246,3 +246,44 @@ function notifierFin(titre, texte, vue, reussi = true) {
     clearTimeout(bandeau.minuteur);
     bandeau.minuteur = setTimeout(() => { bandeau.hidden = true; }, 10000);
 }
+
+// Zones de texte : elles grandissent vers le bas avec leur contenu (plafond à 70 % de l'écran, puis défilement).
+// `rows` donne la hauteur minimale. Les remplissages par le code (prompt écrit par le LLM, valeur rechargée) et les
+// zones masquées puis affichées sont suivis aussi.
+(() => {
+    const ajuster = (zone) => {
+        if (!zone.offsetParent) return;                       // masquée : IntersectionObserver reprendra à l'affichage
+        zone.style.height = "auto";
+        const bords = zone.offsetHeight - zone.clientHeight;
+        zone.style.height = `${zone.scrollHeight + bords}px`;
+    };
+    const vue = new IntersectionObserver((entrees) => {
+        for (const e of entrees) if (e.isIntersecting) ajuster(e.target);
+    });
+    const suivre = (zone) => {
+        if (zone.dataset.autoTaille) return;
+        zone.dataset.autoTaille = "1";
+        vue.observe(zone);
+        ajuster(zone);
+    };
+
+    const reglage = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+    Object.defineProperty(HTMLTextAreaElement.prototype, "value", {
+        ...reglage,
+        set(texte) { reglage.set.call(this, texte); suivre(this); ajuster(this); },
+    });
+
+    document.addEventListener("input", (e) => {
+        if (e.target instanceof HTMLTextAreaElement) ajuster(e.target);
+    });
+    window.addEventListener("resize", () => {
+        document.querySelectorAll("textarea").forEach(ajuster);
+    });
+    new MutationObserver((mutations) => {
+        for (const m of mutations) for (const n of m.addedNodes) {
+            if (n instanceof HTMLTextAreaElement) suivre(n);
+            else if (n.querySelectorAll) n.querySelectorAll("textarea").forEach(suivre);
+        }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+    document.addEventListener("DOMContentLoaded", () => document.querySelectorAll("textarea").forEach(suivre));
+})();
