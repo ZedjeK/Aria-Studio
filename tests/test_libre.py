@@ -255,3 +255,23 @@ class CatalogueDuGuide(unittest.TestCase):
             o = FauxLlm(json.dumps(TOUR))
             tour(o, [{"role": "user", "content": "Un chat"}], sujet="creature")
         self.assertNotIn("Chat", o.appels[0][0][0]["content"].split("Guide topics")[1])
+
+
+class QuestionEnListe(unittest.TestCase):
+    """Une question sur une rubrique du guide garde son nom : l'interface en fait une liste déroulante."""
+
+    def lire(self, liste, rubriques):
+        tour_ = {**TOUR, "questions": [{"question": "Quel lieu ?", "choix": ["Ville moderne"], "liste": liste}]}
+        return prompt.lire_libre(json.dumps(tour_), rubriques)["questions"][0]
+
+    def test_rubrique_du_guide_gardee(self):
+        self.assertEqual(self.lire("Type de lieu", {"Type de lieu"}).get("liste"), "Type de lieu")
+
+    def test_rubrique_inconnue_ou_sans_guide_ignoree(self):
+        self.assertNotIn("liste", self.lire("Inventée", {"Type de lieu"}))
+        self.assertNotIn("liste", self.lire("Type de lieu", None))
+
+    def test_demandee_par_la_consigne(self):
+        self.assertIn('"liste"', prompt.catalogue_guide("lieu"))
+        self.assertIn("Type de lieu", prompt.noms_guide("lieu"))
+        self.assertNotIn("Caméra", prompt.noms_guide("lieu"))
