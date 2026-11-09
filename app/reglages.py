@@ -155,7 +155,8 @@ def params_llm() -> dict[str, Param]:
               aide="Positif = moins de répétitions"),
         Param("max_tokens", "Longueur maximale de réponse (tokens)", "entier", 512, 64, 4096, 64),
         Param("contexte", "Contexte (tokens)", "entier", int(llama["contexte"]), 1024, 262144, 1024,
-              aide="Plus grand = plus de VRAM ; changer redémarre llama-server"),
+              aide="Plus grand = plus de VRAM ; changer redémarre llama-server. Avec la Réflexion ou la vision, "
+                   "Aria le relève d'office à 16 384 au minimum"),
         Param("reflexion", "Réflexion (thinking)", "booleen", bool(llama["reflexion"]),
               aide="Pour les modèles qui la proposent ; plus lent. Sert à la réécriture et au découpage, "
                    "jamais aux courtes traductions (retouche, précisions)"),

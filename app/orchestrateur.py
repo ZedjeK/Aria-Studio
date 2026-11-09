@@ -18,12 +18,9 @@ from app.comfy import ComfyUI
 from app.garde import Garde
 from app.config import CONFIG
 from app.emplacements import moteur
-from app.llm import Llama
+from app.llm import CONTEXTE_REFLEXION, Llama
 from app.modeles import DOSSIER as MODELES
 
-# Contexte minimal d'un LLM qui réfléchit ou qui voit : consigne et images (≈ 600 tokens chacune), le budget de
-# réflexion (llm.BUDGET_REFLEXION) et la réponse.
-CONTEXTE_REFLEXION = 16384
 
 
 def lancement_llm(nom: str) -> dict:
