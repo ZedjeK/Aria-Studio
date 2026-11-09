@@ -65,8 +65,10 @@ class Workflow:
 
     def variantes(self) -> list[str]:
         """Checkpoints présents dans <Famille>/modeles, celui d'origine d'abord s'il est là. C'est la famille qui
-        compte : l'origine supprimée, les autres checkpoints de la famille servent toujours."""
-        deposes = modeles.fichiers(f"{self.famille}/modeles", modeles.EXTENSIONS_IMAGE)
+        compte : l'origine supprimée, les autres checkpoints de la famille servent toujours. Un checkpoint téléchargé et
+        pas encore validé (Modèles → « À valider ») n'est pas proposé."""
+        dossier = f"{self.famille}/modeles"
+        deposes = [m for m in modeles.fichiers(dossier, modeles.EXTENSIONS_IMAGE) if not modeles.en_attente(dossier, m)]
         return sorted(deposes, key=lambda m: m != self.modele_origine)
 
     def manquants(self) -> list[dict]:
@@ -261,6 +263,23 @@ def _fiches_lues() -> list[tuple[dict | None, dict | None, str | None]]:
     dossiers = [d for d in sorted(DOSSIER.iterdir()) if (d / "fiche.yaml").is_file()]
     cle = memo.empreinte([f for d in dossiers for f in (d / "fiche.yaml", d / "api.json")])
     return _lus.lire(cle, lambda: [_lire(d) for d in dossiers])
+
+
+def valider_checkpoint(cle_modele: str, steps: int = 0) -> dict:
+    """Met en service un checkpoint téléchargé. steps > 0 : ils deviennent ses « Steps imposés » dans les workflows de sa
+    famille qui en ont ; 0 : ceux du réglage et de la qualité, comme avant."""
+    dossier, _, nom = cle_modele.rpartition("/")
+    if not modeles.est_checkpoint(dossier):
+        raise ErreurWorkflow(f"Pas un checkpoint de famille : {cle_modele}")
+    if not 0 <= steps <= 150:
+        raise ErreurWorkflow("Steps : un entier entre 1 et 150, ou 0 pour garder ceux du réglage")
+    modeles.valider(cle_modele)
+    famille = dossier.removesuffix("/modeles")
+    if steps:
+        for wf in catalogue():
+            if wf.famille == famille and "steps" in wf.fiche["entrees"]:
+                reglages.modifier_variante(wf.id, nom, {"steps": steps})
+    return {"cle": cle_modele, "steps": steps}
 
 
 def catalogue() -> list[Workflow]:

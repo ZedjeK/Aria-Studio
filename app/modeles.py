@@ -200,6 +200,27 @@ def cle(chemin_fichier: Path) -> str:
     return chemin_fichier.relative_to(DOSSIER).as_posix()
 
 
+def est_checkpoint(dossier: str) -> bool:
+    """<Famille>/modeles : les checkpoints que les workflows proposent en variantes."""
+    return dossier.endswith("/modeles") and not dossier.startswith("_base/")
+
+
+def en_attente(dossier: str, nom: str) -> bool:
+    """Checkpoint téléchargé mais pas encore validé : il n'est proposé nulle part (workflows.variantes)."""
+    return bool((charger_registre().get(f"{dossier}/{nom}") or {}).get("a_valider"))
+
+
+def valider(cle_modele: str) -> dict:
+    """Met un checkpoint téléchargé en service (il apparaît alors dans les variantes). Retourne son entrée de registre."""
+    registre = charger_registre()
+    entree = registre.get(cle_modele)
+    if not entree or not entree.get("a_valider"):
+        raise ErreurModele("Ce modèle n'attend pas de validation")
+    del entree["a_valider"]
+    _sauver_registre(registre)
+    return entree
+
+
 def connu(dossier: str, nom: str) -> bool:
     """Le fichier a-t-il été téléchargé par Aria (source et licence au registre), ou déposé à la main ?"""
     return f"{dossier}/{nom}" in charger_registre()

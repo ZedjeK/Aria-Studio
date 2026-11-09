@@ -183,7 +183,10 @@ class Telechargeur:
             part.unlink(missing_ok=True)
             raise ErreurTelechargement("Empreinte SHA-256 incorrecte : fichier rejeté")
         part.replace(dest)
-        modeles.enregistrer(dest, fiche.to_dict(), sha256)
+        # Un checkpoint neuf n'est proposé nulle part tant que l'utilisateur n'a pas validé ses steps (modeles.valider).
+        a_valider = {"a_valider": {"steps": fiche.steps_suggeres or {"statut": "aucun", "valeurs": [], "extraits": []}}} \
+            if modeles.est_checkpoint(tache.dossier) else {}
+        modeles.enregistrer(dest, fiche.to_dict(), sha256, **a_valider)
         tache.etat = "termine"
 
     async def _recevoir(self, client: httpx.AsyncClient, tache: Tache, part: Path):
