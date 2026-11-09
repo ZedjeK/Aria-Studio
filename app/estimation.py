@@ -4,7 +4,7 @@ la VRAM libre, sans tenir compte des clips déjà tournés.
 Point de départ : le tableau de plateau.QUALITES_VIDEO, mesuré sur la RTX 4080 de l'auteur (16 Go) pour 5 s, à chaud, avec
 le checkpoint d'origine. Il reste exact sur cette machine de référence ; on le corrige de ce qui change :
   - les steps du checkpoint choisi (une variante peut imposer les siens) : le temps suit les steps ;
-  - la durée du clip : (D / 5)^1,25, mesure du Montage ;
+  - la durée du clip : (D / 5)^plateau.EXPOSANT_DUREE_VIDEO, ajusté sur des clips de 15 s ;
   - la VRAM : quand le poids du checkpoint et le travail du clip dépassent la VRAM libre, ComfyUI décharge une partie en
     RAM et chaque step ralentit. Le facteur compare ta machine à la machine de référence ;
   - le nombre de clips : autant de clips, un après l'autre.
@@ -16,7 +16,7 @@ from app import optimiseur, plateau, workflows
 from app.config import CONFIG
 from app.emplacements import MODELES
 
-EXPOSANT_DUREE = 1.25
+EXPOSANT_DUREE = plateau.EXPOSANT_DUREE_VIDEO
 GO = 2**30
 LIBRE_REF_GO = 15.0  # RTX 4080 de 16 Go, bureau compris
 POIDS_REF_GO = 19.5  # minimax_h3_fl2va_pruned_int8_convrot.safetensors, le checkpoint d'origine

@@ -109,7 +109,7 @@ function estimationSecondes() {
     const q = optionsMontage?.video.qualites.find((x) => x.cle === document.getElementById("qualite-montage").value);
     if (!q) return 0;
     const duree = Number(document.getElementById("duree-montage").value);
-    return q.estimation_s * (duree / 5) ** 1.25 * nombreDuChamp("nombre-montage");
+    return q.estimation_s * (duree / 5) ** (optionsMontage.video.exposant_duree ?? 1.25) * nombreDuChamp("nombre-montage");
 }
 
 const enMinutes = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, "0")}` : `${Math.round(s)} s`);
