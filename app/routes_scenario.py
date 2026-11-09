@@ -73,7 +73,7 @@ async def optimiser_prompt(d: DemandeOptimisation, requete: Request = None):
         raise HTTPException(400, "Atelier inconnu : image, retouche ou clip")
     if not (idee or complements_):
         raise HTTPException(400, "Écris ton idée (ou choisis des compléments)")
-    if len(idee) > 2000 or len(complements_) > 4000 or len(d.images) > 3:
+    if len(idee) > 2000 or len(complements_) > 4000 or len(d.images) > workflows.REFERENCES_MAX:
         raise HTTPException(400, "Idée, compléments ou images en trop")
     if d.atelier == "retouche" and len(d.images) != 1:
         raise HTTPException(400, "Choisis l'image à retoucher")
@@ -151,7 +151,7 @@ async def chat_libre(d: DemandeLibre, requete: Request = None):
         origines = plateau.textes_origine(d.images)  # AS-18 : un rush né d'un mineur le reste
         entrees = [*origines, *(plan_["entrees"] if plan_ else [])]
         securite.verifier(*entrees, *(e.content for e in d.echanges if e.role == "user"))
-        vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images[:3]]) or None
+        vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images[:workflows.REFERENCES_MAX]]) or None
         llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
         r = await services.tant_que_connecte(requete, prompt.libre(
             services.orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, contexte, vues, d.role,

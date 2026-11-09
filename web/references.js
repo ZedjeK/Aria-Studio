@@ -1,15 +1,24 @@
-// Scénario, 1 · Départ : les images dont part l'atelier. Image : 1 à 3 rushes dont s'inspirer (« Picture 1… »
+// Scénario, 1 · Départ : les images dont part l'atelier. Image : aucune image (texte vers image), 1 à 10 rushes dont s'inspirer (« Picture 1… »
 // pour un modèle d'édition) ou une image de départ pour une variation ; Retouche : l'image à retoucher ; Clip : le
 // rush à animer ; Séquence : le personnage de référence (decoupage.js). Le LLM les voit quand il écrit (✨ Écrire le
 // prompt, 💬 M'aider à préciser), et elles partent avec le prompt vers le Plateau, le panneau de retouche ou le Montage.
 
-const refsScenario = { role: "inspirer", inspirer: [], variation: null, liberte: 0.6, animer: null, retouche: null };
+// role : texte (aucune image, le mode de base), inspirer ou variation. Les images posées pour S'inspirer sont gardées
+// quand on change de mode, mais seul le mode choisi les envoie.
+const refsScenario = { role: "texte", inspirer: [], variation: null, liberte: 0.6, animer: null, retouche: null };
+
+const maxReferencesScenario = () => optionsPlateau?.references_max ?? 10;
 
 const AIDES_REFERENCE = {
-    inspirer: "Jusqu'à 3 images : cite-les dans ton idée (« la femme de l'image 1 sur le dragon de l'image 2 »). Le "
-        + "prompt partira vers un modèle d'édition qui les reçoit.",
-    variation: "Une seule image : sa composition est gardée, ton idée dit ce qui change. La force du changement "
-        + "(Liberté) se règle au Plateau.",
+    texte: "Pas d'image : le modèle crée tout à partir de ton idée et de tes compléments (sujet, décor, mise en scène).",
+    inspirer: () => "Tes images sont des ingrédients : le modèle d'édition les regarde et compose une nouvelle scène "
+        + "(format libre). Jusqu'à " + maxReferencesScenario() + " images, une case de plus apparaît quand les autres "
+        + "sont remplies. Cite-les par numéro dans ton idée (« la femme de l'image 1 sur le dragon de l'image 2 »). "
+        + "Le LLM écrit le prompt en gardant ce que chaque image montre, sauf si tu demandes de le changer. "
+        + "Pas de curseur de force.",
+    variation: "Ton image est le point de départ : le modèle la redessine en partie. Composition, sujets et style "
+        + "sont gardés, ton idée dit ce qui change. La Liberté (le curseur du Plateau, de 0,3 à 0,9) décide de la "
+        + "force : plus elle monte, plus l'image change. Une seule image, au format de l'original.",
     retouche: "L'image à retoucher : le LLM la regarde pour écrire une consigne qui lui correspond. Le masque se "
         + "dessine ensuite dans le panneau de retouche.",
     clip: "Le rush à animer : il devient la première image du clip. Sans lui, le clip part du texte seul.",
@@ -26,9 +35,10 @@ function caseSeule() {
 // Les images qui comptent pour l'atelier en cours, et leur rôle.
 function imagesReference() {
     if (formeScenario === "sequence") return [];
+    if (formeScenario === "image" && refsScenario.role === "texte") return [];  // texte vers image : aucune image
     const seule = caseSeule();
     if (seule) return refsScenario[seule] ? [refsScenario[seule]] : [];
-    return refsScenario.inspirer.filter(Boolean).slice(0, optionsPlateau?.references_max ?? 3);
+    return refsScenario.inspirer.filter(Boolean).slice(0, maxReferencesScenario());
 }
 
 function roleReference() {
@@ -53,12 +63,14 @@ const TITRES_CASE = { clip: "Clique pour choisir le rush à animer", retouche: "
 function rendreReferencesScenario() {
     const seule = caseSeule();
     const ids = seule ? [refsScenario[seule]] : refsScenario.inspirer;
-    const max = seule ? 1 : (optionsPlateau?.references_max ?? 3);
-    document.getElementById("cases-reference-scenario").innerHTML = Array.from({ length: max }, (_, i) =>
+    // S'inspirer : trois cases au départ, une de plus dès que toutes sont remplies, jusqu'au maximum du modèle.
+    const nombre = seule ? 1 : Math.min(maxReferencesScenario(), Math.max(3, ids.filter(Boolean).length + 1));
+    const sansImage = formeScenario === "image" && refsScenario.role === "texte";
+    document.getElementById("cases-reference-scenario").innerHTML = sansImage ? "" : Array.from({ length: nombre }, (_, i) =>
         caseReference(ids[i] ?? null, i, TITRES_CASE[formeScenario] ?? "Clique pour choisir un rush")).join("");
     document.querySelector(`input[name="role-reference"][value="${refsScenario.role}"]`).checked = true;
-    document.getElementById("aide-reference-scenario").textContent =
-        AIDES_REFERENCE[formeScenario === "image" ? refsScenario.role : formeScenario];
+    const aide = AIDES_REFERENCE[formeScenario === "image" ? refsScenario.role : formeScenario];
+    document.getElementById("aide-reference-scenario").textContent = typeof aide === "function" ? aide() : aide;
 }
 
 // Un changement d'images peut changer de famille de modèles (édition pour s'inspirer) : la liste est refaite.

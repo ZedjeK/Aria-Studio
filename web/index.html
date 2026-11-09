@@ -466,8 +466,12 @@
                         <h3 class="titre-bloc">1 · Départ <span id="facultatif-depart" class="discret">(facultatif)</span></h3>
                         <p id="aide-reference-scenario" class="discret aide-volet"></p>
                         <div class="ligne roles-reference" data-atelier-seul="image">
-                            <label class="case"><input type="radio" name="role-reference" value="inspirer" checked> 🎭 S'inspirer</label>
-                            <label class="case"><input type="radio" name="role-reference" value="variation"> 🎨 Variation</label>
+                            <label class="case" title="Aucune image : le modèle crée tout à partir de ton idée et de tes compléments">
+                                <input type="radio" name="role-reference" value="texte" checked> ✍️ Texte vers image</label>
+                            <label class="case" title="Tes images sont des ingrédients : le modèle compose une nouvelle scène à partir d'elles (plusieurs images, format libre)">
+                                <input type="radio" name="role-reference" value="inspirer"> 🎭 S'inspirer</label>
+                            <label class="case" title="Une seule image est le point de départ : le modèle la redessine en partie, plus ou moins fort (Liberté, au Plateau)">
+                                <input type="radio" name="role-reference" value="variation"> 🎨 Variation</label>
                         </div>
                         <div id="cases-reference-scenario" class="emplacements" data-atelier-sauf="sequence"></div>
                         <div class="bloc-source reference-sequence" data-atelier-seul="sequence">

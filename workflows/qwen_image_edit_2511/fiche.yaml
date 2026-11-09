@@ -2,6 +2,7 @@ format: 2
 id: qwen_image_edit_2511
 nom: Qwen-Image-Edit 2511
 tache: retouche
+reserve: retouche  # réservé à la Retouche : S'inspirer passe par Qwen-Image 2.1 Edit
 famille: Qwen-Edit2511
 civitai:
     bases: ["Qwen"]  # « Qwen » regroupe génération et retouche : le nom tranche

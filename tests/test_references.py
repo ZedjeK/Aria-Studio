@@ -12,7 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from app import plateau, prompt, reglages, workflows
+from app import fiches, plateau, prompt, reglages, workflows
 from app.plateau import ErreurPlateau, Plateau
 from app.securite import ErreurSecurite
 
@@ -21,8 +21,8 @@ PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
 
 class Graphes(unittest.TestCase):
     def test_capacites(self):
-        self.assertEqual(workflows.obtenir("qwen_image_2_1_edit").accepte_references(), 3)
-        self.assertEqual(workflows.obtenir("qwen_image_edit_2511").accepte_references(), 3)
+        self.assertEqual(workflows.obtenir("qwen_image_2_1_edit").accepte_references(), 10)  # le plafond d'Aria
+        self.assertEqual(workflows.obtenir("qwen_image_edit_2511").accepte_references(), 3)  # la limite de son encodeur
         self.assertEqual(workflows.obtenir("qwen_image_2_1").accepte_references(), 0)  # pas d'entrée d'image
         self.assertEqual(workflows.obtenir("krea2_turbo").accepte_references(), 0)
         self.assertTrue(workflows.obtenir("krea2_turbo").accepte_variation())
@@ -51,6 +51,24 @@ class Graphes(unittest.TestCase):
         with self.assertRaises(workflows.ErreurWorkflow):
             workflows.obtenir("qwen_image_edit_2511").preparer(
                 {"prompt": "x", "seed": 1, "image": "a.png", "references": ["b.png", "c.png", "d.png"]})
+
+    def test_inspirer_qwen_21_dix_images(self):
+        wf = workflows.obtenir("qwen_image_2_1_edit")
+        noms = [f"r{i}.png" for i in range(2, 11)]  # l'image 1 + 9 références
+        api = wf.preparer({"prompt": "x", "seed": 1, "image": "a.png", "references": noms})
+        encodeur = next(n for n in api.values() if n["class_type"] == "TextEncodeQwenImage21")
+        for i in range(2, 11):
+            self.assertEqual(encodeur["inputs"][f"images.image_{i}"], [f"aria_ref_{i}", 0])
+        with self.assertRaises(workflows.ErreurWorkflow):  # une de trop : 11 images
+            wf.preparer({"prompt": "x", "seed": 1, "image": "a.png", "references": noms + ["r11.png"]})
+
+    def test_reserve_a_la_retouche(self):
+        self.assertTrue(workflows.obtenir("qwen_image_edit_2511").reserve_retouche())
+        self.assertFalse(workflows.obtenir("qwen_image_2_1_edit").reserve_retouche())
+        fiche = workflows.obtenir("qwen_image_edit_2511").fiche
+        self.assertFalse([p for p in fiches.problemes_workflow(fiche) if p.startswith("reserve")])
+        for mauvaise in ({**fiche, "reserve": "autre"}, {**fiche, "tache": "texte_vers_image"}):
+            self.assertTrue([p for p in fiches.problemes_workflow(mauvaise) if p.startswith("reserve")])
 
     def test_variation(self):
         for id_wf in ("qwen_image_2_1", "krea2_turbo"):
@@ -110,8 +128,11 @@ class Commandes(unittest.TestCase):
             self.commander("x", [a], "collage")
         with self.assertRaisesRegex(ErreurPlateau, "inconnue"):
             self.commander("x", ["20990101-000000-abcdef"])
-        with self.assertRaisesRegex(ErreurPlateau, "accepte de 1 à 3"):
-            self.commander("x", [a, self.rush("y"), self.rush("z"), self.rush("w")])
+        with self.assertRaisesRegex(ErreurPlateau, "accepte de 1 à 10"):
+            self.commander("x", [a] + [self.rush(str(i)) for i in range(10)])  # 11 images
+        self.commander("x", [a] + [self.rush(str(i)) for i in range(9)])  # 10 images : accepté par défaut (2.1 Edit)
+        with self.assertRaisesRegex(ErreurPlateau, "réservé à la retouche"):  # le 2511 ne sert pas à S'inspirer
+            self.commander("x", [a], workflow="qwen_image_edit_2511")
 
     def test_as18_lit_les_textes_d_origine(self):
         """Une image n'est pas lue par AS-18 : la fiche du rush (et de ses ancêtres) l'est."""
