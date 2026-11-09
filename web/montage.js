@@ -112,7 +112,11 @@ function estimationSecondes() {
     return q.estimation_s * (duree / 5) ** (optionsMontage.video.exposant_duree ?? 1.25) * nombreDuChamp("nombre-montage");
 }
 
-const enMinutes = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, "0")}` : `${Math.round(s)} s`);
+// On arrondit les secondes avant de couper en minutes : 1379,6 s donne « 23 min 00 », pas « 22 min 60 ».
+const enMinutes = (s) => {
+    const total = Math.round(s);
+    return total >= 60 ? `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, "0")}` : `${total} s`;
+};
 
 // Le calcul se lit dans l'ordre où il se fait : poids du checkpoint, qualité, durée, nombre de clips (puis la VRAM libre,
 // qui dit si le checkpoint tient).
