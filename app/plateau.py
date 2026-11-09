@@ -136,7 +136,9 @@ def _dimensions_png(donnees: bytes) -> tuple[int, int]:
 def avec_declencheurs(prompt_: str, loras: list[dict] | None) -> str:
     """Les mots déclencheurs des LoRAs choisies, en tête du prompt (image, clip, plan de séquence)."""
     declencheurs = ", ".join(l["declencheurs"] for l in loras or [] if l.get("declencheurs"))
-    return f"{declencheurs}, {prompt_}" if declencheurs else prompt_
+    if not declencheurs:
+        return prompt_
+    return prompt.dans_la_description(prompt_, f"{declencheurs},", debut=True) or f"{declencheurs}, {prompt_}"
 
 
 

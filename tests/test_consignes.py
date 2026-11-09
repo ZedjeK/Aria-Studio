@@ -69,6 +69,38 @@ class Consignes(unittest.TestCase):
         deja = "integrated_multimodal_description: [Shot 1] Walk.\n\noverall_soundscape: Steps."
         self.assertEqual(prompt.mettre_en_champs(deja), deja)  # idempotent, un champ omis reste omis
 
+    def test_champs_separes_et_inseres(self):
+        t = prompt.mettre_en_champs("Walk. overall_soundscape: Steps. non_diegetic_music: N/A", animer=True)
+        self.assertEqual(prompt.separer_champs(t[len(prompt.ALIGNEMENT_I2V):]), ("Walk.", "Steps.", "N/A"))
+        avec = prompt.dans_la_description(t, "Constraint: no rain.")
+        self.assertTrue(avec.startswith(prompt.ALIGNEMENT_I2V))  # la ligne d'alignement reste en tête
+        self.assertIn("[Shot 1] Walk. Constraint: no rain.\n\noverall_soundscape: Steps.", avec)
+        debut = prompt.dans_la_description("integrated_multimodal_description: [Shot 1] Walk.", "lora_x,", debut=True)
+        self.assertEqual(debut, "integrated_multimodal_description: [Shot 1] lora_x, Walk.")
+        self.assertIsNone(prompt.dans_la_description("Walk in prose.", "x"))  # pas en champs : l'appelant ajoute en fin
+
+    def test_decoupage_en_champs(self):
+        from app import decoupage
+        systeme = prompt.consigne("decoupage", None, 110, champs=True)
+        self.assertIn("overall_soundscape", systeme)
+        self.assertNotIn("overall_soundscape", prompt.consigne("decoupage", None, 110))
+        plan = {"enchainement": "prolonger", "note": "", "replique": "", "moment": "fin", "off": False, "duree": 5}
+        texte, _ = decoupage.finir_plan(
+            2, plan, "integrated_multimodal_description: [Shot 1] She walks on.\n\noverall_soundscape: Steps.\n\n"
+                     "non_diegetic_music: N/A", "", "", champs=True)
+        self.assertEqual(texte, "integrated_multimodal_description: [Shot 1] Continuous shot, same scene. She walks on.\n\n"
+                                "overall_soundscape: Steps.\n\nnon_diegetic_music: N/A")
+
+    def test_tournage_garde_les_champs(self):
+        from app import plateau, sequences
+        p = "integrated_multimodal_description: [Shot 1] She walks.\n\noverall_soundscape: Steps.\n\nnon_diegetic_music: N/A"
+        final = plateau.avec_declencheurs(sequences.avec_contrainte(p, "no rain"), [{"declencheurs": "lora_x"}])
+        self.assertIn("[Shot 1] lora_x, She walks. Constraint for every shot: no rain.\n\noverall_soundscape: Steps.", final)
+        self.assertTrue(final.endswith("non_diegetic_music: N/A"))
+        ref = sequences._reference(final, True, True)
+        self.assertIn("<Audio 1>.\n\noverall_soundscape", ref)
+        self.assertEqual(sequences.avec_contrainte("She walks.", "no rain"), "She walks. Constraint for every shot: no rain.")
+
     def test_fiches_apres_audit_des_guides(self):
         from app import workflows
         for w in ("minimax_h3_t2v", "minimax_h3_i2v"):

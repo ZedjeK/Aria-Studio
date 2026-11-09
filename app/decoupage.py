@@ -196,10 +196,16 @@ def source_repliques(synopsis: str, contrainte: str, plans: list[dict]) -> str:
                      *(f'"{p["replique"]}"' for p in plans if p["replique"])])
 
 
-def finir_plan(k: int, p: dict, en: str, personnage_: str, source: str) -> tuple[str, list[str]]:
+def finir_plan(k: int, p: dict, en: str, personnage_: str, source: str, champs: bool = False) -> tuple[str, list[str]]:
     """Les garde-fous du prompt d'un plan écrit par Llama (découpage, ✨ ou 💬 d'un plan) : étiquettes et Markdown
     retirés, répliques inventées retirées, « Continuous shot » d'un plan prolongé, description du personnage, et la
-    réplique du plan mot pour mot, à son moment. Renvoie le prompt et les alertes."""
+    réplique du plan mot pour mot, à son moment. Renvoie le prompt et les alertes.
+    `champs` : le prompt est en trois champs (H3) ; les garde-fous s'appliquent à la description, l'ambiance et la
+    musique sont remises telles quelles."""
+    if champs:
+        description, ambiance, musique = prompt.separer_champs(prompt.nettoyer_markdown(en))
+        texte, alertes = finir_plan(k, p, description, personnage_, source)
+        return prompt.assembler_champs(texte, ambiance, musique), alertes
     texte, inventees = sans_repliques_inventees(source, sans_etiquette(prompt.nettoyer_markdown(en)))
     alertes = [f"Plan {k} : réplique inventée par Llama, retirée : « {r} »" for r in inventees]
     if p["enchainement"] == "prolonger" and not texte.lower().startswith("continuous shot"):
@@ -251,7 +257,8 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     mots_max = reglages.valeurs_workflow(wf).get("mots_max") or 110
     # Le LLM de ce workflow (onglet Modèles), sinon celui par défaut ; un spécialiste ne fait pas de découpage.
     llm = prompt.generaliste(llm or workflows.llm_de(wf.id))
-    systeme = prompt.consigne("decoupage", llm, mots_max, wf.profil.get("regles"))
+    champs = workflows.champs_video(wf.id)
+    systeme = prompt.consigne("decoupage", llm, mots_max, wf.profil.get("regles"), champs=champs)
     systeme = (systeme.replace("{regle_personnage}", e["regle_personnage"]) if "{regle_personnage}" in systeme
                else f"{systeme}\n\nCharacter: {e['regle_personnage']}")  # consigne retouchée sans le repère
     echanges = [{"role": "system", "content": systeme}, {"role": "user", "content": e["demande"]}]
@@ -272,7 +279,7 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     alertes, sortie = [], []
     for k, (fr, en) in zip(cibles, blocs):
         p = plans[k]
-        texte, alertes_plan = finir_plan(k + 1, p, en, e["personnage"], e["source"])
+        texte, alertes_plan = finir_plan(k + 1, p, en, e["personnage"], e["source"], champs)
         fr, _ = sans_repliques_inventees(e["source"], prompt.nettoyer_markdown(fr))
         alertes += alertes_plan
         if len(texte.split()) > mots_max + 20:

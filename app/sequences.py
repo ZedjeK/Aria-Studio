@@ -29,7 +29,7 @@ import time
 import uuid
 from datetime import datetime
 
-from app import modeles, plateau, reglages, rushes, securite, voix, workflows
+from app import modeles, plateau, prompt, reglages, rushes, securite, voix, workflows
 from app import repliques as repliques_h3  # le nom « repliques » est celui de la fonction ci-dessous
 from app.comfy import video_et_affiche
 from app.config import CONFIG
@@ -572,16 +572,20 @@ def avec_contrainte(texte: str, contrainte_en: str | None) -> str:
     """La contrainte à la fin du prompt de chaque plan : Llama peut l'oublier, le serveur la garantit."""
     if not contrainte_en:
         return texte
-    return f"{texte.rstrip()} Constraint for every shot: {contrainte_en.strip().rstrip('.')}."
+    ajout = f"Constraint for every shot: {contrainte_en.strip().rstrip('.')}."
+    return prompt.dans_la_description(texte, ajout) or f"{texte.rstrip()} {ajout}"
 
 
 def _reference(texte: str, personnage_: bool, voix: bool) -> str:
-    morceaux = [texte.rstrip()]
+    ajouts = []
     if personnage_:
-        morceaux.append("The main character is the person from <Picture 1>.")
+        ajouts.append("The main character is the person from <Picture 1>.")
     if voix:
-        morceaux.append("The character speaks with the same voice as in <Audio 1>.")
-    return " ".join(morceaux)
+        ajouts.append("The character speaks with the same voice as in <Audio 1>.")
+    if not ajouts:
+        return texte.rstrip()
+    ajout = " ".join(ajouts)
+    return prompt.dans_la_description(texte, ajout) or f"{texte.rstrip()} {ajout}"
 
 
 async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):

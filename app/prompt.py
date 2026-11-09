@@ -307,16 +307,52 @@ def mots_pour_duree(mots_max: int | None, duree: int | None) -> int | None:
     return mots_max + MOTS_PAR_SECONDE_EN_PLUS * (duree - DUREE_DE_BASE)
 
 
+CHAMP_DESCRIPTION = "integrated_multimodal_description"
+_CHAMPS = re.compile(r"(integrated_multimodal_description|overall_soundscape|non_diegetic_music)\s*:", re.I)
+
+
+def separer_champs(texte: str) -> tuple[str, str | None, str | None]:
+    """(description, ambiance, musique) d'un prompt H3 en trois champs. Un champ absent vaut None ; le [Shot 1] de
+    tête de la description est retiré (assembler_champs le remet). Sans aucun champ, tout est la description."""
+    reperes = list(_CHAMPS.finditer(texte))
+    morceaux = {}
+    if not reperes or texte[:reperes[0].start()].strip():
+        morceaux[CHAMP_DESCRIPTION] = texte[:reperes[0].start()] if reperes else texte
+    for i, m in enumerate(reperes):
+        fin = reperes[i + 1].start() if i + 1 < len(reperes) else len(texte)
+        nom = m.group(1).lower()
+        morceaux[nom] = f"{morceaux.get(nom, '')} {texte[m.end():fin]}"
+    propres = {nom: " ".join(valeur.split()) for nom, valeur in morceaux.items()}
+    description = re.sub(r"^\[Shot 1\]\s*", "", propres.get(CHAMP_DESCRIPTION, ""), flags=re.I)
+    return description, propres.get("overall_soundscape") or None, propres.get("non_diegetic_music") or None
+
+
+def assembler_champs(description: str, ambiance: str | None, musique: str | None) -> str:
+    champs = [f"{CHAMP_DESCRIPTION}: [Shot 1] {description}".rstrip()]
+    if ambiance:
+        champs.append(f"overall_soundscape: {ambiance}")
+    if musique:
+        champs.append(f"non_diegetic_music: {musique}")
+    return "\n\n".join(champs)
+
+
 def mettre_en_champs(texte: str, animer: bool = False) -> str:
     """Prompt H3 en trois champs, un par paragraphe. Le LLM a écrit sur une ligne (nettoyer_markdown) : on remet les
     sauts de ligne, on garantit le premier champ et [Shot 1], et on ajoute la ligne d'alignement de l'image à animer.
     Rien n'est inventé : un champ que le LLM a omis reste omis."""
-    texte = re.sub(r"\s*(overall_soundscape:|non_diegetic_music:)", r"\n\n\1", texte.strip())
-    if not texte.startswith("integrated_multimodal_description:"):
-        texte = f"integrated_multimodal_description: {texte}"
-    if "[Shot 1]" not in texte.split("\n\n")[0]:
-        texte = texte.replace("integrated_multimodal_description:", "integrated_multimodal_description: [Shot 1]", 1)
-    return f"{ALIGNEMENT_I2V}\n\n{texte}" if animer else texte
+    champs = assembler_champs(*separer_champs(texte.strip()))
+    return f"{ALIGNEMENT_I2V}\n\n{champs}" if animer else champs
+
+
+def dans_la_description(texte: str, ajout: str, debut: bool = False) -> str | None:
+    """Ajoute une phrase (contrainte, mots déclencheurs, référence) à la description d'un prompt en champs, avant la
+    ligne d'alignement éventuelle et sans toucher aux autres champs. None si le prompt n'est pas en champs."""
+    repere = _CHAMPS.search(texte)
+    if not repere or repere.group(1).lower() != CHAMP_DESCRIPTION:
+        return None
+    description, ambiance, musique = separer_champs(texte[repere.start():])
+    description = f"{ajout} {description}" if debut else f"{description} {ajout}"
+    return texte[:repere.start()] + assembler_champs(description.strip(), ambiance, musique)
 
 
 def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
@@ -331,7 +367,7 @@ def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
         texte = avec_noms_images(texte, workflow)
     if regles:
         texte += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
-    if champs and nom == "video":
+    if champs and nom in ("video", "decoupage"):
         texte += f"\n\n{FORMAT_CHAMPS}"
     return f"{texte}\n\n{CLAUSE_MINEURS}"
 
