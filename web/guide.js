@@ -11,7 +11,21 @@ const PUCES_GUIDE_MAX = 8;  // les premières valeurs en puces, le reste dans la
 
 // Où en est le déroulé de cet atelier : les réponses données, dans l'ordre.
 // { id, onglet, titre, groupe, bloc, sl, genre: valeur | libre | passe | hasard, texte }
-const guideDe = () => (atelier().guide ??= { fait: [] });
+const guideDe = () => (atelier().guide ??= { fait: [], chemin: {}, toute: {} });
+
+// Les listes rangées par catégorie (« Intérieur / Habitation ») se parcourent pas à pas : d'abord la catégorie, puis le
+// niveau suivant, puis les valeurs. `chemin` : les catégories choisies pour cette étape ; `toute` : la liste entière.
+const niveauxDe = (v) => (v.categorie ? v.categorie.split(" / ") : []);
+
+function parcoursGuide(e) {
+    const chemin = guideDe().chemin[e.id] ?? [];
+    const restantes = e.valeurs.filter((v) => chemin.every((c, i) => niveauxDe(v)[i] === c));
+    const cascade = e.valeurs.some((v) => v.categorie) && e.valeurs.length > PUCES_GUIDE_MAX && !guideDe().toute[e.id];
+    const prochains = cascade ? [...new Set(restantes.map((v) => niveauxDe(v)[chemin.length]).filter(Boolean))] : [];
+    return { chemin, restantes, prochains, cascade };
+}
+
+const oublierParcours = (id) => { delete guideDe().chemin[id]; delete guideDe().toute[id]; };
 
 const valeursOffertes = (bloc, sl, etat, c) => sl.valeurs.filter((v) => (v.prompt || v.prompts_genre)
     && valeurPermise(v, c, bloc) && !enConflit(etat, bloc, sl.nom, v.nom)
@@ -89,9 +103,23 @@ function commandesGuide(e) {
         libre = "Ou décris-le : un dragon, une moto…";
     } else if (e.type === "liste") {
         const actuelle = etat.choix[e.bloc]?.[e.sl.nom];
-        puces = e.valeurs.slice(0, PUCES_GUIDE_MAX).map((v) => `<button type="button" class="petit${
-            v.nom === actuelle ? " choisi" : ""}" data-guide-valeur="${echapper(v.nom)}">${echapper(v.nom)}</button>`).join("");
-        const reste = e.valeurs.slice(PUCES_GUIDE_MAX);
+        const { chemin, restantes, prochains } = parcoursGuide(e);
+        const parCategorie = guideDe().toute[e.id] && e.valeurs.some((v) => v.categorie);
+        const retour = chemin.length ? `<button type="button" class="petit" data-guide-action="categorie-retour">↩ ${
+            chemin.length > 1 ? echapper(chemin[chemin.length - 2]) : "Autre catégorie"}</button>`
+            : parCategorie ? `<button type="button" class="petit" data-guide-action="categorie-retour">↩ Par catégorie</button>` : "";
+        const fil = chemin.length ? `<p class="discret">${chemin.map(echapper).join(" › ")}</p>` : "";
+        const valeursVues = prochains.length ? [] : restantes;
+        if (prochains.length) {
+            puces = prochains.map((cat) => `<button type="button" class="petit" data-guide-categorie="${echapper(cat)}">${
+                echapper(cat)} <span class="discret">${restantes.filter((v) => niveauxDe(v)[chemin.length] === cat).length}</span></button>`).join("")
+                + `<button type="button" class="petit" data-guide-action="toute">Toute la liste</button>`;
+        } else {
+            puces = valeursVues.slice(0, PUCES_GUIDE_MAX).map((v) => `<button type="button" class="petit${
+                v.nom === actuelle ? " choisi" : ""}" data-guide-valeur="${echapper(v.nom)}">${echapper(v.nom)}</button>`).join("");
+        }
+        puces = fil + puces + retour;
+        const reste = valeursVues.slice(PUCES_GUIDE_MAX);
         if (reste.length) {
             const categories = [...new Set(reste.map((v) => v.categorie).filter(Boolean))];
             const options = (vs) => vs.map((v) => `<option value="${echapper(v.nom)}">${echapper(v.nom)}</option>`).join("");
@@ -170,6 +198,7 @@ async function repondreGuide(e, genre, valeur = "", texte = "") {
         }
     }
     guideDe().fait.push(f);
+    oublierParcours(e.id);
     planifierAssemblage();
     rendreGuide();
 }
@@ -179,6 +208,7 @@ function revenirGuide() {
     if (!f) return;
     if (f.id === "texte") { etatPrompt().texte = ""; document.getElementById("texte-prompt").value = ""; }
     else effacerChoixGuide(f);
+    oublierParcours(f.id);
     planifierAssemblage();
     rendreGuide();
 }
@@ -189,6 +219,8 @@ function refaireGuide() {
         if (f.id === "texte") { etatPrompt().texte = ""; document.getElementById("texte-prompt").value = ""; }
         else effacerChoixGuide(f);
     }
+    guideDe().chemin = {};
+    guideDe().toute = {};
     planifierAssemblage();
     rendreGuide();
 }
@@ -196,7 +228,9 @@ function refaireGuide() {
 function hasardGuide(e) {
     const etat = etatPrompt();
     const c = contextePrompt(etat);
-    const candidates = valeursOffertes(e.bloc, e.sl, etat, c).filter((v) => v.nom !== etat.choix[e.bloc]?.[e.sl.nom]);
+    const dansLeParcours = new Set(parcoursGuide(e).restantes.map((v) => v.nom));  // reste dans la catégorie choisie
+    const candidates = valeursOffertes(e.bloc, e.sl, etat, c)
+        .filter((v) => v.nom !== etat.choix[e.bloc]?.[e.sl.nom] && dansLeParcours.has(v.nom));
     if (!candidates.length) return repondreGuide(e, "passe");
     const v = candidates[Math.floor(Math.random() * candidates.length)].nom;
     return repondreGuide(e, "hasard", v);
@@ -218,9 +252,20 @@ zoneGuide.addEventListener("click", (ev) => {
     const e = etapeCourante();
     const valeur = ev.target.closest("[data-guide-valeur]");
     if (valeur && e) return repondreGuide(e, "valeur", valeur.dataset.guideValeur);
+    const categorie = ev.target.closest("[data-guide-categorie]");
+    if (categorie && e) {
+        (guideDe().chemin[e.id] ??= []).push(categorie.dataset.guideCategorie);
+        return rendreGuide();
+    }
     const action = ev.target.closest("[data-guide-action]")?.dataset.guideAction;
     if (action === "passer" && e) return repondreGuide(e, "passe");
     if (action === "hasard" && e) return hasardGuide(e);
+    if (action === "categorie-retour" && e) {
+        if (guideDe().chemin[e.id]?.length) guideDe().chemin[e.id].pop();
+        else delete guideDe().toute[e.id];
+        return rendreGuide();
+    }
+    if (action === "toute" && e) { oublierParcours(e.id); guideDe().toute[e.id] = true; return rendreGuide(); }
     if (action === "revenir") return revenirGuide();
     if (action === "refaire") return refaireGuide();
     if (action === "utiliser") return utiliserGuide();

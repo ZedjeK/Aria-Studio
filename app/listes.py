@@ -184,6 +184,19 @@ def _valeur(entete: list[str], cellules: list[str], ou: str) -> Valeur:
     )
 
 
+def _resoudre_tout(cote: str, sous_listes: dict[str, SousListe], ou: str) -> list[tuple[str, str]]:
+    """Un côté d'incompatibilité. « Sous-liste : @Catégorie » vise toutes les valeurs dont la catégorie commence par ce
+    texte (« Lieu : @Intérieur » : tous les lieux intérieurs) ; sinon une seule valeur (_resoudre)."""
+    nom_sl, sep, valeur = cote.partition(" : ")
+    if sep and valeur.startswith("@") and nom_sl in sous_listes:
+        prefixe = valeur[1:].strip()
+        trouvees = [(nom_sl, v.nom) for v in sous_listes[nom_sl].valeurs.values() if v.categorie.startswith(prefixe)]
+        if not trouvees:
+            raise ErreurListes(f"{ou} : aucune valeur de {nom_sl} dans la catégorie « {prefixe} »")
+        return trouvees
+    return [_resoudre(cote, sous_listes, ou)]
+
+
 def _resoudre(cote: str, sous_listes: dict[str, SousListe], ou: str) -> tuple[str, str]:
     """« Sous-liste : Valeur » ou « Valeur » seule, qui doit alors être unique dans le fichier."""
     nom_sl, sep, valeur = cote.partition(" : ")
@@ -253,8 +266,8 @@ def lire(chemin: Path) -> Bloc:
                 if inconnues := [n for n in noms if n not in sous_listes[sl_ref].valeurs]:
                     raise ErreurListes(f"{chemin.name} : « {v.nom} » ({sl.nom}) cite « {inconnues[0]} », "
                                        f"absent de {sl_ref}")
-    incompatibilites = [(_resoudre(g, sous_listes, ou), _resoudre(d, sous_listes, ou))
-                        for g, d, ou in incompatibilites_brutes]
+    incompatibilites = [(g_, d_) for g, d, ou in incompatibilites_brutes
+                        for g_ in _resoudre_tout(g, sous_listes, ou) for d_ in _resoudre_tout(d, sous_listes, ou)]
     return Bloc(chemin.stem, re.sub(r"\s*\(.*\)$", "", titre), sous_listes, incompatibilites)
 
 

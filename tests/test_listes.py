@@ -579,3 +579,22 @@ class SansSujet(unittest.TestCase):
         # Le brief vidéo a toujours un sujet : « sans sujet » ne concerne que les images.
         with mock.patch.object(listes, "est_video", return_value=True):
             self.assertIn("person", assembler(P, {}, sans_sujet=True)["prompt"].lower())
+
+
+class LieuxEnCascade(unittest.TestCase):
+    """Mise en scène : les lieux sont rangés « Intérieur / … » et « Extérieur / … » ; la règle @ vise une catégorie."""
+
+    def test_chaque_lieu_a_une_categorie_a_deux_niveaux(self):
+        lieux = listes.blocs()["mise-en-scene"].sous_listes["Lieu"].valeurs.values()
+        self.assertGreater(len(lieux), 150)
+        for v in lieux:
+            self.assertRegex(v.categorie, r"^(Intérieur|Extérieur) / .+", v.nom)
+
+    def test_incompatibilite_de_categorie_developpee(self):
+        paires = listes.blocs()["mise-en-scene"].incompatibilites
+        self.assertIn((("Lieu", "Une cuisine"), ("Ambiance", "Sous la pluie")), paires)
+        self.assertNotIn((("Lieu", "Un parc"), ("Ambiance", "Sous la pluie")), paires)
+
+    def test_categorie_vide_refusee(self):
+        with self.assertRaisesRegex(listes.ErreurListes, "aucune valeur"):
+            listes._resoudre_tout("Lieu : @Sous-marin", listes.blocs()["mise-en-scene"].sous_listes, "x")
