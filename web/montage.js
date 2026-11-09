@@ -55,6 +55,9 @@ function checkpointsVideo() {
     };
 }
 
+groupeBoutons("qualite-montage", "Qualité");  // web/commun.js : des boutons plutôt qu'une liste, le select reste en dessous
+groupeBoutons("duree-montage", "Durée");
+
 let preparationMontage = null;
 let envoiScenarioClip = null;  // le prompt reçu du Scénario, son idée et son LLM (fiche du clip)
 

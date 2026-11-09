@@ -128,6 +128,52 @@ function messageAnnulation(c, nom, feminin = false) {
 
 const urlImage = (id) => `/api/creations/${encodeURIComponent(id)}/image`;
 
+// Un select présenté en groupe de boutons (Montage : Qualité, Durée). Le select reste la source de vérité, caché : le
+// reste du code continue de le lire, de le remplir (remplirSelect) et d'écouter « change ». Le groupe suit ses options et
+// aussi un « select.value = … » posé par le code.
+function groupeBoutons(idSelect, titre) {
+    const select = document.getElementById(idSelect);
+    const etiquette = select.closest("label");
+    const groupe = document.createElement("div");
+    groupe.className = "groupe-boutons";
+    groupe.setAttribute("role", "radiogroup");
+    groupe.setAttribute("aria-label", titre);
+    etiquette.before(groupe);
+    etiquette.style.display = "none";
+
+    const rafraichir = () => groupe.querySelectorAll("button").forEach((b) => {
+        const actif = b.dataset.valeur === select.value;
+        b.classList.toggle("actif", actif);
+        b.setAttribute("aria-checked", String(actif));
+    });
+    const construire = () => {
+        groupe.innerHTML = `<span>${echapper(titre)}</span>`;
+        for (const option of select.options) {
+            const bouton = document.createElement("button");
+            bouton.type = "button";
+            bouton.setAttribute("role", "radio");
+            bouton.dataset.valeur = option.value;
+            bouton.title = option.textContent;  // le détail (MP, steps) en infobulle
+            bouton.textContent = option.textContent.split(" · ")[0].replace(/^[^\wÀ-ÿ]+/, "").trim() || option.value;
+            bouton.addEventListener("click", () => {
+                select.value = option.value;
+                select.dispatchEvent(new Event("change"));
+            });
+            groupe.append(bouton);
+        }
+        rafraichir();
+    };
+    const natif = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+    Object.defineProperty(select, "value", {
+        configurable: true,
+        get() { return natif.get.call(this); },
+        set(v) { natif.set.call(this, v); rafraichir(); },
+    });
+    select.addEventListener("change", rafraichir);
+    new MutationObserver(construire).observe(select, { childList: true });
+    construire();
+}
+
 function remplirSelect(id, valeurs, defaut) {
     const select = document.getElementById(id);
     const garde = valeurs.some(([v]) => v === select.value) ? select.value : defaut;  // garde le choix en cours
