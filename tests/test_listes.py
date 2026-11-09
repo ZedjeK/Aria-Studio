@@ -549,3 +549,33 @@ class Video(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SansSujet(unittest.TestCase):
+    """Mélanger / Redessiner : le sujet vient des images ; seuls le décor, l'ambiance, la mise en scène, la pose et l'action restent."""
+
+    def test_aucun_sujet_par_defaut(self):
+        self.assertEqual(assembler(P, {}, sans_sujet=True)["prompt"], "")
+        self.assertTrue(assembler(P, {})["prompt"].startswith("A person."))
+
+    def test_les_choix_du_sujet_sont_ecartes(self):
+        r = assembler(P, femme(**{"Couleur des cheveux": "Noir corbeau"}), age=30, sans_sujet=True)
+        self.assertNotIn("woman", r["prompt"].lower())
+        self.assertNotIn("hair", r["prompt"].lower())
+        self.assertNotIn("30 years", r["prompt"])
+        self.assertIsNone(r["tranche"])
+
+    def test_decor_et_ambiance_restent(self):
+        r = assembler(P, {C: {"Lumière": "Lumière de bougie"}}, sans_sujet=True)
+        self.assertIn("candlelight", r["prompt"])
+        self.assertNotIn("A person", r["prompt"])
+
+    def test_pose_et_action_restent(self):
+        r = assembler(P, {P: {"Pose": "Pose héroïque"}, C: {"Lumière": "Lumière de bougie"}}, sans_sujet=True)
+        self.assertIn("Heroic pose", r["prompt"])
+        self.assertTrue(r["prompt"].startswith("Heroic pose."))
+
+    def test_la_video_garde_son_sujet(self):
+        # Le brief vidéo a toujours un sujet : « sans sujet » ne concerne que les images.
+        with mock.patch.object(listes, "est_video", return_value=True):
+            self.assertIn("person", assembler(P, {}, sans_sujet=True)["prompt"].lower())

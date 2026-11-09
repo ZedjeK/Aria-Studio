@@ -3467,3 +3467,46 @@ button.reinitialiser {
     background: transparent;
     color: var(--accent);
 }
+
+/* 2 · Ton idée : onglets Conversation / Me guider ; les compléments y deviennent le guide (sans leur en-tête repliable). */
+.onglets-idee {
+    display: flex;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+
+button.onglet-idee {
+    padding: 6px 18px;
+    border-radius: 0;
+    border-color: var(--line-strong);
+    background: transparent;
+    color: var(--discret);
+    font-family: var(--font-display);
+    font-weight: 600;
+    clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+button.onglet-idee.actif {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--texte);
+}
+
+.place-guide {
+    margin-top: 4px;
+}
+
+details.complements.en-guide {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+details.complements.en-guide > summary {
+    display: none;
+}
+
+.actions-guide {
+    justify-content: flex-end;
+    margin-top: 12px;
+}
