@@ -3769,3 +3769,7 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 .repli-wf { margin-top: .7rem; border-top: 1px solid var(--line); padding-top: .55rem; }
 .repli-wf > summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
 .repli-wf[open] > summary { color: var(--accent); margin-bottom: .4rem; }
+
+/* Galeries masquées par défaut */
+.masque-galerie { padding: 1.2rem .5rem; }
+.vue-rush.masquer { margin-left: auto; }

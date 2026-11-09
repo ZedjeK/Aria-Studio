@@ -240,7 +240,7 @@ function optionsFormulaire() {
         format: document.getElementById("format-creation").value,
         nombre: nombreDuChamp("nombre-creation"),
         seed: seed === "" ? null : Number(seed),
-        dossier: rushes.dossierOuvert(),  // créé depuis un dossier ouvert : toutes les images y sont rangées
+        dossier: rushes.dossierCible(),  // dossier de destination choisi dans « 📥 Ranger dans »
         ...optionsReferences(),
     };
 }
@@ -391,11 +391,12 @@ const rushes = creerGalerie({
         non_ranges: "Tout est rangé, bravo !",
         archives: "Aucune archive. Archive les rushes que tu veux garder sans les voir partout.",
         corbeille: "La corbeille est vide.",
-        dossier: "Dossier vide : glisse des vignettes sur son nom, ou crée directement depuis ce dossier.",
+        dossier: "Dossier vide : glisse des vignettes sur son nom, ou choisis-le dans « 📥 Ranger dans » avant de créer.",
     },
     vignette: (f, choisi) => `<img src="${urlImage(f.id)}" alt="" loading="lazy" draggable="true"
         data-creation="${echapper(f.id)}" class="${choisi ? "choisi" : ""}">`,
     ouvrir: (f) => ouvrirFiche(f),
+    destination: document.getElementById("destination-plateau"),
     // Clic droit : on ouvre la fiche en coulisse puis on déclenche le bouton correspondant, une seule logique.
     actions: (f) => {
         const via = (bouton) => () => {
@@ -544,7 +545,7 @@ function importerFichier(fichier, ouvrir = true) {
             let f = null;
             try {
                 f = await api("POST", "/api/creations/import",
-                    { image: lecteur.result, nom: fichier.name, dossier: rushes.dossierOuvert() });
+                    { image: lecteur.result, nom: fichier.name, dossier: rushes.dossierCible() });
                 await chargerGalerie();
                 if (ouvrir) ouvrirFiche(f);
             } catch (err) {

@@ -16,12 +16,13 @@ const bobines = creerGalerie({
         non_ranges: "Tout est rangé, bravo !",
         archives: "Aucune archive.",
         corbeille: "La corbeille est vide.",
-        dossier: "Dossier vide : tourne depuis ce dossier, ou glisse des vignettes sur son nom.",
+        dossier: "Dossier vide : choisis-le dans « 📥 Ranger dans » avant de tourner, ou glisse des vignettes sur son nom.",
     },
     // Vignette = première image du clip, immobile ; un clic ouvre sa fiche (lecture muette, 🔊 dans les contrôles).
     vignette: (f, choisi) => `<video src="${urlVideo(f.id)}" poster="${urlImage(f.id)}" muted loop playsinline
         preload="none" draggable="true" data-creation="${echapper(f.id)}" class="${choisi ? "choisi" : ""}"></video>`,
     ouvrir: (f) => ouvrirClip(f),
+    destination: document.getElementById("destination-montage"),
     actions: (f) => {
         const via = (bouton) => () => {
             ouvrirClip(f);
@@ -253,7 +254,7 @@ function reglagesMontage() {
         format: document.getElementById("format-montage").value,
         nombre: nombreDuChamp("nombre-montage"),
         seed: seed === "" ? null : Number(seed),
-        dossier: bobines.dossierOuvert(),  // tourné depuis un dossier ouvert : tous les clips y sont rangés
+        dossier: bobines.dossierCible(),  // dossier de destination choisi dans « 📥 Ranger dans »
         loras: lorasChoisies("loras-montage"),  // mots déclencheurs en tête du prompt, au tournage
     };
 }
