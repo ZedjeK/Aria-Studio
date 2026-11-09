@@ -91,6 +91,10 @@ async function preparerMontageMaintenant() {
     const ck = checkpointsVideo();
     remplirSelect("modele-montage", ck.lignes, ck.defaut);
     remplirSelect("qualite-montage", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.aide}`]), v.defaut_qualite);
+    // La Séquence, si elle est déjà préparée : ses boutons suivent les mégapixels réglés dans Réglages.
+    if (document.getElementById("qualite-sequence").options.length) {
+        remplirSelect("qualite-sequence", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.aide}`]), "rapide");
+    }
     remplirSelect("duree-montage", v.durees.map((d) => [String(d), `${d} s`]), "5");
     remplirSelect("format-montage", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     poserMaxNombre("nombre-montage", v.nombre_max);  // un champ à taper : le max vient du serveur

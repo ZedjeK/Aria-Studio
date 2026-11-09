@@ -65,7 +65,7 @@ def estimer(mode: str, modele: str | None, qualite: str, duree: int, nombre: int
         raise ValueError(f"Résolution inconnue : {qualite}")
     if mode not in plateau.MODES_VIDEO:
         raise ValueError(f"Mode inconnu : {mode}")
-    q = plateau.QUALITES_VIDEO[qualite]
+    q = plateau.qualites_video()[qualite]
     wf = workflows.obtenir(CONFIG.get("generation", {}).get(plateau.MODES_VIDEO[mode]))
     checkpoint = wf.choisi(modele)
     a_valider = wf.a_valider(checkpoint)

@@ -72,8 +72,9 @@ class Workflows(AvecFichierTemporaire):
         self.assertEqual(cles["krea2_turbo"], {"cfg", "sampler", "scheduler", "megapixels", "ratio", "mots_max"})
         self.assertEqual(cles["qwen_image_edit_2511"], {"cfg", "sampler", "scheduler", "shift"})
         self.assertEqual(cles["qwen_image_2_1_edit"], {"cfg", "sampler", "scheduler"})
-        self.assertEqual(cles["minimax_h3_t2v"], {"sampler", "scheduler", "megapixels", "ratio", "mots_max"})
-        self.assertEqual(cles["minimax_h3_i2v"], {"sampler", "scheduler", "megapixels", "mots_max"})
+        resolutions = {"resolution_rapide", "resolution_compromis", "resolution_qualite"}  # boutons du Montage (H3)
+        self.assertEqual(cles["minimax_h3_t2v"], {"sampler", "scheduler", "megapixels", "ratio", "mots_max"} | resolutions)
+        self.assertEqual(cles["minimax_h3_i2v"], {"sampler", "scheduler", "megapixels", "mots_max"} | resolutions)
         self.assertTrue(all("steps" in reglages.params_variante(wf) for wf in workflows.catalogue()))
 
     def test_h3_sampler_et_scheduler_dans_leurs_noeuds(self):
