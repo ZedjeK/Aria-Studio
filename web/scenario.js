@@ -152,8 +152,17 @@ function majAtelier() {
         document.getElementById("creer-prompt").textContent = lancer;
     }
     document.getElementById("prompt-final").value = a.final;
-    document.getElementById("chat-libre").hidden = !conversationActive().echanges.length
-        || (planAide() === null && Boolean(a.chatReplie));  // replié : la conversation reste, 💬 la rouvre
+    // Image, Retouche, Clip : une seule interface, le dialogue avec le LLM, toujours ouvert. Séquence : le chat
+    // s'ouvre avec 💬 (atelier ou plan) et se replie, la conversation reste.
+    const dialogue = formeScenario !== "sequence";
+    if (dialogue) rangerChat();  // decoupage.js : au cas où il était descendu sous un plan
+    document.getElementById("chat-libre").hidden = dialogue ? false : !conversationActive().echanges.length
+        || (planAide() === null && Boolean(a.chatReplie));
+    document.getElementById("message-libre").placeholder = dialogue
+        ? "Décris ce que tu imagines… (Entrée envoie, Maj+Entrée va à la ligne)"
+        : "Ta réponse… Clique une proposition pour l'ajouter ici · Entrée envoie, Maj+Entrée va à la ligne";
+    document.getElementById("prompt-final").placeholder = formeScenario === "sequence" ? ""
+        : "Le prompt écrit par le LLM arrive ici (✍️ Écris-le, dans la conversation) ; tu peux le modifier avant de générer.";
     rendreLibre();  // libre.js
     rendreEtiquettes();
     rendreReferencesScenario();  // references.js
@@ -857,10 +866,14 @@ document.getElementById("prompt-final").addEventListener("input", (e) => {
     garderBrouillon();
 });
 
-document.getElementById("effacer-prompt").addEventListener("click", () => {
-    if (!confirm(`Vider l'atelier ${document.querySelector(".onglet-scenario.actif").textContent.trim()} `
-        + "(idée, conversation, prompt final) ? Les listes et les images restent.")) return;
+// « Tout réinitialiser » (sous Générer) : l'atelier repart de zéro, comme à la première ouverture.
+document.getElementById("effacer-prompt").addEventListener("click", async () => {
+    if (!confirm(`Tout réinitialiser dans l'atelier ${document.querySelector(".onglet-scenario.actif").textContent.trim()} ? `
+        + "L'idée, la conversation, le prompt final, les images de départ et les compléments sont effacés.")) return;
     ateliers[formeScenario] = { idee: "", final: "", echanges: [], dernier: null };
+    Object.assign(refsScenario, { role: "texte", inspirer: [], variation: null, animer: null, retouche: null });
+    Object.keys(etatsPrompt).forEach((sujet) => delete etatsPrompt[sujet]);
     majAtelier();
+    await choisirSujet(sujetPrompt);  // relit les listes : plus aucun choix coché
     garderBrouillon();
 });

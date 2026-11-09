@@ -9,27 +9,39 @@
 </head>
 <body class="large">
     <main>
-        <h1><img class="logo" src="/static/logo.svg" alt="">Aria <span>Studio</span></h1>
-        <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
-
-        <nav>
-            <!-- Création : on écrit, on tourne, on monte. -->
-            <div class="famille-onglets" title="Création">
-                <button class="onglet" data-vue="scenario">📝 Scénario</button>
-                <button class="onglet actif" data-vue="plateau">🎬 Plateau</button>
-                <button class="onglet" data-vue="montage">🎞️ Montage</button>
+        <!-- Barre du studio, sur deux lignes : la marque et l'état des moteurs, puis les onglets. -->
+        <header class="entete-studio">
+            <div class="entete-haut">
+                <div class="marque">
+                    <h1><img class="logo" src="/static/logo.svg" alt="">Aria <span>Studio</span></h1>
+                    <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
+                </div>
+                <div class="entete-droite">
+                    <!-- État en direct des moteurs, visible depuis tous les onglets. -->
+                    <div id="etat-direct" class="etat-direct" title="État en direct"></div>
+                    <button id="quitter-appli" type="button" class="quitter-appli"
+                            title="Quitter Aria : arrête son serveur, ComfyUI et Llama">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                             stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quitter</button>
+                </div>
             </div>
-            <!-- Préparation : les modèles, leur casting à l'aveugle, leurs réglages. -->
-            <div class="famille-onglets" title="Préparation">
-                <button class="onglet" data-vue="modeles">🧩 Modèles</button>
-                <button class="onglet" data-vue="casting">🎭 Casting</button>
-                <button class="onglet" data-vue="reglages">⚙ Réglages</button>
-            </div>
-            <!-- État en direct des moteurs, visible depuis tous les onglets. -->
-            <div id="etat-direct" class="etat-direct" title="État en direct"></div>
-            <button id="quitter-appli" type="button" class="petit quitter-appli"
-                    title="Quitter Aria : arrête son serveur, ComfyUI et Llama">⏻ Quitter</button>
-        </nav>
+            <nav>
+                <!-- Création : on écrit, on tourne, on monte. -->
+                <div class="famille-onglets" title="Création">
+                    <span class="etiquette-famille">Création</span>
+                    <button class="onglet" data-vue="scenario">Scénario</button>
+                    <button class="onglet actif" data-vue="plateau">Plateau</button>
+                    <button class="onglet" data-vue="montage">Montage</button>
+                </div>
+                <!-- Préparation : les modèles, leur casting à l'aveugle, leurs réglages. -->
+                <div class="famille-onglets" title="Préparation">
+                    <span class="etiquette-famille">Préparation</span>
+                    <button class="onglet" data-vue="modeles">Modèles</button>
+                    <button class="onglet" data-vue="casting">Casting</button>
+                    <button class="onglet" data-vue="reglages">Réglages</button>
+                </div>
+            </nav>
+        </header>
         <!-- Après ⏻ Quitter : le serveur est arrêté, l'onglet peut être fermé. -->
         <div id="voile-quitte" class="voile" hidden>
             <div class="fenetre">
@@ -143,8 +155,8 @@
                     <details id="zone-references" class="references">
                         <summary>＋ Références <span id="compte-references" class="discret"></span></summary>
                         <div class="ligne entete-references">
-                            <label class="case"><input type="radio" name="mode-reference" value="inspirer" checked> 🎭 S'inspirer</label>
-                            <label class="case"><input type="radio" name="mode-reference" value="variation"> 🎨 Variation</label>
+                            <label class="case"><input type="radio" name="mode-reference" value="inspirer" checked> 🧩 Mélanger des images</label>
+                            <label class="case"><input type="radio" name="mode-reference" value="variation"> 🎨 Redessiner une image</label>
                             <label id="bloc-liberte" class="case discret" hidden>Liberté
                                 <input id="liberte-reference" type="range" min="0.3" max="0.9" step="0.05" value="0.6">
                                 <span id="valeur-liberte">0,60</span></label>
@@ -447,16 +459,15 @@
                  et à droite le prompt final, modifiable, qui part vers le Plateau ou le Montage. -->
             <section class="carte barre-scenario">
                 <div class="onglets-scenario" role="tablist">
-                    <button type="button" class="onglet-scenario actif" data-atelier="image">🖼️ Image</button>
-                    <button type="button" class="onglet-scenario" data-atelier="retouche">🖌️ Retouche</button>
-                    <button type="button" class="onglet-scenario" data-atelier="clip">🎞️ Clip</button>
-                    <button type="button" class="onglet-scenario" data-atelier="sequence">📽️ Séquence</button>
+                    <button type="button" class="onglet-scenario actif" data-atelier="image">Image</button>
+                    <button type="button" class="onglet-scenario" data-atelier="retouche">Retouche</button>
+                    <button type="button" class="onglet-scenario" data-atelier="clip">Clip</button>
+                    <button type="button" class="onglet-scenario" data-atelier="sequence">Séquence</button>
                 </div>
                 <div class="ligne options-creation">
+                    <span id="brouillon-scenario" class="discret" title="Chaque atelier garde son brouillon dans ce navigateur"></span>
                     <label>Modèle cible <select id="workflow-prompt"></select></label>
                     <label>LLM <select id="llm-atelier" title="👁 : il voit tes images de référence"></select></label>
-                    <span id="brouillon-scenario" class="discret" title="Chaque atelier garde son brouillon dans ce navigateur"></span>
-                    <button id="effacer-prompt" type="button" title="Vide cet atelier (idée, conversation, prompt)">Effacer</button>
                 </div>
             </section>
             <div class="prompt-guide">
@@ -465,13 +476,19 @@
                     <div class="bloc-atelier" id="bloc-depart">
                         <h3 class="titre-bloc">1 · Départ <span id="facultatif-depart" class="discret">(facultatif)</span></h3>
                         <p id="aide-reference-scenario" class="discret aide-volet"></p>
-                        <div class="ligne roles-reference" data-atelier-seul="image">
-                            <label class="case" title="Aucune image : le modèle crée tout à partir de ton idée et de tes compléments">
-                                <input type="radio" name="role-reference" value="texte" checked> ✍️ Texte vers image</label>
-                            <label class="case" title="Tes images sont des ingrédients : le modèle compose une nouvelle scène à partir d'elles (plusieurs images, format libre)">
-                                <input type="radio" name="role-reference" value="inspirer"> 🎭 S'inspirer</label>
-                            <label class="case" title="Une seule image est le point de départ : le modèle la redessine en partie, plus ou moins fort (Liberté, au Plateau)">
-                                <input type="radio" name="role-reference" value="variation"> 🎨 Variation</label>
+                        <div class="cartes-mode" role="radiogroup" aria-label="Comment démarrer" data-atelier-seul="image">
+                            <label class="carte-mode" title="Aucune image : le modèle crée tout à partir de ton idée et de tes compléments">
+                                <input type="radio" name="role-reference" value="texte" checked>
+                                <strong>Depuis un texte</strong>
+                                <small>Tu décris, le modèle crée tout</small></label>
+                            <label class="carte-mode" title="Tes images sont des ingrédients : le modèle compose une nouvelle scène à partir d'elles (plusieurs images, format libre)">
+                                <input type="radio" name="role-reference" value="inspirer">
+                                <strong>Mélanger des images</strong>
+                                <small>Plusieurs images, une nouvelle scène</small></label>
+                            <label class="carte-mode" title="Une seule image est le point de départ : le modèle la redessine en partie, plus ou moins fort (Liberté, au Plateau)">
+                                <input type="radio" name="role-reference" value="variation">
+                                <strong>Redessiner une image</strong>
+                                <small>Une image refaite, plus ou moins fort</small></label>
                         </div>
                         <div id="cases-reference-scenario" class="emplacements" data-atelier-sauf="sequence"></div>
                         <div class="bloc-source reference-sequence" data-atelier-seul="sequence">
@@ -485,6 +502,9 @@
                     <!-- 2 · Ton idée : le prompteur libre de l'atelier -->
                     <div class="bloc-atelier">
                         <h3 class="titre-bloc" id="titre-idee">2 · Ton idée</h3>
+                        <!-- Image, Retouche, Clip : tout passe par le chat ci-dessous (la première réponse est ton idée).
+                             Séquence : le fil de l'histoire se garde ici, avec ✨ Tout écrire et 💬. -->
+                        <div class="idee-sequence" data-atelier-seul="sequence">
                         <textarea id="idee-scenario" rows="4" maxlength="2000"></textarea>
                         <div class="ligne actions-idee">
                             <button id="optimiser-scenario" type="button" class="principal"
@@ -497,6 +517,7 @@
                             <button id="annuler-prompt" type="button" class="petit" hidden>✕ Annuler</button>
                         </div>
                         <p id="erreur-prompt" class="ko" hidden></p>
+                        </div>
                         <div id="place-chat-atelier">
                         <!-- 💬 M'aider à préciser (web/libre.js) : sous l'idée, ou sous un plan de la séquence. -->
                         <section id="chat-libre" class="chat-libre" hidden>
@@ -636,6 +657,10 @@
                         </div>
                         <p id="erreur-sequence-scenario" class="ko" hidden></p>
                     </div>
+                    <button id="effacer-prompt" type="button" class="reinitialiser"
+                            title="Efface l'idée, la conversation, le prompt final, les images de départ et les compléments">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Tout réinitialiser</button>
                 </aside>
             </div>
         </div>

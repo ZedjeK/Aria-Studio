@@ -261,18 +261,18 @@ class Plateau:
             fiche(id_ref)  # le rush doit exister
         if mode == "variation":
             if len(references) != 1:
-                raise ErreurPlateau("La variation part d'une seule image de référence")
+                raise ErreurPlateau("Redessiner une image part d'une seule image de référence")
             if not LIBERTE[0] <= liberte <= LIBERTE[1]:
                 raise ErreurPlateau(f"Liberté entre {LIBERTE[0]:g} et {LIBERTE[1]:g}")
             workflow = workflow or CONFIG.get("generation", {}).get("texte_vers_image")
             wf = workflows.obtenir(workflow)
             if wf.fiche["tache"] != "texte_vers_image" or not wf.accepte_variation():
-                raise ErreurPlateau(f"{wf.fiche['nom']} ne permet pas la variation")
+                raise ErreurPlateau(f"{wf.fiche['nom']} ne permet pas de redessiner une image")
             return workflow
         workflow = workflow or CONFIG.get("generation", {}).get("references")
         wf = workflows.obtenir(workflow)
         if wf.reserve_retouche():
-            raise ErreurPlateau(f"{wf.fiche['nom']} est réservé à la retouche : S'inspirer passe par un autre modèle")
+            raise ErreurPlateau(f"{wf.fiche['nom']} est réservé à la retouche : Mélanger des images passe par un autre modèle")
         if not 1 <= len(references) <= wf.accepte_references():
             raise ErreurPlateau(f"{wf.fiche['nom']} accepte de 1 à {wf.accepte_references()} images de référence")
         return workflow

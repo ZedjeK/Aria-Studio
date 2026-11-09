@@ -49,15 +49,20 @@ async function majEtatDirect() {
         zone.innerHTML = '<span class="pastille absent" title="Le serveur ne répond pas">● Serveur</span>';
         return;
     }
+    // Un moteur : vert s'il tient la carte, éteint sinon (app/main.py : « actif » = celui de l'orchestrateur).
     const pastille = (nom, m, detail = "") => `<span class="pastille ${m.etat}"
-        title="${nom} : ${ETATS_MOTEUR[m.etat]}${detail ? ` · ${echapper(detail)}` : ""}">● ${nom}</span>`;
+        title="${nom} : ${ETATS_MOTEUR[m.etat]}${detail ? ` · ${echapper(detail)}` : ""}"><i class="point"></i><b>${nom}</b>`
+        + `<span class="detail-pastille">${echapper(m.etat === "actif" && detail ? detail : ETATS_MOTEUR[m.etat])}</span></span>`;
     // Orange : une autre appli tient la carte (garde-VRAM), avec le coupable probable en infobulle.
     const alerte = e.garde?.attente ?? e.garde?.alerte;
     const titreVram = alerte
         ? `Carte occupée hors Aria${alerte.coupables.length ? ` : probablement ${alerte.coupables.map((c) => c.nom).join(", ")}` : ""}`
         : "VRAM occupée, tous programmes confondus";
+    const remplissage = e.vram_totale_go ? Math.min(100, Math.round(100 * e.vram_utilisee_go / e.vram_totale_go)) : 0;
     const vram = e.vram_totale_go
-        ? `<span class="vram-direct ${alerte ? "alerte-vram" : ""}" title="${echapper(titreVram)}">${alerte ? "⚠ " : ""}${e.vram_utilisee_go.toLocaleString("fr-FR")} / ${e.vram_totale_go.toLocaleString("fr-FR")} Go</span>`
+        ? `<span class="vram-direct ${alerte ? "alerte-vram" : ""}" title="${echapper(titreVram)}">`
+          + `<span>${alerte ? "⚠ " : ""}${e.vram_utilisee_go.toLocaleString("fr-FR")} / ${e.vram_totale_go.toLocaleString("fr-FR")} Go</span>`
+          + `<span class="jauge-vram"><span style="width:${remplissage}%"></span></span></span>`
         : "";
     zone.innerHTML = enCours(e.commande) + pastille("ComfyUI", e.comfyui) + pastille("Llama", e.llama, e.llama.modele) + vram;
     majBandeauGarde(e.garde?.attente);

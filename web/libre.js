@@ -48,8 +48,16 @@ function rendreLibre() {
     let html = a.echanges.map((e, k) => {
         if (e.role === "note") return `<div class="bulle bulle-note">${echapper(e.content)}</div>`;
         if (e.role === "user") {
-            const texte = e.content === ECRIRE_LIBRE ? "✍️ Écris-le maintenant" : e.content;
-            return bulle("bulle-toi", k === 0 ? "💡 Ton idée" : "Toi", `<p>${echapper(texte)}</p>`);
+            const ecrire = e.content === ECRIRE_LIBRE;
+            const texte = ecrire ? "✍️ Écris-le maintenant" : e.content;
+            // Au survol : réessayer (le LLM répond de nouveau), modifier (le texte revient dans le champ), copier.
+            const actions = [["reessayer", "↻ Réessayer", "Le LLM répond de nouveau à ce message"],
+                             ...(ecrire ? [] : [["modifier", "✎ Modifier", "Remet ce message dans le champ ; ce qui le suit disparaît"],
+                                               ["copier", "⧉ Copier", "Copie ce message"]])]
+                .map(([id, nom, aide]) => `<button type="button" class="petit" data-action-bulle="${id}" data-echange="${k}"
+                    title="${aide}">${nom}</button>`).join("");
+            return `<div class="message-toi">${bulle("bulle-toi", k === 0 ? "💡 Ton idée" : "Toi", `<p>${echapper(texte)}</p>`)}
+                <div class="actions-bulle">${actions}</div></div>`;
         }
         const t = lireTour(e.content);
         const questions = t.questions ?? [];
@@ -78,8 +86,10 @@ function rendreLibre() {
         <button type="button" class="oublier" data-oublier="${echapper(k)}" title="Faux ? Retire-le : le LLM le reposera">✕</button></li>`).join("");
     document.getElementById("fiche-vide-libre").hidden = Object.keys(fiche).length > 0;
 
-    document.getElementById("titre-chat").textContent = planAide() !== null
-        ? `💬 Plan ${planAide() + 1} · ${nom}` : `💬 Préciser avec ${nom}`;
+    document.getElementById("titre-chat").textContent = planAide() !== null ? `💬 Plan ${planAide() + 1} · ${nom}`
+        : formeScenario === "sequence" ? `💬 Préciser avec ${nom}` : `Conversation · ${nom}`;
+    // Image, Retouche, Clip : le chat est toujours ouvert, il n'y a rien à replier.
+    document.getElementById("replier-libre").hidden = planAide() === null && formeScenario !== "sequence";
     const vide = !a.echanges.length;
     document.getElementById("retour-libre").disabled = occupePrompt || vide;
     document.getElementById("recommencer-libre").disabled = occupePrompt || vide;
@@ -192,6 +202,10 @@ async function envoyerLibre(texte) {
     const forme = plan !== null ? "plan" : formeScenario;
     const champ = document.getElementById("message-libre");
     a.echanges.push({ role: "user", content: texte });
+    if (plan === null && formeScenario !== "sequence" && a.echanges.length === 1 && texte !== ECRIRE_LIBRE) {
+        a.idee = texte;  // Image, Retouche, Clip : ton premier message est ton idée (✍️ Écris-le et l'envoi la relisent)
+        document.getElementById("idee-scenario").value = texte;
+    }
     if (texte !== ECRIRE_LIBRE) champ.value = "";
     const premier = a.echanges.length === 1;
     const r = await tourLibre(a, texte === ECRIRE_LIBRE ? "Il écrit… (il réfléchit)"
@@ -286,6 +300,40 @@ function tourEnArriere() {
     garderBrouillon();
 }
 
+// Actions au survol de ta bulle : ↻ le LLM répond de nouveau, ✎ le texte revient dans le champ (ce qui suivait
+// disparaît), ⧉ copie. Réessayer et Modifier reviennent à ce message : tout ce qui le suivait est retiré.
+async function actionBulle(action, k) {
+    const a = conversationActive();
+    const message = a.echanges[k];
+    if (message?.role !== "user") return;
+    const statut = document.getElementById("statut-libre");
+    if (action === "copier") {
+        try {
+            await navigator.clipboard.writeText(message.content);
+            statut.textContent = "Copié.";
+        } catch {
+            statut.textContent = "Copie refusée par le navigateur.";
+        }
+        return;
+    }
+    if (occupePrompt) return;
+    const texte = message.content;
+    a.echanges = a.echanges.slice(0, k);
+    const dernier = a.echanges.findLastIndex((x) => x.role === "assistant");
+    a.dernier = dernier >= 0 ? lireTour(a.echanges[dernier].content) : null;
+    document.getElementById("erreur-libre").hidden = true;
+    statut.textContent = "";
+    if (action === "reessayer") {
+        await envoyerLibre(texte);
+        return;
+    }
+    const champ = document.getElementById("message-libre");
+    champ.value = texte;
+    rendreLibre();
+    garderBrouillon();
+    champ.focus();
+}
+
 // ✕ sur une ligne de « Compris » : elle quitte la fiche, ici et dans le dernier tour du LLM, qu'il relit.
 function oublierLibre(cle) {
     const a = conversationActive();
@@ -339,6 +387,11 @@ document.getElementById("fiche-libre").addEventListener("click", (e) => {
 document.getElementById("conversation-libre").addEventListener("click", (e) => {
     if (e.target.closest("#annuler-libre")) {
         attenteLibre?.controleur.abort();
+        return;
+    }
+    const action = e.target.closest("[data-action-bulle]");
+    if (action) {
+        actionBulle(action.dataset.actionBulle, Number(action.dataset.echange));
         return;
     }
     const bouton = e.target.closest("[data-choix]");
