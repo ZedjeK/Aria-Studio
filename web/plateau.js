@@ -570,13 +570,11 @@ document.getElementById("importer").addEventListener("change", async (e) => {
 
 // Glisser-déposer : une image lâchée n'importe où sur le Plateau suit le même chemin que le bouton « Importer ».
 // Seuls les fichiers venus de l'extérieur comptent (pas une vignette de la galerie qu'on déplace),
-// et jamais pendant une retouche, pour ne pas perdre le masque en cours.
 let survolsDepot = 0;
 const voileDepot = document.getElementById("voile-depot");
 const depotPossible = (e) => e.dataTransfer?.types.includes("Files")
     && !e.dataTransfer.types.includes("text/aria-rush")  // une vignette des rushes qu'on déplace n'est pas un import
-    && !document.getElementById("vue-plateau").hidden
-    && document.getElementById("panneau-retouche").hidden;
+    && !document.getElementById("vue-plateau").hidden;
 
 window.addEventListener("dragenter", (e) => {
     if (!depotPossible(e)) return;

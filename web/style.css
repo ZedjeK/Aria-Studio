@@ -3776,34 +3776,34 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 
 /* Scénario, Plateau, Montage, Modèles, Casting (pas Réglages) : boutons du Scénario (angles droits, majuscules, actif plein cyan). Durée et Qualité deviennent des groupes
    de boutons en parallélogramme (web/commun.js, groupeBoutons) ; Checkpoint prend la largeur libre de sa ligne. */
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button:not(.onglet) {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button:not(.onglet) {
     border-radius: 0;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit,
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet,
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation button.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.petit,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.sous-onglet,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation button.principal {
     font-family: var(--font-display);
     text-transform: uppercase;
     letter-spacing: .06em;
     font-size: .74rem;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit:not(.principal),
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.petit:not(.principal),
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.sous-onglet {
     border: 1px solid var(--line-strong);
     background: transparent;
     color: var(--discret);
     padding: 6px 14px;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit:not(.principal):hover:not(:disabled),
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet:hover {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.petit:not(.principal):hover:not(:disabled),
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.sous-onglet:hover {
     border-color: var(--accent);
     color: var(--texte);
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet.actif {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.sous-onglet.actif {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--bg);
@@ -3811,33 +3811,33 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     box-shadow: none;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.petit.principal {
     background: transparent;
     border: 1px solid var(--action);
     color: var(--action);
     padding: 6px 14px;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .mode-carte {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .mode-carte {
     border-radius: 0;
     background: var(--surface);
     clip-path: polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);
     transform: none;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .mode-carte strong {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .mode-carte strong {
     text-transform: uppercase;
     letter-spacing: .04em;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 12px;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation label {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -3852,12 +3852,12 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     text-transform: uppercase;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label:focus-within {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation label:focus-within {
     border-color: var(--accent);
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation select,
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation input {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation select,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation input {
     flex: none;
     border: 0;
     background: transparent;
@@ -3868,15 +3868,15 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     border-radius: 0;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation input#seed-montage {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation input#seed-montage {
     width: 7rem;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation input.nombre {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation input.nombre {
     width: 3.5rem;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation button.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation button.principal {
     margin-left: auto;
     padding: 10px 34px;
     background: var(--action);
@@ -3886,14 +3886,14 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     font-size: .85rem;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .groupe-boutons {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     align-items: center;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons>span {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .groupe-boutons>span {
     font-family: var(--font-display);
     font-size: .7rem;
     letter-spacing: .08em;
@@ -3902,7 +3902,7 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     margin-right: 2px;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .groupe-boutons button {
     padding: 6px 14px;
     border: 1px solid var(--line-strong);
     background: transparent;
@@ -3911,79 +3911,79 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     font-size: .78rem;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button:hover {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .groupe-boutons button:hover {
     border-color: var(--accent);
     color: var(--texte);
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button.actif {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .groupe-boutons button.actif {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--bg);
     font-weight: 700;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit,
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet,
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.petit,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.sous-onglet,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation label {
     clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
     padding-left: 18px;
     padding-right: 18px;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation label {
     padding: 4px 14px 4px 20px;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation button.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation button.principal {
     clip-path: polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
     padding: 12px 44px;
     filter: drop-shadow(0 0 10px color-mix(in srgb,var(--action) 55%,transparent));
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .groupe-boutons {
     gap: 4px;
     flex: none;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .groupe-boutons button {
     clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
     padding: 7px 20px;
     font-size: .78rem;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button.actif {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .groupe-boutons button.actif {
     box-shadow: none;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation {
     row-gap: 14px;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label.checkpoint {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation label.checkpoint {
     flex: 1 1 260px;
     min-width: 0;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label.checkpoint select {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation label.checkpoint select {
     flex: 1;
     width: auto;
     min-width: 0;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .saut-ligne {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .saut-ligne {
     flex-basis: 100%;
     height: 0;
     margin: -6px 0;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation button.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .options-creation button.principal {
     margin-left: auto;
 }
 
 /* Mêmes segments pour les autres sélecteurs en boutons : ateliers et onglets du Scénario, types de modèles, tâches du
    Casting, filtres des galeries. */
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,label.bouton.petit,#ecrire-libre,#envoyer-prompt,button:not([class])) {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,label.bouton.petit,#telecharger-retouche,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])) {
     border-radius: 0;
     border: 1px solid var(--line-strong);
     background: transparent;
@@ -3998,25 +3998,25 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,label.bouton.petit,#ecrire-libre,#envoyer-prompt,button:not([class])):hover:not(.actif):not(:disabled) {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,label.bouton.petit,#telecharger-retouche,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])):hover:not(.actif):not(:disabled) {
     border-color: var(--accent);
     color: var(--texte);
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,#ecrire-libre,#envoyer-prompt,button:not([class])).actif {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])).actif {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--bg);
     font-weight: 700;
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .vue-rush .nombre {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) .vue-rush .nombre {
     color: inherit;
     opacity: .7;
 }
 
 /* Bouton d'action principal hors de la rangée d'options (Scénario, Casting, Séquence du Montage) : même parallélogramme orange. */
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.principal:not(.petit) {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) button.principal:not(.petit) {
     border-radius: 0;
     clip-path: polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
     font-family: var(--font-display);
@@ -4113,4 +4113,186 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 #notification-fin span {
     font-size: .8rem;
     color: var(--discret);
+}
+
+/* Onglet Retouche (web/retouche.js) */
+.entete-retouche {
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.entete-retouche h2 {
+    margin: 0;
+    margin-right: auto;
+}
+
+.vide-retouche {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 12px 0;
+}
+
+.vide-retouche p {
+    margin: 0 0 8px;
+}
+
+#source-retouche {
+    width: 160px;
+    height: 120px;
+    flex: none;
+}
+
+#vue-retouche .toile img {
+    max-height: 62vh;
+}
+
+#vue-retouche #consigne-retouche {
+    width: 100%;
+}
+
+.comparaison {
+    --position: 50%;
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    user-select: none;
+    overflow: hidden;
+}
+
+.comparaison > img {
+    display: block;
+    max-width: 100%;
+    max-height: 70vh;
+}
+
+.comparaison .avant {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(45deg, var(--carte), var(--carte) 6px, var(--fond) 6px, var(--fond) 12px);
+    clip-path: inset(0 calc(100% - var(--position)) 0 0);
+}
+
+.comparaison .avant img {
+    position: absolute;
+    display: block;
+    object-fit: fill;
+}
+
+.comparaison .trait {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--position);
+    width: 2px;
+    margin-left: -1px;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    pointer-events: none;
+}
+
+.comparaison .poignee {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--accent);
+    background: var(--carte);
+    color: var(--accent);
+    font-size: 1.1rem;
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+.comparaison input[type="range"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: ew-resize;
+}
+
+.comparaison input[type="range"]:focus-visible ~ .trait,
+.comparaison:has(input:focus-visible) .poignee {
+    box-shadow: 0 0 0 3px var(--accent);
+}
+
+.comparaison .etiq,
+.comparaison-cote .etiq {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 3px 14px 3px 16px;
+    background: rgba(5, 10, 20, 0.8);
+    color: var(--discret);
+    font: 700 0.68rem var(--font-display);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+    pointer-events: none;
+}
+
+.comparaison .etiq.a-droite {
+    left: auto;
+    right: 10px;
+}
+
+.comparaison .etiq.actif,
+.comparaison-cote .etiq.actif {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+.comparaison-cote {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.comparaison-cote figure {
+    position: relative;
+    margin: 0;
+}
+
+.comparaison-cote img {
+    display: block;
+    width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+.aide-comparaison {
+    text-align: center;
+    margin: 10px 0 0;
+}
+
+.actions-resultat-retouche {
+    margin-top: 14px;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+#infos-resultat-retouche {
+    margin-left: auto;
+}
+
+@media (max-width: 700px) {
+    .comparaison-cote {
+        grid-template-columns: 1fr;
+    }
+
+    .vide-retouche {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }

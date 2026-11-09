@@ -27,8 +27,9 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
     de ce qu'il a compris, puis écrit le prompt avec toi et l'ajuste.
 
   Le prompt final, toujours visible et modifiable, part vers le Plateau ou le Montage.
-- **Plateau** : il tourne ce prompt tel quel, avec ses réglages (modèle, format, LoRA, références, redessiner une image). Il
-  retouche aussi une image (avec ou sans masque : le LLM traduit ta consigne en voyant l'image) et l'agrandit.
+- **Plateau** : il tourne ce prompt tel quel, avec ses réglages (modèle, format, LoRA, références, redessiner une image).
+- **Retouche** : retoucher un rush au pinceau (avec ou sans masque ; le Scénario peut écrire la consigne en voyant
+  l'image) ou l'agrandir, puis comparer le résultat à l'original avec un curseur ou côte à côte, et repartir du résultat.
 - **Montage** : des clips vidéo avec le son (MiniMax H3), en animant un rush ou depuis le texte, et les séquences :
   il tourne les plans écrits au Scénario, avec la voix de référence de ta bibliothèque, puis assemble le film.
 - **Casting** : des bancs pour comparer les modèles d'image et les LLM sur les mêmes idées, et choisir tes favoris.
