@@ -384,6 +384,7 @@ function ouvrirClip(f) {
         ["Idée", f.idee || "—"],
         ["Prompt", f.prompt],
         ["LLM", f.llm ? f.llm.replace(".gguf", "") : "aucun"],
+        ["Modèle", f.modele ? `${f.workflow} · ${f.modele}` : f.workflow ?? "—"],  // comme la fiche d'une image (plateau.js)
         ["Qualité", [nomQualite(f.qualite), f.megapixels && `${f.megapixels} MP`,
                      f.steps && `${f.steps} steps`].filter(Boolean).join(" · ")],
         ["LoRA", f.loras?.length ? f.loras.map((l) => `${l.fichier.replace(/\.safetensors$/, "")} (${virgule(l.force)})`).join(" · ") : "aucune"],
