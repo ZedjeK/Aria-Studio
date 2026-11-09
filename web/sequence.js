@@ -244,6 +244,7 @@ document.getElementById("vers-scenario-sequence").addEventListener("click", asyn
     }
     ouvrirScenario("sequence");
 });
+groupeBoutons("qualite-sequence", "Résolution");  // web/commun.js, comme au Montage
 [["voix-sequence", (v) => { sequenceCourante.casting.voix = v || null; majEcouteVoix(); }],
  ["modele-sequence", (v) => { sequenceCourante.modele = v || null; }],
  ["qualite-sequence", (v) => { sequenceCourante.qualite = v; }],

@@ -323,6 +323,7 @@ document.getElementById("contrainte-scenario").addEventListener("input", (e) => 
     garderBrouillon();
 });
 
+groupeBoutons("nombre-plans-scenario", "Nombre de plans");
 document.getElementById("nombre-plans-scenario").addEventListener("change", (e) => {
     const n = Number(e.target.value);
     const remplis = decoupage.plans.slice(n).filter((p) => p.note.trim() || p.replique.trim() || p.prompt.trim()).length;

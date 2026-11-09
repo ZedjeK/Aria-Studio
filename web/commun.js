@@ -128,9 +128,9 @@ function messageAnnulation(c, nom, feminin = false) {
 
 const urlImage = (id) => `/api/creations/${encodeURIComponent(id)}/image`;
 
-// Un select présenté en groupe de boutons (Montage : Qualité, Durée). Le select reste la source de vérité, caché : le
-// reste du code continue de le lire, de le remplir (remplirSelect) et d'écouter « change ». Le groupe suit ses options et
-// aussi un « select.value = … » posé par le code.
+// Un select présenté en groupe de boutons (Montage, Scénario, Séquence, Modèles). Le select reste la source de vérité,
+// caché : le reste du code continue de le lire, de le remplir (remplirSelect) et d'écouter « change ». Le groupe suit ses
+// options (et leur « disabled »), un « select.value = … » posé par le code, et le « hidden » de son étiquette.
 function groupeBoutons(idSelect, titre) {
     const select = document.getElementById(idSelect);
     const etiquette = select.closest("label");
@@ -151,8 +151,10 @@ function groupeBoutons(idSelect, titre) {
         for (const option of select.options) {
             const bouton = document.createElement("button");
             bouton.type = "button";
+            bouton.className = "choix";  // pas un bouton nu : le style des segments ne le reprend pas
             bouton.setAttribute("role", "radio");
             bouton.dataset.valeur = option.value;
+            bouton.disabled = option.disabled;
             bouton.title = option.textContent;  // le détail (MP, steps) en infobulle
             bouton.textContent = option.textContent.split(" · ")[0].replace(/^[^\wÀ-ÿ]+/, "").trim() || option.value;
             bouton.addEventListener("click", () => {
@@ -170,7 +172,10 @@ function groupeBoutons(idSelect, titre) {
         set(v) { natif.set.call(this, v); rafraichir(); },
     });
     select.addEventListener("change", rafraichir);
-    new MutationObserver(construire).observe(select, { childList: true });
+    new MutationObserver(construire).observe(select, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
+    const suivreEtiquette = () => { groupe.hidden = etiquette.hidden; };
+    new MutationObserver(suivreEtiquette).observe(etiquette, { attributes: true, attributeFilter: ["hidden"] });
+    suivreEtiquette();
     construire();
 }
 

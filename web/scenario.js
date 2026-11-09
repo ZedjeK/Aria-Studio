@@ -238,6 +238,7 @@ function majDuree() {
     }
     ici.value = source.value;
 }
+groupeBoutons("duree-scenario", "Durée");  // web/commun.js : miroir de « Durée du clip » des Compléments
 document.getElementById("duree-scenario").addEventListener("change", (e) => {
     document.getElementById("duree-prompt").value = e.target.value;
     document.getElementById("duree-prompt").dispatchEvent(new Event("change", { bubbles: true }));

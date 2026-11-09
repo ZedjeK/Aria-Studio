@@ -56,6 +56,8 @@ function majAide() {
         : "");
 }
 document.getElementById("source-decouvrir").addEventListener("change", majAide);
+groupeBoutons("source-decouvrir", "Source");  // Civitai grisé pour les LLM (option désactivée)
+groupeBoutons("tri-decouvrir", "Tri");
 
 document.getElementById("types-decouvrir").addEventListener("click", async (e) => {
     const type = e.target.closest("[data-type]")?.dataset.type;
