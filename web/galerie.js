@@ -2,6 +2,9 @@
 // Mêmes vues (Tous, Non rangés, dossiers, Archives, Corbeille), mêmes dossiers, même sélection.
 // Ranger ne déplace aucun fichier : la fiche note son dossier, son archivage ou sa mise à la corbeille.
 //
+// Par défaut, rien n'est affiché : un rush ou un clip peut être sensible. On ouvre « Tous » ou un dossier quand on le veut
+// (🙈 Masquer referme). Tant que c'est masqué, seuls les compteurs sont lus : aucune vignette n'est demandée.
+//
 // Le balisage d'une galerie porte des data-role : compte, vues, selectionner, barre, compte-selection,
 // ranger-dans, vignettes (voir index.html). « Vider la corbeille » est dans la rangée des vues, vue Corbeille.
 
@@ -9,21 +12,54 @@ const ACTIONS_DEPOT = { non_ranges: ["ranger", null], archives: ["archiver"], co
 const actionDepot = (cle) => (cle?.startsWith("dossier:") ? ["ranger", cle.slice(8)] : ACTIONS_DEPOT[cle]);
 
 // `actions(fiche)` : actions propres au genre du menu clic droit, [[libellé, fonction]] (variante, animer…).
-function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = () => [] }) {
+function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = () => [], destination = null }) {
     const $ = (role) => racine.querySelector(`[data-role="${role}"]`);
-    const g = { fiches: [], etat: null, vue: { vue: "tous", dossier: null }, selection: new Set(), modeSelection: false };
+    const g = { fiches: [], etat: null, vue: { vue: "masque", dossier: null }, selection: new Set(), modeSelection: false };
     let dernierClic = null;  // pour Maj + clic
     const pluriel = (n) => `${n} ${mot}${n > 1 ? "s" : ""}`;
     const cleVue = () => (g.vue.dossier ? `dossier:${g.vue.dossier}` : g.vue.vue);
 
-    g.dossierOuvert = () => g.vue.dossier;  // une création lancée depuis un dossier ouvert y est rangée
+    // Le dossier de destination : celui où sont rangés les prochains rushs ou clips (créés, importés, tournés). Il se choisit
+    // dans le formulaire (liste « 📥 Ranger dans »), indépendamment de ce qui est affiché ; retenu entre deux ouvertures.
+    const cleCible = `aria.destination.${genre}`;
+    let cible = null;
+    try {
+        cible = localStorage.getItem(cleCible) || null;
+    } catch { /* stockage indisponible : « Non rangés » */ }
+    g.dossierCible = () => cible;
+
+    function rendreDestination() {
+        const noms = (g.etat?.dossiers ?? []).map((d) => d.nom);
+        if (cible && g.etat && !noms.includes(cible)) cible = null;  // dossier supprimé ou renommé
+        const options = '<option value="">Non rangés</option>' + noms.map((n) =>
+            `<option value="${echapper(n)}" ${n === cible ? "selected" : ""}>📁 ${echapper(n)}</option>`).join("");
+        if (destination) destination.innerHTML = options;
+    }
+    if (destination) {
+        destination.addEventListener("change", () => {
+            cible = destination.value || null;
+            try {
+                if (cible) localStorage.setItem(cleCible, cible);
+                else localStorage.removeItem(cleCible);
+            } catch { /* tant pis : le choix vaut pour cette session */ }
+        });
+    }
 
     g.charger = async () => {
+        if (g.vue.vue === "masque" && !g.vue.dossier) {
+            g.fiches = [];
+            g.etat = await api("GET", `/api/rushes?genre=${genre}`);
+            g.selection.clear();
+            g.modeSelection = false;
+            rendreVues();
+            rendre();
+            return;
+        }
         const params = new URLSearchParams({ vue: g.vue.dossier ? "tous" : g.vue.vue, genre });
         if (g.vue.dossier) params.set("dossier", g.vue.dossier);
         [g.fiches, g.etat] = await Promise.all([api("GET", `/api/creations?${params}`), api("GET", `/api/rushes?genre=${genre}`)]);
         if (g.vue.dossier && !g.etat.dossiers.some((d) => d.nom === g.vue.dossier)) {
-            g.vue = { vue: "tous", dossier: null };  // dossier supprimé ou renommé entre-temps
+            g.vue = { vue: "masque", dossier: null };  // dossier supprimé ou renommé entre-temps
             return g.charger();
         }
         [...g.selection].filter((id) => !g.fiches.some((f) => f.id === id)).forEach((id) => g.selection.delete(id));
@@ -33,6 +69,7 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
 
     function rendreVues() {
         const e = g.etat;
+        rendreDestination();
         const actif = cleVue();
         const pastille = (cle, libelle, nombre) => `<button type="button" class="vue-rush ${cle === actif ? "actif" : ""}"
             data-vue-rush="${echapper(cle)}">${libelle} <span class="nombre">${nombre}</span></button>`;
@@ -48,14 +85,20 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
             // Dans la corbeille, le bouton qui la vide est ici, avec les autres : plus besoin de tout dérouler.
             + (actif === "corbeille" && e.corbeille
                 ? `<button type="button" class="petit danger" data-vider-corbeille="1"
-                    title="Ce qui est dans la corbeille reste restaurable jusqu'à ce que tu la vides">Vider la corbeille</button>` : "");
+                    title="Ce qui est dans la corbeille reste restaurable jusqu'à ce que tu la vides">Vider la corbeille</button>` : "")
+            + (actif !== "masque"
+                ? '<button type="button" class="vue-rush masquer" data-masquer="1" title="Ne plus afficher les vignettes">🙈 Masquer</button>' : "");
     }
 
     function rendre() {
-        $("compte").textContent = `· ${pluriel(g.fiches.length)}`;
-        $("vignettes").innerHTML = g.fiches.length
-            ? g.fiches.map((f) => vignette(f, g.selection.has(f.id))).join("")
-            : `<p class="discret">${vides[g.vue.dossier ? "dossier" : g.vue.vue]}</p>`;
+        const masque = g.vue.vue === "masque" && !g.vue.dossier;
+        $("compte").textContent = masque ? `· ${pluriel(g.etat.tous)} en tout` : `· ${pluriel(g.fiches.length)}`;
+        $("selectionner").hidden = masque || g.modeSelection;
+        $("vignettes").innerHTML = masque
+            ? `<p class="discret masque-galerie">🙈 Rien n'est affiché par défaut. Ouvre « Tous » ou un dossier pour voir tes ${mot}s.</p>`
+            : g.fiches.length
+                ? g.fiches.map((f) => vignette(f, g.selection.has(f.id))).join("")
+                : `<p class="discret">${vides[g.vue.dossier ? "dossier" : g.vue.vue]}</p>`;
         $("vignettes").classList.toggle("en-selection", g.modeSelection);
         majBarre();
     }
@@ -63,7 +106,7 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
     function majBarre() {
         const barre = $("barre");
         barre.hidden = !g.modeSelection;
-        $("selectionner").hidden = g.modeSelection;
+        if (g.vue.vue !== "masque" || g.vue.dossier) $("selectionner").hidden = g.modeSelection;
         if (!g.modeSelection) return;
         const n = g.selection.size;
         $("compte-selection").textContent = `${n} sélectionné${n > 1 ? "s" : ""}`;
@@ -131,6 +174,7 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
         if (!bouton) return;
         try {
             if (bouton.dataset.vueRush) changerVue(bouton.dataset.vueRush);
+            if (bouton.dataset.masquer) changerVue("masque");
             if (bouton.dataset.nouveauDossier) {
                 const nom = prompt("Nom du nouveau dossier :");
                 if (!nom?.trim()) return;
@@ -153,7 +197,7 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
                 && confirm(`Supprimer le dossier « ${g.vue.dossier} » ? Ses images et ses clips ne sont pas supprimés : `
                     + "ils retournent dans « Non rangés ».")) {
                 await api("DELETE", `/api/rushes/dossiers/${encodeURIComponent(g.vue.dossier)}`);
-                changerVue("tous");
+                changerVue("masque");
             }
         } catch (err) {
             alert(err.message);
