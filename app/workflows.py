@@ -63,18 +63,49 @@ class Workflow:
         famille n'en a aucun, pas un passage obligé."""
         return next(f["nom"] for f in self.fiche["fichiers"] if f["dossier"] == f"{self.famille}/modeles")
 
-    def variantes(self) -> list[str]:
-        """Checkpoints présents dans <Famille>/modeles, celui d'origine d'abord s'il est là. C'est la famille qui
-        compte : l'origine supprimée, les autres checkpoints de la famille servent toujours. Un checkpoint téléchargé et
-        pas encore validé (Modèles → « À valider ») n'est pas proposé."""
-        dossier = f"{self.famille}/modeles"
-        deposes = [m for m in modeles.fichiers(dossier, modeles.EXTENSIONS_IMAGE) if not modeles.en_attente(dossier, m)]
+    def presents(self) -> list[str]:
+        """Checkpoints déposés dans <Famille>/modeles, validés ou non, celui d'origine d'abord s'il est là."""
+        deposes = modeles.fichiers(f"{self.famille}/modeles", modeles.EXTENSIONS_IMAGE)
         return sorted(deposes, key=lambda m: m != self.modele_origine)
 
+    def variantes(self) -> list[str]:
+        """Checkpoints proposés (Plateau, Montage, séquences, Réglages) : ceux présents dont les steps sont connus. C'est
+        la famille qui compte : l'origine supprimée, les autres checkpoints de la famille servent toujours. Un checkpoint
+        sans steps validés attend dans Modèles → Ma collection (« À valider »)."""
+        return [m for m in self.presents() if not self.a_valider(m)]
+
+    def en_attente(self) -> list[str]:
+        """Checkpoints présents qui attendent que l'utilisateur valide leurs steps."""
+        return [m for m in self.presents() if self.a_valider(m)]
+
+    def steps_clairs(self) -> int:
+        """Les steps du checkpoint d'origine, si sa fiche n'en donne qu'une valeur (défaut et recommandation d'accord, ou
+        une seule des deux). Deux valeurs différentes (H3 : 8 par défaut, 12 recommandé) : 0, c'est à l'utilisateur."""
+        if "steps" not in self.fiche["entrees"]:
+            return 0
+        dits = {self.fiche.get("defauts", {}).get("steps")}
+        dits |= {v.get("valeur") for v in (self.fiche.get("recommandations") or {}).get("valeurs", [])
+                 if v.get("cle") == "steps"}
+        dits.discard(None)
+        return int(dits.pop()) if len(dits) == 1 else 0
+
+    def steps_de(self, fichier: str) -> int:
+        """Steps d'un checkpoint : ceux validés par l'utilisateur, sinon ceux de la fiche pour l'origine quand elle est
+        claire. 0 : inconnus, le checkpoint est à valider."""
+        propres = int(reglages.valeurs_variante(self, fichier).get("steps") or 0)
+        if propres:
+            return propres
+        return self.steps_clairs() if fichier == self.modele_origine else 0
+
+    def a_valider(self, fichier: str) -> bool:
+        """Un checkpoint n'est proposé que si ses steps sont connus (validés, ou clairs dans la fiche). Un workflow sans
+        entrée « steps » n'a rien à valider."""
+        return "steps" in self.fiche["entrees"] and not self.steps_de(fichier)
+
     def manquants(self) -> list[dict]:
-        """Fichiers de la fiche absents. Le checkpoint d'origine n'en est que si la famille n'a aucun checkpoint ; les
-        fichiers communs (encodeurs, VAE, LoRA du workflow) restent nécessaires."""
-        dossier, un_checkpoint = f"{self.famille}/modeles", bool(self.variantes())
+        """Fichiers de la fiche absents. Le checkpoint d'origine n'en est que si la famille n'a aucun checkpoint (même à
+        valider : il est là, on ne le retélécharge pas) ; les fichiers communs (encodeurs, VAE, LoRA) restent nécessaires."""
+        dossier, un_checkpoint = f"{self.famille}/modeles", bool(self.presents())
         return [f for f in self.fiche["fichiers"] if not (f["dossier"] == dossier and un_checkpoint)
                 and not modeles.destination(f["dossier"], f["nom"]).is_file()]
 
@@ -96,6 +127,7 @@ class Workflow:
             "manquants": manquants,
             "a_telecharger": sum(f["taille"] for f in manquants),
             "modeles": self.variantes(),
+            "a_valider": self.en_attente(),
             "origine": self.modele_origine,
             "loras": modeles.loras(self.famille),
         }
@@ -111,11 +143,15 @@ class Workflow:
         tout = {**self.fiche.get("defauts", {}), **{k: v for k, v in regle.items() if k in entrees}, **valeurs}
         if tout.get("modele") is None:
             tout.pop("modele", None)  # le modèle d'origine, déjà dans api.json
-        elif tout["modele"] not in self.variantes():
+        elif tout["modele"] not in self.presents():
             raise ErreurWorkflow(f"Modèle absent de {self.famille}/modeles : {tout['modele']}")
-        variante = reglages.valeurs_variante(self, tout.get("modele") or self.modele_origine)
-        if variante.get("steps") and "steps" in entrees:
-            tout["steps"] = variante["steps"]  # ce checkpoint impose les siens (réglage par variante)
+        checkpoint = tout.get("modele") or self.modele_origine
+        if self.a_valider(checkpoint):
+            raise ErreurWorkflow(f"Checkpoint à valider : {checkpoint}. Ses steps ne sont pas connus : valide-les dans "
+                                 "Modèles → Ma collection avant de t'en servir")
+        variante = reglages.valeurs_variante(self, checkpoint)
+        if "steps" in entrees and "steps" not in valeurs:
+            tout["steps"] = self.steps_de(checkpoint)  # les steps du checkpoint (validés, ou clairs dans sa fiche)
         choix_loras = tout.pop("loras", None) or []
         references = tout.pop("references", None) or []  # images 2 et 3 (déjà téléversées) ; l'image 1 = « image »
         format_sortie = tout.pop("format_sortie", None)  # S'inspirer : format choisi au lieu de celui de l'image 1
@@ -265,20 +301,21 @@ def _fiches_lues() -> list[tuple[dict | None, dict | None, str | None]]:
     return _lus.lire(cle, lambda: [_lire(d) for d in dossiers])
 
 
-def valider_checkpoint(cle_modele: str, steps: int = 0) -> dict:
-    """Met en service un checkpoint téléchargé. steps > 0 : ils deviennent ses « Steps imposés » dans les workflows de sa
-    famille qui en ont ; 0 : ceux du réglage et de la qualité, comme avant."""
+def valider_checkpoint(cle_modele: str, steps: int) -> dict:
+    """Met en service un checkpoint de famille (téléchargé, déposé à la main ou d'origine) avec les steps que
+    l'utilisateur a validés : ils deviennent ses steps dans tous les workflows de sa famille qui en ont."""
     dossier, _, nom = cle_modele.rpartition("/")
     if not modeles.est_checkpoint(dossier):
         raise ErreurWorkflow(f"Pas un checkpoint de famille : {cle_modele}")
-    if not 0 <= steps <= 150:
-        raise ErreurWorkflow("Steps : un entier entre 1 et 150, ou 0 pour garder ceux du réglage")
-    modeles.valider(cle_modele)
+    if not isinstance(steps, int) or not 1 <= steps <= 150:
+        raise ErreurWorkflow("Steps : un entier entre 1 et 150")
     famille = dossier.removesuffix("/modeles")
-    if steps:
-        for wf in catalogue():
-            if wf.famille == famille and "steps" in wf.fiche["entrees"]:
-                reglages.modifier_variante(wf.id, nom, {"steps": steps})
+    concernes = [wf for wf in catalogue() if wf.famille == famille and "steps" in wf.fiche["entrees"]]
+    if not any(nom in wf.presents() for wf in concernes):
+        raise ErreurWorkflow(f"Checkpoint absent, ou sans workflow qui règle ses steps : {cle_modele}")
+    for wf in concernes:
+        reglages.modifier_variante(wf.id, nom, {"steps": steps})
+    modeles.oublier_attente(cle_modele)
     return {"cle": cle_modele, "steps": steps}
 
 

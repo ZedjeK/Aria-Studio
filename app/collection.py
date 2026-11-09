@@ -60,6 +60,38 @@ def _utilisations(catalogue: list) -> dict[str, list[str]]:
     return par_cle
 
 
+def _steps_dits_par_la_fiche(wf) -> list[dict]:
+    """Ce que la fiche du workflow dit des steps de son checkpoint d'origine (défaut du template, recommandations)."""
+    dits = []
+    if (defaut := wf.fiche.get("defauts", {}).get("steps")) is not None:
+        dits.append({"valeur": defaut, "origine": "défaut du template du workflow", "source": None})
+    for r in (wf.fiche.get("recommandations") or {}).get("valeurs", []):
+        if r.get("cle") == "steps":
+            dits.append({"valeur": r["valeur"], "origine": r.get("note") or "recommandé", "source": r.get("source")})
+    return dits
+
+
+def _steps_des_checkpoints(catalogue: list) -> dict[str, dict]:
+    """Clé d'un checkpoint de famille -> {"valides": steps connus} ou {"a_valider": de quoi décider}. Le premier
+    workflow de la famille qui règle des steps fait foi (valider les pose dans tous)."""
+    sortie = {}
+    for wf in catalogue:
+        if "steps" not in wf.fiche["entrees"]:
+            continue
+        for nom in wf.presents():
+            cle = f"{wf.famille}/modeles/{nom}"
+            if cle in sortie:
+                continue
+            if wf.a_valider(nom):
+                sortie[cle] = {"a_valider": {
+                    "steps": modeles.suggestion_steps(cle),  # lue sur sa page au téléchargement
+                    "fiche": _steps_dits_par_la_fiche(wf) if nom == wf.modele_origine else [],
+                }}
+            else:
+                sortie[cle] = {"valides": wf.steps_de(nom)}
+    return sortie
+
+
 def est_lora(dossier: str) -> bool:
     return dossier.endswith("/loras") and not dossier.startswith("_base")
 
@@ -68,6 +100,7 @@ def collection() -> dict:
     catalogue = workflows.catalogue()
     infos = workflows.familles()
     utilise = _utilisations(catalogue)
+    steps = _steps_des_checkpoints(catalogue)
     llm_defaut = modeles.llm_defaut()
     groupes = {g: [] for g in GROUPES}
     for m in modeles.inventaire():
@@ -85,7 +118,10 @@ def collection() -> dict:
             "origine": origine, "source": i.get("source"), "page": i.get("page"), "licence": i.get("licence"),
             "declencheurs": i.get("mots_declencheurs") or [], "base": i.get("base"), "nom_modele": i.get("nom_modele"),
             "utilise_par": utilise_par, "supprimable": m["suivi"],
-            "a_valider": (m["infos"] or {}).get("a_valider"),  # checkpoint neuf : steps suggérés, en attente de validation
+            # Checkpoint de famille : ses steps validés, ou ce qu'il faut pour les valider (il n'est proposé nulle part
+            # avant : workflows.Workflow.a_valider).
+            "steps": (steps.get(m["cle"]) or {}).get("valides"),
+            "a_valider": (steps.get(m["cle"]) or {}).get("a_valider"),
             # LoRA d'une famille : mots déclencheurs et force, réglables ici (les LoRA de _base sont internes),
             # et ses usages (image, retouche, video), ceux des workflows de sa famille : les filtres du groupe LoRA.
             "lora": modeles.reglage_lora(m["cle"]) if est_lora(m["dossier"]) else None,

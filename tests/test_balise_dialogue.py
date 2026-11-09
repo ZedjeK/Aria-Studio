@@ -8,12 +8,16 @@ import unittest
 
 from app import prompt, repliques, sequences, workflows
 from tests.test_libre import FauxLlm
+from tests import steps_connus
 
 
 def texte_du_prompt(api: dict, wf: workflows.Workflow) -> str:
     noeud, entree = wf.fiche["entrees"]["prompt"]
     return api[noeud]["inputs"][entree]
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class Ecriture(unittest.TestCase):
     def test_la_balise_porte_la_langue(self):

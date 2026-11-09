@@ -391,12 +391,13 @@ async def preparer_fiche(demande: DemandeFiche):
 
 class DemandeValidation(BaseModel):
     cle: str
-    steps: int = 0  # 0 = garder les steps du réglage et de la qualité
+    steps: int  # 1 à 150 : les steps validés par l'utilisateur
 
 
 @app.post("/api/modeles/valider")
 def valider_modele(demande: DemandeValidation):
-    """Met en service un checkpoint téléchargé, avec les steps que l'utilisateur a validés (ou saisis)."""
+    """Met en service un checkpoint (téléchargé, déposé à la main ou d'origine) avec les steps que l'utilisateur a
+    validés."""
     try:
         return workflows.valider_checkpoint(demande.cle, demande.steps)
     except (modeles.ErreurModele, workflows.ErreurWorkflow, reglages.ErreurReglages) as e:
@@ -714,11 +715,11 @@ def options_plateau():
 
 @app.get("/api/plateau/estimation")
 def estimation_tournage(mode: str, qualite: str, duree: int, nombre: int = 1, modele: str | None = None):
-    """Temps estimé d'un tournage du Montage : checkpoint, qualité, durée, nombre de clips, VRAM libre
+    """Temps estimé d'un tournage du Montage : checkpoint (steps, poids), résolution, durée, nombre de clips, VRAM libre
     (app/estimation.py)."""
     if (mode not in plateau.MODES_VIDEO or qualite not in plateau.QUALITES_VIDEO or duree not in plateau.DUREES_VIDEO
             or not 1 <= nombre <= plateau.CLIPS_MAX):
-        raise HTTPException(status_code=400, detail="Mode, qualité, durée ou nombre de clips inconnus")
+        raise HTTPException(status_code=400, detail="Mode, résolution, durée ou nombre de clips inconnus")
     return estimation.estimer(mode, modele or None, qualite, duree, nombre)
 
 

@@ -52,10 +52,29 @@ function checkpointsVideo() {
         lignes: w.modeles.map((m) => [m, `${m.replace(/\.safetensors$/, "")}${m === w.origine ? " (origine)" : ""}`
                                           + `${m === w.modele_defaut ? " ★" : ""}`]),
         defaut: w.modele_defaut,
+        a_valider: w.a_valider ?? [],
     };
 }
 
-groupeBoutons("qualite-montage", "Qualité");  // web/commun.js : des boutons plutôt qu'une liste, le select reste en dessous
+// Les steps d'un checkpoint (validés dans Modèles, ou clairs dans sa fiche) ; 0 si inconnus.
+function stepsCheckpoint(modele) {
+    const t = optionsMontage?.workflows.image_vers_video;
+    const w = t?.choix.find((x) => x.id === t.defaut) ?? t?.choix[0];
+    return w?.steps?.[modele || w.modele_defaut] ?? 0;
+}
+
+// Plus de checkpoint proposé : ils attendent tous que leurs steps soient validés.
+function messageAValider() {
+    if (!optionsMontage) return "";
+    const ck = checkpointsVideo();
+    if (ck.lignes.length) return "";
+    return ck.a_valider.length
+        ? `⏸ ${ck.a_valider.length} checkpoint${ck.a_valider.length > 1 ? "s" : ""} à valider : pose leurs steps dans `
+          + "Modèles → Ma collection pour tourner."
+        : "Aucun checkpoint vidéo installé.";
+}
+
+groupeBoutons("qualite-montage", "Résolution");  // web/commun.js : des boutons plutôt qu'une liste, le select reste en dessous
 groupeBoutons("duree-montage", "Durée");
 
 let preparationMontage = null;
@@ -71,8 +90,7 @@ async function preparerMontageMaintenant() {
     const v = optionsMontage.video;
     const ck = checkpointsVideo();
     remplirSelect("modele-montage", ck.lignes, ck.defaut);
-    remplirSelect("qualite-montage", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.megapixels} MP · ${q.steps} steps`]),
-        v.defaut_qualite);
+    remplirSelect("qualite-montage", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.aide}`]), v.defaut_qualite);
     remplirSelect("duree-montage", v.durees.map((d) => [String(d), `${d} s`]), "5");
     remplirSelect("format-montage", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     poserMaxNombre("nombre-montage", v.nombre_max);  // un champ à taper : le max vient du serveur
@@ -112,7 +130,9 @@ function estimationSecondes() {
     const q = optionsMontage?.video.qualites.find((x) => x.cle === document.getElementById("qualite-montage").value);
     if (!q) return 0;
     const duree = Number(document.getElementById("duree-montage").value);
-    return q.estimation_s * (duree / 5) ** (optionsMontage.video.exposant_duree ?? 1.25) * nombreDuChamp("nombre-montage");
+    const steps = stepsCheckpoint(document.getElementById("modele-montage").value) || q.steps;  // le tableau est mesuré à q.steps
+    return q.estimation_s * (steps / q.steps) * (duree / 5) ** (optionsMontage.video.exposant_duree ?? 1.25)
+        * nombreDuChamp("nombre-montage");
 }
 
 // On arrondit les secondes avant de couper en minutes : 1379,6 s donne « 23 min 00 », pas « 22 min 60 ».
@@ -121,15 +141,19 @@ const enMinutes = (s) => {
     return total >= 60 ? `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, "0")}` : `${total} s`;
 };
 
-// Le calcul se lit dans l'ordre où il se fait : poids du checkpoint, qualité, durée, nombre de clips (puis la VRAM libre,
-// qui dit si le checkpoint tient).
+// Le calcul se lit dans l'ordre où il se fait : VRAM libre → steps du checkpoint → poids du checkpoint → résolution →
+// durée → clips.
 function majEstimation() {
+    const attente = messageAValider();
+    if (attente) {
+        document.getElementById("estimation-montage").textContent = attente;
+        return;
+    }
     const c = calculMontage?.cle === cleCalculMontage() && calculMontage.source === "calcul" ? calculMontage : null;
-    // Le calcul suit cet ordre : VRAM libre → poids du modèle vidéo → qualité → durée → clips.
     const go = (n) => `${String(n).replace(".", ",")} Go`;
     const detail = c
-        ? ` : ${go(c.vram_libre_go)} de VRAM libre → modèle de ${go(c.poids_go)}`
-          + ` → ${nomQualite(document.getElementById("qualite-montage").value)} (${c.steps} steps)`
+        ? ` : ${go(c.vram_libre_go)} de VRAM libre → ${c.steps} steps → modèle de ${go(c.poids_go)}`
+          + ` → ${nomQualite(document.getElementById("qualite-montage").value)}`
           + ` → ${document.getElementById("duree-montage").value} s → ${c.nombre} clip${c.nombre > 1 ? "s" : ""}`
           + (c.nombre > 1 ? ` de ≈ ${enMinutes(c.clip_s)}` : "")
         : " (tableau d'origine, mesuré sur une RTX 4080 : VRAM non lue)";
@@ -376,7 +400,7 @@ async function suivreMontage(id, debut, estimation) {
 
 // Fiche d'un clip
 
-// Le nom d'une qualité, tel que le serveur le donne (plateau.QUALITES_VIDEO).
+// Le nom d'une résolution, tel que le serveur le donne (plateau.QUALITES_VIDEO : les clés gardent l'ancien nom).
 const nomQualite = (cle) => optionsMontage?.video.qualites.find((q) => q.cle === cle)?.nom ?? cle;
 
 function ouvrirClip(f) {
@@ -392,8 +416,8 @@ function ouvrirClip(f) {
         ["Prompt", f.prompt],
         ["LLM", f.llm ? f.llm.replace(".gguf", "") : "aucun"],
         ["Modèle", f.modele ? `${f.workflow} · ${f.modele}` : f.workflow ?? "—"],  // comme la fiche d'une image (plateau.js)
-        ["Qualité", [nomQualite(f.qualite), f.megapixels && `${f.megapixels} MP`,
-                     f.steps && `${f.steps} steps`].filter(Boolean).join(" · ")],
+        ["Résolution", [f.megapixels ? `${String(f.megapixels).replace(".", ",")} MP` : nomQualite(f.qualite),
+                        f.steps && `${f.steps} steps`].filter(Boolean).join(" · ")],
         ["LoRA", f.loras?.length ? f.loras.map((l) => `${l.fichier.replace(/\.safetensors$/, "")} (${virgule(l.force)})`).join(" · ") : "aucune"],
         ["Clip", [`${f.duree} s`, `${f.largeur}×${f.hauteur}`, f.format].filter(Boolean).join(" · ")],
         ["Seed", f.seed],

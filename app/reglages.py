@@ -295,11 +295,12 @@ def params_workflow(wf) -> dict[str, Param]:
     """Réglages proposés pour ce workflow, selon ce que son graphe contient vraiment."""
     from app.workflows import FORMATS
     entrees, defauts, params = wf.fiche["entrees"], wf.fiche.get("defauts", {}), []
-    # Vidéo : la qualité choisie dans le Montage fixe steps et mégapixels ; ces deux réglages servent au Casting.
-    montage = " · Montage : la qualité choisie (Rapide / Compromis / Qualité) l'emporte" if wf.fiche.get("video") else ""
-    if "steps" in entrees:
+    # Vidéo : la résolution choisie dans le Montage fixe les mégapixels ; ce réglage sert au Casting.
+    montage = " · Montage : la résolution choisie l'emporte" if wf.fiche.get("video") else ""
+    # Les steps se règlent par checkpoint (params_variante), plus par workflow : ce sont eux qui comptent partout.
+    if "steps" in entrees and "modele" not in entrees:
         params.append(Param("steps", "Steps", "entier", int(defauts.get("steps", 20)), 1, 150, 1,
-                            aide="Plus = plus lent ; les modèles Turbo / Lightning sont faits pour peu de steps" + montage))
+                            aide="Plus = plus lent ; les modèles Turbo / Lightning sont faits pour peu de steps"))
     if ks := noeud_unique(wf.api, "KSampler"):
         entree = wf.api[ks]["inputs"]
         samplers, schedulers = options_sampler()
@@ -365,8 +366,9 @@ def params_variante(wf) -> dict[str, Param]:
         params.append(Param("lora_workflow", "LoRA du workflow", "booleen", True,
                             aide=f"{', '.join(noms)} : décoche-la si ce checkpoint l'intègre déjà (Turbo, Lightning…)"))
     if "steps" in wf.fiche["entrees"]:
-        params.append(Param("steps", "Steps imposés", "entier", 0, 0, 150, 1,
-                            aide="0 = ceux du réglage (et de la qualité du Montage). Sinon, ce nombre partout"))
+        params.append(Param("steps", "Steps", "entier", 0, 0, 150, 1,
+                            aide="Les steps de ce checkpoint, partout (Plateau, Montage, séquences). 0 : ceux de sa fiche "
+                                 "si elle est claire, sinon il repasse « À valider » dans Modèles"))
     return {p.cle: p for p in params}
 
 
@@ -378,7 +380,7 @@ def valeurs_variante(wf, fichier: str) -> dict:
 def modifier_variante(id_workflow: str, fichier: str, changements: dict) -> dict:
     from app import workflows
     wf = workflows.obtenir(id_workflow)
-    if fichier not in wf.variantes():
+    if fichier not in wf.presents():
         raise ErreurReglages(f"Checkpoint absent de modeles/{wf.famille}/modeles : {fichier}")
     donnees = lire()
     donnees = {"llm": dict(donnees["llm"]), "workflows": {k: dict(v) for k, v in donnees["workflows"].items()}}

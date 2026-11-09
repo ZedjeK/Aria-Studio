@@ -15,9 +15,13 @@ from unittest import mock
 from app import fiches, plateau, prompt, reglages, workflows
 from app.plateau import ErreurPlateau, Plateau
 from app.securite import ErreurSecurite
+from tests import steps_connus
 
 PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000")  # en-tête suffisant
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class Graphes(unittest.TestCase):
     def test_capacites(self):

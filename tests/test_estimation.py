@@ -8,7 +8,7 @@ sans le checkpoint ni la VRAM). Rien n'est lancé : la VRAM libre est donnée, j
 import unittest
 from unittest import mock
 
-from app import estimation, plateau
+from app import estimation, plateau, workflows
 
 CONFIG = {"generation": {"image_vers_video": "minimax_h3_i2v", "texte_vers_video": "minimax_h3_t2v"}}
 ORIGINE = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
@@ -17,9 +17,8 @@ ORIGINE = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
 class Estimation(unittest.TestCase):
     def estimer(self, qualite="compromis", duree=5, nombre=1, libre=estimation.LIBRE_REF_GO, mode="animer",
                 modele=ORIGINE, steps=None, poids=estimation.POIDS_REF_GO):
-        variante = {"steps": steps} if steps else {}
         with (mock.patch.object(estimation, "CONFIG", CONFIG),
-              mock.patch.object(estimation, "reglages_variante", return_value=variante),
+              mock.patch.object(workflows.Workflow, "steps_de", lambda wf, f: steps or 0),
               mock.patch.object(estimation, "_poids_go", return_value=poids)):
             return estimation.estimer(mode, modele, qualite, duree, nombre, libre_go=libre)
 
@@ -48,6 +47,13 @@ class Estimation(unittest.TestCase):
         self.assertEqual(self.estimer("compromis", steps=8)["clip_s"], round(base * 8 / 12))
         self.assertEqual(self.estimer("compromis", steps=8)["steps"], 8)
 
+    def test_checkpoint_a_valider_signale(self):
+        """Steps inconnus : le tableau tel quel, et l'interface le dit (le tournage sera refusé)."""
+        r = self.estimer("compromis")
+        self.assertTrue(r["a_valider"])
+        self.assertEqual(r["steps"], 12)
+        self.assertFalse(self.estimer("compromis", steps=12)["a_valider"])
+
     def test_la_vram_libre_compte(self):
         moins, ref, plus = (self.estimer("qualite", libre=v)["clip_s"] for v in (10, 15, 24))
         self.assertGreater(moins, ref)
@@ -60,7 +66,7 @@ class Estimation(unittest.TestCase):
 
     def test_sans_lecture_de_vram_le_tableau(self):
         with (mock.patch.object(estimation, "CONFIG", CONFIG),
-              mock.patch.object(estimation, "reglages_variante", return_value={}),
+              mock.patch.object(workflows.Workflow, "steps_de", lambda wf, f: 0),
               mock.patch.object(estimation, "_poids_go", return_value=19.5),
               mock.patch.object(estimation, "_vram_libre_go", return_value=None)):
             r = estimation.estimer("animer", ORIGINE, "compromis", 5, 2)

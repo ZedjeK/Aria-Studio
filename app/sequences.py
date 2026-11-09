@@ -99,12 +99,14 @@ def dimensions_sequence(s: dict) -> tuple[int, int]:
 
 
 def estimation(s: dict, indices: list[int]) -> float:
-    """Secondes de calcul sur la carte de l'auteur (mesures du Montage), assemblage compris."""
+    """Secondes de calcul sur la carte de l'auteur (mesures du Montage), assemblage compris. Le tableau est mesuré aux
+    steps de sa résolution : il suit ceux du checkpoint (au prorata), puis le surcoût mesuré des plans qui parlent."""
     q = plateau.QUALITES_VIDEO[s["qualite"]]
+    base = steps_base(s) or q["steps"]  # checkpoint à valider : le tableau tel quel, le tournage le refusera
 
     def cout(plan):
-        surcout = SURCOUT_PAROLE if steps_plan(s, plan) > q["steps"] else 1
-        return q["estimation_s"] * SURCOUT_SEQUENCE * surcout * (plan["duree"] / 5) ** 1.25
+        surcout = SURCOUT_PAROLE if parle(plan) and base < STEPS_PAROLE else 1
+        return q["estimation_s"] * (base / q["steps"]) * SURCOUT_SEQUENCE * surcout * (plan["duree"] / 5) ** 1.25
 
     return sum(cout(s["plans"][k]) for k in indices) + (5 if indices else 0)
 
@@ -114,9 +116,15 @@ def parle(plan: dict) -> bool:
     return bool(_REPLIQUE.search(f"{plan['idee']} {plan.get('prompt') or ''}"))
 
 
+def steps_base(s: dict) -> int:
+    """Steps du checkpoint de la séquence (validés, ou clairs dans sa fiche) ; 0 s'il est à valider."""
+    wf = _workflow()
+    return wf.steps_de(wf.choisi(s.get("modele")))
+
+
 def steps_plan(s: dict, plan: dict) -> int:
-    """Steps de la qualité choisie, au moins STEPS_PAROLE pour un plan qui parle (la voix en a besoin)."""
-    steps = plateau.QUALITES_VIDEO[s["qualite"]]["steps"]
+    """Steps du checkpoint, au moins STEPS_PAROLE pour un plan qui parle (la voix en a besoin)."""
+    steps = steps_base(s)
     return max(steps, STEPS_PAROLE) if parle(plan) else steps
 
 
@@ -263,7 +271,7 @@ def _valider(donnees: dict, pour_tourner: bool = False) -> dict:
         raise ErreurSequence("Titre de 1 à 40 caractères")
     qualite = donnees.get("qualite", "compromis")
     if qualite not in plateau.QUALITES_VIDEO:
-        raise ErreurSequence(f"Qualité inconnue : {qualite}")
+        raise ErreurSequence(f"Résolution inconnue : {qualite}")
     format_ = donnees.get("format", "16:9 (Widescreen)")
     if format_ not in workflows.FORMATS:
         raise ErreurSequence(f"Format inconnu : {format_}")
@@ -450,7 +458,7 @@ def graphe_plan(s: dict, k: int, prompt_plan: str, seed: int, fichiers: dict) ->
                "steps": steps_plan(s, p), "prefixe": "aria_sequence"}
     if p["enchainement"] == "rush":
         valeurs["image"] = fichiers["rush"]
-    api = wf.preparer(valeurs)  # AS-18 sur le prompt, réglages de l'utilisateur, qualité
+    api = wf.preparer(valeurs)  # AS-18 sur le prompt, réglages de l'utilisateur, résolution ; checkpoint à valider : refusé
     i2v = reglages.noeud_unique(api, "MiniMaxH3ImageToVideo")
     guider = reglages.noeud_unique(api, "BasicGuider")
     vae, vae_audio = _vaes(api)

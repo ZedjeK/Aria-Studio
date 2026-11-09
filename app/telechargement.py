@@ -183,7 +183,8 @@ class Telechargeur:
             part.unlink(missing_ok=True)
             raise ErreurTelechargement("Empreinte SHA-256 incorrecte : fichier rejeté")
         part.replace(dest)
-        # Un checkpoint neuf n'est proposé nulle part tant que l'utilisateur n'a pas validé ses steps (modeles.valider).
+        # Un checkpoint neuf n'est proposé nulle part tant que ses steps ne sont pas validés (workflows.Workflow.a_valider) ;
+        # la suggestion lue sur sa page attend ici d'être montrée (Modèles → Ma collection).
         a_valider = {"a_valider": {"steps": fiche.steps_suggeres or {"statut": "aucun", "valeurs": [], "extraits": []}}} \
             if modeles.est_checkpoint(tache.dossier) else {}
         modeles.enregistrer(dest, fiche.to_dict(), sha256, **a_valider)

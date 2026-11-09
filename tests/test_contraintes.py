@@ -12,10 +12,14 @@ from app.plateau import Plateau
 from app.securite import ErreurSecurite
 from app.sequences import ErreurSequence
 from tests.test_sequences import Base, FauxLlama, blocs, png
+from tests import steps_connus
 
 CONTRAINTE = "elle garde sa combinaison bleue et les cheveux attachés"
 EN = "she keeps her blue flight suit and her hair tied back"
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class Contrainte(Base):
     def test_validation_et_valeurs_par_defaut(self):

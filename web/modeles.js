@@ -122,25 +122,37 @@ function groupeCollection(g) {
     return `<section class="carte groupe-collection"><div class="ligne"><h2>${titre}</h2>${chercher}</div>${liste}</section>`;
 }
 
-// Checkpoint téléchargé : il n'est proposé nulle part tant que tu n'as pas validé ses steps. Aria lit une suggestion dans
-// le texte de la page (aucune source n'a de champ « steps ») : fiable seulement si un seul nombre y apparaît.
+// Checkpoint à valider : il n'est proposé nulle part tant que tu n'as pas posé ses steps. Sources possibles : ce que sa
+// fiche en dit (checkpoint d'origine : défaut du template et recommandations, quand elles divergent), et une suggestion
+// lue dans le texte de sa page au téléchargement (aucune source n'a de champ « steps ») : fiable seulement si un seul
+// nombre y apparaît. Rien n'est appliqué sans ton clic.
 function blocValidation(e) {
     const s = e.a_valider.steps ?? { statut: "aucun", valeurs: [], extraits: [] };
+    const fiche = e.a_valider.fiche ?? [];
     const page = e.page ? `<a href="${echapper(e.page)}" target="_blank" rel="noopener">la page du modèle</a>` : "la page du modèle";
-    const message = s.statut === "unique"
-        ? `Suggestion : <strong>${s.valeurs[0]} steps</strong>, lue dans le texte de la source. Vérifie-la sur ${page} avant de valider.`
-        : s.statut === "ambigu"
-            ? `<span class="ko">Suggestion peu fiable</span> : plusieurs nombres de steps (${s.valeurs.join(", ")}). Lis le détail sur ${page}.`
-            : `<span class="ko">Suggestion peu fiable</span> : aucun nombre de steps trouvé dans le texte. Lis le détail sur ${page}.`;
+    const lien = (url) => url ? ` (<a href="${echapper(url)}" target="_blank" rel="noopener">source</a>)` : "";
+    let message;
+    if (fiche.length) {
+        message = `<span class="ko">À toi de trancher</span> : sa fiche donne ${fiche.length > 1 ? "plusieurs valeurs" : "une valeur"}.`
+            + `<ul class="discret">${fiche.map((f) => `<li><strong>${f.valeur} steps</strong> : ${echapper(f.origine)}${lien(f.source)}</li>`).join("")}</ul>`;
+    } else if (s.statut === "unique") {
+        message = `Suggestion : <strong>${s.valeurs[0]} steps</strong>, lue dans le texte de la source. Vérifie-la sur ${page} avant de valider.`;
+    } else if (s.statut === "ambigu") {
+        message = `<span class="ko">Suggestion peu fiable</span> : plusieurs nombres de steps (${s.valeurs.join(", ")}). Lis le détail sur ${page}.`;
+    } else {
+        message = `<span class="ko">Suggestion peu fiable</span> : `
+            + (e.page ? `aucun nombre de steps trouvé. Lis le détail sur ${page}.`
+                      : "aucune page connue pour ce fichier. Cherche sa page (🔍 Retrouver les sources peut la trouver) et lis ce qu'elle conseille.");
+    }
     const extraits = s.extraits.map((x) => `<li>${echapper(x.origine)} : « ${echapper(x.texte)} »</li>`).join("");
+    const prerempli = !fiche.length && s.statut === "unique" ? s.valeurs[0] : "";
     return `<div class="a-valider" data-cle="${echapper(e.cle)}">
-        <div><strong>⏸ À valider</strong> : pas encore proposé dans les workflows.</div>
+        <div><strong>⏸ À valider</strong> : pas proposé dans les workflows tant que ses steps ne sont pas posés.</div>
         <div class="discret">${message}</div>
         ${extraits ? `<ul class="discret">${extraits}</ul>` : ""}
         <div class="ligne">
-            <label>Steps <input type="number" min="0" max="150" step="1" class="steps-valides" style="width:5em"
-                value="${s.statut === "unique" ? s.valeurs[0] : ""}" placeholder="0"
-                title="0 = garder ceux du réglage et de la qualité du Montage"></label>
+            <label>Steps <input type="number" min="1" max="150" step="1" class="steps-valides" style="width:5em"
+                value="${prerempli}" placeholder="?" title="Les steps de ce checkpoint, partout (Plateau, Montage, séquences)"></label>
             <button type="button" class="petit" data-valider="${echapper(e.cle)}">Valider et mettre en service</button>
         </div>
     </div>`;
@@ -151,7 +163,8 @@ function elementCollection(e) {
     const source = e.page
         ? `<a href="${echapper(e.page)}" target="_blank" rel="noopener">${echapper(e.nom_modele || e.source || "page")}</a>`
         : "";
-    const details = [source, e.base ? `base ${echapper(e.base)}` : "", e.licence ? `licence ${echapper(e.licence)}` : ""]
+    const details = [source, e.base ? `base ${echapper(e.base)}` : "", e.licence ? `licence ${echapper(e.licence)}` : "",
+                     e.steps ? `${e.steps} steps` : ""]
         .filter(Boolean).join(" · ");
     const usages = e.lora ? USAGES_LORA.filter(([u]) => e.usages.includes(u)) : [];
     return `<li ${e.lora ? `data-usages="${e.usages.join(" ")}"` : ""}>
@@ -479,8 +492,11 @@ document.getElementById("vue-modeles").addEventListener("click", async (e) => {
             await chercherDepuis(cible.dataset.chercher, cible.dataset.famille);
         } else if (cible.dataset.valider) {
             const champ = cible.closest(".a-valider").querySelector(".steps-valides");
-            const steps = Number(champ.value || 0);
-            if (!Number.isInteger(steps) || steps < 0 || steps > 150) throw new Error("Steps : un entier entre 1 et 150, ou 0.");
+            const steps = Number(champ.value);
+            if (!champ.value || !Number.isInteger(steps) || steps < 1 || steps > 150) {
+                champ.focus();
+                throw new Error("Steps : un entier entre 1 et 150. En cas de doute, lis la page du modèle.");
+            }
             cible.disabled = true;
             await api("POST", "/api/modeles/valider", { cle: cible.dataset.valider, steps });
             chargerModeles();
