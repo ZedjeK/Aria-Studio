@@ -3774,36 +3774,36 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 .masque-galerie { padding: 1.2rem .5rem; }
 .vue-rush.masquer { margin-left: auto; }
 
-/* Montage : boutons du Scénario (angles droits, majuscules, actif plein cyan). Durée et Qualité deviennent des groupes
+/* Scénario, Plateau, Montage, Modèles, Casting (pas Réglages) : boutons du Scénario (angles droits, majuscules, actif plein cyan). Durée et Qualité deviennent des groupes
    de boutons en parallélogramme (web/commun.js, groupeBoutons) ; Checkpoint prend la largeur libre de sa ligne. */
-#vue-montage button:not(.onglet) {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button:not(.onglet) {
     border-radius: 0;
 }
 
-#vue-montage button.petit,
-#vue-montage button.sous-onglet,
-#vue-montage .options-creation button.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation button.principal {
     font-family: var(--font-display);
     text-transform: uppercase;
     letter-spacing: .06em;
     font-size: .74rem;
 }
 
-#vue-montage button.petit:not(.principal),
-#vue-montage button.sous-onglet {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit:not(.principal),
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet {
     border: 1px solid var(--line-strong);
     background: transparent;
     color: var(--discret);
     padding: 6px 14px;
 }
 
-#vue-montage button.petit:not(.principal):hover:not(:disabled),
-#vue-montage button.sous-onglet:hover {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit:not(.principal):hover:not(:disabled),
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet:hover {
     border-color: var(--accent);
     color: var(--texte);
 }
 
-#vue-montage button.sous-onglet.actif {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet.actif {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--bg);
@@ -3811,33 +3811,33 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     box-shadow: none;
 }
 
-#vue-montage button.petit.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit.principal {
     background: transparent;
     border: 1px solid var(--action);
     color: var(--action);
     padding: 6px 14px;
 }
 
-#vue-montage .mode-carte {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .mode-carte {
     border-radius: 0;
     background: var(--surface);
     clip-path: polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);
     transform: none;
 }
 
-#vue-montage .mode-carte strong {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .mode-carte strong {
     text-transform: uppercase;
     letter-spacing: .04em;
 }
 
-#vue-montage .options-creation {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 12px;
 }
 
-#vue-montage .options-creation label {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -3852,12 +3852,12 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     text-transform: uppercase;
 }
 
-#vue-montage .options-creation label:focus-within {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label:focus-within {
     border-color: var(--accent);
 }
 
-#vue-montage .options-creation select,
-#vue-montage .options-creation input {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation select,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation input {
     flex: none;
     border: 0;
     background: transparent;
@@ -3868,15 +3868,15 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     border-radius: 0;
 }
 
-#vue-montage .options-creation input#seed-montage {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation input#seed-montage {
     width: 7rem;
 }
 
-#vue-montage .options-creation input.nombre {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation input.nombre {
     width: 3.5rem;
 }
 
-#vue-montage .options-creation button.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation button.principal {
     margin-left: auto;
     padding: 10px 34px;
     background: var(--action);
@@ -3886,14 +3886,14 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     font-size: .85rem;
 }
 
-#vue-montage .groupe-boutons {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     align-items: center;
 }
 
-#vue-montage .groupe-boutons>span {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons>span {
     font-family: var(--font-display);
     font-size: .7rem;
     letter-spacing: .08em;
@@ -3902,7 +3902,7 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     margin-right: 2px;
 }
 
-#vue-montage .groupe-boutons button {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button {
     padding: 6px 14px;
     border: 1px solid var(--line-strong);
     background: transparent;
@@ -3911,72 +3911,162 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     font-size: .78rem;
 }
 
-#vue-montage .groupe-boutons button:hover {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button:hover {
     border-color: var(--accent);
     color: var(--texte);
 }
 
-#vue-montage .groupe-boutons button.actif {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button.actif {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--bg);
     font-weight: 700;
 }
 
-#vue-montage button.petit,
-#vue-montage button.sous-onglet,
-#vue-montage .options-creation label {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.petit,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.sous-onglet,
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label {
     clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
     padding-left: 18px;
     padding-right: 18px;
 }
 
-#vue-montage .options-creation label {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label {
     padding: 4px 14px 4px 20px;
 }
 
-#vue-montage .options-creation button.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation button.principal {
     clip-path: polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
     padding: 12px 44px;
     filter: drop-shadow(0 0 10px color-mix(in srgb,var(--action) 55%,transparent));
 }
 
-#vue-montage .groupe-boutons {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons {
     gap: 4px;
     flex: none;
 }
 
-#vue-montage .groupe-boutons button {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button {
     clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
     padding: 7px 20px;
     font-size: .78rem;
 }
 
-#vue-montage .groupe-boutons button.actif {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .groupe-boutons button.actif {
     box-shadow: none;
 }
 
-#vue-montage .options-creation {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation {
     row-gap: 14px;
 }
 
-#vue-montage .options-creation label.checkpoint {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label.checkpoint {
     flex: 1 1 260px;
     min-width: 0;
 }
 
-#vue-montage .options-creation label.checkpoint select {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation label.checkpoint select {
     flex: 1;
     width: auto;
     min-width: 0;
 }
 
-#vue-montage .saut-ligne {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .saut-ligne {
     flex-basis: 100%;
     height: 0;
     margin: -6px 0;
 }
 
-#vue-montage .options-creation button.principal {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .options-creation button.principal {
     margin-left: auto;
+}
+
+/* Mêmes segments pour les autres sélecteurs en boutons : ateliers et onglets du Scénario, types de modèles, tâches du
+   Casting, filtres des galeries. */
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,label.bouton.petit,#ecrire-libre,#envoyer-prompt,button:not([class])) {
+    border-radius: 0;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--discret);
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-size: .74rem;
+    padding: 7px 20px;
+    box-shadow: none;
+    transform: none;
+    clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+}
+
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,label.bouton.petit,#ecrire-libre,#envoyer-prompt,button:not([class])):hover:not(.actif):not(:disabled) {
+    border-color: var(--accent);
+    color: var(--texte);
+}
+
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,#ecrire-libre,#envoyer-prompt,button:not([class])).actif {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+}
+
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) .vue-rush .nombre {
+    color: inherit;
+    opacity: .7;
+}
+
+/* Bouton d'action principal hors de la rangée d'options (Scénario, Casting, Séquence du Montage) : même parallélogramme orange. */
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting) button.principal:not(.petit) {
+    border-radius: 0;
+    clip-path: polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding-left: 28px;
+    padding-right: 28px;
+}
+
+/* Modèles · Rechercher : la colonne est étroite, chaque champ prend toute la largeur ; Rechercher reste une ligne. */
+#vue-modeles #form-decouvrir label {
+    flex: none;
+}
+
+#vue-modeles #form-decouvrir label.recherche input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+}
+
+#vue-modeles .choix-type {
+    gap: 6px;
+}
+
+/* Dans la colonne, un groupe de boutons : le titre sur sa ligne, les boutons en dessous. */
+#vue-modeles #form-decouvrir .groupe-boutons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+#vue-modeles #form-decouvrir .groupe-boutons>span {
+    grid-column: 1 / -1;
+    margin-bottom: 2px;
+}
+
+#vue-modeles #form-decouvrir .groupe-boutons button {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+#vue-modeles button.badge-telechargements {
+    border-radius: 0;
+    clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-size: .74rem;
+    padding: 7px 20px;
+}
+
+#vue-modeles #form-decouvrir .groupe-boutons button {
+    width: 100%;
 }
