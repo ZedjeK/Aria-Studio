@@ -185,6 +185,14 @@ sont remplacés. Avec `--sans-installer`, elle reste dans `.build_cache\staging`
 .venv\Scripts\python.exe tools\build_portable.py
 ```
 
+Publier une version : passer `VERSION` de `app/__init__.py` au nouveau numéro, déposer les notes dans
+`docs/releases/vX.Y.Z.md`, fusionner, puis pousser le tag. `.github/workflows/release.yml` construit alors le zip
+et son `.sha256` sur Windows et crée la release en brouillon, à relire et à publier :
+
+```powershell
+git tag -a v2.0.0 -m "Version 2.0.0"; git push origin v2.0.0
+```
+
 | Dossier | Rôle |
 |---|---|
 | `app\` | Le serveur : Plateau, Montage, séquences, orchestrateur des moteurs, assistant… |

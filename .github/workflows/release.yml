@@ -1,0 +1,61 @@
+# Release automatique : pousser un tag « vX.Y.Z » construit la version portable sur Windows (build_portable.py :
+# Python embarqué, dépendances, lanceur compilé avec le csc.exe du runner), en fait le zip et son .sha256 et crée la
+# release en BROUILLON : tu relis les notes et tu publies. Les notes sont celles de docs/releases/<tag>.md si ce
+# fichier existe, sinon celles que GitHub génère.
+#
+#     git tag -a v2.0.0 -m "Version 2.0.0"; git push origin v2.0.0
+#
+# Le tag doit être celui de app/__init__.py (VERSION) : sinon le build s'arrête avant de rien publier. Le jeton
+# d'écriture n'est donné qu'à la dernière étape (celle qui crée la release), pas aux étapes qui installent et
+# construisent.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Dépendances
+        run: python -m pip install -r requirements.txt
+
+      - name: Le tag est celui de VERSION
+        run: |
+          $version = python -c "from app import VERSION; print(VERSION)"
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "Le tag $env:GITHUB_REF_NAME ne correspond pas à VERSION ($version) dans app/__init__.py."
+          }
+
+      - name: Construire la version portable
+        run: python tools/build_portable.py --sans-installer
+
+      - name: Zip et empreinte
+        run: python tools/zip_release.py
+
+      - name: Release en brouillon
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $zip = ".build_cache/release/Aria-Studio-$version.zip"
+          $notes = "docs/releases/$env:GITHUB_REF_NAME.md"
+          if (Test-Path $notes) { $texte = @("--notes-file", $notes) } else { $texte = @("--generate-notes") }
+          gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --draft --verify-tag --title "Aria - Studio $version" @texte
