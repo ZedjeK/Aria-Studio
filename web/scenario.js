@@ -185,7 +185,45 @@ const AIDES_GUIDE = {
     clip: "Choisis ce que tu veux imposer au clip : le sujet, le décor, la mise en scène, le dialogue et la musique.",
 };
 
+// Le format choisi ici est celui du Plateau (image) ou du Montage (clip) : un seul réglage, deux endroits. Redessiner une
+// image et un clip animé d'une image gardent le format de l'image : pas de choix, le LLM n'a rien à adapter.
+function selectFormatSource() {
+    if (formeScenario === "image") {
+        const s = document.getElementById("format-creation");
+        return s && !s.disabled ? s : null;
+    }
+    if (formeScenario === "clip" && !document.getElementById("bloc-format-montage").hidden) {
+        return document.getElementById("format-montage");
+    }
+    return null;
+}
+
+const formatScenario = () => selectFormatSource()?.value || null;
+
+function majFormat() {
+    const source = selectFormatSource();
+    const ici = document.getElementById("format-scenario");
+    document.getElementById("bloc-format-scenario").hidden = !source;
+    if (!source) return;
+    const options = [...source.options].map((o) => o.value).join("|");
+    if (ici.dataset.options !== options) {
+        ici.dataset.options = options;
+        ici.replaceChildren(...[...source.options].map((o) => new Option(o.textContent, o.value)));
+    }
+    ici.value = source.value;
+}
+
+document.getElementById("format-scenario").addEventListener("change", (e) => {
+    const source = selectFormatSource();
+    if (!source) return;
+    source.value = e.target.value;
+    source.dispatchEvent(new Event("change", { bubbles: true }));
+    majFinal();
+});
+["format-creation", "format-montage"].forEach((id) => document.getElementById(id).addEventListener("change", majFormat));
+
 function majGuide() {
+    majFormat();
     const guide = guidable();
     if (!guide) ongletIdee = "conversation";
     const voirGuide = guide && ongletIdee === "guide";
@@ -279,6 +317,7 @@ function majPartiraAvec() {
 }
 
 function majFinal() {
+    majFormat();
     majPartiraAvec();
     const texte = atelier().final.trim();
     const mots = compterMots(texte);

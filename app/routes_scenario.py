@@ -123,6 +123,7 @@ class DemandeLibre(BaseModel):
     role: str | None = None  # leur rôle : inspirer, variation, animer
     llm: str | None = None
     duree: int = 5
+    format: str | None = None  # le format de l'image ou du clip, choisi au Scénario (comme au Plateau)
 
 
 ECHANGES_LIBRE_MAX, LONGUEUR_ECHANGE_LIBRE = 60, 4000
@@ -137,6 +138,8 @@ async def chat_libre(d: DemandeLibre, requete: Request = None):
         raise HTTPException(400, "Atelier inconnu : image, retouche, clip, séquence ou plan")
     if d.forme == "plan" and not (d.sequence and isinstance(d.sequence.get("plan"), int)):
         raise HTTPException(400, "Quel plan de la séquence ?")
+    if d.format and d.format not in workflows.FORMATS:
+        raise HTTPException(400, f"Format inconnu : {d.format}")
     if not d.echanges or d.echanges[-1].role != "user" or len(d.echanges) > ECHANGES_LIBRE_MAX \
             or any(e.role not in ("user", "assistant") or len(e.content) > LONGUEUR_ECHANGE_LIBRE for e in d.echanges):
         raise HTTPException(400, "Conversation invalide ou trop longue : recommence-la")
@@ -156,7 +159,7 @@ async def chat_libre(d: DemandeLibre, requete: Request = None):
         llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
         r = await services.tant_que_connecte(requete, prompt.libre(
             services.orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, contexte, vues, d.role,
-            llm, duree))
+            llm, duree, d.format))
         if plan_ and r["prompt"]:  # les garde-fous du découpage : réplique du plan à son moment, rien d'inventé
             texte, alertes = decoupage.finir_plan(s.plan + 1, plan_["plans"][s.plan], r["prompt"],
                                                   plan_["personnage"], plan_["source"])

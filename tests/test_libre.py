@@ -191,3 +191,26 @@ class Route(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FormatDuScenario(unittest.TestCase):
+    """Le format choisi au Scénario est dit au LLM, et seulement à lui (image, clip)."""
+
+    def test_orientation(self):
+        self.assertIn("landscape", prompt.cadre_format("16:9 (Widescreen)"))
+        self.assertIn("portrait", prompt.cadre_format("9:16 (Portrait Widescreen)"))
+        self.assertIn("square", prompt.cadre_format("1:1 (Square)"))
+        self.assertEqual(prompt.cadre_format(None), "")
+        self.assertEqual(prompt.cadre_format("n'importe quoi"), "")
+
+    def test_dans_la_consigne_image_et_clip_pas_retouche(self):
+        for forme, attendu in (("image", True), ("clip", True), ("retouche", False)):
+            o = FauxLlm(json.dumps(TOUR))
+            tour(o, [{"role": "user", "content": "Un chat"}], forme=forme, format_="3:2 (Photo)")
+            self.assertEqual("3:2 (Photo)" in o.appels[0][0][0]["content"], attendu, forme)
+
+    def test_route_refuse_un_format_inconnu(self):
+        with self.assertRaises(HTTPException) as e:
+            asyncio.run(routes_scenario.chat_libre(routes_scenario.DemandeLibre(
+                echanges=[routes_scenario.EchangeLibre(role="user", content="Un chat")], format="7:5")))
+        self.assertEqual(e.exception.status_code, 400)
