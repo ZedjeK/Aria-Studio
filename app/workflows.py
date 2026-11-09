@@ -352,6 +352,17 @@ def regles_prompt(id_workflow: str | None) -> list[str]:
         return []
 
 
+def rubriques_ignorees(id_workflow: str | None) -> set[str]:
+    """Rubriques de « Me guider » inutiles à ce modèle cible (profil_prompt.rubriques_ignorees de sa fiche) : celles
+    que son entrée fixe déjà, comme l'image à animer qui porte le style, la palette et l'objectif."""
+    if not id_workflow:
+        return set()
+    try:
+        return {str(r) for r in obtenir(id_workflow).profil.get("rubriques_ignorees") or []}
+    except ErreurWorkflow:
+        return set()
+
+
 def dialogue_en_balise(id_workflow: str | None) -> bool:
     """Ce modèle lit les répliques dans une balise <d>[Langue] …</d> (profil_prompt.balise_dialogue de sa fiche)."""
     if not id_workflow:

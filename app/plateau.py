@@ -190,7 +190,8 @@ class Plateau:
                                "loras": modeles.loras(wf.famille),
                                "format": reglages.valeurs_workflow(wf).get("ratio"),  # réglable (onglet Réglages)
                                "references": wf.accepte_references(), "variation": wf.accepte_variation(),
-                               "reserve_retouche": wf.reserve_retouche()}
+                               "reserve_retouche": wf.reserve_retouche(),
+                               "rubriques_ignorees": sorted(workflows.rubriques_ignorees(wf.id))}
                               for wf in prets if wf.fiche["tache"] == tache],
                 }
                 # vidéo : modèle cible du Scénario, et checkpoints proposés dans le Montage

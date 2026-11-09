@@ -303,3 +303,24 @@ class GardeCjk(unittest.TestCase):
     def test_garde_sur_texte_simple(self):
         self.assertEqual(prompt.garde_cjk("a cat 猫 sitting", "un chat"), "a cat sitting")
         self.assertEqual(prompt.garde_cjk("a cat 猫", "un chat 猫"), "a cat 猫")
+
+
+class RubriquesParModele(unittest.TestCase):
+    """profil_prompt.rubriques_ignorees : « Me guider » et le LLM ne demandent pas ce que l'entrée du modèle fixe déjà."""
+
+    def test_catalogue_sans_les_rubriques_ignorees(self):
+        avec = prompt.catalogue_guide("personnage", False, True)
+        sans = prompt.catalogue_guide("personnage", False, True, ignorees={"Style", "Objectif"})
+        self.assertIn("- Style (", avec)
+        self.assertNotIn("- Style (", sans)
+        self.assertNotIn("- Objectif (", sans)
+        self.assertIn("- Caméra (", sans)
+
+    def test_noms_guide_filtres(self):
+        self.assertNotIn("Palette", prompt.noms_guide("personnage", False, True, {"Palette"}))
+
+    def test_fiche_image_vers_video(self):
+        from app import workflows
+        self.assertEqual(workflows.rubriques_ignorees("minimax_h3_i2v"), {"Style", "Palette", "Finition", "Objectif"})
+        self.assertEqual(workflows.rubriques_ignorees("krea2_turbo"), set())
+        self.assertEqual(workflows.rubriques_ignorees(None), set())

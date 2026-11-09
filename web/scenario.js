@@ -75,6 +75,16 @@ function remplirLlms() {
         + `${m.favori ? " ★" : ""}${m.vision ? " 👁" : ""}</option>`).join("");
 }
 const ciblePrompt = () => document.getElementById("workflow-prompt").value || null;
+// Rubriques que le modèle cible n'a pas à se faire demander (profil_prompt.rubriques_ignorees de sa fiche).
+function rubriquesIgnorees() {
+    try {
+        const [, t] = tacheCible();
+        const id = ciblePrompt();
+        return new Set(t.choix.find((x) => x.id === id)?.rubriques_ignorees ?? []);
+    } catch {
+        return new Set();
+    }
+}
 const cibleVideo = () => formeScenario === "clip" || formeScenario === "sequence";
 
 let preparationScenario = Promise.resolve();
@@ -916,6 +926,7 @@ document.getElementById("workflow-prompt").addEventListener("change", () => {
     ciblesParForme[tacheCible()[0]] = ciblePrompt();
     remplirLlms();  // s'il n'a pas été choisi à la main, le LLM suit celui du modèle cible
     planifierAssemblage();
+    if (typeof majGuide === "function") majGuide();  // les rubriques ignorées par ce modèle changent
 });
 
 document.querySelector(".onglets-scenario").addEventListener("click", (e) => {

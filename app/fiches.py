@@ -8,7 +8,9 @@ Une fiche de workflow (workflows/<id>/fiche.yaml) et une fiche de LLM (catalogue
               de palier, null tant que ce n'est pas fait), mesure ({carte, date, methode}), cartes_verifiees
 Une fiche de workflow a en plus :
     reserve        facultatif : « retouche » réserve le workflow à la Retouche (S'inspirer ne le propose pas)
-    profil_prompt  style (prose, instruction, brief_video), langue, mots_max (facultatif), negatif, regles (ajoutées
+    profil_prompt  style (prose, instruction, brief_video), langue, mots_max (facultatif), negatif,
+                   rubriques_ignorees (facultatif : rubriques de « Me guider » que ce modèle n'a pas à se faire demander),
+                   regles (ajoutées
                    à la consigne de Llama quand ce modèle est la cible), conseils et sources (documentation),
                    balise_dialogue (facultatif : le modèle lit les répliques dans <d>[Langue] …</d>, app/repliques.py),
                    nom_image (facultatif : comment le modèle désigne ses images de référence dans un prompt, avec {n} ;
@@ -86,7 +88,7 @@ def problemes_profil(profil) -> list[str]:
         p.append("profil_prompt.langue manquant")
     if "mots_max" in profil and not (isinstance(profil["mots_max"], int) and 20 <= profil["mots_max"] <= 1000):
         p.append("profil_prompt.mots_max : un entier de 20 à 1000")
-    for cle in ("regles", "conseils", "sources"):
+    for cle in ("regles", "conseils", "sources", "rubriques_ignorees"):
         if not isinstance(profil.get(cle, []), list):
             p.append(f"profil_prompt.{cle} : une liste")
     return p

@@ -49,7 +49,7 @@ function etapesGuide() {
         if (b.video && !cibleVideo()) return;
         b.groupes.forEach((g) => {
             if (sansListesSujet && g.onglet === "sujet") return;
-            g.sous_listes.forEach((sl) => candidates.push({ bloc: b.id, groupe: g.nom, onglet: g.onglet, sl }));
+            g.sous_listes.filter((sl) => !rubriquesIgnorees().has(sl.nom)).forEach((sl) => candidates.push({ bloc: b.id, groupe: g.nom, onglet: g.onglet, sl }));
         });
     });
     candidates.sort((x, y) => RANG_SECTION[x.onglet] - RANG_SECTION[y.onglet]);  // le tri garde l'ordre des accordéons
