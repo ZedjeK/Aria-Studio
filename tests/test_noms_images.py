@@ -10,7 +10,7 @@ from app import prompt, workflows
 from tests.test_libre import FauxLlm, TOUR
 
 QWEN_21 = ("qwen_image_2_1", "qwen_image_2_1_edit")
-SANS_NOM = ("qwen_image_edit_2511", "krea2_turbo", "minimax_h3_i2v")
+SANS_NOM = ("krea2_turbo", "minimax_h3_i2v")
 
 
 class NomDesImages(unittest.TestCase):
@@ -35,7 +35,7 @@ class Consigne(unittest.TestCase):
         self.assertIn("numbered <image1>, <image2>, <image3>", qwen)
         self.assertIn('"the woman from <image1>"', qwen)
         self.assertNotIn("Picture 1", qwen)
-        defaut = prompt.consigne("references", workflow="qwen_image_edit_2511")
+        defaut = prompt.consigne("references", workflow="krea2_turbo")
         self.assertIn("numbered Picture 1, Picture 2, Picture 3", defaut)
         self.assertEqual(prompt.consigne("references"), defaut)
 
@@ -55,7 +55,7 @@ class VuesEtChat(unittest.TestCase):
         self.assertIn("Picture 1: A woman.\nPicture 2: A dragon.", sans)
 
     def test_le_chat_nomme_les_images_du_modele(self):
-        for id_wf, attendu in (("qwen_image_2_1_edit", "<image1>"), ("qwen_image_edit_2511", "Picture 1")):
+        for id_wf, attendu in (("qwen_image_2_1_edit", "<image1>"), ("krea2_turbo", "Picture 1")):
             o = FauxLlm(json.dumps(TOUR))
             asyncio.run(prompt.libre(o, [{"role": "user", "content": "Mets-la sur une plage"}], "image", id_wf,
                                      vues=[prompt.Vue(b"PNG", "A woman.")], role="inspirer"))

@@ -59,7 +59,7 @@ casting:
 generation:
     # Workflows par défaut, mis à jour par le bouton « favori » du Casting.
     texte_vers_image: "qwen_image_2_1"
-    retouche: "qwen_image_edit_2511"
+    retouche: "qwen_image_2_1_edit"
     # Créer depuis des références (S'inspirer) : garde le mieux le personnage et le style (essais du 2026-10-20).
     references: "qwen_image_2_1_edit"
     # Vidéo : MiniMax H3, vainqueur du Casting vidéo (LTX-2.5 retiré à la demande de l'auteur).

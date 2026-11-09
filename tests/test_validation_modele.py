@@ -70,7 +70,6 @@ class Validation(unittest.TestCase):
     def test_fiche_claire_ou_pas(self):
         self.assertEqual(self.wf.steps_clairs(), 0)  # H3 : 8 par défaut, 12 recommandé
         self.assertEqual(workflows.obtenir("krea2_turbo").steps_clairs(), 8)  # 8 et 8
-        self.assertEqual(workflows.obtenir("qwen_image_edit_2511").steps_clairs(), 4)
         self.assertEqual(workflows.obtenir("qwen_image_2_1").steps_clairs(), 0)  # 25 et 40
 
     def test_un_checkpoint_a_valider_est_refuse_au_tournage(self):

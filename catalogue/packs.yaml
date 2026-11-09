@@ -21,17 +21,7 @@ packs:
             generation:
                 texte_vers_image: qwen_image_2_1
                 references: qwen_image_2_1_edit
-                retouche: qwen_image_2_1_edit  # remplacé par le pack Retouche s'il est pris
-
-    retouche:
-        nom: Retouche avancée
-        usage: Retoucher une image avec une consigne et un masque (Qwen-Image-Edit 2511, plus précis)
-        workflows: [qwen_image_edit_2511]
-        moteurs: [comfyui]
-        testee: RTX 4080 SUPER 16 Go
-        favoris:
-            generation:
-                retouche: qwen_image_edit_2511
+                retouche: qwen_image_2_1_edit
 
     video:
         nom: Vidéo

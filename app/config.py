@@ -14,6 +14,8 @@ def charger() -> dict:
     with CONFIG_FILE.open(encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
     for section, valeurs in emplacements.favoris().items():  # les favoris du Casting passent devant
+        if section == "generation":  # un workflow retiré d'Aria ne reste pas favori : la valeur de config.yaml reprend
+            valeurs = {tache: id_wf for tache, id_wf in valeurs.items() if (ROOT / "workflows" / str(id_wf)).is_dir()}
         config.setdefault(section, {}).update(valeurs)
     if emplacements.comfyui_externe():  # « J'ai déjà ComfyUI » : un chemin absolu, que moteur() garde tel quel
         config.setdefault("comfyui", {})["dossier"] = str(emplacements.comfyui_externe())

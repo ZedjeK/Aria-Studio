@@ -55,9 +55,7 @@ class Optimiseur(unittest.TestCase):
         props, r = self.propositions()
         # Les steps se valident par checkpoint (Modèles → Ma collection) : l'Optimiser ne les propose plus.
         self.assertNotIn(("qwen_image_2_1", "steps"), props)
-        shift = props[("qwen_image_edit_2511", "shift")]
-        self.assertEqual(shift["propose"], 3.0)
-        self.assertTrue(shift["source"].startswith("https://"))
+        self.assertFalse([cle for (cible, cle) in props if cle == "shift"])  # plus aucun workflow livré ne le recommande
         self.assertEqual(props[(LLM, "temperature_traduction")]["propose"], 0.05)
         self.assertEqual(props[(BONSAI, "presence_penalty")]["propose"], 1.5)
         self.assertEqual(r["materiel"]["gpu"], "GPU de test")
@@ -74,7 +72,7 @@ class Optimiseur(unittest.TestCase):
 
     def test_alertes_vram_sur_16_go(self):
         _, r = self.propositions()
-        self.assertTrue(any("Qwen-Image-Edit 2511" in a and "RAM" in a for a in r["alertes"]))
+        self.assertTrue(any("MiniMax H3 · image vers vidéo" in a and "RAM" in a for a in r["alertes"]))
         self.assertTrue(any("Krea 2" in a and "1 MP" in a for a in r["alertes"]))
 
     def test_vram_du_projecteur_comptee(self):

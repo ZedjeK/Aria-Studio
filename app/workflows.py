@@ -28,7 +28,7 @@ ENCODEURS_REFERENCES = {
     "TextEncodeQwenImage21": ("images.image_{}", 16, "EmptyLatentImage"),
 }
 # Plafond d'Aria : 10 images, ce que les modèles ComfyUI officiels de Qwen-Image 2.1 Edit reçoivent (son encodeur a 16
-# entrées, mais seules 10 sont câblées). Chaque workflow garde sa propre limite : le 2511 s'arrête à 3 (son encodeur).
+# entrées, mais seules 10 sont câblées). Chaque workflow garde sa propre limite, celle de son encodeur.
 REFERENCES_MAX = 10
 
 

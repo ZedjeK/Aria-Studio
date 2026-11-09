@@ -115,7 +115,7 @@ class Ateliers(unittest.TestCase):
     def test_retouche_et_sequence(self):
         """Retouche : une consigne d'édition en anglais ; Séquence : l'histoire, en français."""
         o = FauxLlm(json.dumps(TOUR))
-        tour(o, [{"role": "user", "content": "Rends le ciel orange"}], forme="retouche", workflow="qwen_image_edit_2511",
+        tour(o, [{"role": "user", "content": "Rends le ciel orange"}], forme="retouche", workflow="qwen_image_2_1_edit",
              vues=[prompt.Vue(b"PNG", "A cat on a windowsill at night.")], role="retouche")
         systeme = o.appels[0][0][0]["content"]
         self.assertIn("instruction-based image editing model", systeme)

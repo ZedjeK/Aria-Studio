@@ -54,7 +54,6 @@ class Usages(unittest.TestCase, ModelesTemporaires):
         f = workflows.familles()
         self.assertEqual(f["Krea2"]["usages"], ["image"])
         self.assertEqual(f["Qwen-Image2.1"]["usages"], ["image", "retouche"])  # création et retouche
-        self.assertEqual(f["Qwen-Edit2511"]["usages"], ["retouche"])
         self.assertEqual(f["MiniMax-H3"]["usages"], ["video"])
         self.assertEqual(f["Krea2"]["nature"], "image")  # le rangement des modèles ne change pas
 

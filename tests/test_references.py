@@ -26,23 +26,9 @@ setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas 
 class Graphes(unittest.TestCase):
     def test_capacites(self):
         self.assertEqual(workflows.obtenir("qwen_image_2_1_edit").accepte_references(), 10)  # le plafond d'Aria
-        self.assertEqual(workflows.obtenir("qwen_image_edit_2511").accepte_references(), 3)  # la limite de son encodeur
         self.assertEqual(workflows.obtenir("qwen_image_2_1").accepte_references(), 0)  # pas d'entrée d'image
         self.assertEqual(workflows.obtenir("krea2_turbo").accepte_references(), 0)
         self.assertTrue(workflows.obtenir("krea2_turbo").accepte_variation())
-
-    def test_inspirer_2511_trois_images(self):
-        wf = workflows.obtenir("qwen_image_edit_2511")
-        api = wf.preparer({"prompt": "the woman from Picture 1 on the dragon from Picture 2", "seed": 1,
-                           "image": "a.png", "references": ["b.png", "c.png"], "format_sortie": "16:9 (Widescreen)"})
-        encodeurs = [n for n in api.values() if n["class_type"] == "TextEncodeQwenImageEditPlus"]
-        self.assertEqual(len(encodeurs), 2)
-        for e in encodeurs:  # positif et négatif voient les mêmes images
-            self.assertEqual((e["inputs"]["image2"], e["inputs"]["image3"]), (["aria_ref_2", 0], ["aria_ref_3", 0]))
-        ks = api[reglages.noeud_unique(api, "KSampler")]["inputs"]
-        self.assertEqual(ks["latent_image"], ["aria_latent", 0])
-        self.assertEqual(api["aria_latent"]["class_type"], "EmptySD3LatentImage")
-        self.assertEqual(api["aria_format"]["inputs"]["aspect_ratio"], "16:9 (Widescreen)")
 
     def test_inspirer_qwen_21_latent_adapte(self):
         api = workflows.obtenir("qwen_image_2_1_edit").preparer(
@@ -50,11 +36,6 @@ class Graphes(unittest.TestCase):
         encodeur = next(n for n in api.values() if n["class_type"] == "TextEncodeQwenImage21")
         self.assertEqual(encodeur["inputs"]["images.image_2"], ["aria_ref_2", 0])
         self.assertEqual(api["aria_latent"]["class_type"], "EmptyLatentImage")
-
-    def test_trop_d_images(self):
-        with self.assertRaises(workflows.ErreurWorkflow):
-            workflows.obtenir("qwen_image_edit_2511").preparer(
-                {"prompt": "x", "seed": 1, "image": "a.png", "references": ["b.png", "c.png", "d.png"]})
 
     def test_inspirer_qwen_21_dix_images(self):
         wf = workflows.obtenir("qwen_image_2_1_edit")
@@ -67,11 +48,12 @@ class Graphes(unittest.TestCase):
             wf.preparer({"prompt": "x", "seed": 1, "image": "a.png", "references": noms + ["r11.png"]})
 
     def test_reserve_a_la_retouche(self):
-        self.assertTrue(workflows.obtenir("qwen_image_edit_2511").reserve_retouche())
-        self.assertFalse(workflows.obtenir("qwen_image_2_1_edit").reserve_retouche())
-        fiche = workflows.obtenir("qwen_image_edit_2511").fiche
-        self.assertFalse([p for p in fiches.problemes_workflow(fiche) if p.startswith("reserve")])
-        for mauvaise in ({**fiche, "reserve": "autre"}, {**fiche, "tache": "texte_vers_image"}):
+        base = workflows.obtenir("qwen_image_2_1_edit")
+        self.assertFalse(base.reserve_retouche())  # aucun workflow livré n'est réservé aujourd'hui : la clé reste prête
+        reserve = workflows.Workflow({**base.fiche, "reserve": "retouche"}, base.api)
+        self.assertTrue(reserve.reserve_retouche())
+        self.assertFalse([p for p in fiches.problemes_workflow(reserve.fiche) if p.startswith("reserve")])
+        for mauvaise in ({**base.fiche, "reserve": "autre"}, {**reserve.fiche, "tache": "texte_vers_image"}):
             self.assertTrue([p for p in fiches.problemes_workflow(mauvaise) if p.startswith("reserve")])
 
     def test_variation(self):
@@ -124,7 +106,7 @@ class Commandes(unittest.TestCase):
         with self.assertRaisesRegex(ErreurPlateau, "Liberté"):
             self.commander("x", [a], "variation", liberte=2)
         with self.assertRaisesRegex(ErreurPlateau, "ne permet pas"):
-            self.commander("x", [a], "variation", workflow="qwen_image_edit_2511")
+            self.commander("x", [a], "variation", workflow="qwen_image_2_1_edit")
 
     def test_validations(self):
         a = self.rush("x")
@@ -135,8 +117,9 @@ class Commandes(unittest.TestCase):
         with self.assertRaisesRegex(ErreurPlateau, "accepte de 1 à 10"):
             self.commander("x", [a] + [self.rush(str(i)) for i in range(10)])  # 11 images
         self.commander("x", [a] + [self.rush(str(i)) for i in range(9)])  # 10 images : accepté par défaut (2.1 Edit)
-        with self.assertRaisesRegex(ErreurPlateau, "réservé à la retouche"):  # le 2511 ne sert pas à S'inspirer
-            self.commander("x", [a], workflow="qwen_image_edit_2511")
+        with mock.patch.object(workflows.Workflow, "reserve_retouche", lambda self: True), \
+                self.assertRaisesRegex(ErreurPlateau, "réservé à la retouche"):  # un workflow réservé ne sert pas à S'inspirer
+            self.commander("x", [a], workflow="qwen_image_2_1_edit")
 
     def test_as18_lit_les_textes_d_origine(self):
         """Une image n'est pas lue par AS-18 : la fiche du rush (et de ses ancêtres) l'est."""
