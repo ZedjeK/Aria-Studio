@@ -282,6 +282,10 @@
                             <div class="ancrages" id="ancrages"></div>
                             <div class="apercu-agrandir"><div id="apercu-cadre"><div id="apercu-image"></div></div></div>
                         </div>
+                        <div class="ligne">
+                            <div id="formats-agrandir" class="groupe-boutons" role="group" aria-label="Format de l'agrandissement">
+                                <span>Format</span></div>
+                        </div>
                         <p class="discret">L'image d'origine reste intacte ; seules les zones ajoutées sont inventées.</p>
                     </div>
 
@@ -295,6 +299,11 @@
                         <label title="Largeur, en pixels, de la transition entre la retouche et l'image d'origine">Fondu
                             <input id="fondu-retouche" type="range" min="0" max="128" value="24">
                             <span id="valeur-fondu" class="valeur">24 px</span></label>
+                        <label>Seed <input id="seed-retouche" type="number" min="0" placeholder="aléatoire"></label>
+                        <label>Images <input id="nombre-retouche" class="nombre" type="number" min="1" max="1" step="1" value="1"
+                                             inputmode="numeric" title="Combien de variantes à la suite (la seed augmente de 1 à chaque image)"></label>
+                        <label title="Le dossier de Rushes où seront rangés les résultats ; par défaut, celui de l'image d'origine">📥 Ranger dans
+                            <select id="destination-retouche" data-destination="rushes"></select></label>
                         <button id="lancer-retouche" class="principal" type="button">Lancer</button>
                     </div>
                     <div id="loras-retouche" class="loras"></div>
@@ -324,6 +333,7 @@
                 </div>
                 <p class="discret aide-comparaison"><span id="aide-curseur">Glisse le trait pour comparer ·</span>
                     <button id="bascule-comparaison" type="button" class="petit">Passer en côte à côte</button></p>
+                <div id="variantes-retouche" class="vignettes variantes-retouche" hidden></div>
                 <p id="consigne-resultat-retouche" class="discret"></p>
                 <div class="ligne actions-resultat-retouche">
                     <button id="repartir-retouche" type="button" class="petit principal"
@@ -332,6 +342,32 @@
                     <a id="telecharger-retouche" class="bouton petit" download>⬇ Télécharger</a>
                     <span id="infos-resultat-retouche" class="discret"></span>
                 </div>
+            </section>
+
+            <section class="carte" id="rushes-retouche">
+                <div class="ligne entete-galerie">
+                    <h2>Rushes <span data-role="compte" class="discret"></span></h2>
+                    <div class="ligne">
+                        <button data-role="selectionner" type="button" class="petit">Sélectionner</button>
+                        <label class="bouton petit">Importer une image
+                            <input id="importer-retouche" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                        </label>
+                    </div>
+                </div>
+                <div data-role="vues" class="vues-rushes"></div>
+                <div data-role="barre" class="barre-selection" hidden>
+                    <span data-role="compte-selection"></span>
+                    <button type="button" class="petit" data-selection="tout">Tout</button>
+                    <button type="button" class="petit" data-selection="aucun">Aucun</button>
+                    <span class="separateur"></span>
+                    <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
+                    <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
+                    <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
+                    <button type="button" class="petit" data-action="restaurer">Restaurer</button>
+                    <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
+                    <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                </div>
+                <div data-role="vignettes" class="vignettes"></div>
             </section>
         </div>
 

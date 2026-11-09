@@ -419,10 +419,10 @@ def oublier_voix(valeur: str, nom: str) -> list[str]:
 
 
 def _dossier(titre: str) -> str:
-    """Dossier des Bobines de la séquence (créé au besoin, partagé avec les Rushes)."""
+    """Dossier des Bobines de la séquence (créé au besoin, côté Bobines seulement)."""
     nom = re.sub(r"[^\w .'’-]", "", f"Séquence {titre}")[:40].strip()
-    if nom not in rushes.dossiers():
-        rushes.creer_dossier(nom)
+    if nom not in rushes.dossiers(genre="clips"):
+        rushes.creer_dossier(nom, "clips")
     return nom
 
 

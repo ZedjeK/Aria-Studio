@@ -768,6 +768,8 @@ class DemandeRetouche(BaseModel):
     seed: int | None = None
     modele: str | None = None
     loras: list[dict] | None = None
+    nombre: int = 1  # variantes (seed, seed + 1…)
+    dossier: str | None = None  # dossier de Rushes ; absent = celui de l'image d'origine
 
 
 class DemandeAgrandissement(BaseModel):
@@ -783,6 +785,8 @@ class DemandeAgrandissement(BaseModel):
     seed: int | None = None
     modele: str | None = None
     loras: list[dict] | None = None
+    nombre: int = 1
+    dossier: str | None = None
 
 
 class DemandeImport(BaseModel):
@@ -796,7 +800,8 @@ def retoucher(d: DemandeRetouche):
     def action():
         masque = retouche.depuis_data_url(d.masque) if d.masque else None
         return plateau_.commander_retouche(d.source, d.instruction, d.reecrire, d.llm, d.workflow, masque,
-                                           d.fondu, d.seed, d.modele, d.loras)
+                                           d.fondu, d.seed, d.modele, d.loras, d.nombre,
+                                           rushes.valider_dossier(d.dossier))
     return services.commander(action)
 
 
@@ -804,7 +809,7 @@ def retoucher(d: DemandeRetouche):
 def agrandir(d: DemandeAgrandissement):
     return services.commander(lambda: plateau_.commander_agrandissement(
         d.source, d.largeur, d.hauteur, d.ancrage, d.precision, d.reecrire, d.llm, d.workflow, d.fondu, d.seed,
-        d.modele, d.loras))
+        d.modele, d.loras, d.nombre, rushes.valider_dossier(d.dossier)))
 
 
 @app.post("/api/creations/import")
@@ -912,25 +917,25 @@ class DemandeDossier(BaseModel):
 
 
 @app.post("/api/rushes/dossiers")
-def creer_dossier(demande: DemandeDossier):
+def creer_dossier(demande: DemandeDossier, genre: str = "images"):
     try:
-        return {"nom": rushes.creer_dossier(demande.nom)}
+        return {"nom": rushes.creer_dossier(demande.nom, genre)}
     except rushes.ErreurRushes as e:
         raise HTTPException(400, str(e))
 
 
 @app.put("/api/rushes/dossiers/{nom}")
-def renommer_dossier(nom: str, demande: DemandeDossier):
+def renommer_dossier(nom: str, demande: DemandeDossier, genre: str = "images"):
     try:
-        return {"nom": rushes.renommer_dossier(nom, demande.nom)}
+        return {"nom": rushes.renommer_dossier(nom, demande.nom, genre)}
     except rushes.ErreurRushes as e:
         raise HTTPException(400, str(e))
 
 
 @app.delete("/api/rushes/dossiers/{nom}")
-def supprimer_dossier(nom: str):
+def supprimer_dossier(nom: str, genre: str = "images"):
     try:
-        return {"liberes": rushes.supprimer_dossier(nom)}
+        return {"liberes": rushes.supprimer_dossier(nom, genre)}
     except rushes.ErreurRushes as e:
         raise HTTPException(404, str(e))
 

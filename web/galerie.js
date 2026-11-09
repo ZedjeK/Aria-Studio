@@ -1,5 +1,5 @@
 // Galeries rangées : les Rushes du Plateau (images) et les Bobines du Montage (clips).
-// Mêmes vues (Tous, Non rangés, dossiers, Archives, Corbeille), mêmes dossiers, même sélection.
+// Mêmes vues (Tous, Non rangés, dossiers, Archives, Corbeille), même sélection ; chaque genre a ses propres dossiers.
 // Ranger ne déplace aucun fichier : la fiche note son dossier, son archivage ou sa mise à la corbeille.
 //
 // Par défaut, rien n'est affiché : un rush ou un clip peut être sensible. On ouvre « Tous » ou un dossier quand on le veut
@@ -12,7 +12,10 @@ const ACTIONS_DEPOT = { non_ranges: ["ranger", null], archives: ["archiver"], co
 const actionDepot = (cle) => (cle?.startsWith("dossier:") ? ["ranger", cle.slice(8)] : ACTIONS_DEPOT[cle]);
 
 // `actions(fiche)` : actions propres au genre du menu clic droit, [[libellé, fonction]] (variante, animer…).
-function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = () => [], destination = null }) {
+// `cleDestination` : où retenir le dossier de destination (par genre par défaut ; l'onglet Retouche a le sien) ;
+// `libelleAucun` : le nom de l'entrée sans dossier dans la liste « 📥 Ranger dans ».
+function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = () => [], destination = null,
+    cleDestination = null, libelleAucun = "Non rangés" }) {
     const $ = (role) => racine.querySelector(`[data-role="${role}"]`);
     const g = { fiches: [], etat: null, vue: { vue: "masque", dossier: null }, selection: new Set(), modeSelection: false };
     let dernierClic = null;  // pour Maj + clic
@@ -21,17 +24,22 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
 
     // Le dossier de destination : celui où sont rangés les prochains rushs ou clips (créés, importés, tournés). Il se choisit
     // dans le formulaire (liste « 📥 Ranger dans »), indépendamment de ce qui est affiché ; retenu entre deux ouvertures.
-    const cleCible = `aria.destination.${genre}`;
+    const cleCible = cleDestination ?? `aria.destination.${genre}`;
     let cible = null;
-    try {
-        cible = localStorage.getItem(cleCible) || null;
-    } catch { /* stockage indisponible : « Non rangés » */ }
-    g.dossierCible = () => cible;
+    const relireCible = () => {
+        try {
+            cible = localStorage.getItem(cleCible) || null;
+        } catch { /* stockage indisponible : on garde le choix de cette session */ }
+        return cible;
+    };
+    relireCible();
+    g.dossierCible = relireCible;
 
     function rendreDestination() {
         const noms = (g.etat?.dossiers ?? []).map((d) => d.nom);
+        relireCible();
         if (cible && g.etat && !noms.includes(cible)) cible = null;  // dossier supprimé ou renommé
-        const options = '<option value="">Non rangés</option>' + noms.map((n) =>
+        const options = `<option value="">${echapper(libelleAucun)}</option>` + noms.map((n) =>
             `<option value="${echapper(n)}" ${n === cible ? "selected" : ""}>📁 ${echapper(n)}</option>`).join("");
         if (destination) destination.innerHTML = options;
     }
@@ -178,13 +186,13 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
             if (bouton.dataset.nouveauDossier) {
                 const nom = prompt("Nom du nouveau dossier :");
                 if (!nom?.trim()) return;
-                const d = await api("POST", "/api/rushes/dossiers", { nom: nom.trim() });
+                const d = await api("POST", `/api/rushes/dossiers?genre=${genre}`, { nom: nom.trim() });
                 changerVue(`dossier:${d.nom}`);
             }
             if (bouton.dataset.renommerDossier) {
                 const nom = prompt("Nouveau nom du dossier :", g.vue.dossier);
                 if (!nom?.trim() || nom.trim() === g.vue.dossier) return;
-                const d = await api("PUT", `/api/rushes/dossiers/${encodeURIComponent(g.vue.dossier)}`, { nom: nom.trim() });
+                const d = await api("PUT", `/api/rushes/dossiers/${encodeURIComponent(g.vue.dossier)}?genre=${genre}`, { nom: nom.trim() });
                 changerVue(`dossier:${d.nom}`);
             }
             if (bouton.dataset.viderCorbeille) {
@@ -194,9 +202,9 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
                 await g.charger();
             }
             if (bouton.dataset.supprimerDossier
-                && confirm(`Supprimer le dossier « ${g.vue.dossier} » ? Ses images et ses clips ne sont pas supprimés : `
-                    + "ils retournent dans « Non rangés ».")) {
-                await api("DELETE", `/api/rushes/dossiers/${encodeURIComponent(g.vue.dossier)}`);
+                && confirm(`Supprimer le dossier « ${g.vue.dossier} » ? Rien n'est supprimé : `
+                    + `les ${mot}s du dossier retournent dans « Non rangés ».`)) {
+                await api("DELETE", `/api/rushes/dossiers/${encodeURIComponent(g.vue.dossier)}?genre=${genre}`);
                 changerVue("masque");
             }
         } catch (err) {

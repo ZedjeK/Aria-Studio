@@ -3771,7 +3771,7 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 .repli-wf[open] > summary { color: var(--accent); margin-bottom: .4rem; }
 
 /* Galeries masquées par défaut */
-.masque-galerie { padding: 1.2rem .5rem; }
+.masque-galerie { padding: 1.2rem .5rem; grid-column: 1 / -1; }
 .vue-rush.masquer { margin-left: auto; }
 
 /* Scénario, Plateau, Montage, Modèles, Casting (pas Réglages) : boutons du Scénario (angles droits, majuscules, actif plein cyan). Durée et Qualité deviennent des groupes
@@ -4295,4 +4295,25 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
         flex-direction: column;
         align-items: flex-start;
     }
+}
+
+/* Variantes d'une même retouche : une bande de vignettes sous la comparaison. */
+.variantes-retouche {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 120px));
+    justify-content: center;
+    margin-top: 14px;
+}
+
+.variantes-retouche img {
+    cursor: pointer;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+}
+
+.variantes-retouche img.choisi {
+    outline-color: var(--accent);
+}
+
+#formats-agrandir {
+    flex-wrap: wrap;
 }

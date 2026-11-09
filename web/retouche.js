@@ -9,7 +9,9 @@ let sourceRetouche = null;
 let masqueGarde = null;  // { id, image, fondu } : le masque peint attend le retour du Scénario (✍️ L'écrire au Scénario)
 let gomme = false;
 let ancrage = "centre";
-let resultatRetouche = null;  // id du dernier résultat affiché dans la comparaison
+let resultatRetouche = null;  // id du résultat affiché dans la comparaison
+let resultatsRetouche = [];  // tous les résultats de la dernière commande (variantes)
+let lanceeRetouche = null;  // ce qui a été lancé : image d'origine, mode, taille et ancrage de l'agrandissement
 let retoucheEnCours = false;
 
 const $r = (id) => document.getElementById(id);
@@ -17,6 +19,45 @@ const canevas = $r("canevas-masque");
 const ctx = canevas.getContext("2d");
 
 groupeBoutons("mode-retouche", "Action");  // web/commun.js : Retoucher │ Agrandir, le select reste la source
+brancherNombre("nombre-retouche");
+
+// Rushes : la même galerie rangée que le Plateau (web/galerie.js). Un clic sur une vignette la prend comme image à retoucher.
+const rushesRetouche = creerGalerie({
+    genre: "images",
+    racine: $r("rushes-retouche"),
+    mot: "image",
+    vides: {
+        tous: "Aucun rush pour l'instant : crée une image au Plateau, ou importe-en une.",
+        non_ranges: "Tout est rangé, bravo !",
+        archives: "Aucune archive.",
+        corbeille: "La corbeille est vide.",
+        dossier: "Dossier vide : glisse des vignettes sur son nom, ou choisis-le dans « 📥 Ranger dans » avant de lancer.",
+    },
+    vignette: (f, choisi) => `<img src="${urlImage(f.id)}" alt="" loading="lazy" draggable="true"
+        data-creation="${echapper(f.id)}" class="${choisi ? "choisi" : ""}">`,
+    ouvrir: (f) => prendreCommeSource(f),
+    actions: (f) => [["Ouvrir la fiche", () => ouvrirFiche(f)]],
+    destination: $r("destination-retouche"),
+    cleDestination: "aria.destination.retouche",  // son propre choix, indépendant de celui du Plateau
+    libelleAucun: "Comme l'image d'origine",
+});
+
+async function prendreCommeSource(f) {
+    $r("resultat-retouche").hidden = true;
+    await ouvrirRetouche(f, modeRetouche);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function importerPourRetouche(fichier) {
+    const f = await importerFichier(fichier, false, rushesRetouche);  // web/plateau.js
+    if (f) await prendreCommeSource(f);
+}
+$r("importer-retouche").addEventListener("change", async (e) => {
+    const fichier = e.target.files[0];
+    if (!fichier) return;
+    await importerPourRetouche(fichier);
+    e.target.value = "";
+});
 
 function allerRetouche() {
     const onglet = document.querySelector('.onglet[data-vue="retouche"]');
@@ -74,6 +115,7 @@ function ouvrirRetouche(f, mode = modeRetouche) {
     });
     img.src = urlImage(f.id);
     if (agrandir) {
+        majFormatsAgrandir();
         $r("largeur-agrandir").value = Math.round(f.largeur * 1.3 / 8) * 8;
         $r("hauteur-agrandir").value = f.hauteur;
         choisirAncrage("centre");
@@ -94,10 +136,8 @@ $r("mode-retouche").addEventListener("change", () => {
 
 // Choisir l'image : le sélecteur de rushes du Montage (web/montage.js), avec l'import depuis le disque.
 async function choisirImageRetouche() {
-    ouvrirChoixRush(async (id) => {
-        $r("resultat-retouche").hidden = true;
-        await ouvrirRetouche(await api("GET", `/api/creations/${encodeURIComponent(id)}`), modeRetouche);
-    }, modeRetouche === "agrandissement" ? "Quelle image agrandir ?" : "Quelle image retoucher ?");
+    ouvrirChoixRush(async (id) => prendreCommeSource(await api("GET", `/api/creations/${encodeURIComponent(id)}`)),
+        modeRetouche === "agrandissement" ? "Quelle image agrandir ?" : "Quelle image retoucher ?");
 }
 ["choisir-rush-retouche", "changer-image-retouche", "source-retouche"].forEach((id) =>
     $r(id).addEventListener("click", choisirImageRetouche));
@@ -171,7 +211,44 @@ $r("ancrages").addEventListener("click", (e) => {
     if (e.target.dataset.ancrage) choisirAncrage(e.target.dataset.ancrage);
 });
 ["largeur-agrandir", "hauteur-agrandir"].forEach((id) =>
-    $r(id).addEventListener("input", () => choisirAncrage(ancrage)));
+    $r(id).addEventListener("input", () => {
+        marquerFormat(null);  // une taille tapée à la main n'est plus un format
+        choisirAncrage(ancrage);
+    }));
+
+// Formats : les mêmes que ceux du Plateau, en raccourcis qui remplissent largeur et hauteur. La taille choisie est la plus
+// petite de ce format qui contienne l'image d'origine (multiples de 8) ; si l'image a déjà ce format, elle grandit de 25 %.
+function majFormatsAgrandir() {
+    const formats = (optionsPlateau?.formats ?? []).filter((f) => /^\d+:\d+/.test(f));
+    $r("formats-agrandir").innerHTML = "<span>Format</span>" + formats.map((f) =>
+        `<button type="button" class="choix" data-format="${echapper(f)}" title="${echapper(f)}">${echapper(f.split(" ")[0])}</button>`).join("");
+}
+
+function marquerFormat(format) {
+    document.querySelectorAll("#formats-agrandir button").forEach((b) => b.classList.toggle("actif", b.dataset.format === format));
+}
+
+function tailleAuFormat(largeur0, hauteur0, ratioL, ratioH) {
+    const r = ratioL / ratioH;
+    const multiple8 = (v) => Math.ceil(v / 8) * 8;
+    let [L, H] = r >= largeur0 / hauteur0 ? [multiple8(hauteur0 * r), hauteur0] : [largeur0, multiple8(largeur0 / r)];
+    if (L === largeur0 && H === hauteur0) {
+        L = multiple8(largeur0 * 1.25);
+        H = multiple8(L / r);
+    }
+    return [L, H];
+}
+
+$r("formats-agrandir").addEventListener("click", (e) => {
+    const format = e.target.closest("button")?.dataset.format;
+    if (!format || !sourceRetouche) return;
+    const [, rl, rh] = format.match(/^(\d+):(\d+)/);
+    const [L, H] = tailleAuFormat(sourceRetouche.largeur, sourceRetouche.hauteur, Number(rl), Number(rh));
+    $r("largeur-agrandir").value = L;
+    $r("hauteur-agrandir").value = H;
+    choisirAncrage(ancrage);
+    marquerFormat(format);
+});
 
 function choisirAncrage(a) {
     ancrage = a;
@@ -204,6 +281,9 @@ $r("lancer-retouche").addEventListener("click", async () => {
         ...choixModele("workflow-retouche"),
         fondu: Number($r("fondu-retouche").value),
         loras: lorasChoisies("loras-retouche"),
+        seed: $r("seed-retouche").value === "" ? null : Number($r("seed-retouche").value),
+        nombre: nombreDuChamp("nombre-retouche"),
+        dossier: rushesRetouche.dossierCible(),  // null : le résultat reste dans le dossier de l'image d'origine
     };
     const lancee = {
         source: sourceRetouche, mode: modeRetouche, ancrage,
@@ -260,15 +340,40 @@ async function suivreRetouche(id, lancee) {
         afficherErreur($r("erreur-retouche"), message);
         if (!c.images.length) return;
     } else {
-        notifierFin(`${quoi} terminé${lancee.mode === "agrandissement" ? "" : "e"}`, "Le résultat est prêt à comparer", "retouche");
+        const n = c.images.length;
+        notifierFin(`${quoi} terminé${lancee.mode === "agrandissement" ? "" : "e"}`,
+            `${n} image${n > 1 ? "s" : ""} dans les rushes, prête${n > 1 ? "s" : ""} à comparer`, "retouche");
     }
     const duree = Math.round((Date.now() - debut) / 1000);
-    afficherComparaison(lancee, c.images[0], c.prompt ?? "", `${quoi} · ${lancee.modele} · ${duree} s`);
+    afficherComparaison(lancee, c.images, c.prompt ?? "", `${quoi} · ${lancee.modele} · ${duree} s`);
 }
 
 // Comparaison : un curseur à glisser (par défaut) ou les deux images côte à côte.
-function afficherComparaison(lancee, idResultat, consigne, infos) {
+function afficherComparaison(lancee, ids, consigne, infos) {
+    lanceeRetouche = lancee;
+    resultatsRetouche = ids;
+    // Plusieurs variantes : une bande de vignettes pour passer de l'une à l'autre face à l'original.
+    $r("variantes-retouche").hidden = ids.length < 2;
+    $r("variantes-retouche").innerHTML = ids.length < 2 ? "" : ids.map((id, i) =>
+        `<img src="${urlImage(id)}" alt="Variante ${i + 1}" data-variante="${i}" title="Variante ${i + 1}">`).join("");
+    $r("consigne-resultat-retouche").textContent = consigne ? `Consigne envoyée au modèle : ${consigne}` : "";
+    $r("consigne-resultat-retouche").hidden = !consigne;
+    $r("infos-resultat-retouche").textContent = infos;
+    montrerVariante(0);
+    $r("resultat-retouche").hidden = false;
+    $r("resultat-retouche").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$r("variantes-retouche").addEventListener("click", (e) => {
+    const i = e.target.closest("[data-variante]")?.dataset.variante;
+    if (i !== undefined) montrerVariante(Number(i));
+});
+
+function montrerVariante(i) {
+    const lancee = lanceeRetouche;
+    const idResultat = resultatsRetouche[i];
     resultatRetouche = idResultat;
+    document.querySelectorAll("#variantes-retouche img").forEach((img, j) => img.classList.toggle("choisi", j === i));
     const avant = urlImage(lancee.source.id);
     const apres = urlImage(idResultat);
     $r("avant-curseur").src = avant;
@@ -287,14 +392,9 @@ function afficherComparaison(lancee, idResultat, consigne, infos) {
         Object.assign(img.style, { left: "0", top: "0", width: "100%", height: "100%" });
     }
     placerCurseur(50);
-    $r("consigne-resultat-retouche").textContent = consigne ? `Consigne envoyée au modèle : ${consigne}` : "";
-    $r("consigne-resultat-retouche").hidden = !consigne;
-    $r("infos-resultat-retouche").textContent = infos;
     const lien = $r("telecharger-retouche");
     lien.href = apres;
     lien.download = `aria-${idResultat}.png`;
-    $r("resultat-retouche").hidden = false;
-    $r("resultat-retouche").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function placerCurseur(valeur) {

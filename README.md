@@ -29,7 +29,10 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
   Le prompt final, toujours visible et modifiable, part vers le Plateau ou le Montage.
 - **Plateau** : il tourne ce prompt tel quel, avec ses réglages (modèle, format, LoRA, références, redessiner une image).
 - **Retouche** : retoucher un rush au pinceau (avec ou sans masque ; le Scénario peut écrire la consigne en voyant
-  l'image) ou l'agrandir, puis comparer le résultat à l'original avec un curseur ou côte à côte, et repartir du résultat.
+  l'image) ou l'agrandir (avec des raccourcis de format), avec seed, nombre de variantes et « Ranger dans ». Le résultat se
+  compare à l'original avec un curseur ou côte à côte, et on peut repartir de lui. Les Rushes, l'import et le
+  glisser-déposer sont dans l'onglet.
+- **Dossiers** : les Rushes (images) et les Bobines (clips) ont chacun leurs dossiers.
 - **Montage** : des clips vidéo avec le son (MiniMax H3), en animant un rush ou depuis le texte, et les séquences :
   il tourne les plans écrits au Scénario, avec la voix de référence de ta bibliothèque, puis assemble le film.
 - **Casting** : des bancs pour comparer les modèles d'image et les LLM sur les mêmes idées, et choisir tes favoris.
