@@ -391,10 +391,11 @@ function afficherNotifications() {
     const permission = "Notification" in window ? Notification.permission : "absent";
     document.getElementById("autorisation-notifications").textContent = {
         granted: "Notifications Windows : autorisées.",
-        denied: "Notifications Windows : refusées par le navigateur. Le bandeau et le son restent ; pour les rétablir, "
+        denied: "Notifications Windows : refusées par le navigateur, un bandeau dans Aria les remplace. Pour les rétablir, "
                 + "autorise les notifications pour Aria dans les paramètres du site (icône à gauche de l'adresse).",
-        default: "Notifications Windows : pas encore autorisées. « Essayer » ou le prochain Créer / Tourner les demande.",
-        absent: "Ce navigateur ne gère pas les notifications : le bandeau et le son restent.",
+        default: "Notifications Windows : pas encore autorisées (un bandeau dans Aria les remplace). « Essayer » ou le "
+                 + "prochain Créer / Tourner les demande.",
+        absent: "Ce navigateur ne gère pas les notifications : un bandeau dans Aria les remplace.",
     }[permission];
 }
 

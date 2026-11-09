@@ -186,8 +186,9 @@ function remplirSelect(id, valeurs, defaut) {
         `<option value="${echapper(valeur)}" ${valeur === garde ? "selected" : ""}>${echapper(texte)}</option>`).join("");
 }
 
-// Fin d'un job (Plateau, Montage, Casting) : un bandeau dans l'appli, un son, et une notification Windows (API
-// Notifications du navigateur) quand la fenêtre d'Aria n'est pas au premier plan. Choix dans Réglages → Système.
+// Fin d'un job (Plateau, Montage, Casting) : une notification Windows (API Notifications du navigateur), toujours, que la
+// fenêtre d'Aria soit au premier plan ou non, et un son. Si le navigateur ne les autorise pas (pas encore accordées,
+// refusées, absentes), un bandeau dans l'appli prend le relais pour ne rien rater. Choix dans Réglages → Système.
 const prefsNotifications = { active: true, son: true };  // lus au démarrage par web/reglages.js
 
 // Le navigateur ne demande l'autorisation qu'après un geste : au premier clic sur un bouton d'action (Créer, Tourner…).
@@ -224,6 +225,13 @@ function jouerSonFin(reussi) {
 function notifierFin(titre, texte, vue, reussi = true) {
     if (!prefsNotifications.active) return;
     const ouvrir = () => { window.focus(); document.querySelector(`.onglet[data-vue="${vue}"]`)?.click(); };
+    if (prefsNotifications.son) jouerSonFin(reussi);
+    if ("Notification" in window && Notification.permission === "granted") {
+        // silent : le son est celui d'Aria (réglable), pas un second celui de Windows
+        const n = new Notification(`Aria Studio · ${titre}`, { body: texte, icon: "/static/favicon.png", tag: `aria-${vue}`, silent: true });
+        n.onclick = () => { n.close(); ouvrir(); };
+        return;
+    }
     let bandeau = document.getElementById("notification-fin");
     if (!bandeau) {
         bandeau = document.createElement("button");
@@ -237,9 +245,4 @@ function notifierFin(titre, texte, vue, reussi = true) {
     bandeau.hidden = false;
     clearTimeout(bandeau.minuteur);
     bandeau.minuteur = setTimeout(() => { bandeau.hidden = true; }, 10000);
-    if (prefsNotifications.son) jouerSonFin(reussi);
-    if ((document.hidden || !document.hasFocus()) && "Notification" in window && Notification.permission === "granted") {
-        const n = new Notification(`Aria Studio · ${titre}`, { body: texte, icon: "/static/favicon.png", tag: `aria-${vue}` });
-        n.onclick = () => { n.close(); ouvrir(); };
-    }
 }
