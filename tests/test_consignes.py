@@ -31,15 +31,51 @@ class Consignes(unittest.TestCase):
         self.assertIn("No background music unless the user asks for it", prompt.consigne("decoupage"))
 
     def test_longueur_de_la_fiche(self):
-        """Qwen-Image 2.1 conseille 200 mots : la consigne en imposait 40 à 120 à tous les modèles."""
-        self.assertEqual(prompt.mots_max_de("qwen_image_2_1"), 200)
-        self.assertIn("40 to 200 words", prompt.messages("une pomme", None, None, 200)[0]["content"])
+        """Le réécrivain officiel de Qwen-Image 2.1 vise 400 à 500 mots : la consigne en imposait 40 à 120 à tous."""
+        self.assertEqual(prompt.mots_max_de("qwen_image_2_1"), 450)
+        self.assertIn("40 to 450 words", prompt.messages("une pomme", None, None, 450)[0]["content"])
         self.assertIn("40 to 120 words", prompt.consigne("reecriture"))  # sans modèle cible
         self.assertIsNone(prompt.mots_max_de("inconnu"))
 
     def test_animer_ancre_la_premiere_image(self):
         """Guide d'écriture de MiniMax H3 : la première image est d'abord ancrée, puis l'action."""
         self.assertIn("anchoring it as it really is", prompt.NOTES_VUES["animer"])
+
+    def test_longueur_d_un_clip_selon_sa_duree(self):
+        self.assertEqual(prompt.mots_pour_duree(110, 5), 110)
+        self.assertEqual(prompt.mots_pour_duree(110, 3), 110)
+        self.assertEqual(prompt.mots_pour_duree(110, 10), 150)
+        self.assertEqual(prompt.mots_pour_duree(110, 15), 190)
+        self.assertIsNone(prompt.mots_pour_duree(None, 10))
+
+    def test_h3_en_trois_champs(self):
+        self.assertTrue(prompt.workflows.champs_video("minimax_h3_t2v"))
+        self.assertTrue(prompt.workflows.champs_video("minimax_h3_i2v"))
+        self.assertFalse(prompt.workflows.champs_video("krea2_turbo"))
+        self.assertFalse(prompt.workflows.champs_video(None))
+        avec = prompt.consigne("video", None, 110, champs=True)
+        for champ in ("integrated_multimodal_description", "overall_soundscape", "non_diegetic_music"):
+            self.assertIn(champ, avec)
+        self.assertNotIn("overall_soundscape", prompt.consigne("video", None, 110))
+        self.assertTrue(avec.endswith(prompt.CLAUSE_MINEURS))
+
+    def test_mise_en_champs(self):
+        brut = ("A woman walks. overall_soundscape: Footsteps. non_diegetic_music: N/A")
+        t2v = prompt.mettre_en_champs(brut)
+        self.assertEqual(t2v.split("\n\n"), ["integrated_multimodal_description: [Shot 1] A woman walks.",
+                                              "overall_soundscape: Footsteps.", "non_diegetic_music: N/A"])
+        i2v = prompt.mettre_en_champs(brut, animer=True)
+        self.assertTrue(i2v.startswith(prompt.ALIGNEMENT_I2V + "\n\n" + "integrated_multimodal_description:"))
+        deja = "integrated_multimodal_description: [Shot 1] Walk.\n\noverall_soundscape: Steps."
+        self.assertEqual(prompt.mettre_en_champs(deja), deja)  # idempotent, un champ omis reste omis
+
+    def test_fiches_apres_audit_des_guides(self):
+        from app import workflows
+        for w in ("minimax_h3_t2v", "minimax_h3_i2v"):
+            f = workflows.obtenir(w).fiche
+            self.assertEqual(f["video"]["duree_max"], 15)
+            self.assertNotIn("atlascloud", " ".join(f["profil_prompt"].get("sources", [])))
+        self.assertIn("Restore and colorize the photo.", " ".join(workflows.regles_prompt("qwen_image_edit_2511")))
 
 
 if __name__ == "__main__":

@@ -309,8 +309,8 @@ class Profil(unittest.TestCase):
         self.assertTrue(any("au-delà de 5" in a for a in r["alertes"]))
 
     def test_profils_des_fiches(self):
-        self.assertEqual(assembler(P, {}, workflow="krea2_turbo")["mots_max"], 120)
-        self.assertEqual(assembler(P, {}, workflow="qwen_image_2_1")["mots_max"], 200)
+        self.assertEqual(assembler(P, {}, workflow="krea2_turbo")["mots_max"], 150)
+        self.assertEqual(assembler(P, {}, workflow="qwen_image_2_1")["mots_max"], 450)
         self.assertEqual(assembler(P, {}, workflow="minimax_h3_t2v")["mots_max"], 110)
 
 

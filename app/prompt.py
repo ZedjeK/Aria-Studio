@@ -150,6 +150,18 @@ REGLE_SANS_REFERENCE = ("no picture shows the character: in every start and cut 
 ENTETE_REGLES = ("Style rules of the target model. They shape the OPEN parts only: whenever one clashes with what "
                  "the user fixed or asked, the user wins.")
 MOTS_MIN = 40
+# Un clip plus long porte plus d'actions : la fiche donne la longueur d'un clip de 5 s, chaque seconde de plus en ajoute
+# MOTS_PAR_SECONDE_EN_PLUS. Une estimation d'Aria (110 mots à 5 s, 150 à 10 s, 190 à 15 s), aucun guide n'en donne.
+DUREE_DE_BASE = 5
+MOTS_PAR_SECONDE_EN_PLUS = 8
+
+FORMAT_CHAMPS = """Output format of the target model (it replaces the plain-prose layout above; every other rule stays):
+exactly these three fields, one per paragraph, in this order, with these exact labels.
+integrated_multimodal_description: [Shot 1] then the whole picture-and-action brief with the dialogue, as described above. No timestamp on Shot 1. Add a second shot only if the user asks for a cut: "[Shot 2] At 00:03.500, the camera cuts to ...".
+overall_soundscape: one paragraph of 1 to 4 sentences: ambient sounds, sounds of the actions, non-verbal human sounds. Never put dialogue or music in it. Write N/A only if the user asks for silence.
+non_diegetic_music: the background score only if the user asks for it (1 to 3 sentences: instruments, tempo, rhythm, dynamics, no mood words); otherwise N/A.
+The word limit counts the three fields together."""
+ALIGNEMENT_I2V = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."
 MOTS_MAX_DEFAUT = {"reecriture": 120, "video": 110}  # sans modèle cible (avant : 40 à 120 mots même pour Qwen à 200)
 
 CONSIGNES_DEFAUT = {"reecriture": CONSIGNE, "retouche": CONSIGNE_RETOUCHE,
@@ -288,8 +300,27 @@ async def _par_specialiste(orchestrateur: Orchestrateur, modele: str, s: dict, t
     return lire_specialiste(reponse.texte, s), reponse, duree, llama
 
 
+def mots_pour_duree(mots_max: int | None, duree: int | None) -> int | None:
+    """Longueur conseillée d'un clip : celle de la fiche jusqu'à 5 s, puis MOTS_PAR_SECONDE_EN_PLUS par seconde en plus."""
+    if not mots_max or not duree or duree <= DUREE_DE_BASE:
+        return mots_max
+    return mots_max + MOTS_PAR_SECONDE_EN_PLUS * (duree - DUREE_DE_BASE)
+
+
+def mettre_en_champs(texte: str, animer: bool = False) -> str:
+    """Prompt H3 en trois champs, un par paragraphe. Le LLM a écrit sur une ligne (nettoyer_markdown) : on remet les
+    sauts de ligne, on garantit le premier champ et [Shot 1], et on ajoute la ligne d'alignement de l'image à animer.
+    Rien n'est inventé : un champ que le LLM a omis reste omis."""
+    texte = re.sub(r"\s*(overall_soundscape:|non_diegetic_music:)", r"\n\n\1", texte.strip())
+    if not texte.startswith("integrated_multimodal_description:"):
+        texte = f"integrated_multimodal_description: {texte}"
+    if "[Shot 1]" not in texte.split("\n\n")[0]:
+        texte = texte.replace("integrated_multimodal_description:", "integrated_multimodal_description: [Shot 1]", 1)
+    return f"{ALIGNEMENT_I2V}\n\n{texte}" if animer else texte
+
+
 def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
-             regles: list[str] | None = None, workflow: str | None = None) -> str:
+             regles: list[str] | None = None, workflow: str | None = None, champs: bool = False) -> str:
     """Consigne du GGUF (réglée ou d'origine), puis les règles propres au modèle cible (profil_prompt.regles de sa
     fiche), toujours suivie de la clause verrouillée. `workflow` : le modèle cible, pour nommer ses images de
     référence (avec_noms_images) ; une consigne réglée à la main y passe aussi."""
@@ -300,6 +331,8 @@ def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
         texte = avec_noms_images(texte, workflow)
     if regles:
         texte += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
+    if champs and nom == "video":
+        texte += f"\n\n{FORMAT_CHAMPS}"
     return f"{texte}\n\n{CLAUSE_MINEURS}"
 
 
@@ -390,7 +423,9 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
     regle = reglages.valeurs_llm(modele)
     if video:
         cadre = "animate the provided image" if video == "animer" else "from text only"
-        echanges = [{"role": "system", "content": consigne("video", modele, mots_max_de(workflow), regles)},
+        champs = workflows.champs_video(workflow)
+        echanges = [{"role": "system", "content": consigne("video", modele, mots_pour_duree(mots_max_de(workflow), duree),
+                                                           regles, champs=champs)},
                     {"role": "user", "content": f"{idee}\n\n(Clip: {duree} s, {cadre})"}]
     elif references:
         echanges = [{"role": "system", "content": consigne("references", modele, regles=regles, workflow=workflow)},
@@ -407,6 +442,8 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
     texte = garde_cjk(nettoyer_markdown(reponse.texte), idee)  # **gras**, *italique*, titres : ni ComfyUI ni H3 n'en veulent
     if video and workflows.dialogue_en_balise(workflow):
         texte = vers_balises(texte)  # une réplique entre guillemets passe dans la balise <d> de H3
+    if video and workflows.champs_video(workflow):
+        texte = mettre_en_champs(texte, animer=video == "animer")
     # Idée et prompt ensemble : le LLM peut avoir ajouté un terme sensible à une idée avec un mineur.
     securite.verifier(idee, texte)
     return {
@@ -637,6 +674,8 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     }
     cible, rubriques, langue_prompt = cibles.get(forme, cibles["image"])
     mots = mots_max_de(workflow) if forme in ("image", "clip", "plan") else None
+    if forme in ("clip", "plan"):
+        mots = mots_pour_duree(mots, duree)
     systeme = CONSIGNE_LIBRE.format(
         cible=cible, contexte=contexte.strip() or "nothing yet", sujets_video=rubriques,
         essentiels=ESSENTIELS.get(forme, ESSENTIELS["video" if forme == "clip" else "image"]),

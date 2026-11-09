@@ -67,7 +67,7 @@ materiel:
 profil_prompt:
     style: prose
     langue: en
-    mots_max: 200  # valeur de départ, à affiner au banc (son enhancer officiel vise 400 à 500 mots : à comparer)
+    mots_max: 450  # son réécrivain officiel (PE-T2I, system_prompt.txt) vise ~20 phrases, « four to five hundred words » ; relevé le 2026-11-09. L'ancien 200 venait du polisseur de Qwen-Image 1. À confirmer au banc.
     nom_image: '<image{n}>'  # doc ComfyUI de Qwen-Image 2.1 : les images se désignent par indice, « <image1> »
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
     # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.

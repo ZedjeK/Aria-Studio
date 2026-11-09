@@ -77,7 +77,7 @@ defauts:
     steps: 8
 video:
     fps: 24
-    duree_max: 10
+    duree_max: 15  # page ComfyUI H3 et fiche Hugging Face : 4 à 15 s (relevé le 2026-11-09)
     son: true
 materiel:
     vram_estimee_go: 19.5  # poids chargés : une estimation, pas un minimum
@@ -89,6 +89,7 @@ profil_prompt:
     style: brief_video
     langue: en
     mots_max: 110  # borne haute de la consigne vidéo (40 à 110 mots) : un choix d'Aria, aucun guide n'en donne
+    format_champs: true  # trois champs (integrated_multimodal_description, overall_soundscape, non_diegetic_music) : guide ComfyUI H3 ; app/prompt.py
     balise_dialogue: true  # les répliques vont dans <d>[Langue] …</d> (guide officiel §4.4) : app/repliques.py
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
     # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
@@ -111,7 +112,6 @@ profil_prompt:
     - Éviter les consignes contradictoires (plan continu ET coupes).
     sources:
     - https://docs.comfy.org/tutorials/video/minimax/minimax-h3
-    - https://www.atlascloud.ai/blog/tips/minimax-h3-prompt-guide
 recommandations:
     resolution_native_mp: 0.98
     source_resolution: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
