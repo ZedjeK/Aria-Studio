@@ -85,10 +85,11 @@ QUALITES_VIDEO = {
     "qualite": {"nom": "💎 Qualité", "megapixels": 0.98, "steps": 12, "estimation_s": 425},
 }
 DUREES_VIDEO = (5, 8, 10, 15)  # H3 est entraîné de 5 à 15 s
-# Le temps d'un clip croît avec sa durée en (D / 5)^EXPOSANT. 1,85 : ajusté sur deux clips de 15 s en Compromis
-# (20 min 17 et 23 min 00, relevés le 2026-11-09) contre 170 s pour 5 s ; l'ancien 1,25 donnait 11 min 11. Deux clips,
-# une seule qualité : à reprendre avec des clips de 8 et 10 s.
-EXPOSANT_DUREE_VIDEO = 1.85
+# Le temps d'un clip croît avec sa durée en (D / 5)^EXPOSANT. 1,57 : ajusté sur un clip de 15 s en Compromis avec le
+# checkpoint d'origine (15 min 57, relevé le 2026-11-09) contre 170 s pour 5 s ; l'ancien 1,25 donnait 11 min 11. Deux
+# autres clips de 15 s (20 min 17 et 23 min 00), d'un autre checkpoint non relevé, étaient plus lents : c'est au poids du
+# checkpoint de l'expliquer (app/estimation.py). Un seul clip, une seule qualité : à reprendre avec 8 s et 10 s.
+EXPOSANT_DUREE_VIDEO = 1.57
 MODES_VIDEO = {"animer": "image_vers_video", "texte": "texte_vers_video"}
 CLIPS_MAX = 20  # clips d'une même commande (Montage) : environ 1 min 20 chacun à 0,4 MP, l'estimation de la page le dit
 LIBERTE = (0.05, 1.0)

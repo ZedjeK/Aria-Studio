@@ -34,10 +34,10 @@ class Estimation(unittest.TestCase):
         self.assertEqual(self.estimer("rapide", duree=10)["clip_s"], round(80 * 2 ** e))
         self.assertEqual(self.estimer("rapide", duree=15)["clip_s"], round(80 * 3 ** e))
 
-    def test_deux_clips_reels_de_15_s_en_compromis(self):
-        """Relevés le 2026-11-09 : 20 min 17 et 23 min 00 pour 15 s en Compromis (0,6 MP, 12 steps). L'estimation
-        de référence doit tomber entre les deux (ajustement sur ces deux clips : un seul réglage, la durée)."""
-        self.assertTrue(1217 <= self.estimer("compromis", duree=15)["clip_s"] <= 1380)
+    def test_un_clip_reel_de_15_s_en_compromis(self):
+        """Relevé le 2026-11-09, checkpoint d'origine : 15 s en Compromis (0,6 MP, 12 steps) ont pris 15 min 57 (957 s).
+        L'exposant de durée est ajusté sur ce clip : un seul réglage, à 5 % près."""
+        self.assertAlmostEqual(self.estimer("compromis", duree=15)["clip_s"], 957, delta=957 * 0.05)
 
     def test_le_nombre_de_clips_multiplie(self):
         un, trois = self.estimer("qualite"), self.estimer("qualite", nombre=3)
