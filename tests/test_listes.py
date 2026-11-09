@@ -598,3 +598,28 @@ class LieuxEnCascade(unittest.TestCase):
     def test_categorie_vide_refusee(self):
         with self.assertRaisesRegex(listes.ErreurListes, "aucune valeur"):
             listes._resoudre_tout("Lieu : @Sous-marin", listes.blocs()["mise-en-scene"].sous_listes, "x")
+
+
+class BanqueEnrichie(unittest.TestCase):
+    """Lot 4 : les rubriques riches sont rangées par catégorie, et la cohérence est gardée."""
+
+    def test_rubriques_riches_rangees(self):
+        b = listes.blocs()
+        for bloc, rubrique, minimum in [("commun", "Style", 80), ("commun", "Lumière", 40), ("mise-en-scene", "Ambiance", 55),
+                                        ("video", "Caméra", 30), ("video", "Ambiance sonore", 40), ("creature", "Type", 100),
+                                        ("objet", "Catégorie", 150)]:
+            valeurs = list(b[bloc].sous_listes[rubrique].valeurs.values())
+            self.assertGreaterEqual(len(valeurs), minimum, rubrique)
+            self.assertTrue(all(v.categorie for v in valeurs), f"{rubrique} : valeur sans catégorie")
+
+    def test_regles_de_coherence(self):
+        ms = listes.blocs()["mise-en-scene"].incompatibilites
+        self.assertIn((("Ambiance", "Pleine lune"), ("Moment", "À midi")), ms)
+        self.assertIn((("Lieu", "Une cuisine"), ("Ambiance", "Tempête de sable")), ms)
+        obj = listes.blocs()["objet"].incompatibilites
+        self.assertIn((("Catégorie", "Smartphone"), ("Époque", "Médiévale")), obj)
+
+    def test_signature_d_aria_presente(self):
+        valeurs = listes.blocs()["objet"].sous_listes["Catégorie"].valeurs
+        self.assertIn("Jupe écossaise", valeurs)
+        self.assertIn("Porte-jarretelles et bas", valeurs)
