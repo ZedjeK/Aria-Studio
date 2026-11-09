@@ -114,11 +114,15 @@ function estimationSecondes() {
 
 const enMinutes = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, "0")}` : `${Math.round(s)} s`);
 
+// Le calcul se lit dans l'ordre où il se fait : poids du checkpoint, qualité, durée, nombre de clips (puis la VRAM libre,
+// qui dit si le checkpoint tient).
 function majEstimation() {
     const c = calculMontage?.cle === cleCalculMontage() && calculMontage.source === "calcul" ? calculMontage : null;
+    const go = (n) => String(n).replace(".", ",");
     const detail = c
-        ? ` : ${c.steps} steps, checkpoint de ${String(c.poids_go).replace(".", ",")} Go, ${String(c.vram_libre_go).replace(".", ",")} Go de VRAM libre`
-          + (c.nombre > 1 ? `, ${c.nombre} clips de ≈ ${enMinutes(c.clip_s)}` : "")
+        ? ` : checkpoint de ${go(c.poids_go)} Go → ${nomQualite(document.getElementById("qualite-montage").value)} (${c.steps} steps)`
+          + ` → ${document.getElementById("duree-montage").value} s → ${c.nombre} clip${c.nombre > 1 ? "s" : ""}`
+          + (c.nombre > 1 ? ` de ≈ ${enMinutes(c.clip_s)}` : "") + ` · ${go(c.vram_libre_go)} Go de VRAM libre`
         : " (tableau d'origine, mesuré sur une RTX 4080 : VRAM non lue)";
     document.getElementById("estimation-montage").textContent = `≈ ${enMinutes(estimationSecondes())} sur ta carte${detail}`
         + " · à chaud, sans le chargement du modèle au premier clip";
