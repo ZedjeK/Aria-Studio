@@ -124,6 +124,8 @@ class DemandeLibre(BaseModel):
     llm: str | None = None
     duree: int = 5
     format: str | None = None  # le format de l'image ou du clip, choisi au Scénario (comme au Plateau)
+    sujet: str | None = None  # le sujet du guide (personnage, creature, objet, lieu) : ses rubriques cadrent les questions
+    sans_sujet: bool = False  # Mélanger / Redessiner : le sujet vient des images, pas des listes
 
 
 ECHANGES_LIBRE_MAX, LONGUEUR_ECHANGE_LIBRE = 60, 4000
@@ -159,7 +161,7 @@ async def chat_libre(d: DemandeLibre, requete: Request = None):
         llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
         r = await services.tant_que_connecte(requete, prompt.libre(
             services.orchestrateur, [e.model_dump() for e in d.echanges], d.forme, d.workflow, contexte, vues, d.role,
-            llm, duree, d.format))
+            llm, duree, d.format, d.sujet, d.sans_sujet))
         if plan_ and r["prompt"]:  # les garde-fous du découpage : réplique du plan à son moment, rien d'inventé
             texte, alertes = decoupage.finir_plan(s.plan + 1, plan_["plans"][s.plan], r["prompt"],
                                                   plan_["personnage"], plan_["source"])

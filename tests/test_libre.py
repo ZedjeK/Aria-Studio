@@ -214,3 +214,44 @@ class FormatDuScenario(unittest.TestCase):
             asyncio.run(routes_scenario.chat_libre(routes_scenario.DemandeLibre(
                 echanges=[routes_scenario.EchangeLibre(role="user", content="Un chat")], format="7:5")))
         self.assertEqual(e.exception.status_code, 400)
+
+
+class CatalogueDuGuide(unittest.TestCase):
+    """Les questions du LLM suivent les rubriques de « Me guider », filtrées selon l'atelier."""
+
+    def test_rubriques_et_valeurs_du_guide(self):
+        c = prompt.catalogue_guide("personnage")
+        for attendu in ("Couleur des yeux", "Lumière", "Cadrage", "Ambiance"):
+            self.assertIn(f"- {attendu} (", c)
+        self.assertNotIn("Caméra", c)  # une image n'a ni caméra, ni voix, ni son
+
+    def test_clip_ajoute_camera_voix_son(self):
+        c = prompt.catalogue_guide("lieu", video=True)
+        self.assertIn("- Caméra (Caméra):", c)
+        self.assertIn("- Musique (Son):", c)
+
+    def test_sujet_des_images_pas_de_rubriques_du_sujet(self):
+        avec, sans = prompt.catalogue_guide("personnage"), prompt.catalogue_guide("personnage", sans_sujet=True)
+        self.assertIn("- Couleur des yeux (", avec)
+        self.assertNotIn("Couleur des yeux", sans)
+        self.assertIn("- Lumière (", sans)  # le décor et la mise en scène restent
+
+    def test_valeurs_plafonnees_et_sujet_inconnu(self):
+        self.assertIn(", …", prompt.catalogue_guide("lieu"))  # « Type de lieu » a plus de 8 valeurs
+        self.assertEqual(prompt.catalogue_guide("n'importe quoi"), "")
+
+    def test_dans_la_consigne_image_et_clip_pas_retouche(self):
+        for forme, attendu in (("image", True), ("clip", True), ("retouche", False)):
+            o = FauxLlm(json.dumps(TOUR))
+            tour(o, [{"role": "user", "content": "Un chat"}], forme=forme, sujet="creature")
+            self.assertEqual("Guide topics" in o.appels[0][0][0]["content"], attendu, forme)
+
+    def test_petit_contexte_noms_de_rubriques_seulement(self):
+        court = prompt.catalogue_guide("personnage", compact=True)
+        self.assertIn("- Couleur des yeux (Visage)", court)
+        self.assertNotIn("Noir", court)  # pas de valeurs
+        self.assertLess(len(court), len(prompt.catalogue_guide("personnage")) // 4)
+        with mock.patch.object(prompt, "lancement_llm", lambda nom: {"contexte": 4096}):
+            o = FauxLlm(json.dumps(TOUR))
+            tour(o, [{"role": "user", "content": "Un chat"}], sujet="creature")
+        self.assertNotIn("Chat", o.appels[0][0][0]["content"].split("Guide topics")[1])
