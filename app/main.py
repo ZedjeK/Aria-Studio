@@ -17,8 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import (assistant, casting, cles, collection, decouvrir, emplacements, estimation, garde, mesures, mises_a_jour,
-                 modeles, moteurs, optimiseur, plateau, prompt, reglages, retouche, routes_montage, routes_scenario,
-                 rushes, securite, services, workflows)
+                 modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages, retouche, routes_montage,
+                 routes_scenario, rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
 from app.comfy import ErreurComfy
 from app.config import CONFIG, ROOT, dossier_comfyui_livre
@@ -179,6 +179,22 @@ async def verifier_mise_a_jour():
 @app.put("/api/mise-a-jour")
 def regler_mise_a_jour(d: DemandeMiseAJour):
     return mises_a_jour.activer(d.active)
+
+
+class DemandeNotifications(BaseModel):
+    active: bool | None = None
+    son: bool | None = None
+
+
+@app.get("/api/notifications")
+def lire_notifications():
+    """Prévenir à la fin d'un job (bandeau, notification Windows) et avec un son : les choix de Réglages → Système."""
+    return notifications.etat()
+
+
+@app.put("/api/notifications")
+def regler_notifications(d: DemandeNotifications):
+    return notifications.regler(d.active, d.son)
 
 
 class DemandeOuverture(BaseModel):

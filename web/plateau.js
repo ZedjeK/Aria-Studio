@@ -292,6 +292,10 @@ async function suivreCommande(id, debut) {
         }
     }
     if (!c) return;
+    const quoi = c.type === "retouche" ? "Retouche" : "Image";
+    if (c.etat === "erreur") notifierFin(`${quoi} en erreur`, c.erreur || "Le job a échoué.", "plateau", false);
+    else if (c.etat === "annule") notifierFin(`${quoi} annulée`, messageAnnulation(c, "image", true), "plateau", false);
+    else notifierFin(`${quoi} terminée`, `${c.images.length} image${c.images.length > 1 ? "s" : ""} dans les rushes`, "plateau");
     if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-creation");
         afficherErreur(erreur, c.etat === "annule" ? messageAnnulation(c, "image", true) : c.erreur);

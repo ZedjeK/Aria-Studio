@@ -185,3 +185,61 @@ function remplirSelect(id, valeurs, defaut) {
     select.innerHTML = valeurs.map(([valeur, texte]) =>
         `<option value="${echapper(valeur)}" ${valeur === garde ? "selected" : ""}>${echapper(texte)}</option>`).join("");
 }
+
+// Fin d'un job (Plateau, Montage, Casting) : un bandeau dans l'appli, un son, et une notification Windows (API
+// Notifications du navigateur) quand la fenêtre d'Aria n'est pas au premier plan. Choix dans Réglages → Système.
+const prefsNotifications = { active: true, son: true };  // lus au démarrage par web/reglages.js
+
+// Le navigateur ne demande l'autorisation qu'après un geste : au premier clic sur un bouton d'action (Créer, Tourner…).
+document.addEventListener("click", (e) => {
+    if (prefsNotifications.active && e.target.closest?.("button.principal")
+        && "Notification" in window && Notification.permission === "default") Notification.requestPermission();
+}, true);
+
+let sonNotifications = null;
+function jouerSonFin(reussi) {
+    try {
+        sonNotifications ??= new AudioContext();
+        const t = sonNotifications.currentTime;
+        // deux notes montantes si c'est réussi, descendantes sinon
+        (reussi ? [660, 990] : [520, 350]).forEach((frequence, i) => {
+            const osc = sonNotifications.createOscillator();
+            const gain = sonNotifications.createGain();
+            osc.type = "sine";
+            osc.frequency.value = frequence;
+            gain.gain.setValueAtTime(0.0001, t + i * 0.16);
+            gain.gain.exponentialRampToValueAtTime(0.18, t + i * 0.16 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.16 + 0.3);
+            osc.connect(gain).connect(sonNotifications.destination);
+            osc.start(t + i * 0.16);
+            osc.stop(t + i * 0.16 + 0.32);
+        });
+    } catch {
+        // pas d'audio (navigateur, réglages) : le bandeau suffit
+    }
+}
+
+// titre : « Image terminée » ; texte : le détail ; vue : l'onglet à ouvrir au clic ; reussi : false pour une erreur
+// ou une annulation.
+function notifierFin(titre, texte, vue, reussi = true) {
+    if (!prefsNotifications.active) return;
+    const ouvrir = () => { window.focus(); document.querySelector(`.onglet[data-vue="${vue}"]`)?.click(); };
+    let bandeau = document.getElementById("notification-fin");
+    if (!bandeau) {
+        bandeau = document.createElement("button");
+        bandeau.type = "button";
+        bandeau.id = "notification-fin";
+        document.body.append(bandeau);
+    }
+    bandeau.className = reussi ? "ok" : "ko";
+    bandeau.innerHTML = `<strong>${echapper(titre)}</strong><span>${echapper(texte)}</span>`;
+    bandeau.onclick = () => { bandeau.hidden = true; ouvrir(); };
+    bandeau.hidden = false;
+    clearTimeout(bandeau.minuteur);
+    bandeau.minuteur = setTimeout(() => { bandeau.hidden = true; }, 10000);
+    if (prefsNotifications.son) jouerSonFin(reussi);
+    if ((document.hidden || !document.hasFocus()) && "Notification" in window && Notification.permission === "granted") {
+        const n = new Notification(`Aria Studio · ${titre}`, { body: texte, icon: "/static/favicon.png", tag: `aria-${vue}` });
+        n.onclick = () => { n.close(); ouvrir(); };
+    }
+}
