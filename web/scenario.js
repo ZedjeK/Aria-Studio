@@ -127,6 +127,7 @@ async function chargerModelesPrompt() {
     ciblesParForme[cle_] = document.getElementById("workflow-prompt").value || null;
     remplirSelect("duree-prompt", optionsPlateau.video.durees.map((d) => [String(d), `${d} s`]),
                   document.getElementById("duree-prompt").value || "5");
+    if (typeof majDuree === "function") majDuree();
     remplirLlms();
     majAtelier();
 }
@@ -214,6 +215,8 @@ const formatScenario = () => selectFormatSource()?.value || null;
 function majFormat() {
     const source = selectFormatSource();
     const ici = document.getElementById("format-scenario");
+    document.getElementById("bloc-duree-scenario").hidden = formeScenario !== "clip";
+    majDuree();
     document.getElementById("bloc-format-scenario").hidden = !source;
     if (!source) return;
     const options = [...source.options].map((o) => o.value).join("|");
@@ -223,6 +226,24 @@ function majFormat() {
     }
     ici.value = source.value;
 }
+
+// La durée du clip : « duree-prompt » (Compléments) reste la source ; la liste du haut en est le miroir.
+function majDuree() {
+    const source = document.getElementById("duree-prompt");
+    const ici = document.getElementById("duree-scenario");
+    const options = [...source.options].map((o) => o.value).join("|");
+    if (ici.dataset.options !== options) {
+        ici.dataset.options = options;
+        ici.replaceChildren(...[...source.options].map((o) => new Option(o.textContent, o.value)));
+    }
+    ici.value = source.value;
+}
+document.getElementById("duree-scenario").addEventListener("change", (e) => {
+    document.getElementById("duree-prompt").value = e.target.value;
+    document.getElementById("duree-prompt").dispatchEvent(new Event("change", { bubbles: true }));
+    majFinal();
+});
+document.getElementById("duree-prompt").addEventListener("change", majDuree);
 
 document.getElementById("format-scenario").addEventListener("change", (e) => {
     const source = selectFormatSource();
