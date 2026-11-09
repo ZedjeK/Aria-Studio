@@ -2,12 +2,14 @@
 la VRAM libre, sans tenir compte des clips déjà tournés.
 
 Point de départ : le tableau de plateau.QUALITES_VIDEO, mesuré sur la RTX 4080 de l'auteur (16 Go) pour 5 s, à chaud, avec
-le checkpoint d'origine. Il reste exact sur cette machine de référence ; on le corrige de ce qui change :
-  - les steps du checkpoint choisi (une variante peut imposer les siens) : le temps suit les steps ;
-  - la durée du clip : (D / 5)^plateau.EXPOSANT_DUREE_VIDEO, ajusté sur un clip de 15 s ;
-  - la VRAM : quand le poids du checkpoint et le travail du clip dépassent la VRAM libre, ComfyUI décharge une partie en
-    RAM et chaque step ralentit. Le facteur compare ta machine à la machine de référence ;
-  - le nombre de clips : autant de clips, un après l'autre.
+le checkpoint d'origine. Il reste exact sur cette machine de référence ; le calcul suit cet ordre :
+  1. la VRAM libre ;
+  2. le poids du modèle vidéo : quand lui et le travail du clip dépassent la VRAM libre, ComfyUI décharge une partie en
+     RAM et chaque step ralentit. Le facteur compare ta machine à la machine de référence ;
+  3. la qualité : le temps du tableau, corrigé des steps si le checkpoint choisi impose les siens ;
+  4. la durée : (D / 5)^plateau.EXPOSANT_DUREE_VIDEO, ajusté sur un clip de 15 s ;
+  5. le nombre de clips : autant de clips, un après l'autre.
+Prédiction jugée correcte par l'auteur pour 15 s en Compromis, checkpoints de 19,53 à 61,73 Go (2026-11-09).
 Hypothèses non mesurées : la forme du ralentissement (VRAM_COEF), la VRAM de travail d'un clip (TRAVAIL_GO_PAR_MP) et
 la vitesse brute de la carte (une 4090 sera plus rapide qu'une 4080 : ce n'est pas modélisé).
 """
