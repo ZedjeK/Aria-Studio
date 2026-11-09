@@ -22,6 +22,15 @@ from app.orchestrateur import lancement_llm
 FICHIER_LLM = MODELES / "llm" / "recommandations.yaml"
 GO = 2**30
 SURCOUT_LLM_GO = 1.5  # contexte 4096 + tampons de calcul, au-delà du poids du GGUF (comme Découvrir)
+CONTEXTE_BASE = 4096  # le contexte que SURCOUT_LLM_GO compte
+# Cache du contexte (KV) par tranche de 1024 tokens au-delà de la base, en part du poids du GGUF : estimation (14B dense
+# ≈ 0,17 Go, 27B ≈ 0,3 Go) ; prudente pour les modèles à attention locale ou MoE, qui en demandent moins.
+KV_PAR_1024_PART_DU_POIDS = 0.02
+
+
+def surcout_llm_go(poids_go: float, contexte: int) -> float:
+    """VRAM au-delà du poids du GGUF : tampons, et cache du contexte qui grandit avec lui (Réflexion ou vision : 16 384)."""
+    return SURCOUT_LLM_GO + max(0, contexte - CONTEXTE_BASE) / 1024 * poids_go * KV_PAR_1024_PART_DU_POIDS
 
 
 def profil_materiel() -> dict:
@@ -114,18 +123,37 @@ def propositions() -> dict:
             if r["cle"] in params:
                 _proposer(sortie, "llm", fichier, nom, params[r["cle"]], actuelles[r["cle"]], r["valeur"],
                           r.get("note", "Recommandation officielle"), r.get("source") or reco.get("source"))
-        # Pas de proposition de contexte : llama.cpp (--fit) place lui-même ce qui ne tient pas, et un MoE
-        # comme Gemma 26B A4B reste rapide malgré le débordement (81 tokens/s mesurés au Casting).
+        # Le contexte ne se réduit pas : llama.cpp (--fit) place lui-même ce qui ne tient pas, et un MoE comme Gemma 26B
+        # A4B reste rapide malgré le débordement (81 tokens/s mesurés au Casting). On ne propose que de le remonter
+        # au minimum que la Réflexion ou la vision exige (voir plus bas) ; le débordement, lui, est signalé.
         taille = os.path.getsize(modeles.DOSSIER / "llm" / fichier) / GO
-        vision = lancement_llm(fichier)["vision"]  # projecteur d'images, chargé d'office avec le LLM
+        lancement = lancement_llm(fichier)
+        vision = lancement["vision"]  # projecteur d'images, chargé d'office avec le LLM
         if vision is not None and vision.is_file():
             taille += os.path.getsize(vision) / GO
         else:
             vision = None
-        if taille + SURCOUT_LLM_GO > libre:
+        # Le contexte réellement lancé : la Réflexion et la vision le relèvent d'office (à 16 384 au minimum), même si
+        # le réglage affiché est plus bas. On propose d'aligner le réglage sur ce qui tourne, et la VRAM le compte.
+        contexte = lancement["contexte"]
+        if (p := params.get("contexte")) and actuelles["contexte"] < contexte:
+            cause = "La Réflexion" if actuelles["reflexion"] else "Le LLM"
+            if vision and actuelles["reflexion"]:
+                cause = "La Réflexion et la vision"
+            elif vision:
+                cause = "La vision"
+            _proposer(sortie, "llm", fichier, nom, p, actuelles["contexte"], contexte,
+                      f"{cause} demande {contexte} tokens au minimum (consigne, images, réflexion, réponse) : Aria les "
+                      f"lance déjà ainsi ; ce réglage le montre au lieu de {actuelles['contexte']}", None)
+        if taille + surcout_llm_go(taille, contexte) > libre:
             avec = ", vision comprise" if vision else ""
-            alertes.append(f"{nom} ({taille:.1f} Go{avec}) dépasse ta VRAM libre ({libre:g} Go) : llama.cpp en place une "
-                           "partie sur le processeur. Peu d'effet pour un modèle MoE, nettement plus lent pour un "
-                           "modèle dense.")
+            conseil = ""
+            if actuelles["reflexion"] and not vision and contexte > actuelles["contexte"] \
+                    and taille + surcout_llm_go(taille, actuelles["contexte"]) <= libre:
+                conseil = (f" Sans la Réflexion, le contexte retomberait à {actuelles['contexte']} tokens et le modèle "
+                           "tiendrait.")
+            alertes.append(f"{nom} ({taille:.1f} Go{avec}, contexte {contexte}) dépasse ta VRAM libre ({libre:g} Go, "
+                           "estimation) : llama.cpp en place une partie sur le processeur. Peu d'effet pour un modèle "
+                           "MoE, nettement plus lent pour un modèle dense." + conseil)
 
     return {"materiel": materiel, "propositions": sortie, "alertes": alertes, "sans_recommandation": sans_reco}
