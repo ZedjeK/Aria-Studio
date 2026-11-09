@@ -116,7 +116,8 @@ class Validation(Base):
     def test_creation_et_dossier_des_bobines(self):
         s = self.creer()
         self.assertEqual(s["dossier"], "Séquence Décollage")
-        self.assertIn("Séquence Décollage", rushes.dossiers())
+        self.assertIn("Séquence Décollage", rushes.dossiers(genre="clips"))
+        self.assertNotIn("Séquence Décollage", rushes.dossiers())  # pas chez les Rushes
         self.assertEqual(sequences.lire(s["id"])["plans"][1]["rush"], None)
         self.assertEqual(len({p["id"] for p in s["plans"]}), 4)
 

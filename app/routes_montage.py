@@ -33,7 +33,7 @@ def tourner_clip(d: DemandeClip):
         raise HTTPException(400, "Le prompt est vide : écris-le ici, ou au ✍️ Scénario")
     return services.commander(lambda: services.plateau_.commander_clip(
         d.idee or d.prompt, d.prompt, d.mode, d.source, d.qualite, d.duree, d.format, d.seed, d.nombre,
-        rushes.valider_dossier(d.dossier), d.modele, d.loras, d.ecrit_par))
+        rushes.valider_dossier(d.dossier, "clips"), d.modele, d.loras, d.ecrit_par))
 
 
 # Montage, mode Séquence

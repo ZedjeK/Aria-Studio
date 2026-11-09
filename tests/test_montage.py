@@ -91,16 +91,18 @@ class Commandes(Base):
 
 
 class Bobines(Base):
-    def test_clips_et_images_separes_dossiers_communs(self):
+    def test_clips_et_images_separes_dossiers_separes(self):
         image = self.rush("une image")
         clip = plateau.enregistrer_clip(b"mp4", PNG, {"type": "clip", "idee": "un clip"})
         self.assertTrue(plateau.chemin_video(clip).is_file())
         self.assertEqual([f["id"] for f in rushes.liste(genre="images")], [image])
         self.assertEqual([f["id"] for f in rushes.liste(genre="clips")], [clip])
-        rushes.creer_dossier("Manga ch.1")
-        rushes.agir([image, clip], "ranger", "Manga ch.1")
+        rushes.creer_dossier("Manga ch.1")  # dossier de Rushes : les Bobines ne le voient pas
+        rushes.creer_dossier("Chapitre 1", "clips")
+        rushes.agir([image], "ranger", "Manga ch.1")
+        rushes.agir([clip], "ranger", "Chapitre 1")
         self.assertEqual(rushes.etat("images")["dossiers"], [{"nom": "Manga ch.1", "nombre": 1}])
-        self.assertEqual(rushes.etat("clips")["dossiers"], [{"nom": "Manga ch.1", "nombre": 1}])
+        self.assertEqual(rushes.etat("clips")["dossiers"], [{"nom": "Chapitre 1", "nombre": 1}])
 
     def test_corbeille_par_genre(self):
         image = self.rush("une image")

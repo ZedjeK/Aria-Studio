@@ -19,6 +19,10 @@ document.querySelectorAll(".onglet").forEach((bouton) => {
             chargerGalerie();
         }
         if (bouton.dataset.vue === "modeles") ouvrirModeles();  // web/modeles.js
+        if (bouton.dataset.vue === "retouche") {
+            chargerOptionsPlateau();  // modèles de retouche et LoRAs
+            chargerGalerie();  // web/plateau.js : Rushes du Plateau et de l'onglet Retouche
+        }
     });
 });
 

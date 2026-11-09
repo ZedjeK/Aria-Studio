@@ -400,8 +400,10 @@ class Plateau:
 
     def commander_retouche(self, source: str, instruction: str, reecrire: bool, llm: str | None,
                            workflow: str | None, masque: bytes | None, fondu: int, seed: int | None,
-                           modele: str | None = None, loras: list[dict] | None = None) -> Commande:
+                           modele: str | None = None, loras: list[dict] | None = None, nombre: int = 1,
+                           dossier: str | None = None) -> Commande:
         textes = textes_origine([source])  # la source doit exister ; son texte d'origine compte pour AS-18
+        self._valider_nombre(nombre)
         if not instruction.strip():
             raise ErreurPlateau("Écris ta consigne de retouche")
         securite.verifier(instruction, *textes)
@@ -410,15 +412,17 @@ class Plateau:
         loras = self._valider_loras(workflows.obtenir(workflow), loras, instruction, textes)
         return self._mettre_en_file(Commande(
             instruction, None if reecrire else instruction, self._valider_llm(llm, workflow) if reecrire else None,
-            workflow, "retouche", seed, 1, source, modele, loras,
-            type="retouche", masque=masque, fondu=max(0, min(fondu, 128)), textes_origine=textes,
+            workflow, "retouche", seed, nombre, source, modele, loras,
+            type="retouche", masque=masque, fondu=max(0, min(fondu, 128)), textes_origine=textes, dossier=dossier,
         ))
 
     def commander_agrandissement(self, source: str, largeur: int, hauteur: int, ancrage: str, precision: str,
                                  reecrire: bool, llm: str | None, workflow: str | None, fondu: int,
                                  seed: int | None, modele: str | None = None,
-                                 loras: list[dict] | None = None) -> Commande:
+                                 loras: list[dict] | None = None, nombre: int = 1,
+                                 dossier: str | None = None) -> Commande:
         f = fiche(source)
+        self._valider_nombre(nombre)
         textes = textes_origine([source])
         if largeur < f["largeur"] or hauteur < f["hauteur"] or (largeur, hauteur) == (f["largeur"], f["hauteur"]):
             raise ErreurPlateau(f"La nouvelle taille doit être plus grande que {f['largeur']}×{f['hauteur']}")
@@ -436,10 +440,15 @@ class Plateau:
         loras = self._valider_loras(workflows.obtenir(workflow), loras, precision, textes)
         return self._mettre_en_file(Commande(
             precision, consigne, self._valider_llm(llm, workflow) if consigne is None else None,
-            workflow, "agrandi", seed, 1, source, modele, loras,
+            workflow, "agrandi", seed, nombre, source, modele, loras,
             type="agrandissement", fondu=max(0, min(fondu, 128)),
-            largeur=largeur, hauteur=hauteur, ancrage=ancrage, textes_origine=textes,
+            largeur=largeur, hauteur=hauteur, ancrage=ancrage, textes_origine=textes, dossier=dossier,
         ))
+
+    @staticmethod
+    def _valider_nombre(nombre: int):
+        if not 1 <= nombre <= NOMBRE_MAX:
+            raise ErreurPlateau(f"Le nombre d'images doit être entre 1 et {NOMBRE_MAX}")
 
     @staticmethod
     def _valider_llm(llm: str | None, workflow: str | None = None) -> str:
@@ -566,49 +575,57 @@ class Plateau:
             entree, position = source, None
             masque = await asyncio.to_thread(retouche.masque_net, c.masque, source.size) if c.masque else None
 
-        seed = c.seed if c.seed is not None else random.randrange(2**48)
+        base = c.seed if c.seed is not None else random.randrange(2**48)
         wf = workflows.obtenir(c.workflow)
-        c.etape = "Agrandissement" if c.type == "agrandissement" else "Retouche"
-        async with self.orchestrateur.comfyui() as comfy:
-            nom = await comfy.televerser((f"aria_{c.id}.png", await asyncio.to_thread(retouche.png, entree)))
-            images = await comfy.executer(
-                wf.preparer({"prompt": self._avec_declencheurs(c), "image": nom, "seed": seed, "modele": c.modele,
-                             "loras": c.loras, "prefixe": "aria_plateau"}),
-                progression=self._suivi(c),
-            )
-        if not images:
-            raise ErreurPlateau("ComfyUI n'a renvoyé aucune image")
+        etape = "Agrandissement" if c.type == "agrandissement" else "Retouche"
+        nom = None  # l'image d'entrée est téléversée une seule fois pour toutes les variantes
+        for i in range(c.nombre):
+            seed = base + i
+            c.etape = f"{etape} {i + 1}/{c.nombre}" if c.nombre > 1 else etape
+            c.progression = 0.0
+            debut_image = time.perf_counter()
+            async with self.orchestrateur.comfyui() as comfy:
+                if nom is None:
+                    nom = await comfy.televerser((f"aria_{c.id}.png", await asyncio.to_thread(retouche.png, entree)))
+                images = await comfy.executer(
+                    wf.preparer({"prompt": self._avec_declencheurs(c), "image": nom, "seed": seed, "modele": c.modele,
+                                 "loras": c.loras, "prefixe": "aria_plateau"}),
+                    progression=self._suivi(c),
+                )
+            if not images:
+                raise ErreurPlateau("ComfyUI n'a renvoyé aucune image")
 
-        c.etape = "Recollage"
+            c.etape = "Recollage"
 
-        def recoller() -> bytes:
-            resultat = retouche.ouvrir(images[0][1])
-            if c.type == "agrandissement":
-                resultat = resultat.resize(entree.size, retouche.Image.Resampling.LANCZOS)
-                final = retouche.recoller_agrandissement(source, position, resultat, c.fondu)
-            elif masque is not None:
-                final = retouche.recoller(source, resultat, masque, c.fondu)
-            else:
-                final = resultat.resize(source.size, retouche.Image.Resampling.LANCZOS)
-            return retouche.png(final)
+            def recoller(brut: bytes = images[0][1]) -> bytes:
+                resultat = retouche.ouvrir(brut)
+                if c.type == "agrandissement":
+                    resultat = resultat.resize(entree.size, retouche.Image.Resampling.LANCZOS)
+                    final = retouche.recoller_agrandissement(source, position, resultat, c.fondu)
+                elif masque is not None:
+                    final = retouche.recoller(source, resultat, masque, c.fondu)
+                else:
+                    final = resultat.resize(source.size, retouche.Image.Resampling.LANCZOS)
+                return retouche.png(final)
 
-        c.images.append(enregistrer(await asyncio.to_thread(recoller), {
-            "type": c.type,
-            "idee": c.idee,
-            "prompt": c.prompt,
-            "llm": c.llm,
-            "workflow": c.workflow,
-            "modele": wf.choisi(c.modele),
-            "loras": c.loras,
-            "format": c.format,
-            "seed": seed,
-            "parent": c.parent,
-            "masque": masque is not None,
-            "fondu": c.fondu,
-            "ancrage": c.ancrage if c.type == "agrandissement" else None,
-            "duree_s": round(time.perf_counter() - debut, 2),
-            **({"dossier": d} if (d := fiche(c.parent).get("dossier")) else {}),
-        }))
+            dossier = c.dossier or fiche(c.parent).get("dossier")  # sans choix, le résultat reste à côté de sa source
+            c.images.append(enregistrer(await asyncio.to_thread(recoller), {
+                "type": c.type,
+                "idee": c.idee,
+                "prompt": c.prompt,
+                "llm": c.llm,
+                "workflow": c.workflow,
+                "modele": wf.choisi(c.modele),
+                "loras": c.loras,
+                "format": c.format,
+                "seed": seed,
+                "parent": c.parent,
+                "masque": masque is not None,
+                "fondu": c.fondu,
+                "ancrage": c.ancrage if c.type == "agrandissement" else None,
+                "duree_s": round(time.perf_counter() - (debut if i == 0 else debut_image), 2),
+                **({"dossier": dossier} if dossier else {}),
+            }))
 
     async def _tourner(self, c: Commande):
         """Montage : un clip MP4 + sa vignette par seed, sur le prompt écrit au Scénario (tel quel)."""

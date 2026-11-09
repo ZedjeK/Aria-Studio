@@ -117,6 +117,45 @@ class Rushes(unittest.TestCase):
         self.assertEqual(self.vue(dossier="Dragons"), [id_import])
         self.assertIsNone(rushes.valider_dossier(""))
 
+    def test_dossiers_separes_par_genre(self):
+        clip = plateau.enregistrer_clip(b"mp4", PNG, {"type": "clip"})
+        rushes.creer_dossier("Dragons")
+        rushes.creer_dossier("Dragons", "clips")  # même nom permis : ce sont deux listes
+        rushes.creer_dossier("Bobines seules", "clips")
+        self.assertEqual(rushes.dossiers(), ["Dragons"])
+        self.assertEqual(rushes.dossiers(genre="clips"), ["Dragons", "Bobines seules"])
+        rushes.agir([self.ids[0], clip], "ranger", "Dragons")
+        rushes.renommer_dossier("Dragons", "Pilotes", "clips")  # ne touche pas les Rushes
+        self.assertEqual(plateau.fiche(clip)["dossier"], "Pilotes")
+        self.assertEqual(plateau.fiche(self.ids[0])["dossier"], "Dragons")
+        self.assertEqual(rushes.supprimer_dossier("Pilotes", "clips"), 1)
+        self.assertEqual(rushes.dossiers(), ["Dragons"])
+        self.assertEqual(self.vue(dossier="Dragons"), [self.ids[0]])
+        with self.assertRaises(ErreurRushes):  # « Dragons » n'existe plus que chez les Rushes : un clip ne s'y range pas
+            rushes.agir([clip], "ranger", "Dragons")
+        with self.assertRaises(ErreurRushes):
+            rushes.valider_dossier("Dragons", "clips")  # il n'existe plus côté Bobines
+        self.assertEqual(rushes.valider_dossier("Dragons"), "Dragons")
+
+    def test_ancienne_liste_commune_vaut_pour_les_deux_genres(self):
+        import json
+        clip = plateau.enregistrer_clip(b"mp4", PNG, {"type": "clip"})
+        rushes.FICHIER_DOSSIERS.write_text(json.dumps(["Manga", "Dragons"]), encoding="utf-8")  # ancien format
+        self.assertEqual(rushes.dossiers(), ["Manga", "Dragons"])
+        self.assertEqual(rushes.dossiers(genre="clips"), ["Manga", "Dragons"])
+        rushes.agir([clip], "ranger", "Manga")  # rien n'est perdu : le rangement d'avant marche encore
+        rushes.supprimer_dossier("Manga", "clips")  # un côté seulement
+        self.assertEqual(rushes.dossiers(), ["Manga", "Dragons"])
+        self.assertEqual(rushes.dossiers(genre="clips"), ["Dragons"])
+        enregistre = json.loads(rushes.FICHIER_DOSSIERS.read_text(encoding="utf-8"))  # réécrit au nouveau format
+        self.assertEqual(enregistre, {"images": ["Manga", "Dragons"], "clips": ["Dragons"]})
+
+    def test_dossier_note_dans_une_fiche_reapparait_dans_son_genre(self):
+        clip = plateau.enregistrer_clip(b"mp4", PNG, {"type": "clip", "dossier": "Perdu"})
+        self.assertEqual(rushes.dossiers(genre="clips"), ["Perdu"])
+        self.assertEqual(rushes.dossiers(), [])
+        self.assertTrue(clip)
+
 
 if __name__ == "__main__":
     unittest.main()

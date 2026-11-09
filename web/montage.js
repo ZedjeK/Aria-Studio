@@ -1,5 +1,5 @@
 // Montage : tourner des clips avec le son (MiniMax H3), en animant un rush ou à partir d'un texte,
-// et les Bobines, rangées comme les Rushes (mêmes dossiers, web/galerie.js).
+// et les Bobines, rangées comme les Rushes (mêmes gestes, dossiers à part, web/galerie.js).
 
 const urlVideo = (id) => `/api/creations/${encodeURIComponent(id)}/video`;
 let optionsMontage = null;

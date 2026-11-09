@@ -37,6 +37,7 @@ async function chargerOptionsPlateau() {
     const choisi = t2i.choix.find((w) => w.id === choixModele("workflow-creation").workflow);
     remplirSelect("format-creation", o.formats.map((f) => [f, f]), choisi?.format ?? o.formats[0]);
     poserMaxNombre("nombre-creation", o.nombre_max);  // un champ à taper : le max vient du serveur
+    poserMaxNombre("nombre-retouche", o.nombre_max);
     afficherLoras("loras-creation", "workflow-creation");
     afficherLoras("loras-retouche", "workflow-retouche");
     rendreReferences();
@@ -420,7 +421,7 @@ const rushes = creerGalerie({
 });
 
 async function chargerGalerie() {
-    await rushes.charger();
+    await Promise.all([rushes.charger(), typeof rushesRetouche === "undefined" ? null : rushesRetouche.charger()]);  // web/retouche.js
 }
 
 // Résultats de la dernière création (hors galerie) : un clic ouvre la fiche.
@@ -542,14 +543,15 @@ document.getElementById("supprimer-creation").addEventListener("click", async ()
 
 const TYPES_IMPORT = ["image/png", "image/jpeg", "image/webp"];
 
-function importerFichier(fichier, ouvrir = true) {
+// `galerie` : celle dont le dossier de destination s'applique (Plateau, ou onglet Retouche).
+function importerFichier(fichier, ouvrir = true, galerie = rushes) {
     return new Promise((fin) => {
         const lecteur = new FileReader();
         lecteur.onload = async () => {
             let f = null;
             try {
                 f = await api("POST", "/api/creations/import",
-                    { image: lecteur.result, nom: fichier.name, dossier: rushes.dossierCible() });
+                    { image: lecteur.result, nom: fichier.name, dossier: galerie.dossierCible() });
                 await chargerGalerie();
                 if (ouvrir) ouvrirFiche(f);
             } catch (err) {
@@ -568,15 +570,13 @@ document.getElementById("importer").addEventListener("change", async (e) => {
     e.target.value = "";
 });
 
-// Glisser-déposer : une image lâchée n'importe où sur le Plateau suit le même chemin que le bouton « Importer ».
+// Glisser-déposer : une image lâchée n'importe où sur le Plateau ou l'onglet Retouche suit le même chemin que son bouton « Importer ».
 // Seuls les fichiers venus de l'extérieur comptent (pas une vignette de la galerie qu'on déplace),
-// et jamais pendant une retouche, pour ne pas perdre le masque en cours.
 let survolsDepot = 0;
 const voileDepot = document.getElementById("voile-depot");
 const depotPossible = (e) => e.dataTransfer?.types.includes("Files")
     && !e.dataTransfer.types.includes("text/aria-rush")  // une vignette des rushes qu'on déplace n'est pas un import
-    && !document.getElementById("vue-plateau").hidden
-    && document.getElementById("panneau-retouche").hidden;
+    && (!document.getElementById("vue-plateau").hidden || !document.getElementById("vue-retouche").hidden);
 
 window.addEventListener("dragenter", (e) => {
     if (!depotPossible(e)) return;
@@ -603,7 +603,8 @@ window.addEventListener("drop", async (e) => {
         return;
     }
     if (fichiers.length > 1) alert(`Une image à la fois : j'importe « ${fichier.name} ».`);
-    await importerFichier(fichier);
+    if (!document.getElementById("vue-retouche").hidden) await importerPourRetouche(fichier);  // web/retouche.js
+    else await importerFichier(fichier);
 });
 
 chargerOptionsPlateau();
