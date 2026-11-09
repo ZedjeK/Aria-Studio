@@ -3565,3 +3565,94 @@ select.liste-question {
     border-radius: 999px;
     font-size: 0.85rem;
 }
+
+/* 🧭 Me guider (guide.js) : le déroulé en bulles. */
+.conversation-guide .section-guide {
+    margin: 6px 0 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.conversation-guide .bulle {
+    max-width: 92%;
+}
+
+form.libre-guide {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+form.libre-guide input {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.actions-etape {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.actions-etape .principal {
+    margin-left: auto;
+}
+
+select.liste-guide {
+    flex: none;
+    width: auto;
+    max-width: 100%;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.recap-guide {
+    margin: 4px 0 0;
+    padding-left: 1.2em;
+}
+
+.conversation-guide .bulle-toi {
+    min-width: 5.5rem;
+}
+
+button.onglet-idee {
+    white-space: nowrap;
+}
+
+.onglets-idee {
+    flex-wrap: wrap;
+}
+
+/* Me guider : le même cadre que le chat, pour bien le séparer du reste de la page. */
+.place-guide {
+    margin-top: 12px;
+    border: 1px solid var(--bord);
+    background: var(--surface);
+}
+
+.place-guide[hidden] {
+    display: none;
+}
+
+/* Tes réponses ne se coupent plus au milieu d'un mot (« Eurasien / ne »). */
+.conversation-guide .message-toi .bulle-toi {
+    width: max-content;
+    max-width: 80%;
+    overflow-wrap: break-word;
+}
+
+/* La liste complète garde une largeur lisible, même dans une bulle étroite. */
+select.liste-guide,
+select.liste-question {
+    min-width: 14rem;
+    max-width: 100%;
+    text-overflow: ellipsis;
+}
