@@ -3735,3 +3735,37 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 .mode-carte:has(input:checked) .icone { filter: none; }
 .mode-carte:has(input:checked) strong { color: var(--accent); }
 .mode-carte:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Modèles : un modèle = un titre et un liseré (comme sous « Aria Studio »), ses familles et ses LoRA réunies */
+.sous-groupe-modele { margin-top: 1.1rem; }
+.sous-groupe-modele:first-of-type { margin-top: .4rem; }
+.titre-modele { display: flex; align-items: baseline; gap: .7rem; padding-bottom: .45rem; margin-bottom: .5rem;
+    border-bottom: 1px solid var(--line); position: relative; }
+.titre-modele::after { content: ""; position: absolute; left: 0; bottom: -1px; width: 4.5rem; height: 1px;
+    background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.titre-modele h3 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; letter-spacing: .03em; color: var(--accent); }
+.sous-groupe-modele > .carte { margin-top: .8rem; }
+.groupe-collection .sous-groupe-modele .liste.collection { margin-top: 0; }
+
+/* Cartes des onglets d'usage */
+.defauts-usage .puces-defaut { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .6rem; margin-bottom: .6rem; }
+.puce-defaut { display: flex; flex-direction: column; gap: .15rem; background: var(--surface-sunken);
+    border: 1px solid var(--line); border-radius: 10px; padding: .6rem .85rem; }
+.puce-defaut strong { color: var(--accent); font-weight: 600; }
+.note-variation { margin-top: 1rem; }
+.entete-wf { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin-bottom: .4rem; }
+.entete-wf h2 { flex: 1; margin: 0; }
+.etat-wf { font-size: .8rem; border: 1px solid currentColor; border-radius: 999px; padding: .15rem .7rem; }
+.puces-wf { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+.puce { font-size: .75rem; color: var(--muted); background: var(--surface-sunken); border: 1px solid var(--line);
+    border-radius: 999px; padding: .15rem .65rem; }
+.panneau-wf { background: var(--surface-sunken); border: 1px solid var(--line); border-radius: 10px; padding: .7rem .9rem; }
+.entete-panneau { display: flex; align-items: center; justify-content: space-between; margin-bottom: .4rem; }
+.entete-panneau h3 { margin: 0; }
+.liste-nette { list-style: none; padding: 0; margin: 0 0 .6rem; display: flex; flex-direction: column; gap: .25rem; }
+.liste-nette li { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .3rem .5rem; border-radius: 6px; }
+.liste-nette li:hover { background: var(--hover); }
+.liste-nette .nom { flex: 1 1 12rem; overflow-wrap: anywhere; }
+.repli-wf { margin-top: .7rem; border-top: 1px solid var(--line); padding-top: .55rem; }
+.repli-wf > summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+.repli-wf[open] > summary { color: var(--accent); margin-bottom: .4rem; }

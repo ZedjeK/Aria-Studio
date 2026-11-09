@@ -74,12 +74,44 @@ function filtrerLoras() {
     document.querySelectorAll(".collection [data-usages]").forEach((li) => {
         li.hidden = filtreLoras !== "tous" && !li.dataset.usages.split(" ").includes(filtreLoras);
     });
+    // Un modèle dont toutes les LoRA sont filtrées disparaît avec son titre.
+    document.querySelectorAll(".sous-groupe-modele").forEach((bloc) => {
+        if (bloc.querySelector("[data-usages]")) bloc.hidden = ![...bloc.querySelectorAll("[data-usages]")].some((li) => !li.hidden);
+    });
+}
+
+// Un modèle réunit ses familles : Qwen-Image 2.1 et Qwen-Image-Edit 2511 sont deux familles d'Aria, un seul modèle ici.
+const NOMS_MODELES = { krea2: "Krea 2", "minimax-h3": "MiniMax H3" };
+function modeleDeFamille(famille) {
+    const f = (famille ?? "").trim();
+    if (!f) return "Autres";
+    if (/^qwen/i.test(f)) return "Qwen-Image";
+    return NOMS_MODELES[f.toLowerCase()] ?? f;
+}
+
+// Les éléments rangés par modèle, chaque modèle sous son titre et son liseré ; l'ordre d'arrivée est gardé.
+function parModele(elements) {
+    const groupes = new Map();
+    elements.forEach((e) => {
+        const nom = modeleDeFamille(e.famille);
+        if (!groupes.has(nom)) groupes.set(nom, []);
+        groupes.get(nom).push(e);
+    });
+    return [...groupes.entries()].sort(([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr"));
+}
+
+function listeParModele(elements) {
+    return parModele(elements).map(([nom, liste]) => `<div class="sous-groupe-modele">
+        <div class="titre-modele"><h3>${echapper(nom)}</h3><span class="discret">${liste.length} · ${taille(liste.reduce((t, x) => t + x.taille, 0))}</span></div>
+        <ul class="liste collection">${liste.map(elementCollection).join("")}</ul></div>`).join("");
 }
 
 function groupeCollection(g) {
     const titre = `${echapper(g.nom)} <span class="discret">· ${g.elements.length} · ${taille(g.taille)}</span>`;
+    const parFamille = ["image", "video", "lora"].includes(g.id);
     const liste = g.elements.length
-        ? `${g.id === "lora" ? filtresLoras(g.elements) : ""}<ul class="liste collection">${g.elements.map(elementCollection).join("")}</ul>`
+        ? `${g.id === "lora" ? filtresLoras(g.elements) : ""}${parFamille ? listeParModele(g.elements)
+            : `<ul class="liste collection">${g.elements.map(elementCollection).join("")}</ul>`}`
         : `<p class="discret">Rien pour l'instant.</p>`;
     const chercher = TYPES_CHERCHER[g.id]
         ? `<button type="button" class="petit" data-chercher="${g.id}">🔎 Chercher ${TYPES_CHERCHER[g.id]}</button>` : "";
@@ -244,7 +276,6 @@ function blocReecriture(wf) {
         .filter(Boolean).join(" · ");
     const choisi = r.specialistes.find((s) => s.choisi);
     return `<div class="reecriture-workflow">
-        <h3>✍️ Réécriture du prompt</h3>
         <label>LLM <select data-llm-workflow="${wf.id}">${options}</select></label>
         <p class="discret">${choisi
             ? `${echapper(choisi.nom)} réécrit avec sa propre consigne officielle (réflexion, puis un prompt détaillé) : les règles du modèle ne lui sont pas données.`
@@ -319,14 +350,19 @@ document.getElementById("vue-modeles").addEventListener("click", async (e) => {
 
 function rendreUsage(id, u) {
     const nomDe = (wid) => u.workflows.find((w) => w.id === wid)?.nom ?? wid ?? "—";
-    const favoris = `<section class="carte"><h2>Par défaut</h2><dl class="machine-assistant">${u.favoris.map((f) =>
-        `<dt>${echapper(f.libelle)}</dt><dd>${f.valeur ? `★ ${echapper(nomDe(f.valeur))}` : "—"}</dd>`).join("")}</dl>
+    const defauts = `<section class="carte defauts-usage"><h2>Par défaut</h2>
+        <div class="puces-defaut">${u.favoris.map((f) => `<div class="puce-defaut"><span class="discret">${echapper(f.libelle)}</span>
+            <strong>${f.valeur ? `★ ${echapper(nomDe(f.valeur))}` : "—"}</strong></div>`).join("")}</div>
         <p class="discret">Le Plateau, le Montage et le Scénario partent de ces workflows. Le checkpoint par défaut de chacun
-            se choisit ci-dessous (☆) ; ses réglages fins (steps, CFG…) sont dans Réglages.</p></section>`;
+            se choisit plus bas (☆) ; ses réglages fins (steps, CFG…) sont dans Réglages.</p></section>`;
     const variation = u.variation.length
-        ? `<p class="discret">🎨 Redessiner une image (Plateau, zone Références) : elle part d'une image avec un modèle texte vers image :
-            ${echapper(u.variation.join(", "))}.</p>` : "";
-    return favoris + u.workflows.map((wf) => carteWorkflow(wf, id, u)).join("") + variation
+        ? `<p class="discret note-variation">🎨 Redessiner une image (Plateau, zone Références) : elle part d'une image avec un modèle
+            texte vers image : ${echapper(u.variation.join(", "))}.</p>` : "";
+    const ranges = parModele(u.workflows.map((w) => ({ ...w, famille: w.famille })));
+    const cartes = ranges.map(([nom, liste]) => `<div class="sous-groupe-modele">
+        ${ranges.length > 1 || liste.length > 1 ? `<div class="titre-modele"><h3>${echapper(nom)}</h3></div>` : ""}
+        ${liste.map((wf) => carteWorkflow(wf, id, u)).join("")}</div>`).join("");
+    return defauts + cartes + variation
         + (u.workflows.length ? "" : '<p class="discret">Aucun workflow pour cet usage.</p>');
 }
 
@@ -336,40 +372,52 @@ function carteWorkflow(wf, idUsage, u) {
         ? `<span class="favori">★ ${echapper(libelle(cle))}</span>`
         : `<button type="button" class="petit" data-favori="${cle}" data-workflow="${wf.id}" ${wf.pret ? "" : "disabled"}
                title="${wf.pret ? "" : "Télécharge d'abord ce qui manque"}">☆ Par défaut pour « ${echapper(libelle(cle))} »</button>`)).join(" ");
-    const vram = wf.vram_min_go
-        ? `VRAM mesurée : ${wf.vram_min_go} Go minimum` : `VRAM estimée ${wf.vram_estimee_go} Go`;
-    const capacites = [wf.references ? `jusqu'à ${wf.references} images de référence` : "", wf.variation ? "redessiner une image" : ""]
-        .filter(Boolean).join(" · ");
+    const puces = [`Famille ${echapper(wf.famille)}`, taille(wf.taille),
+        wf.vram_min_go ? `VRAM mesurée ≥ ${wf.vram_min_go} Go` : `VRAM estimée ${wf.vram_estimee_go} Go`,
+        wf.references ? `${wf.references} images de référence au plus` : "", wf.variation ? "redessiner une image" : ""]
+        .filter(Boolean).map((t) => `<span class="puce">${t}</span>`).join("");
     const nature = idUsage === "video" ? "video" : "image";
+    const r = wf.reecriture;
+    const llmNom = llmsUsages.choix.find((m) => m.fichier === (r.llm || llmsUsages.defaut))?.nom ?? "LLM par défaut";
     return `<section class="carte workflow-usage">
-        <div class="ligne"><h2>${echapper(wf.nom)}</h2>
-            ${wf.pret ? '<span class="ok">prêt ✓</span>'
-                : `<span class="ko">il manque ${taille(wf.a_telecharger)}</span>
+        <header class="entete-wf">
+            <h2>${echapper(wf.nom)}</h2>
+            ${wf.pret ? '<span class="etat-wf ok">prêt ✓</span>'
+                : `<span class="etat-wf ko">il manque ${taille(wf.a_telecharger)}</span>
                    <button type="button" class="petit principal" data-telecharger-wf="${wf.id}" data-taille="${wf.a_telecharger}"
-                           data-licence="${echapper(wf.licence)}">⬇ Télécharger ce qui manque</button>`}</div>
-        <div class="favoris-workflow">${favoris}</div>
-        <p class="discret">Famille ${echapper(wf.famille)} · ${taille(wf.taille)} · ${vram}${capacites ? ` · ${capacites}` : ""}</p>
-        <p class="discret licence-fiche">${resumeLicence(wf.licence_fiche)}</p>
+                           data-licence="${echapper(wf.licence)}">⬇ Télécharger ce qui manque</button>`}
+        </header>
+        <div class="puces-wf">${puces}</div>
+        ${favoris ? `<div class="favoris-workflow">${favoris}</div>` : ""}
         ${wf.manquants.length ? `<p class="discret">Manquants : ${wf.manquants.map((f) => echapper(`${f.dossier}/${f.nom}`)).join(", ")}</p>` : ""}
-        ${blocReecriture(wf)}
         <div class="colonnes-workflow">
-            <div>
-                <h3>Checkpoints <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.famille)}/modeles">📂</button></h3>
-                <ul class="liste">${wf.modeles.map((m) => `<li>${echapper(m)}
+            <div class="panneau-wf">
+                <div class="entete-panneau"><h3>Checkpoints</h3>
+                    <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.famille)}/modeles" title="Ouvrir le dossier">📂</button></div>
+                <ul class="liste liste-nette">${wf.modeles.map((m) => `<li><span class="nom">${echapper(m)}</span>
+                    ${m === wf.origine ? '<span class="badge">d\'origine</span>' : ""}
                     ${m === wf.modele_defaut ? '<span class="badge ok">par défaut</span>'
                         : `<button type="button" class="petit" data-checkpoint-defaut="${echapper(m)}" data-workflow="${wf.id}"
-                                   title="Le checkpoint que ce workflow prend quand rien d'autre n'est choisi">☆ Par défaut</button>`}
-                    ${m === wf.origine ? '<span class="badge">d\'origine</span>' : ""}</li>`).join("")}</ul>
-                <button type="button" class="petit" data-chercher="${nature}" data-famille="${echapper(wf.famille)}">🔎 Chercher des checkpoints ${echapper(wf.famille)}</button>
+                                   title="Le checkpoint que ce workflow prend quand rien d'autre n'est choisi">☆ Par défaut</button>`}</li>`).join("")}</ul>
+                <button type="button" class="petit" data-chercher="${nature}" data-famille="${echapper(wf.famille)}">🔎 Chercher des checkpoints</button>
             </div>
-            <div>
-                <h3>LoRA <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.famille)}/loras">📂</button></h3>
-                ${wf.loras.length ? `<ul class="liste">${wf.loras.map((l) => `<li>${echapper(l.nom)}${l.declencheurs
-                    ? ` <span class="discret">· ${echapper(l.declencheurs)}</span>` : ""}</li>`).join("")}</ul>`
+            <div class="panneau-wf">
+                <div class="entete-panneau"><h3>LoRA</h3>
+                    <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.famille)}/loras" title="Ouvrir le dossier">📂</button></div>
+                ${wf.loras.length ? `<ul class="liste liste-nette">${wf.loras.map((l) => `<li><span class="nom">${echapper(l.nom)}</span>${l.declencheurs
+                    ? `<span class="discret">${echapper(l.declencheurs)}</span>` : ""}</li>`).join("")}</ul>`
                     : '<p class="discret">Aucune LoRA pour cette famille.</p>'}
-                <button type="button" class="petit" data-chercher="lora" data-famille="${echapper(wf.famille)}">🔎 Chercher des LoRA ${echapper(wf.famille)}</button>
+                <button type="button" class="petit" data-chercher="lora" data-famille="${echapper(wf.famille)}">🔎 Chercher des LoRA</button>
             </div>
         </div>
+        <details class="repli-wf" ${r.ailleurs ? "open" : ""}>
+            <summary>✍️ Réécriture du prompt <span class="discret">· ${echapper(llmNom)}</span></summary>
+            ${blocReecriture(wf)}
+        </details>
+        <details class="repli-wf">
+            <summary>📜 Licence</summary>
+            <p class="discret licence-fiche">${resumeLicence(wf.licence_fiche)}</p>
+        </details>
     </section>`;
 }
 
