@@ -3641,3 +3641,23 @@ select.liste-question {
     max-width: 100%;
     text-overflow: ellipsis;
 }
+
+/* Menu clic droit des galeries (rushes, bobines) */
+.menu-contexte {
+    position: fixed; z-index: 1000; min-width: 13rem; padding: .3rem;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .55), 0 0 0 1px rgba(125, 249, 255, .08);
+    display: flex; flex-direction: column; gap: 1px;
+}
+.menu-contexte button {
+    background: transparent; border: 0; color: var(--text); text-align: left; cursor: pointer;
+    padding: .45rem .7rem; border-radius: 6px; font: inherit; font-size: .85rem; width: 100%;
+}
+.menu-contexte button:hover, .menu-contexte button:focus-visible { background: var(--hover); color: var(--accent); outline: none; }
+.menu-contexte button.danger { color: var(--danger); }
+.menu-contexte .sep { border: 0; border-top: 1px solid var(--line); margin: .25rem 0; }
+.menu-contexte .entree-sous { position: relative; }
+.menu-contexte .avec-sous::after { content: "▸"; float: right; color: var(--muted); }
+.menu-contexte .sous-menu { position: absolute; left: 100%; top: -.3rem; display: none; max-height: 60vh; overflow: auto; }
+.menu-contexte.sous-a-gauche .sous-menu { left: auto; right: 100%; }
+.menu-contexte .entree-sous:hover > .sous-menu, .menu-contexte .entree-sous:focus-within > .sous-menu { display: flex; }

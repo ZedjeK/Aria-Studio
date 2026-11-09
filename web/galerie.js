@@ -8,7 +8,8 @@
 const ACTIONS_DEPOT = { non_ranges: ["ranger", null], archives: ["archiver"], corbeille: ["corbeille"] };
 const actionDepot = (cle) => (cle?.startsWith("dossier:") ? ["ranger", cle.slice(8)] : ACTIONS_DEPOT[cle]);
 
-function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir }) {
+// `actions(fiche)` : actions propres au genre du menu clic droit, [[libellé, fonction]] (variante, animer…).
+function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = () => [] }) {
     const $ = (role) => racine.querySelector(`[data-role="${role}"]`);
     const g = { fiches: [], etat: null, vue: { vue: "tous", dossier: null }, selection: new Set(), modeSelection: false };
     let dernierClic = null;  // pour Maj + clic
@@ -202,6 +203,86 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir }) {
             return;
         }
         ouvrir(await api("GET", `/api/creations/${encodeURIComponent(id)}`));
+    });
+
+    // Clic droit sur une vignette : les mêmes gestes que la fiche et la barre de sélection, sans ouvrir la fiche.
+    // Si la vignette fait partie de la sélection, les gestes de rangement valent pour toute la sélection.
+    let menu = null;
+    const fermerMenu = () => {
+        menu?.remove();
+        menu = null;
+    };
+    document.addEventListener("click", fermerMenu);
+    document.addEventListener("scroll", fermerMenu, true);
+    window.addEventListener("blur", fermerMenu);
+    document.addEventListener("keydown", (e) => e.key === "Escape" && fermerMenu());
+
+    $("vignettes").addEventListener("contextmenu", (e) => {
+        const id = e.target.closest("[data-creation]")?.dataset.creation;
+        if (!id) return;
+        e.preventDefault();
+        fermerMenu();
+        const f = g.fiches.find((x) => x.id === id);
+        if (!f) return;
+        const lot = g.selection.has(id) && g.selection.size > 1 ? [...g.selection] : [id];
+        const vue = g.vue.dossier ? "dossier" : g.vue.vue;
+        const suffixe = lot.length > 1 ? ` (${lot.length})` : "";
+        const lignes = [["Ouvrir la fiche", async () => ouvrir(await api("GET", `/api/creations/${encodeURIComponent(id)}`))]];
+        if (vue !== "corbeille") lignes.push(...actions(f).map(([l, fn]) => [l, () => fn(f)]));
+        lignes.push(["—"]);
+        if (vue !== "corbeille") {
+            lignes.push([g.selection.has(id) ? "Désélectionner" : "Sélectionner", () => {
+                g.modeSelection = true;
+                g.selection.has(id) ? g.selection.delete(id) : g.selection.add(id);
+                rendre();
+            }]);
+            lignes.push(["Ranger dans…", null, [["Non rangés", () => agir(lot, "ranger", null)],
+                ...g.etat.dossiers.map((d) => [`📁 ${d.nom}`, () => agir(lot, "ranger", d.nom)])]]);
+            lignes.push([vue === "archives" ? `Sortir des archives${suffixe}` : `Archiver${suffixe}`,
+                () => agir(lot, vue === "archives" ? "desarchiver" : "archiver")]);
+            lignes.push([`🗑 Mettre à la corbeille${suffixe}`, () => agir(lot, "corbeille"), "danger"]);
+        } else {
+            lignes.push([`Restaurer${suffixe}`, () => agir(lot, "restaurer")]);
+        }
+        menu = document.createElement("div");
+        menu.className = "menu-contexte";
+        menu.setAttribute("role", "menu");
+        const remplir = (conteneur, items) => items.forEach(([libelle, fn, sous]) => {
+            if (libelle === "—") {
+                conteneur.appendChild(Object.assign(document.createElement("hr"), { className: "sep" }));
+                return;
+            }
+            const b = document.createElement("button");
+            b.type = "button";
+            b.setAttribute("role", "menuitem");
+            b.textContent = libelle;
+            if (sous === "danger") b.classList.add("danger");
+            if (Array.isArray(sous)) {
+                b.classList.add("avec-sous");
+                const bloc = document.createElement("div");
+                bloc.className = "menu-contexte sous-menu";
+                remplir(bloc, sous);
+                const wrap = document.createElement("div");
+                wrap.className = "entree-sous";
+                wrap.append(b, bloc);
+                conteneur.appendChild(wrap);
+                return;
+            }
+            b.addEventListener("click", (ev) => {
+                ev.stopPropagation();
+                fermerMenu();
+                fn();
+            });
+            conteneur.appendChild(b);
+        });
+        remplir(menu, lignes);
+        document.body.appendChild(menu);
+        const { innerWidth: L, innerHeight: H } = window;
+        const r = menu.getBoundingClientRect();
+        menu.style.left = `${Math.max(4, Math.min(e.clientX, L - r.width - 4))}px`;
+        menu.style.top = `${Math.max(4, Math.min(e.clientY, H - r.height - 4))}px`;
+        if (e.clientX + r.width + 220 > L) menu.classList.add("sous-a-gauche");
+        menu.querySelector("button")?.focus({ preventScroll: true });
     });
 
     return g;
