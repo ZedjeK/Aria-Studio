@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, casting, cles, collection, decouvrir, emplacements, garde, mesures, mises_a_jour,
+from app import (assistant, casting, cles, collection, decouvrir, emplacements, estimation, garde, mesures, mises_a_jour,
                  modeles, moteurs, optimiseur, plateau, prompt, reglages, retouche, routes_montage, routes_scenario,
                  rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
@@ -696,6 +696,16 @@ class DemandeCreation(BaseModel):
 @app.get("/api/plateau/options")
 def options_plateau():
     return plateau_.options()
+
+
+@app.get("/api/plateau/estimation")
+def estimation_tournage(mode: str, qualite: str, duree: int, nombre: int = 1, modele: str | None = None):
+    """Temps estimé d'un tournage du Montage : checkpoint, qualité, durée, nombre de clips, VRAM libre
+    (app/estimation.py)."""
+    if (mode not in plateau.MODES_VIDEO or qualite not in plateau.QUALITES_VIDEO or duree not in plateau.DUREES_VIDEO
+            or not 1 <= nombre <= plateau.CLIPS_MAX):
+        raise HTTPException(status_code=400, detail="Mode, qualité, durée ou nombre de clips inconnus")
+    return estimation.estimer(mode, modele or None, qualite, duree, nombre)
 
 
 @app.post("/api/creations")

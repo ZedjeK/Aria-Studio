@@ -75,33 +75,74 @@ async function preparerMontageMaintenant() {
     poserMaxNombre("nombre-montage", v.nombre_max);  // un champ à taper : le max vient du serveur
     rendreLoras("loras-montage", workflowVideo());  // plateau.js : ce qui est déjà coché reste coché
     rendreSource();
-    majEstimation();
+    reestimerMontage();
     await bobines.charger();
 }
 
-// Estimation d'après les mesures sur la RTX 4080 (5 s) : la durée coûte un peu plus que proportionnellement.
+// Estimation calculée par le serveur (app/estimation.py) : checkpoint (poids, steps), qualité, durée, nombre de clips et
+// VRAM libre. Le tableau mesuré sur la RTX 4080 de l'auteur (5 s) sert tant que la réponse n'est pas là ou si la VRAM
+// n'est pas lisible ; la durée y coûte un peu plus que proportionnellement.
+let calculMontage = null;  // {cle, ...réponse de /api/plateau/estimation}
+
+const cleCalculMontage = () => [modeMontage, document.getElementById("modele-montage").value,
+    document.getElementById("qualite-montage").value, document.getElementById("duree-montage").value,
+    nombreDuChamp("nombre-montage")].join("|");
+
+let derniereDemandeMontage = 0;
+async function chargerCalculMontage() {
+    const cle = cleCalculMontage();
+    const [mode, modele, qualite, duree, nombre] = cle.split("|");
+    if (mode === "sequence" || !qualite) return;
+    const rang = ++derniereDemandeMontage;
+    try {
+        const params = new URLSearchParams({ mode, qualite, duree, nombre, ...(modele ? { modele } : {}) });
+        const r = await api("GET", `/api/plateau/estimation?${params}`);
+        if (rang === derniereDemandeMontage) calculMontage = { cle, ...r };  // la dernière demande seule compte
+    } catch {
+        if (rang === derniereDemandeMontage) calculMontage = null;  // le tableau d'origine reprend
+    }
+    majEstimation();
+}
+
 function estimationSecondes() {
+    if (calculMontage?.cle === cleCalculMontage() && calculMontage.source === "calcul") return calculMontage.total_s;
     const q = optionsMontage?.video.qualites.find((x) => x.cle === document.getElementById("qualite-montage").value);
     if (!q) return 0;
     const duree = Number(document.getElementById("duree-montage").value);
-    return q.estimation_s * (duree / 5) ** 1.25 * nombreDuChamp("nombre-montage");
+    return q.estimation_s * (duree / 5) ** (optionsMontage.video.exposant_duree ?? 1.25) * nombreDuChamp("nombre-montage");
 }
 
 const enMinutes = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, "0")}` : `${Math.round(s)} s`);
 
+// Le calcul se lit dans l'ordre où il se fait : poids du checkpoint, qualité, durée, nombre de clips (puis la VRAM libre,
+// qui dit si le checkpoint tient).
 function majEstimation() {
-    document.getElementById("estimation-montage").textContent = `≈ ${enMinutes(estimationSecondes())} sur ta carte`
-        + " (à chaud ; le premier clip charge le modèle)";
+    const c = calculMontage?.cle === cleCalculMontage() && calculMontage.source === "calcul" ? calculMontage : null;
+    // Le calcul suit cet ordre : VRAM libre → poids du modèle vidéo → qualité → durée → clips.
+    const go = (n) => `${String(n).replace(".", ",")} Go`;
+    const detail = c
+        ? ` : ${go(c.vram_libre_go)} de VRAM libre → modèle de ${go(c.poids_go)}`
+          + ` → ${nomQualite(document.getElementById("qualite-montage").value)} (${c.steps} steps)`
+          + ` → ${document.getElementById("duree-montage").value} s → ${c.nombre} clip${c.nombre > 1 ? "s" : ""}`
+          + (c.nombre > 1 ? ` de ≈ ${enMinutes(c.clip_s)}` : "")
+        : " (tableau d'origine, mesuré sur une RTX 4080 : VRAM non lue)";
+    document.getElementById("estimation-montage").textContent = `≈ ${enMinutes(estimationSecondes())} sur ta carte${detail}`
+        + " · à chaud, sans le chargement du modèle au premier clip";
 }
-["qualite-montage", "duree-montage"].forEach((id) =>
-    document.getElementById(id).addEventListener("change", majEstimation));
-brancherNombre("nombre-montage", majEstimation);  // l'estimation suit le nombre de clips pendant la frappe
+function reestimerMontage() {
+    majEstimation();           // tout de suite avec ce qu'on a, puis avec le calcul du serveur
+    chargerCalculMontage();
+}
+["qualite-montage", "duree-montage", "modele-montage"].forEach((id) =>
+    document.getElementById(id).addEventListener("change", reestimerMontage));
+brancherNombre("nombre-montage", reestimerMontage);  // l'estimation suit le nombre de clips pendant la frappe
 
 // Mode et source
 
 document.querySelectorAll('input[name="mode-montage"]').forEach((radio) => {
     radio.addEventListener("change", () => {
         modeMontage = radio.value;
+        chargerCalculMontage();
         document.getElementById("bloc-source-montage").hidden = modeMontage !== "animer";
         document.getElementById("bloc-format-montage").hidden = modeMontage !== "texte";
         // Séquence : le formulaire du clip seul s'efface au profit du panneau de la séquence (sequence.js).
@@ -402,7 +443,7 @@ document.getElementById("reutiliser-clip").addEventListener("click", () => {
     if (f.modele && [...modele.options].some((o) => o.value === f.modele)) modele.value = f.modele;
     rendreLoras("loras-montage", workflowVideo(), f.loras ?? []);  // ses LoRA, cochées comme au tournage
     rendreSource();
-    majEstimation();
+    reestimerMontage();
     window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
