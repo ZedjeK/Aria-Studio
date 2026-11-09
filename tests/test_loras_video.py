@@ -11,10 +11,14 @@ from app import collection, modeles, plateau, rushes, sequences, workflows
 from app.plateau import ErreurPlateau, Plateau
 from app.securite import ErreurSecurite
 from tests.test_sequences import Base as BaseSequence
+from tests import steps_connus
 
 STYLE = "style_h3.safetensors"
 LORA = {"fichier": STYLE, "force": 0.8, "declencheurs": "cinematic grain"}
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class ModelesTemporaires:
     """Un dossier des modèles avec le checkpoint de H3, une LoRA H3 et une LoRA Qwen-Image 2.1."""

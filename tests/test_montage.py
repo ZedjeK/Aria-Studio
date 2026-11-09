@@ -14,9 +14,13 @@ from unittest import mock
 from app import plateau, prompt, reglages, rushes, workflows
 from app.plateau import ErreurPlateau, Plateau
 from app.securite import ErreurSecurite
+from tests import steps_connus
 
 PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000") + bytes(16)
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class Base(unittest.TestCase):
     def setUp(self):
@@ -52,7 +56,7 @@ class Commandes(Base):
         self.assertEqual((c.workflow, c.parent, c.qualite, c.duree, c.nombre), ("minimax_h3_i2v", r, "qualite", 10, 2))
 
     def test_validations(self):
-        for options, message in (({"mode": "collage"}, "Mode"), ({"qualite": "ultra"}, "Qualité"), ({"duree": 7}, "Durée"),
+        for options, message in (({"mode": "collage"}, "Mode"), ({"qualite": "ultra"}, "Résolution"), ({"duree": 7}, "Durée"),
                                  ({"nombre": plateau.CLIPS_MAX + 1}, "clips"), ({"mode": "animer"}, "rush"),
                                  ({"format": "5:4"}, "Format")):
             with self.assertRaisesRegex(ErreurPlateau, message, msg=options):

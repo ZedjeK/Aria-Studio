@@ -23,6 +23,7 @@ from app.plateau import Plateau
 from app.securite import ErreurSecurite
 from app.sequences import ErreurSequence
 from app.voix import ErreurVoix
+from tests import steps_connus
 
 
 def png(largeur=832, hauteur=1248) -> bytes:
@@ -46,6 +47,9 @@ def flac(secondes: float, frequence: int = 32000) -> bytes:
     infos = (frequence << 44) | (1 << 41) | (15 << 36) | int(secondes * frequence)
     return b"fLaC" + bytes([0x80, 0, 0, 34]) + bytes(10) + struct.pack(">Q", infos) + bytes(16)
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class Base(unittest.TestCase):
     def setUp(self):

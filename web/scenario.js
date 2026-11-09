@@ -305,7 +305,7 @@ function majPartiraAvec() {
             + `${loras("loras-creation")}`,
         retouche: () => `le masque et le fondu se règlent au panneau de retouche${loras("loras-retouche")}`,
         clip: () => `${nombreDuChamp("nombre-montage")} clip(s) · ${dureeClip()} s · ${texteDe("qualite-montage")
-            .split(" · ")[0] || "qualité du Montage"}${loras("loras-montage")}`,
+            .split(" · ")[0] || "résolution du Montage"}${loras("loras-montage")}`,
     };
     const ligne = lignes[formeScenario];
     document.getElementById("partira-avec").textContent = ligne

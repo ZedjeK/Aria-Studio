@@ -78,11 +78,14 @@ class Commande:
 
 MODES_REFERENCE = ("inspirer", "variation")
 
-# Montage : qualités de MiniMax H3 (mesurées sur la RTX 4080 de l'auteur pour 5 s, à chaud) et durées proposées.
+# Montage : résolutions de MiniMax H3 (les clés gardent leur ancien nom de « qualité » : clips et séquences enregistrés
+# les portent). Les steps ne viennent plus d'ici mais du checkpoint (workflows.Workflow.steps_de) ; « steps » est
+# celui de la mesure : estimation_s a été mesuré à ces steps sur la RTX 4080 de l'auteur, pour 5 s, à chaud.
 QUALITES_VIDEO = {
-    "rapide": {"nom": "⚡ Rapide", "megapixels": 0.4, "steps": 8, "estimation_s": 80},
-    "compromis": {"nom": "⚖️ Compromis", "megapixels": 0.6, "steps": 12, "estimation_s": 170},
-    "qualite": {"nom": "💎 Qualité", "megapixels": 0.98, "steps": 12, "estimation_s": 425},
+    "rapide": {"nom": "0,4 MP", "aide": "rapide", "megapixels": 0.4, "steps": 8, "estimation_s": 80},
+    "compromis": {"nom": "0,6 MP", "aide": "compromis", "megapixels": 0.6, "steps": 12, "estimation_s": 170},
+    "qualite": {"nom": "1 MP", "aide": "≈ natif de H3 (0,98 MP), le plus fin et le plus lent", "megapixels": 0.98,
+                "steps": 12, "estimation_s": 425},
 }
 DUREES_VIDEO = (5, 8, 10, 15)  # H3 est entraîné de 5 à 15 s
 # Le temps d'un clip croît avec sa durée en (D / 5)^EXPOSANT. 1,57 : ajusté sur un clip de 15 s en Compromis avec le
@@ -193,6 +196,8 @@ class Plateau:
                     "defaut": CONFIG.get("generation", {}).get(tache),
                     "choix": [{"id": wf.id, "nom": wf.fiche["nom"], "famille": wf.famille,
                                "origine": wf.modele_origine, "modeles": wf.variantes(),
+                               "steps": {m: wf.steps_de(m) for m in wf.variantes()},  # ceux de chaque checkpoint
+                               "a_valider": wf.en_attente(),  # présents, steps à valider (Modèles)
                                "modele_defaut": wf.choisi(None),  # réglé dans l'onglet Réglages
                                "loras": modeles.loras(wf.famille),
                                "format": reglages.valeurs_workflow(wf).get("ratio"),  # réglable (onglet Réglages)
@@ -206,8 +211,8 @@ class Plateau:
             },
             "references_defaut": CONFIG.get("generation", {}).get("references"),
             "video": {
-                "qualites": [{"cle": k, "nom": q["nom"], "megapixels": q["megapixels"], "steps": q["steps"],
-                              "estimation_s": q["estimation_s"]} for k, q in QUALITES_VIDEO.items()],
+                "qualites": [{"cle": k, "nom": q["nom"], "aide": q["aide"], "megapixels": q["megapixels"],
+                              "steps": q["steps"], "estimation_s": q["estimation_s"]} for k, q in QUALITES_VIDEO.items()],
                 "defaut_qualite": "compromis", "durees": list(DUREES_VIDEO), "nombre_max": CLIPS_MAX,
                 "exposant_duree": EXPOSANT_DUREE_VIDEO,
                 "workflows": {mode: CONFIG.get("generation", {}).get(tache) for mode, tache in MODES_VIDEO.items()},
@@ -298,7 +303,7 @@ class Plateau:
         if mode not in MODES_VIDEO:
             raise ErreurPlateau(f"Mode inconnu : {mode}")
         if qualite not in QUALITES_VIDEO:
-            raise ErreurPlateau(f"Qualité inconnue : {qualite}")
+            raise ErreurPlateau(f"Résolution inconnue : {qualite}")
         if duree not in DUREES_VIDEO:
             raise ErreurPlateau(f"Durée proposée : {', '.join(map(str, DUREES_VIDEO))} s")
         if not 1 <= nombre <= CLIPS_MAX:
@@ -583,7 +588,7 @@ class Plateau:
             c.progression = 0.0
             debut_clip = time.perf_counter()
             valeurs = {"prompt": self._avec_declencheurs(c), "seed": seed, "duree": c.duree,
-                       "megapixels": q["megapixels"], "steps": q["steps"], "modele": c.modele, "loras": c.loras,
+                       "megapixels": q["megapixels"], "modele": c.modele, "loras": c.loras,  # steps : ceux du checkpoint
                        "prefixe": "aria_montage"}
             async with self.orchestrateur.comfyui() as comfy:
                 if c.mode_video == "animer":
@@ -607,7 +612,7 @@ class Plateau:
                 "qualite": c.qualite,
                 "duree": c.duree,
                 "megapixels": q["megapixels"],
-                "steps": q["steps"],
+                "steps": wf.steps_de(wf.choisi(c.modele)),
                 "modele": wf.choisi(c.modele),
                 "loras": c.loras,
                 "format": c.format if c.mode_video == "texte" else "image source",

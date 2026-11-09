@@ -87,10 +87,10 @@ def propositions() -> dict:
             alertes.append(f"{nom} demande environ {estimee:g} Go de VRAM pour {libre:g} Go libres : ComfyUI en "
                            "décharge une partie en RAM, ça fonctionne mais plus lentement.")
         if wf.fiche["tache"].endswith("video") and (natif := reco.get("resolution_native_mp")):
-            # Vidéo : la taille coûte des minutes par clip ; c'est un choix de qualité (Rapide / Compromis /
-            # Qualité), pas un réglage à corriger. On informe sans proposer.
-            alertes.append(f"{nom} est entraîné vers {natif:g} MP. Dans le Montage, c'est la qualité choisie qui "
-                           f"décide (Qualité ≈ natif, Compromis, Rapide) ; ici, {actuelles.get('megapixels'):g} MP "
+            # Vidéo : la taille coûte des minutes par clip ; c'est un choix de résolution (0,4 / 0,6 / 1 MP), pas un
+            # réglage à corriger. On informe sans proposer.
+            alertes.append(f"{nom} est entraîné vers {natif:g} MP. Dans le Montage, c'est la résolution choisie qui "
+                           f"décide (1 MP ≈ natif) ; ici, {actuelles.get('megapixels'):g} MP "
                            "pour le Casting. Plus haut = plus fin mais nettement plus lent (voir les notes de sa fiche).")
         elif "megapixels" in params and (natif := reco.get("resolution_native_mp")):
             cible = _plafond_megapixels(libre - estimee, float(natif))

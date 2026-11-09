@@ -15,9 +15,13 @@ from unittest import mock
 from app import listes, modeles, prompt, reglages, workflows
 from app.llm import Llama
 from app.reglages import ErreurReglages
+from tests import steps_connus
 
 LLM = "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf"
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class AvecFichierTemporaire(unittest.TestCase):
     def setUp(self):
@@ -40,7 +44,7 @@ class Cache(AvecFichierTemporaire):
     def test_deux_ecritures_a_la_meme_date_ne_se_perdent_pas(self):
         """Sous Windows l'horloge des fichiers est grossière : deux écritures rapprochées portent la même date.
         Le cache ne doit pas resservir l'ancien contenu (une modification était perdue, au hasard)."""
-        reglages.modifier_workflow("minimax_h3_t2v", {"steps": 10})
+        reglages.modifier_workflow("minimax_h3_t2v", {"megapixels": 0.5})
         fige = reglages.FICHIER.stat()
         vraie_stat = Path.stat
 
@@ -53,10 +57,10 @@ class Cache(AvecFichierTemporaire):
                                    fige.st_ctime_ns))
 
         with mock.patch.object(Path, "stat", stat_figee):
-            reglages.modifier_workflow("minimax_h3_t2v", {"steps": 11})
+            reglages.modifier_workflow("minimax_h3_t2v", {"megapixels": 0.6})
             reglages.modifier_workflow("minimax_h3_t2v", {"sampler": "euler"})
             valeurs = reglages.valeurs_workflow(workflows.obtenir("minimax_h3_t2v"))
-        self.assertEqual((valeurs["steps"], valeurs["sampler"]), (11, "euler"))
+        self.assertEqual((valeurs["megapixels"], valeurs["sampler"]), (0.6, "euler"))
 
 
 class Workflows(AvecFichierTemporaire):
@@ -64,18 +68,20 @@ class Workflows(AvecFichierTemporaire):
         # « modele » (le checkpoint par défaut) partout : toutes les fiches livrées ont l'entrée modele.
         cles = {wf.id: set(reglages.params_workflow(wf)) - {"modele"} for wf in workflows.catalogue()}
         self.assertTrue(all("modele" in reglages.params_workflow(wf) for wf in workflows.catalogue()))
-        self.assertEqual(cles["krea2_turbo"], {"steps", "cfg", "sampler", "scheduler", "megapixels", "ratio", "mots_max"})
-        self.assertEqual(cles["qwen_image_edit_2511"], {"steps", "cfg", "sampler", "scheduler", "shift"})
-        self.assertEqual(cles["qwen_image_2_1_edit"], {"steps", "cfg", "sampler", "scheduler"})
-        self.assertEqual(cles["minimax_h3_t2v"], {"steps", "sampler", "scheduler", "megapixels", "ratio", "mots_max"})
-        self.assertEqual(cles["minimax_h3_i2v"], {"steps", "sampler", "scheduler", "megapixels", "mots_max"})
+        # Les steps se règlent par checkpoint (params_variante) : plus de réglage « Steps » par workflow.
+        self.assertEqual(cles["krea2_turbo"], {"cfg", "sampler", "scheduler", "megapixels", "ratio", "mots_max"})
+        self.assertEqual(cles["qwen_image_edit_2511"], {"cfg", "sampler", "scheduler", "shift"})
+        self.assertEqual(cles["qwen_image_2_1_edit"], {"cfg", "sampler", "scheduler"})
+        self.assertEqual(cles["minimax_h3_t2v"], {"sampler", "scheduler", "megapixels", "ratio", "mots_max"})
+        self.assertEqual(cles["minimax_h3_i2v"], {"sampler", "scheduler", "megapixels", "mots_max"})
+        self.assertTrue(all("steps" in reglages.params_variante(wf) for wf in workflows.catalogue()))
 
     def test_h3_sampler_et_scheduler_dans_leurs_noeuds(self):
         reglages.modifier_workflow("minimax_h3_t2v", {"sampler": "euler", "scheduler": "beta"})
         api = workflows.obtenir("minimax_h3_t2v").preparer({"prompt": "x", "seed": 1})
         self.assertEqual(api[reglages.noeud_unique(api, "KSamplerSelect")]["inputs"]["sampler_name"], "euler")
         self.assertEqual(api[reglages.noeud_unique(api, "BasicScheduler")]["inputs"]["scheduler"], "beta")
-        aide = reglages.params_workflow(workflows.obtenir("minimax_h3_t2v"))["steps"].aide
+        aide = reglages.params_workflow(workflows.obtenir("minimax_h3_t2v"))["megapixels"].aide
         self.assertIn("Montage", aide)
 
     def test_optimiser_propose_le_sampler_officiel_de_h3(self):
@@ -91,13 +97,14 @@ class Workflows(AvecFichierTemporaire):
     def test_valeurs_d_origine(self):
         wf = workflows.obtenir("qwen_image_edit_2511")
         self.assertEqual(reglages.valeurs_workflow(wf),
-                         {"steps": 4, "cfg": 1.0, "sampler": "euler", "scheduler": "simple", "shift": 3.1,
+                         {"cfg": 1.0, "sampler": "euler", "scheduler": "simple", "shift": 3.1,
                           "modele": "qwen_image_edit_2511_int8_convrot.safetensors"})
 
     def test_preparer_applique_les_reglages(self):
         reglages.modifier_workflow("qwen_image_edit_2511",
-                                   {"steps": 8, "cfg": 2.5, "sampler": "dpmpp_2m", "scheduler": "karras", "shift": 5})
+                                   {"cfg": 2.5, "sampler": "dpmpp_2m", "scheduler": "karras", "shift": 5})
         wf = workflows.obtenir("qwen_image_edit_2511")
+        reglages.modifier_variante(wf.id, wf.modele_origine, {"steps": 8})  # les steps : ceux du checkpoint
         api = wf.preparer({"prompt": "make the sky red", "seed": 1})
         ks = api[reglages.noeud_unique(api, "KSampler")]["inputs"]
         self.assertEqual((ks["steps"], ks["cfg"], ks["sampler_name"], ks["scheduler"]), (8, 2.5, "dpmpp_2m", "karras"))
@@ -105,19 +112,20 @@ class Workflows(AvecFichierTemporaire):
         self.assertEqual(wf.api[reglages.noeud_unique(wf.api, "KSampler")]["inputs"]["cfg"], 1)  # l'original intact
 
     def test_la_valeur_de_l_appel_gagne(self):
-        reglages.modifier_workflow("krea2_turbo", {"steps": 12, "ratio": "16:9 (Widescreen)"})
+        reglages.modifier_workflow("krea2_turbo", {"ratio": "16:9 (Widescreen)"})
         wf = workflows.obtenir("krea2_turbo")
-        api = wf.preparer({"prompt": "a cat", "seed": 1, "steps": 5})
+        reglages.modifier_variante(wf.id, wf.modele_origine, {"steps": 12})
+        api = wf.preparer({"prompt": "a cat", "seed": 1, "steps": 5})  # l'appel l'emporte sur le checkpoint (essais)
         noeud, entree = wf.fiche["entrees"]["steps"]
         self.assertEqual(api[noeud]["inputs"][entree], 5)
         noeud, entree = wf.fiche["entrees"]["ratio"]
         self.assertEqual(api[noeud]["inputs"][entree], "16:9 (Widescreen)")  # pas donné : le réglage s'applique
 
     def test_retour_aux_valeurs_d_origine(self):
-        reglages.modifier_workflow("krea2_turbo", {"steps": 12, "cfg": 1.5})
-        reglages.modifier_workflow("krea2_turbo", {"steps": None, "cfg": 1.0})  # None, ou la valeur d'origine
+        reglages.modifier_workflow("krea2_turbo", {"cfg": 1.5, "sampler": "euler_ancestral"})
+        reglages.modifier_workflow("krea2_turbo", {"cfg": 1.0, "sampler": None})  # None, ou la valeur d'origine
         self.assertEqual(reglages.lire()["workflows"], {})
-        self.assertEqual(reglages.valeurs_workflow(workflows.obtenir("krea2_turbo"))["steps"], 8)
+        self.assertEqual(reglages.valeurs_workflow(workflows.obtenir("krea2_turbo"))["cfg"], 1.0)
 
     def test_valeurs_refusees(self):
         for changement in ({"steps": 0}, {"steps": 151}, {"steps": 2.5}, {"steps": True}, {"cfg": "fort"},

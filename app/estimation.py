@@ -1,12 +1,14 @@
-"""Temps estimé d'un tournage du Montage : calculé d'après le checkpoint, la qualité, la durée, le nombre de clips et
-la VRAM libre, sans tenir compte des clips déjà tournés.
+"""Temps estimé d'un tournage du Montage : calculé d'après la VRAM libre, les steps et le poids du checkpoint, la
+résolution, la durée et le nombre de clips, sans tenir compte des clips déjà tournés.
 
 Point de départ : le tableau de plateau.QUALITES_VIDEO, mesuré sur la RTX 4080 de l'auteur (16 Go) pour 5 s, à chaud, avec
 le checkpoint d'origine. Il reste exact sur cette machine de référence ; le calcul suit cet ordre :
   1. la VRAM libre ;
-  2. le poids du modèle vidéo : quand lui et le travail du clip dépassent la VRAM libre, ComfyUI décharge une partie en
+  2. les steps du checkpoint (validés dans Modèles, ou clairs dans sa fiche) : le tableau est mesuré aux steps de sa
+     résolution, le temps suit au prorata ;
+  3. le poids du modèle vidéo : quand lui et le travail du clip dépassent la VRAM libre, ComfyUI décharge une partie en
      RAM et chaque step ralentit. Le facteur compare ta machine à la machine de référence ;
-  3. la qualité : le temps du tableau, corrigé des steps si le checkpoint choisi impose les siens ;
+     la résolution (mégapixels) entre dans ce travail, et dans le temps du tableau ;
   4. la durée : (D / 5)^plateau.EXPOSANT_DUREE_VIDEO, ajusté sur un clip de 15 s ;
   5. le nombre de clips : autant de clips, un après l'autre.
 Prédiction jugée correcte par l'auteur pour 15 s en Compromis, checkpoints de 19,53 à 61,73 Go (2026-11-09).
@@ -60,13 +62,14 @@ def estimer(mode: str, modele: str | None, qualite: str, duree: int, nombre: int
     """Secondes d'un clip et de la commande entière, avec ce qui a servi au calcul.
     `libre_go` : la VRAM libre (mesurée ici si absente). Sans mesure, le tableau d'origine seul."""
     if qualite not in plateau.QUALITES_VIDEO:
-        raise ValueError(f"Qualité inconnue : {qualite}")
+        raise ValueError(f"Résolution inconnue : {qualite}")
     if mode not in plateau.MODES_VIDEO:
         raise ValueError(f"Mode inconnu : {mode}")
     q = plateau.QUALITES_VIDEO[qualite]
     wf = workflows.obtenir(CONFIG.get("generation", {}).get(plateau.MODES_VIDEO[mode]))
     checkpoint = wf.choisi(modele)
-    steps = int(reglages_variante(wf, checkpoint).get("steps") or q["steps"])
+    a_valider = wf.a_valider(checkpoint)
+    steps = wf.steps_de(checkpoint) or q["steps"]  # à valider : le tableau tel quel (le tournage sera refusé)
     poids = _poids_go(wf, checkpoint)
     libre = _vram_libre_go() if libre_go is None else libre_go
     clip = q["estimation_s"] * (steps / q["steps"]) * (duree / 5) ** EXPOSANT_DUREE
@@ -76,10 +79,5 @@ def estimer(mode: str, modele: str | None, qualite: str, duree: int, nombre: int
         clip *= facteur
     return {"source": "calcul" if libre is not None else "tableau_d_origine",
             "clip_s": round(clip), "total_s": round(clip * nombre), "nombre": nombre,
-            "checkpoint": checkpoint, "poids_go": round(poids, 1), "steps": steps,
+            "checkpoint": checkpoint, "poids_go": round(poids, 1), "steps": steps, "a_valider": a_valider,
             "vram_libre_go": None if libre is None else round(libre, 1), "facteur_vram": round(facteur, 2)}
-
-
-def reglages_variante(wf: workflows.Workflow, checkpoint: str) -> dict:
-    from app import reglages
-    return reglages.valeurs_variante(wf, checkpoint)

@@ -205,20 +205,17 @@ def est_checkpoint(dossier: str) -> bool:
     return dossier.endswith("/modeles") and not dossier.startswith("_base/")
 
 
-def en_attente(dossier: str, nom: str) -> bool:
-    """Checkpoint téléchargé mais pas encore validé : il n'est proposé nulle part (workflows.variantes)."""
-    return bool((charger_registre().get(f"{dossier}/{nom}") or {}).get("a_valider"))
+def suggestion_steps(cle_modele: str) -> dict | None:
+    """La suggestion de steps lue à son téléchargement (sources.steps), tant qu'il n'est pas validé."""
+    return ((charger_registre().get(cle_modele) or {}).get("a_valider") or {}).get("steps")
 
 
-def valider(cle_modele: str) -> dict:
-    """Met un checkpoint téléchargé en service (il apparaît alors dans les variantes). Retourne son entrée de registre."""
+def oublier_attente(cle_modele: str):
+    """Le checkpoint est validé : sa suggestion de steps n'a plus lieu d'être. Ce n'est pas elle qui le met en service
+    (ce sont ses steps validés, workflows.Workflow.steps_de) ; sans entrée au registre, rien à faire."""
     registre = charger_registre()
-    entree = registre.get(cle_modele)
-    if not entree or not entree.get("a_valider"):
-        raise ErreurModele("Ce modèle n'attend pas de validation")
-    del entree["a_valider"]
-    _sauver_registre(registre)
-    return entree
+    if (registre.get(cle_modele) or {}).pop("a_valider", None) is not None:
+        _sauver_registre(registre)
 
 
 def connu(dossier: str, nom: str) -> bool:

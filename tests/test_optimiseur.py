@@ -11,11 +11,15 @@ from unittest import mock
 import yaml
 
 from app import modeles, optimiseur, reglages, workflows
+from tests import steps_connus
 
 GO = 2**30
 LLM = "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf"
 BONSAI = "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class Optimiseur(unittest.TestCase):
     def setUp(self):
@@ -49,13 +53,13 @@ class Optimiseur(unittest.TestCase):
 
     def test_recommandations_sourcees(self):
         props, r = self.propositions()
-        qwen = props[("qwen_image_2_1", "steps")]
-        self.assertEqual((qwen["actuel"], qwen["propose"]), (25, 40))
-        self.assertTrue(qwen["source"].startswith("https://"))
-        self.assertEqual(props[("qwen_image_edit_2511", "shift")]["propose"], 3.0)
+        # Les steps se valident par checkpoint (Modèles → Ma collection) : l'Optimiser ne les propose plus.
+        self.assertNotIn(("qwen_image_2_1", "steps"), props)
+        shift = props[("qwen_image_edit_2511", "shift")]
+        self.assertEqual(shift["propose"], 3.0)
+        self.assertTrue(shift["source"].startswith("https://"))
         self.assertEqual(props[(LLM, "temperature_traduction")]["propose"], 0.05)
         self.assertEqual(props[(BONSAI, "presence_penalty")]["propose"], 1.5)
-        self.assertNotIn(("krea2_turbo", "steps"), props)  # déjà à la valeur recommandée : rien à proposer
         self.assertEqual(r["materiel"]["gpu"], "GPU de test")
 
     def test_appliquer_vide_les_propositions(self):
@@ -114,7 +118,7 @@ class Optimiseur(unittest.TestCase):
     def test_fichiers_de_recommandations_valides(self):
         """Chaque recommandation rangée vise un réglage qui existe et respecte ses bornes."""
         for wf in workflows.catalogue():
-            params = reglages.params_workflow(wf)
+            params = {**reglages.params_workflow(wf), "steps": reglages.params_variante(wf)["steps"]}  # steps : par checkpoint
             for r in (wf.fiche.get("recommandations") or {}).get("valeurs") or []:
                 self.assertIn(r["cle"], params, wf.id)
                 params[r["cle"]].valider(r["valeur"])

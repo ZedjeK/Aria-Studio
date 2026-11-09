@@ -15,6 +15,7 @@ from app import modeles, plateau, reglages, rushes, sequences, workflows
 from app.plateau import Commande, ErreurPlateau, Plateau
 from app.reglages import ErreurReglages
 from tests.test_sequences import png
+from tests import steps_connus
 
 H3 = "minimax_h3_i2v"
 ORIGINE_H3 = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
@@ -35,6 +36,9 @@ def presents_sauf_checkpoints(dossier, nom):
     """modeles.destination simulé : les fichiers communs (encodeurs, VAE, LoRA du workflow) sont là."""
     return SimpleNamespace(is_file=lambda: dossier != "MiniMax-H3/modeles")
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class Base(unittest.TestCase):
     def setUp(self):
@@ -152,11 +156,12 @@ class ReglagesParCheckpoint(Base):
             api = self.preparer(modele=DASIWA, loras=[{"fichier": "style.safetensors", "force": 0.8}])
         self.assertEqual([l["inputs"]["lora_name"] for l in self.noeuds(api, "LoraLoaderModelOnly")], ["style.safetensors"])
 
-    def test_steps_imposes(self):
+    def test_steps_du_checkpoint(self):
         reglages.modifier_variante(H3, DASIWA, {"steps": 6})
         sched = lambda api: self.noeuds(api, "BasicScheduler")[0]["inputs"]["steps"]
-        self.assertEqual(sched(self.preparer(modele=DASIWA, steps=12)), 6)  # même la qualité du Montage
-        self.assertEqual(sched(self.preparer(modele=ORIGINE_H3, steps=12)), 12)
+        self.assertEqual(sched(self.preparer(modele=DASIWA)), 6)  # ses steps, quelle que soit la résolution
+        self.assertEqual(sched(self.preparer(modele=ORIGINE_H3)), 8)  # l'origine : les siens (ici le défaut de sa fiche)
+        self.assertEqual(sched(self.preparer(modele=DASIWA, steps=12)), 12)  # un plan qui parle impose 12
 
     def test_enregistrement_et_retour(self):
         self.assertEqual(reglages.modifier_variante(H3, DASIWA, {"lora_workflow": False, "steps": 6}),

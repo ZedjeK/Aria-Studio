@@ -1,6 +1,6 @@
 // Montage, mode Séquence : des plans enchaînés (prolonger, couper, transition), tournés dans l'ordre et assemblés
 // en un film par le serveur (app/sequences.py). Leurs prompts s'écrivent au Scénario (histoire, découpage) ; ici on
-// les retouche, on règle le tournage (personnage, voix, modèle, qualité) et on tourne : chaque plan tourne son prompt
+// les retouche, on règle le tournage (personnage, voix, modèle, résolution) et on tourne : chaque plan tourne son prompt
 // tel quel. Un plan modifié n'est plus « à jour » et sera retourné, avec les plans qui partent de lui.
 // La voix vient de la bibliothèque data/voix (essais tournés en cabine silencieuse, ou fichiers importés ; app/voix.py).
 
@@ -41,7 +41,7 @@ function preparerSequence() {
 async function preparerSequenceMaintenant() {
     if (!optionsMontage) await preparerMontage();
     const v = optionsMontage.video;
-    remplirSelect("qualite-sequence", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.megapixels} MP`]), "rapide");
+    remplirSelect("qualite-sequence", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.aide}`]), "rapide");
     const ck = checkpointsVideo();
     remplirSelect("modele-sequence", ck.lignes, ck.defaut);
     remplirSelect("format-sequence", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
@@ -185,11 +185,15 @@ function aTourner(demandes = []) {
     return [...choisis].sort((a, b) => a - b);
 }
 
+// Comme sequences.estimation : le tableau, mesuré aux steps de sa résolution, suit au prorata ceux du checkpoint.
+const stepsSequence = () => stepsCheckpoint(document.getElementById("modele-sequence").value);
+
 function estimationSequence(indices) {
     const v = optionsMontage.video;
     const q = v.qualites.find((x) => x.cle === sequenceCourante.qualite);
-    const cout = (p) => q.estimation_s * v.sequence.surcout * (p.duree / 5) ** 1.25
-        * (parlePlan(p) && q.steps < v.sequence.steps_parole ? v.sequence.surcout_parole : 1);
+    const base = stepsSequence() || q.steps;
+    const cout = (p) => q.estimation_s * (base / q.steps) * v.sequence.surcout * (p.duree / 5) ** 1.25
+        * (parlePlan(p) && base < v.sequence.steps_parole ? v.sequence.surcout_parole : 1);
     return indices.reduce((total, k) => total + cout(sequenceCourante.plans[k]), indices.length ? 5 : 0);
 }
 
@@ -198,7 +202,8 @@ function majEtat() {
     document.querySelectorAll("#plans-sequence .plan-sequence").forEach((li) => {
         const k = Number(li.dataset.plan);
         const p = sequenceCourante.plans[k];
-        const parle = parlePlan(p) ? ` · 🗣 voix soignée (${optionsMontage.video.sequence.steps_parole} steps)` : "";
+        const parole = optionsMontage.video.sequence.steps_parole;
+        const parle = parlePlan(p) && stepsSequence() < parole ? ` · 🗣 voix soignée (${parole} steps)` : "";
         const sansPrompt = !(p.prompt ?? "").trim() ? " · ✍️ prompt à écrire" : "";
         li.querySelector(".etat-plan").textContent = (indices.includes(k) ? "⏳ à tourner" : "✅ à jour") + parle + sansPrompt;
         li.classList.toggle("a-jour", !indices.includes(k));
@@ -245,7 +250,7 @@ document.getElementById("vers-scenario-sequence").addEventListener("click", asyn
  ["format-sequence", (v) => { sequenceCourante.format = v; }]].forEach(([id, poser]) => {
     document.getElementById(id).addEventListener("change", (e) => {
         poser(e.target.value);
-        modifiee(true);  // casting, qualité ou format : toute la séquence est à retourner (taille, voix)
+        modifiee(true);  // casting, résolution ou format : toute la séquence est à retourner (taille, voix)
     });
 });
 

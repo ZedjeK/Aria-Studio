@@ -404,7 +404,7 @@ document.getElementById("resume-sequence").addEventListener("click", (e) => {
 });
 
 // Envoi au Montage : la première fois, la séquence est créée ; ensuite, elle est mise à jour (ses réglages du Montage,
-// voix, qualité, LoRA, restent, et un plan dont le prompt n'a pas changé garde son clip). Les prompts sont imposés.
+// voix, résolution, LoRA, restent, et un plan dont le prompt n'a pas changé garde son clip). Les prompts sont imposés.
 
 async function envoyerSequence(mettreAJour) {
     const titre = document.getElementById("titre-sequence-scenario");

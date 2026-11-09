@@ -11,10 +11,11 @@ from unittest import mock
 
 from PIL import Image
 
-from app import decoupage, plateau, prompt, rushes, sequences
+from app import decoupage, plateau, prompt, rushes, sequences, workflows
 from app.plateau import ErreurPlateau, Plateau
 from app.securite import ErreurSecurite
 from app.sequences import ErreurSequence
+from tests import steps_connus
 
 
 def png(largeur=832, hauteur=1248) -> bytes:
@@ -22,6 +23,9 @@ def png(largeur=832, hauteur=1248) -> bytes:
     Image.new("RGB", (largeur, hauteur), (40, 30, 20)).save(sortie, "PNG")
     return sortie.getvalue()
 
+
+
+setUpModule, tearDownModule = steps_connus.module()  # ces tests ne portent pas sur la validation des steps
 
 class Base(unittest.TestCase):
     def setUp(self):
@@ -124,7 +128,7 @@ class Validation(Base):
             ({"plans": [{"idee": "", "enchainement": "texte"}]}, "écris l'idée"),
             ({"plans": [{"idee": "x", "enchainement": "texte", "duree": 7}]}, "durée"),
             ({"plans": [{"idee": "x", "enchainement": "texte"}] * 13}, "De 1 à 12 plans"),
-            ({"qualite": "ultra"}, "Qualité"),
+            ({"qualite": "ultra"}, "Résolution"),
             ({"titre": ""}, "Titre"),
         ]
         for autres, message in cas:
@@ -189,9 +193,11 @@ class StepsSelonLaParole(Base):
         api = sequences.graphe_plan(s, 3, "The camera pulls back.", 42, {"rush": "r.png", "precedent": "p.mp4"})
         self.assertEqual(next(v for v in api.values() if v["class_type"] == "BasicScheduler")["inputs"]["steps"], 8)
 
-    def test_qualite_deja_a_12(self):
-        s = self.creer(qualite="compromis")
-        self.assertEqual({sequences.steps_plan(s, p) for p in s["plans"]}, {12})
+    def test_checkpoint_deja_a_12(self):
+        s = self.creer(qualite="compromis")  # la résolution ne change plus les steps : le checkpoint décide
+        self.assertEqual([sequences.steps_plan(s, p) for p in s["plans"]], [12, 8, 8, 8])
+        with mock.patch.object(workflows.Workflow, "steps_de", lambda wf, f: 12):
+            self.assertEqual({sequences.steps_plan(s, p) for p in s["plans"]}, {12})
 
     def test_estimation_compte_le_surcout_de_la_parole(self):
         s = self.creer()
