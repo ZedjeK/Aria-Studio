@@ -80,7 +80,7 @@ function filtrerLoras() {
     });
 }
 
-// Un modèle réunit ses familles : Qwen-Image 2.1 et Qwen-Image-Edit 2511 sont deux familles d'Aria, un seul modèle ici.
+// Un modèle réunit ses familles : si plusieurs familles d'Aria en font partie, elles ne sont qu'un seul modèle ici.
 const NOMS_MODELES = { krea2: "Krea 2", "minimax-h3": "MiniMax H3" };
 function modeleDeFamille(famille) {
     const f = (famille ?? "").trim();

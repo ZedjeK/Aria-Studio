@@ -43,7 +43,7 @@ async function chargerOptionsPlateau() {
 }
 
 // Références : 1 à 10 rushes pour S'inspirer (nouvelle scène, format au choix), 1 pour une Variation.
-// Les modèles proposés changent avec le mode : édition (Qwen 2.1 Edit, 2511) ou texte vers image (img2img).
+// Les modèles proposés changent avec le mode : édition (Qwen 2.1 Edit) ou texte vers image (img2img).
 
 let referencesChoisies = [];  // toutes celles posées, gardées même quand la Variation n'en utilise qu'une
 let modeReference = "inspirer";

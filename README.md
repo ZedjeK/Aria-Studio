@@ -131,7 +131,6 @@ Aria ne fournit aucun modèle : chacun a sa propre licence, affichée dans l'ass
 | Modèle | Licence | À savoir |
 |---|---|---|
 | Qwen-Image 2.1 et 2.1 Edit | [Qwen Research License](https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE) | Usage non commercial seulement |
-| Qwen-Image-Edit 2511 | Apache 2.0 | Usage commercial permis ; l'encodeur de texte vient d'un dépôt à licence « other » |
 | MiniMax H3 | [MiniMax H3 Community License](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE) | Non autorisé dans l'Union européenne, au Royaume-Uni, en Corée du Sud et aux États-Unis ; lis les conditions commerciales ; le Turbo 8 steps n'a pas de licence déclarée |
 | Ministral 3 14B, Bonsai 2 27B | Apache 2.0 | Usage commercial permis |
 

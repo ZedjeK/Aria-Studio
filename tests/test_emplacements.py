@@ -112,10 +112,18 @@ class Favoris(Base):
 
     def test_passent_devant_config_yaml(self):
         from app import config
-        emplacements.retenir_favori("generation", "retouche", "mon_favori")
+        emplacements.retenir_favori("generation", "retouche", "krea2_turbo")
         c = config.charger()
-        self.assertEqual(c["generation"]["retouche"], "mon_favori")
+        self.assertEqual(c["generation"]["retouche"], "krea2_turbo")
         self.assertIn("texte_vers_image", c["generation"])  # le reste de config.yaml est gardé
+
+    def test_un_favori_vers_un_workflow_retire_est_ignore(self):
+        from app import config
+        emplacements.retenir_favori("generation", "retouche", "qwen_image_edit_2511")  # retiré d'Aria
+        emplacements.retenir_favori("generation", "texte_vers_image", "krea2_turbo")  # toujours là
+        c = config.charger()
+        self.assertEqual(c["generation"]["retouche"], "qwen_image_2_1_edit")  # la valeur de config.yaml reprend
+        self.assertEqual(c["generation"]["texte_vers_image"], "krea2_turbo")
 
     def test_comfyui_externe_remplace_celui_d_aria(self):
         from app import config

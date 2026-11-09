@@ -70,7 +70,6 @@ class Workflows(AvecFichierTemporaire):
         self.assertTrue(all("modele" in reglages.params_workflow(wf) for wf in workflows.catalogue()))
         # Les steps se règlent par checkpoint (params_variante) : plus de réglage « Steps » par workflow.
         self.assertEqual(cles["krea2_turbo"], {"cfg", "sampler", "scheduler", "megapixels", "ratio", "mots_max"})
-        self.assertEqual(cles["qwen_image_edit_2511"], {"cfg", "sampler", "scheduler", "shift"})
         self.assertEqual(cles["qwen_image_2_1_edit"], {"cfg", "sampler", "scheduler"})
         resolutions = {"resolution_rapide", "resolution_compromis", "resolution_qualite"}  # boutons du Montage (H3)
         self.assertEqual(cles["minimax_h3_t2v"], {"sampler", "scheduler", "megapixels", "ratio", "mots_max"} | resolutions)
@@ -96,20 +95,18 @@ class Workflows(AvecFichierTemporaire):
         self.assertNotIn(("minimax_h3_t2v", "sampler"), h3)  # déjà au réglage officiel
 
     def test_valeurs_d_origine(self):
-        wf = workflows.obtenir("qwen_image_edit_2511")
+        wf = workflows.obtenir("qwen_image_2_1_edit")
         self.assertEqual(reglages.valeurs_workflow(wf),
-                         {"cfg": 1.0, "sampler": "euler", "scheduler": "simple", "shift": 3.1,
-                          "modele": "qwen_image_edit_2511_int8_convrot.safetensors"})
+                         {"cfg": 1.0, "sampler": "euler", "scheduler": "simple",
+                          "modele": "qwen_image_2.1_int8_convrot.safetensors"})
 
     def test_preparer_applique_les_reglages(self):
-        reglages.modifier_workflow("qwen_image_edit_2511",
-                                   {"cfg": 2.5, "sampler": "dpmpp_2m", "scheduler": "karras", "shift": 5})
-        wf = workflows.obtenir("qwen_image_edit_2511")
+        reglages.modifier_workflow("qwen_image_2_1_edit", {"cfg": 2.5, "sampler": "dpmpp_2m", "scheduler": "karras"})
+        wf = workflows.obtenir("qwen_image_2_1_edit")
         reglages.modifier_variante(wf.id, wf.modele_origine, {"steps": 8})  # les steps : ceux du checkpoint
-        api = wf.preparer({"prompt": "make the sky red", "seed": 1})
+        api = wf.preparer({"prompt": "make the sky red", "seed": 1, "image": "a.png"})
         ks = api[reglages.noeud_unique(api, "KSampler")]["inputs"]
         self.assertEqual((ks["steps"], ks["cfg"], ks["sampler_name"], ks["scheduler"]), (8, 2.5, "dpmpp_2m", "karras"))
-        self.assertEqual(api[reglages.noeud_unique(api, "ModelSamplingAuraFlow")]["inputs"]["shift"], 5.0)
         self.assertEqual(wf.api[reglages.noeud_unique(wf.api, "KSampler")]["inputs"]["cfg"], 1)  # l'original intact
 
     def test_la_valeur_de_l_appel_gagne(self):

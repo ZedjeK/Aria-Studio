@@ -107,7 +107,7 @@ class Consignes(unittest.TestCase):
             f = workflows.obtenir(w).fiche
             self.assertEqual(f["video"]["duree_max"], 15)
             self.assertNotIn("atlascloud", " ".join(f["profil_prompt"].get("sources", [])))
-        self.assertIn("Restore and colorize the photo.", " ".join(workflows.regles_prompt("qwen_image_edit_2511")))
+        self.assertIn("Lead with the operation", " ".join(workflows.regles_prompt("qwen_image_2_1_edit")))
 
 
 if __name__ == "__main__":
