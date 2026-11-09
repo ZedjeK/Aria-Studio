@@ -326,6 +326,15 @@ def params_workflow(wf) -> dict[str, Param]:
     if "megapixels" in entrees:
         params.append(Param("megapixels", "Mégapixels", "reel", float(defauts.get("megapixels", 1)), 0.25, 6.0, 0.05,
                             aide="Taille de l'image : plus = plus de VRAM et plus lent" + montage))
+    if wf.fiche.get("video") and "megapixels" in entrees:
+        from app import plateau
+        # Les trois boutons de résolution du Montage : un nombre de mégapixels chacun (le même pour les workflows
+        # image vers vidéo et texte vers vidéo de la famille : modifier_workflow les tient d'accord).
+        for rang, (cle, q) in enumerate(plateau.QUALITES_VIDEO.items(), start=1):
+            params.append(Param(f"resolution_{cle}", f"Résolution {rang} · d'origine {q['nom']}", "reel", q["megapixels"],
+                                0.25, 2.0, 0.05,
+                                aide="Mégapixels de ce bouton dans le Montage et les séquences. Plus = plus fin, plus de "
+                                     "VRAM et nettement plus lent (le temps affiché au Montage suit, à titre indicatif)."))
     if "ratio" in entrees:
         params.append(Param("ratio", "Format par défaut", "choix", defauts.get("ratio", FORMATS[0]),
                             choix=tuple(FORMATS)))
@@ -417,6 +426,12 @@ def modifier_workflow(id_workflow: str, changements: dict) -> dict:
     donnees = lire()
     donnees = {"llm": dict(donnees["llm"]), "workflows": {k: dict(v) for k, v in donnees["workflows"].items()}}
     _appliquer(donnees["workflows"].setdefault(wf.id, {}), params_workflow(wf), changements)
+    # Les résolutions vidéo sont celles de la famille : image vers vidéo et texte vers vidéo restent d'accord.
+    resolutions = {cle: v for cle, v in changements.items() if cle.startswith("resolution_")}
+    if resolutions and wf.fiche.get("video"):
+        for autre in workflows.catalogue():
+            if autre.famille == wf.famille and autre.id != wf.id and autre.fiche.get("video"):
+                _appliquer(donnees["workflows"].setdefault(autre.id, {}), params_workflow(autre), resolutions)
     _ecrire(donnees)
     return valeurs_workflow(wf)
 

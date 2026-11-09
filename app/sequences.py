@@ -90,7 +90,7 @@ def _ratio_format(format_: str) -> float:
 
 def dimensions_sequence(s: dict) -> tuple[int, int]:
     """Tous les plans ont la même taille (sinon pas d'assemblage) : celle du rush de départ, sinon du format."""
-    mp = plateau.QUALITES_VIDEO[s["qualite"]]["megapixels"]
+    mp = plateau.qualites_video()[s["qualite"]]["megapixels"]
     premier = s["plans"][0]
     if premier["enchainement"] == "rush":
         l, h = plateau._dimensions_png(plateau.chemin_image(premier["rush"]).read_bytes())
@@ -101,7 +101,7 @@ def dimensions_sequence(s: dict) -> tuple[int, int]:
 def estimation(s: dict, indices: list[int]) -> float:
     """Secondes de calcul sur la carte de l'auteur (mesures du Montage), assemblage compris. Le tableau est mesuré aux
     steps de sa résolution : il suit ceux du checkpoint (au prorata), puis le surcoût mesuré des plans qui parlent."""
-    q = plateau.QUALITES_VIDEO[s["qualite"]]
+    q = plateau.qualites_video()[s["qualite"]]
     base = steps_base(s) or q["steps"]  # checkpoint à valider : le tableau tel quel, le tournage le refusera
 
     def cout(plan):
@@ -451,7 +451,7 @@ def graphe_plan(s: dict, k: int, prompt_plan: str, seed: int, fichiers: dict) ->
     """Graphe d'un plan. `fichiers` : noms déjà téléversés dans ComfyUI (rush, precedent, personnage, et la voix :
     « voix » pour un clip, « voix_son » pour un son de la bibliothèque)."""
     p = s["plans"][k]
-    q = plateau.QUALITES_VIDEO[s["qualite"]]
+    q = plateau.qualites_video()[s["qualite"]]
     wf = workflows.obtenir(CONFIG.get("generation", {}).get("image_vers_video"))
     valeurs = {"prompt": prompt_plan, "seed": seed, "duree": p["duree"], "megapixels": q["megapixels"],
                "modele": s.get("modele"), "loras": s.get("loras") or [],
@@ -643,7 +643,7 @@ async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
             "type": "clip", "mode_video": "sequence", "sequence": s["id"], "plan": k + 1,
             "enchainement": plan["enchainement"], "idee": plan["idee"], "prompt": prompt_plan, "llm": s["llm"],
             "workflow": CONFIG.get("generation", {}).get("image_vers_video"), "qualite": s["qualite"],
-            "duree": plan["duree"], "megapixels": plateau.QUALITES_VIDEO[s["qualite"]]["megapixels"],
+            "duree": plan["duree"], "megapixels": plateau.qualites_video()[s["qualite"]]["megapixels"],
             "steps": steps_plan(s, plan), "voix": ref_voix, "modele": _workflow().choisi(s.get("modele")),
             "seed": seed, "parent": plan["rush"], "dossier": s["dossier"],
             "duree_s": round(time.perf_counter() - debut, 2)})

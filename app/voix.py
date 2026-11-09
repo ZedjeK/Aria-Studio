@@ -163,7 +163,7 @@ def options() -> dict:
     return {"phrase_defaut": PHRASE_DEFAUT, "longueur_phrase": LONGUEUR_PHRASE, "mots_max": MOTS_MAX,
             "longueur_description": LONGUEUR_DESCRIPTION, "longueur_nom": LONGUEUR_NOM,
             "formats": sorted(FORMATS_AUDIO), "duree_min": DUREE_MIN, "duree_max": DUREE_MAX,
-            "estimation_s": round(plateau.QUALITES_VIDEO[QUALITE]["estimation_s"] * 1.4)}
+            "estimation_s": round(plateau.qualites_video()[QUALITE]["estimation_s"] * 1.4)}
 
 
 # Fichier audio de l'utilisateur
@@ -257,7 +257,7 @@ def prompt_essai(phrase: str, description: str, avec_personnage: bool) -> str:
 def graphe_essai(prompt: str, seed: int, duree: int, personnage: str | None) -> dict:
     """ReferenceToVideo (le personnage en <Picture 1>, ou aucun), son seul en sortie (SaveAudio, FLAC)."""
     from app import sequences  # sequences importe voix
-    q = plateau.QUALITES_VIDEO[QUALITE]
+    q = plateau.qualites_video()[QUALITE]
     wf = workflows.obtenir(CONFIG.get("generation", {}).get("image_vers_video"))
     api = wf.preparer({"prompt": prompt, "seed": seed, "duree": duree, "megapixels": q["megapixels"],
                        "steps": STEPS, "prefixe": "aria_voix"})  # AS-18 sur le prompt

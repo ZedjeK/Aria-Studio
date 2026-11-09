@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 import random
 import re
 import struct
@@ -87,6 +88,41 @@ QUALITES_VIDEO = {
     "qualite": {"nom": "1 MP", "aide": "≈ natif de H3 (0,98 MP), le plus fin et le plus lent", "megapixels": 0.98,
                 "steps": 12, "estimation_s": 425},
 }
+# Réglages → MiniMax H3 : les mégapixels des trois résolutions se choisissent (une valeur par bouton du Montage). Le temps
+# d'un clip à une autre taille s'interpole sur les trois mesures ci-dessus, ramenées à 12 steps (échelle log-log, la pente
+# du segment voisin au-delà des extrémités) : c'est une indication, la mesure reste celle de l'auteur.
+_MESURES_12_STEPS = sorted((q["megapixels"], q["estimation_s"] * 12 / q["steps"]) for q in QUALITES_VIDEO.values())
+
+
+def _temps_a_12_steps(mp: float) -> float:
+    pts = _MESURES_12_STEPS
+    i = 0 if mp <= pts[1][0] else 1  # segment de référence (le premier sous le milieu, le second au-dessus)
+    (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+    pente = math.log(y1 / y0) / math.log(x1 / x0)
+    return y0 * (mp / x0) ** pente
+
+
+def mp_video_reglees() -> dict[str, float]:
+    """Les mégapixels de chaque résolution : ceux de Réglages (workflow image vers vidéo), sinon d'origine."""
+    try:
+        valeurs = reglages.valeurs_workflow(workflows.obtenir(CONFIG.get("generation", {}).get("image_vers_video")))
+    except Exception:  # workflow absent : les valeurs d'origine suffisent
+        valeurs = {}
+    return {cle: float(valeurs.get(f"resolution_{cle}", q["megapixels"])) for cle, q in QUALITES_VIDEO.items()}
+
+
+def qualites_video() -> dict:
+    """QUALITES_VIDEO avec les mégapixels choisis dans Réglages : nom, aide et temps de mesure suivent."""
+    sortie = {}
+    for cle, mp in mp_video_reglees().items():
+        q = dict(QUALITES_VIDEO[cle])
+        if mp != q["megapixels"]:
+            q.update(megapixels=mp, nom=f"{round(mp, 2):g} MP".replace(".", ","), aide="réglé dans Réglages",
+                     estimation_s=round(_temps_a_12_steps(mp) * q["steps"] / 12))
+        sortie[cle] = q
+    return sortie
+
+
 DUREES_VIDEO = (5, 8, 10, 15)  # H3 est entraîné de 5 à 15 s
 # Le temps d'un clip croît avec sa durée en (D / 5)^EXPOSANT. 1,57 : ajusté sur un clip de 15 s en Compromis avec le
 # checkpoint d'origine (15 min 57, relevé le 2026-11-09) contre 170 s pour 5 s ; l'ancien 1,25 donnait 11 min 11. Deux
@@ -212,7 +248,7 @@ class Plateau:
             "references_defaut": CONFIG.get("generation", {}).get("references"),
             "video": {
                 "qualites": [{"cle": k, "nom": q["nom"], "aide": q["aide"], "megapixels": q["megapixels"],
-                              "steps": q["steps"], "estimation_s": q["estimation_s"]} for k, q in QUALITES_VIDEO.items()],
+                              "steps": q["steps"], "estimation_s": q["estimation_s"]} for k, q in qualites_video().items()],
                 "defaut_qualite": "compromis", "durees": list(DUREES_VIDEO), "nombre_max": CLIPS_MAX,
                 "exposant_duree": EXPOSANT_DUREE_VIDEO,
                 "workflows": {mode: CONFIG.get("generation", {}).get(tache) for mode, tache in MODES_VIDEO.items()},
@@ -579,7 +615,7 @@ class Plateau:
         securite.verifier(c.idee, c.prompt, *c.textes_origine, *(l["declencheurs"] for l in c.loras))
 
         wf = workflows.obtenir(c.workflow)
-        q = QUALITES_VIDEO[c.qualite]
+        q = qualites_video()[c.qualite]
         base = c.seed if c.seed is not None else random.randrange(2**48)
         source = None
         for i in range(c.nombre):
