@@ -20,12 +20,19 @@ async function chargerCasting() {
     select.innerHTML = bancs.map((b) => `<option value="${echapper(b.id)}">
         ${echapper(b.date.replace("T", " "))} · ${NOMS_TACHES[b.tache] ?? echapper(b.tache)}
         · ${b.nb_workflows} modèles${b.revele ? "" : " · à l'aveugle"}</option>`).join("");
+    const histo = document.getElementById("historique-bancs");
+    histo.innerHTML = bancs.length ? bancs.map((b) => `<button type="button" class="carte-banc ${b.id === bancAffiche ? "actif" : ""}"
+        data-banc="${echapper(b.id)}"><strong>${NOMS_TACHES[b.tache] ?? echapper(b.tache)}</strong>
+        <span class="discret">${echapper(b.date.replace("T", " "))} · ${b.nb_workflows} modèles</span>
+        <span class="${b.revele ? "ok" : "aveugle"}">${b.revele ? "révélé" : "à l'aveugle"}</span></button>`).join("")
+        : '<p class="discret">Aucun casting pour l\'instant.</p>';
     if (!bancs.length) {
         document.getElementById("banc").innerHTML = '<p class="discret">Aucun banc pour l\'instant.</p>';
         return;
     }
     if (!bancs.some((b) => b.id === bancAffiche)) bancAffiche = bancs[0].id;
     select.value = bancAffiche;
+    histo.querySelectorAll("[data-banc]").forEach((c) => c.classList.toggle("actif", c.dataset.banc === bancAffiche));
     chargerBanc();
 }
 
@@ -187,4 +194,21 @@ document.getElementById("banc").addEventListener("click", async (e) => {
     } catch (err) {
         alert(err.message);
     }
+});
+
+// Pastilles de tâche (le select caché reste la source de vérité pour le lancement).
+document.getElementById("taches-banc").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tache]");
+    if (!b) return;
+    document.getElementById("tache-banc").value = b.dataset.tache;
+    document.querySelectorAll("#taches-banc button").forEach((x) => x.classList.toggle("actif", x === b));
+});
+
+document.getElementById("historique-bancs").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-banc]");
+    if (!c) return;
+    bancAffiche = c.dataset.banc;
+    document.getElementById("liste-bancs").value = bancAffiche;
+    document.querySelectorAll("#historique-bancs [data-banc]").forEach((x) => x.classList.toggle("actif", x === c));
+    chargerBanc();
 });

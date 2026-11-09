@@ -325,3 +325,59 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
         etat.classList.add("ko");
     }
 });
+
+// Refonte : navigation à gauche, recherche, « Modifiés seulement », pastille orange des sections touchées.
+(() => {
+    const vue = document.getElementById("vue-reglages");
+    const contenu = vue.querySelector(".contenu-reglages");
+    const nav = vue.querySelector(".nav-reglages");
+    const recherche = document.getElementById("recherche-reglages");
+    const modifies = document.getElementById("modifies-reglages");
+    let section = "tout";
+
+    const norme = (t) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+    function appliquer() {
+        const q = norme(recherche.value.trim());
+        const filtre = Boolean(q) || modifies.checked;
+        contenu.querySelectorAll("[data-section]").forEach((bloc) => {
+            const visibleParNav = section === "tout" || bloc.dataset.section === section;
+            let reste = true;
+            if (filtre && bloc.dataset.section !== "systeme") {
+                const lignes = [...bloc.querySelectorAll(".param, details.consigne")];
+                lignes.forEach((l) => {
+                    const ok = (!q || norme(l.textContent).includes(q)) && (!modifies.checked || l.matches(".modifie")
+                        || l.querySelector(".modifie, .badge"));
+                    l.hidden = !ok;
+                });
+                reste = lignes.some((l) => !l.hidden);
+            } else {
+                bloc.querySelectorAll(".param, details.consigne").forEach((l) => (l.hidden = false));
+            }
+            bloc.hidden = !visibleParNav || !reste;
+        });
+        const systeme = document.getElementById("systeme-reglages");
+        if (section === "systeme") systeme.open = true;
+        const total = contenu.querySelectorAll(".param.modifie, details.consigne.modifie").length;
+        const compte = document.getElementById("nb-modifies");
+        compte.hidden = !total;
+        compte.textContent = total;
+        nav.querySelectorAll("[data-section]").forEach((b) => {
+            const point = b.querySelector(".point-modifie");
+            if (point) point.hidden = !contenu.querySelector(`[data-section="${b.dataset.section}"] .modifie`);
+        });
+    }
+
+    nav.addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-section]");
+        if (!b) return;
+        section = b.dataset.section;
+        nav.querySelectorAll("button").forEach((x) => x.classList.toggle("actif", x === b));
+        appliquer();
+    });
+    recherche.addEventListener("input", appliquer);
+    modifies.addEventListener("change", appliquer);
+    // Les champs sont redessinés après chaque chargement ou enregistrement : on refiltre.
+    new MutationObserver(() => appliquer()).observe(contenu, { childList: true, subtree: true });
+    appliquer();
+})();
