@@ -78,10 +78,13 @@ profil_prompt:
     - 'Lead with the operation (what changes and where), then say explicitly what stays unchanged.'
     - 'Keep identity unless the user targets it: the face and recognizable accessories of a person, the exact design of a product, and the rendering medium (photo, anime, illustration, painting).'
     - 'Anchor every detail on what the image shows; never invent a detail you cannot see.'
-    - 'Written text: give the exact characters in double quotes and keep the typography and language already in the image.'
+    - 'Written text: give the exact characters in double quotes and keep the typography, the language and the capitalization already in the image.'
     - 'If the canvas is extended outward, call it outpainting explicitly.'
+    - 'To restore and colour an old photograph, write exactly: "Restore and colorize the photo."'
+    - 'With several pictures, say which picture is being changed (Picture 1, Picture 2).'
     regles_sources:
-    - 'https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I (system_prompt.txt)'
+    - 'https://github.com/QwenLM/Qwen-Image/blob/main/src/examples/tools/prompt_utils.py (EDIT_SYSTEM_PROMPT, le polisseur officiel de la retouche Qwen-Image-Edit : instruction directe, « Picture 1 », texte entre guillemets avec sa langue et ses majuscules)'
+    - 'https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I (system_prompt.txt, le réécrivain de la 2.1 : opération d''abord, puis ce qui reste)'
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
 recommandations:
     valeurs:

@@ -11,7 +11,7 @@ from unittest import mock
 
 from PIL import Image
 
-from app import decoupage, plateau, rushes, sequences
+from app import decoupage, plateau, prompt, rushes, sequences
 from app.plateau import ErreurPlateau, Plateau
 from app.securite import ErreurSecurite
 from app.sequences import ErreurSequence
@@ -389,13 +389,13 @@ class Decoupage(Base):
         self.assertIn("copy the character description given by the user word for word", systeme)  # sans référence
         self.assertNotIn("{regle_personnage}", systeme)
         self.assertIn("40 to 110 words", systeme)
-        self.assertTrue(r["plans"][0]["prompt"].startswith("A young woman"))  # description déjà là : rien d'ajouté
-        self.assertTrue(r["plans"][1]["prompt"].startswith("Continuous shot, same scene."))
-        self.assertEqual(r["plans"][2]["prompt"],  # description remise, Markdown retiré, réplique de la note remise
+        self.assertTrue(prompt.separer_champs(r["plans"][0]["prompt"])[0].startswith("A young woman"))  # description déjà là : rien d'ajouté
+        self.assertTrue(prompt.separer_champs(r["plans"][1]["prompt"])[0].startswith("Continuous shot, same scene."))
+        self.assertEqual(prompt.separer_champs(r["plans"][2]["prompt"])[0],  # description remise, Markdown retiré, réplique de la note remise
                          "The character is a young woman in her early twenties, Korean, wearing a flight suit. "
                          "Close-up in the cockpit, the character flips two switches. "
                          "The character (S1) says: <d>[French] Moteurs au vert.</d>")
-        self.assertFalse(r["plans"][3]["prompt"].startswith("The character is"))  # transition : « the character »
+        self.assertFalse(prompt.separer_champs(r["plans"][3]["prompt"])[0].startswith("The character is"))  # transition : « the character »
         self.assertEqual([p["idee"] for p in r["plans"]], ["plan 1", "plan 2", "plan 3", "plan 4"])
         self.assertEqual(r["alertes"], [])
 
@@ -408,7 +408,7 @@ class Decoupage(Base):
         self.assertIn("1. start from the picture", llama.messages[0][1]["content"])
         self.assertNotIn("Korean", llama.messages[0][1]["content"])  # la description n'est pas envoyée
         self.assertEqual(r["plans"][0]["rush"], self.pilote)
-        self.assertEqual(r["plans"][2]["prompt"],  # rien d'imposé
+        self.assertEqual(prompt.separer_champs(r["plans"][2]["prompt"])[0],  # rien d'imposé
                          "A shot. The character (S1) says: <d>[French] Moteurs au vert.</d>")
         self.assertTrue(any("« On décolle ce soir. » absente" in a for a in r["alertes"]))
 

@@ -352,6 +352,16 @@ def regles_prompt(id_workflow: str | None) -> list[str]:
         return []
 
 
+def champs_video(id_workflow: str | None) -> bool:
+    """Ce modèle lit son prompt en trois champs (profil_prompt.format_champs de sa fiche) : guide ComfyUI de H3."""
+    if not id_workflow:
+        return False
+    try:
+        return bool(obtenir(id_workflow).profil.get("format_champs"))
+    except ErreurWorkflow:
+        return False
+
+
 def rubriques_ignorees(id_workflow: str | None) -> set[str]:
     """Rubriques de « Me guider » inutiles à ce modèle cible (profil_prompt.rubriques_ignorees de sa fiche) : celles
     que son entrée fixe déjà, comme l'image à animer qui porte le style, la palette et l'objectif."""

@@ -70,7 +70,7 @@ materiel:
 profil_prompt:
     style: prose
     langue: en
-    mots_max: 120  # valeur de départ, à affiner au banc
+    mots_max: 150  # aucune longueur officielle : le guide Krea dit « long, detailed prompts » ; ses 20 exemples font 10 à 180 mots (médiane ~75). Valeur de départ, à affiner au banc (relevé le 2026-11-09).
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
     # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
     regles:
@@ -80,6 +80,7 @@ profil_prompt:
     - 'If the idea asks for no written words, end the prompt with: "No text, no letters, no logos, no watermark."'
     regles_sources:
     - 'template ComfyUI image_krea2_turbo_t2i (consigne de son affineur de prompt)'
+    - 'https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt (même consigne, officielle)'
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
 recommandations:
     resolution_native_mp: 4.2  # 2048 × 2048

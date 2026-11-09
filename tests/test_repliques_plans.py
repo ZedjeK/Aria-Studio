@@ -33,7 +33,7 @@ class Repliques(Base):
                       f"<d>[French] {REPLIQUE}</d>, spoken at the end of the shot, after the action, as a reaction", demande)
         self.assertNotIn("Nobody speaks", demande)
         # le LLM l'a écrite entre guillemets : le filet la passe dans la balise de H3
-        self.assertEqual(r["plans"][1]["prompt"], f"She takes off her helmet and says: <d>[French] {REPLIQUE}</d>")
+        self.assertEqual(prompt.separer_champs(r["plans"][1]["prompt"])[0], f"She takes off her helmet and says: <d>[French] {REPLIQUE}</d>")
         self.assertEqual(r["alertes"], [])
 
     def test_replique_perdue_remise_a_son_moment(self):
@@ -54,14 +54,14 @@ class Repliques(Base):
         plans[1] = {**plans[1], "off": True, "replique": " ".join(["mot"] * 14)}
         r, demande = self.decouper(blocs("A.", "B.", "C."), plans)
         self.assertIn("as an off-screen voiceover (the character's lips stay closed)", demande)
-        self.assertIn("in an off-screen voiceover", r["plans"][1]["prompt"].lower())
+        self.assertIn("in an off-screen voiceover", prompt.separer_champs(r["plans"][1]["prompt"])[0].lower())
         self.assertIn("Plan 2 : réplique de 14 mots pour 5 s (environ 12 au plus) : elle risque d'être pressée ou coupée",
                       r["alertes"])
 
     def test_inventee_retiree_celle_du_plan_gardee(self):
         r, _ = self.decouper(blocs('She walks in and says "Bonjour."', f'She says "{REPLIQUE}"', "She smiles."))
-        self.assertNotIn("Bonjour", r["plans"][0]["prompt"])
-        self.assertIn(REPLIQUE, r["plans"][1]["prompt"])
+        self.assertNotIn("Bonjour", prompt.separer_champs(r["plans"][0]["prompt"])[0])
+        self.assertIn(REPLIQUE, prompt.separer_champs(r["plans"][1]["prompt"])[0])
 
     def test_personne_ne_parle(self):
         _, demande = self.decouper(blocs("A.", "B.", "C."), [{**p, "replique": ""} for p in PLANS])
@@ -87,7 +87,7 @@ class UnSeulPlan(Base):
         self.assertIn("Shot 1 as already written: Wide shot, a pilot walks into the hangar.", demande)
         self.assertIn("Shot 3 as already written: Continuous shot", demande)
         self.assertEqual((len(r["plans"]), r["cible"]), (1, 1))
-        self.assertEqual(r["plans"][0]["prompt"],
+        self.assertEqual(prompt.separer_champs(r["plans"][0]["prompt"])[0],
                          f"Close-up, she takes off her helmet. The character (S1) says: <d>[French] {REPLIQUE}</d>")
         self.assertEqual(r["contrainte_en"], {"fr": "cheveux attachés", "en": "hair tied up"})  # pas retraduite
         self.assertEqual(len(llama.messages), 1)
