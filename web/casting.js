@@ -51,6 +51,9 @@ function afficherProgression(actif) {
     } else if (suiviBanc) {
         clearInterval(suiviBanc);
         suiviBanc = null;
+        const nom = NOMS_TACHES[actif?.tache] ?? "Casting";
+        if (actif?.etat === "erreur") notifierFin("Casting en erreur", actif.erreur || nom, "casting", false);
+        else notifierFin("Casting terminé", `${nom} · résultats à comparer`, "casting");
         chargerCasting();
     }
 }

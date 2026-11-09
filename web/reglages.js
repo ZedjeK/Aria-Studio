@@ -381,3 +381,37 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
     new MutationObserver(() => appliquer()).observe(contenu, { childList: true, subtree: true });
     appliquer();
 })();
+
+// Réglages → Système → Notifications (web/commun.js : prefsNotifications, notifierFin).
+function afficherNotifications() {
+    document.getElementById("active-notifications").checked = prefsNotifications.active;
+    const son = document.getElementById("son-notifications");
+    son.checked = prefsNotifications.son;
+    son.disabled = !prefsNotifications.active;
+    const permission = "Notification" in window ? Notification.permission : "absent";
+    document.getElementById("autorisation-notifications").textContent = {
+        granted: "Notifications Windows : autorisées.",
+        denied: "Notifications Windows : refusées par le navigateur. Le bandeau et le son restent ; pour les rétablir, "
+                + "autorise les notifications pour Aria dans les paramètres du site (icône à gauche de l'adresse).",
+        default: "Notifications Windows : pas encore autorisées. « Essayer » ou le prochain Créer / Tourner les demande.",
+        absent: "Ce navigateur ne gère pas les notifications : le bandeau et le son restent.",
+    }[permission];
+}
+
+async function reglerNotifications(changement) {
+    try {
+        Object.assign(prefsNotifications, await api("PUT", "/api/notifications", changement));
+    } catch {
+        // pas de serveur : la barre d'état le dit déjà
+    }
+    afficherNotifications();
+}
+
+document.getElementById("active-notifications").addEventListener("change", (e) => reglerNotifications({ active: e.target.checked }));
+document.getElementById("son-notifications").addEventListener("change", (e) => reglerNotifications({ son: e.target.checked }));
+document.getElementById("essai-notifications").addEventListener("click", async () => {
+    if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission();
+    notifierFin("Essai", "Voilà ce qui s'affichera à la fin d'un job.", "reglages");
+    afficherNotifications();
+});
+api("GET", "/api/notifications").then((p) => { Object.assign(prefsNotifications, p); afficherNotifications(); }).catch(() => {});

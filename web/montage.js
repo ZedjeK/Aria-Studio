@@ -386,6 +386,10 @@ async function suivreMontage(id, debut, estimation) {
         }
     }
     if (!c) return;
+    if (c.etat === "erreur") notifierFin("Clip en erreur", c.erreur || "Le tournage a échoué.", "montage", false);
+    else if (c.etat === "annule") notifierFin("Clip annulé", messageAnnulation(c, "clip"), "montage", false);
+    else notifierFin("Clip terminé", `${c.images.length} clip${c.images.length > 1 ? "s" : ""} dans les bobines · `
+                     + enMinutes((Date.now() - debut) / 1000), "montage");
     if (c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-montage");
         afficherErreur(erreur, c.etat === "annule" ? messageAnnulation(c, "clip") : c.erreur);

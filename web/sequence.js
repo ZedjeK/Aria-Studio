@@ -458,6 +458,11 @@ async function suivreSequence(commande, debut, estimation) {
     }
     bloquerSequence(false);
     bobines.charger();
+    if (!panne) {
+        if (c.etat === "erreur") notifierFin("Séquence en erreur", c.erreur || "Le tournage a échoué.", "montage", false);
+        else if (c.etat === "annule") notifierFin("Séquence annulée", messageAnnulation(c, "plan"), "montage", false);
+        else notifierFin("Séquence terminée", `Film prêt · ${enMinutes((Date.now() - debut) / 1000)}`, "montage");
+    }
     if (panne || c.etat === "erreur" || c.etat === "annule") {
         const erreur = document.getElementById("erreur-sequence");
         afficherErreur(erreur, panne
