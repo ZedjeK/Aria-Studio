@@ -89,6 +89,45 @@ class Optimiseur(unittest.TestCase):
             _, r = self.propositions()
         self.assertTrue(any("12.0 Go, vision comprise" in a for a in r["alertes"]), r["alertes"])
 
+    def lancement(self, contexte, reflexion=True, vision=None):
+        return {"serveur": Path("llama-server.exe"), "contexte": contexte, "reflexion": reflexion, "vision": vision}
+
+    def test_surcout_llm_suit_le_contexte(self):
+        self.assertEqual(optimiseur.surcout_llm_go(6, 4096), optimiseur.SURCOUT_LLM_GO)  # l'ancien calcul, inchangé
+        self.assertAlmostEqual(optimiseur.surcout_llm_go(8.5, 16384), 1.5 + 12 * 8.5 * 0.02)  # ≈ 3,5 Go : 2 Go de cache
+        self.assertGreater(optimiseur.surcout_llm_go(14, 16384), optimiseur.surcout_llm_go(6, 16384))
+        self.assertEqual(optimiseur.surcout_llm_go(6, 1024), optimiseur.SURCOUT_LLM_GO)  # pas de remise sous la base
+
+    def test_contexte_propose_quand_la_reflexion_le_releve(self):
+        """Contexte réglé à 4096 avec la Réflexion : Aria lance déjà à 16 384 ; l'Optimiser propose d'aligner le réglage."""
+        reglages.modifier_llm(LLM, {"contexte": 4096, "reflexion": True})
+        props, _ = self.propositions()
+        p = props[(LLM, "contexte")]
+        self.assertEqual((p["actuel"], p["propose"]), (4096, 16384))
+        self.assertIn("Réflexion", p["raison"])
+        reglages.modifier_llm(LLM, {"contexte": 16384})  # comme Jérémy l'a réglé à la main : rien à proposer
+        props, _ = self.propositions()
+        self.assertNotIn((LLM, "contexte"), props)
+
+    def test_pas_de_proposition_sans_reflexion_ni_vision(self):
+        reglages.modifier_llm(LLM, {"contexte": 4096, "reflexion": False})
+        with mock.patch.object(optimiseur, "lancement_llm", lambda f: self.lancement(4096, reflexion=False)):
+            props, _ = self.propositions()
+        self.assertNotIn((LLM, "contexte"), props)
+
+    def test_la_vram_compte_le_contexte_releve_et_le_dit(self):
+        reglages.modifier_llm(LLM, {"contexte": 4096, "reflexion": True})
+        self.carte(9)  # 8 Go libres : 6 + 1,5 (contexte 4096) tiennent ; 6 + 1,5 + 1,44 (16 384) non
+        with mock.patch.object(optimiseur, "lancement_llm", lambda f: self.lancement(16384)):
+            _, r = self.propositions()
+        alerte = next((a for a in r["alertes"] if a.startswith("Ministral 3 14B")), None)
+        self.assertIsNotNone(alerte, r["alertes"])
+        self.assertIn("contexte 16384", alerte)
+        self.assertIn("Sans la Réflexion", alerte)  # couper la Réflexion le ferait tenir : on le dit
+        with mock.patch.object(optimiseur, "lancement_llm", lambda f: self.lancement(4096, reflexion=False)):
+            _, r = self.propositions()
+        self.assertFalse(any(a.startswith("Ministral 3 14B") for a in r["alertes"]))
+
     def test_mégapixels_selon_la_carte(self):
         self.carte(48)
         props, _ = self.propositions()
