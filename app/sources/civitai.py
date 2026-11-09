@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 
 from app import cles
-from app.sources import ErreurSource, Fiche
+from app.sources import ErreurSource, Fiche, steps
 
 API = "https://civitai.com/api/v1"
 
@@ -133,6 +133,9 @@ async def fiche(url: str) -> Fiche:
         mots_declencheurs=[m.strip() for m in version.get("trainedWords") or [] if m.strip()],
         base=base,
         **(usage_auteur(version, f["name"]) if type_civitai in TYPES_LORA else {}),
+        steps_suggeres=None if type_civitai in TYPES_LORA else steps.suggerer(
+            {"nom du fichier": f["name"], "nom de la version": version.get("name") or "",
+             "description de la version": version.get("description") or ""}),
     )
 
 

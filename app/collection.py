@@ -85,6 +85,7 @@ def collection() -> dict:
             "origine": origine, "source": i.get("source"), "page": i.get("page"), "licence": i.get("licence"),
             "declencheurs": i.get("mots_declencheurs") or [], "base": i.get("base"), "nom_modele": i.get("nom_modele"),
             "utilise_par": utilise_par, "supprimable": m["suivi"],
+            "a_valider": (m["infos"] or {}).get("a_valider"),  # checkpoint neuf : steps suggérés, en attente de validation
             # LoRA d'une famille : mots déclencheurs et force, réglables ici (les LoRA de _base sont internes),
             # et ses usages (image, retouche, video), ceux des workflows de sa famille : les filtres du groupe LoRA.
             "lora": modeles.reglage_lora(m["cle"]) if est_lora(m["dossier"]) else None,

@@ -389,6 +389,20 @@ async def preparer_fiche(demande: DemandeFiche):
     return {"id": fiche_id, **fiche.to_dict(), "espace_libre": modeles.espace_libre()}
 
 
+class DemandeValidation(BaseModel):
+    cle: str
+    steps: int = 0  # 0 = garder les steps du réglage et de la qualité
+
+
+@app.post("/api/modeles/valider")
+def valider_modele(demande: DemandeValidation):
+    """Met en service un checkpoint téléchargé, avec les steps que l'utilisateur a validés (ou saisis)."""
+    try:
+        return workflows.valider_checkpoint(demande.cle, demande.steps)
+    except (modeles.ErreurModele, workflows.ErreurWorkflow, reglages.ErreurReglages) as e:
+        raise HTTPException(400, str(e))
+
+
 @app.delete("/api/modeles/{cle:path}")
 def supprimer_modele(cle: str):
     try:

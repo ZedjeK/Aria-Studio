@@ -5,7 +5,7 @@ from urllib.parse import quote, urlparse
 import httpx
 
 from app import cles, modeles
-from app.sources import ErreurSource, Fiche
+from app.sources import ErreurSource, Fiche, steps
 
 HF = "https://huggingface.co"
 
@@ -51,6 +51,15 @@ async def fiche(url: str) -> Fiche:
         raise ErreurSource(f"Fichier introuvable dans {depot} : {chemin_fichier}")
     f = fichiers[0]
 
+    textes = {"nom du fichier": chemin_fichier.split("/")[-1]}
+    try:  # la fiche du dépôt (README) : texte libre, meilleur effort
+        async with httpx.AsyncClient(timeout=20, headers=entetes()) as client:
+            r = await client.get(f"{HF}/{depot}/raw/{quote(revision, safe='')}/README.md")
+            if r.status_code == 200:
+                textes["README du dépôt"] = r.text[:30000]
+    except httpx.HTTPError:
+        pass
+
     licence = (infos.get("cardData") or {}).get("license")
     if not licence:
         licence = next((t.removeprefix("license:") for t in infos.get("tags", []) if t.startswith("license:")), None)
@@ -65,4 +74,5 @@ async def fiche(url: str) -> Fiche:
         dossier=_deviner_dossier(chemin_fichier),
         licence=licence,
         jeton_requis=bool(infos.get("gated")) and not cles.cle("huggingface"),
+        steps_suggeres=steps.suggerer(textes),
     )
