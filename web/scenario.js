@@ -197,44 +197,50 @@ const AIDES_GUIDE = {
     clip: "Choisis ce que tu veux imposer au clip : le sujet, le décor, la mise en scène, le dialogue et la musique.",
 };
 
-// Le format choisi ici est celui du Plateau (image) ou du Montage (clip) : un seul réglage, deux endroits. Un clip animé
-// d'une image garde le format de l'image : pas de choix. Redessiner une image propose « Celui de l'image » en plus des
-// formats : ce choix n'existe qu'ici tant que rien n'est parti (le Plateau le reçoit à l'envoi), donc il a sa variable.
+// Le format choisi ici est celui du Plateau (image) ou du Montage (clip texte) : un seul réglage, deux endroits.
+// Redessiner une image, Retouche et Clip animé partent d'une image : ils proposent « Celui de l'image » (par défaut) en
+// plus des formats, qui recadrent l'image au centre. Ce choix n'existe qu'ici tant que rien n'est parti (le Plateau, la
+// Retouche ou le Montage le reçoivent à l'envoi), donc il a sa variable, une par cas.
 const redessinerScenario = () => formeScenario === "image" && refsScenario.role === "variation";
-let formatRedessinerScenario = null;  // null : « Celui de l'image »
+const animerScenario = () => formeScenario === "clip" && Boolean(refsScenario.animer);  // un rush est choisi
+const casDepartImage = () => redessinerScenario() ? "redessiner" : animerScenario() ? "animer"
+    : formeScenario === "retouche" ? "retouche" : null;
+const formatsDepartImage = { redessiner: null, animer: null, retouche: null };  // null : « Celui de l'image »
+let formatClipTexte = "16:9 (Widescreen)";  // tant que le Montage n'a pas été ouvert, il n'a pas encore de liste
 
 function selectFormatSource() {
     if (formeScenario === "image") return document.getElementById("format-creation");
-    if (formeScenario === "clip" && !document.getElementById("bloc-format-montage").hidden) {
-        return document.getElementById("format-montage");
-    }
+    if (formeScenario === "clip") return document.getElementById("format-montage");
     return null;
 }
 
 // Le format choisi ici, ou null (« Celui de l'image » : le LLM n'a rien à cadrer).
 const formatScenario = () => {
-    if (redessinerScenario()) return formatRedessinerScenario;
-    const valeur = selectFormatSource()?.value || null;
+    if (document.getElementById("bloc-format-scenario").hidden) return null;
+    const valeur = document.getElementById("format-scenario").value || null;
     return valeur === optionsPlateau?.format_image ? null : valeur;
 };
 
 function majFormat() {
+    const cas = casDepartImage();
     const source = selectFormatSource();
     const ici = document.getElementById("format-scenario");
     document.getElementById("bloc-duree-scenario").hidden = formeScenario !== "clip";
     majDuree();
-    document.getElementById("bloc-format-scenario").hidden = !source;
-    if (!source) return;
     const image = optionsPlateau?.format_image;
-    // « Celui de l'image » est du Plateau en train de redessiner : ici il n'existe que pour Redessiner.
-    const lignes = [...source.options].filter((o) => o.value !== image).map((o) => [o.textContent, o.value]);
-    if (redessinerScenario() && image) lignes.unshift(["Celui de l'image", image]);
+    document.getElementById("bloc-format-scenario").hidden = !(cas || source) || !optionsPlateau;
+    if (!(cas || source) || !optionsPlateau) return;
+    // « Celui de l'image » : seulement quand on part d'une image (Redessiner, Retouche, Clip animé).
+    const formats = optionsPlateau.formats.map((f) => [f, f]);
+    const lignes = cas ? [["Celui de l'image", image], ...formats] : formats;
     const options = lignes.map(([, v]) => v).join("|");
     if (ici.dataset.options !== options) {
         ici.dataset.options = options;
         ici.replaceChildren(...lignes.map(([texte, v]) => new Option(texte, v)));
     }
-    ici.value = redessinerScenario() ? (formatRedessinerScenario ?? image) : source.value;
+    // Image : le Plateau. Clip texte : le Montage s'il est prêt et n'est pas resté sur « Celui de l'image » (mode animer).
+    const miroir = source?.options.length && source.value !== image;
+    ici.value = cas ? (formatsDepartImage[cas] ?? image) : (miroir ? source.value : formatClipTexte);
 }
 
 // La durée du clip : « duree-prompt » (Compléments) reste la source ; la liste du haut en est le miroir.
@@ -257,13 +263,16 @@ document.getElementById("duree-scenario").addEventListener("change", (e) => {
 document.getElementById("duree-prompt").addEventListener("change", majDuree);
 
 document.getElementById("format-scenario").addEventListener("change", (e) => {
-    if (redessinerScenario()) {  // le Plateau le recevra à l'envoi
-        formatRedessinerScenario = e.target.value === optionsPlateau?.format_image ? null : e.target.value;
+    const cas = casDepartImage();
+    if (cas) {  // le Plateau, la Retouche ou le Montage le recevront à l'envoi
+        formatsDepartImage[cas] = e.target.value === optionsPlateau?.format_image ? null : e.target.value;
         majFinal();
         return;
     }
     const source = selectFormatSource();
     if (!source) return;
+    if (formeScenario === "clip") formatClipTexte = e.target.value;
+    if (!source.options.length) { majFinal(); return; }  // le Montage la recevra à l'envoi
     source.value = e.target.value;
     source.dispatchEvent(new Event("change", { bubbles: true }));
     majFinal();
@@ -826,7 +835,7 @@ async function envoyer(creer) {
     if (!prompt) return;
     const envoi = { prompt, workflow: ciblePrompt(), images: imagesReference(), role: roleReference(),
                     duree: dureeClip(), lancer: creer, idee: atelier().idee.trim(), llm: atelier().llm,
-                    format: redessinerScenario() ? formatRedessinerScenario : null };
+                    format: casDepartImage() || formeScenario === "clip" ? formatScenario() : null };
     if (formeScenario === "retouche") await recevoirRetouche(envoi);  // plateau.js
     else await (cibleVideo() ? recevoirAuMontage(envoi) : recevoirAuPlateau(envoi));
 }

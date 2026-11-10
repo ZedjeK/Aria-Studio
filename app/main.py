@@ -775,6 +775,7 @@ class DemandeRetouche(BaseModel):
     loras: list[dict] | None = None
     nombre: int = 1  # variantes (seed, seed + 1…)
     dossier: str | None = None  # dossier de Rushes ; absent = celui de l'image d'origine
+    format: str | None = None  # recadre l'image au centre à ce format avant la retouche ; absent = son format
 
 
 class DemandeAgrandissement(BaseModel):
@@ -806,7 +807,7 @@ def retoucher(d: DemandeRetouche):
         masque = retouche.depuis_data_url(d.masque) if d.masque else None
         return plateau_.commander_retouche(d.source, d.instruction, d.reecrire, d.llm, d.workflow, masque,
                                            d.fondu, d.seed, d.modele, d.loras, d.nombre,
-                                           rushes.valider_dossier(d.dossier))
+                                           rushes.valider_dossier(d.dossier), d.format)
     return services.commander(action)
 
 

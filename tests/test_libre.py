@@ -226,7 +226,7 @@ if __name__ == "__main__":
 
 
 class FormatDuScenario(unittest.TestCase):
-    """Le format choisi au Scénario est dit au LLM, et seulement à lui (image, clip)."""
+    """Le format choisi au Scénario est dit au LLM (image, clip, retouche), jamais à ComfyUI par ce chemin."""
 
     def test_orientation(self):
         self.assertIn("landscape", prompt.cadre_format("16:9 (Widescreen)"))
@@ -235,8 +235,8 @@ class FormatDuScenario(unittest.TestCase):
         self.assertEqual(prompt.cadre_format(None), "")
         self.assertEqual(prompt.cadre_format("n'importe quoi"), "")
 
-    def test_dans_la_consigne_image_et_clip_pas_retouche(self):
-        for forme, attendu in (("image", True), ("clip", True), ("retouche", False)):
+    def test_dans_la_consigne_image_clip_et_retouche(self):
+        for forme, attendu in (("image", True), ("clip", True), ("retouche", True)):
             o = FauxLlm(json.dumps(TOUR))
             tour(o, [{"role": "user", "content": "Un chat"}], forme=forme, format_="3:2 (Photo)")
             self.assertEqual("3:2 (Photo)" in o.appels[0][0][0]["content"], attendu, forme)

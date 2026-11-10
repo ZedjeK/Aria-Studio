@@ -60,6 +60,7 @@ class Commande:
     plans: list[int] = field(default_factory=list)  # … et ses plans (indices), dans l'ordre
     description: str = ""  # essai de voix : qui parle, et comment (la phrase est dans idee, le personnage dans parent)
     voix: str | None = None  # essai de voix : le brouillon produit (data/voix)
+    cadrage: str | None = None  # Retouche, clip animé : l'image de départ est recadrée au centre à ce format (None : intacte)
     imposees: dict = field(default_factory=dict)  # valeurs forcées dans le workflow (essai de l'assistant : peu de steps)
     # AS-18 : textes d'origine des rushes utilisés (une image n'est pas lue, sa fiche si).
     textes_origine: list[str] = field(default_factory=list, repr=False)
@@ -350,6 +351,9 @@ class Plateau:
             raise ErreurPlateau("Choisis le rush à animer")
         if mode == "texte" and format not in FORMATS:
             raise ErreurPlateau(f"Format inconnu : {format}")
+        if mode == "animer" and format not in (*FORMATS, FORMAT_IMAGE):
+            raise ErreurPlateau(f"Format inconnu : {format}")
+        cadrage = format if mode == "animer" and format != FORMAT_IMAGE else None
         workflow = CONFIG.get("generation", {}).get(MODES_VIDEO[mode])
         wf = workflows.obtenir(workflow)
         if wf.manquants():
@@ -361,7 +365,7 @@ class Plateau:
         return self._mettre_en_file(Commande(
             idee, prompt_clip.strip(), str(ecrit_par)[:200] if ecrit_par else None, workflow, format, seed, nombre,
             source if mode == "animer" else None, modele, loras, type="clip", mode_video=mode, qualite=qualite,
-            duree=duree, textes_origine=textes, dossier=dossier))
+            duree=duree, textes_origine=textes, dossier=dossier, cadrage=cadrage))
 
     def commander_sequence(self, id_sequence: str, plans: list[int] | None = None) -> Commande:
         """Montage, mode Séquence : tourne les plans demandés (et ceux qui en dépendent), puis assemble le film."""
@@ -403,7 +407,15 @@ class Plateau:
     def commander_retouche(self, source: str, instruction: str, reecrire: bool, llm: str | None,
                            workflow: str | None, masque: bytes | None, fondu: int, seed: int | None,
                            modele: str | None = None, loras: list[dict] | None = None, nombre: int = 1,
-                           dossier: str | None = None) -> Commande:
+                           dossier: str | None = None, format: str | None = None) -> Commande:
+        """`format` : un format de FORMATS, l'image est recadrée au centre avant la retouche ; absent (ou « image
+        source »), elle garde le sien. Un format ne va pas avec un masque (peint sur l'image entière)."""
+        if format == FORMAT_IMAGE:
+            format = None
+        if format and format not in FORMATS:
+            raise ErreurPlateau(f"Format inconnu : {format}")
+        if format and masque:
+            raise ErreurPlateau("Un format ne se combine pas avec un masque : retouche sans masque, ou garde le format de l'image")
         textes = textes_origine([source])  # la source doit exister ; son texte d'origine compte pour AS-18
         self._valider_nombre(nombre)
         if not instruction.strip():
@@ -416,6 +428,7 @@ class Plateau:
             instruction, None if reecrire else instruction, self._valider_llm(llm, workflow) if reecrire else None,
             workflow, "retouche", seed, nombre, source, modele, loras,
             type="retouche", masque=masque, fondu=max(0, min(fondu, 128)), textes_origine=textes, dossier=dossier,
+            cadrage=format,
         ))
 
     def commander_agrandissement(self, source: str, largeur: int, hauteur: int, ancrage: str, precision: str,
@@ -560,7 +573,10 @@ class Plateau:
         debut = time.perf_counter()
         # Ouverture, masque, encodage et recollage des images se font à côté : la barre d'état et les autres
         # demandes ne gèlent plus pendant ce temps.
-        source = await asyncio.to_thread(lambda: retouche.ouvrir(chemin_image(c.parent).read_bytes()))
+        def ouvrir_source():
+            image = retouche.ouvrir(chemin_image(c.parent).read_bytes())
+            return retouche.recadrer_centre(image, c.cadrage) if c.cadrage else image
+        source = await asyncio.to_thread(ouvrir_source)  # recadrée au format choisi, sinon intacte
         if c.prompt is None:
             c.etape = "Traduction de la consigne"
             traduction = await prompt.traduire_instruction(
@@ -625,9 +641,19 @@ class Plateau:
                 "masque": masque is not None,
                 "fondu": c.fondu,
                 "ancrage": c.ancrage if c.type == "agrandissement" else None,
+                **({"cadrage": c.cadrage} if c.cadrage else {}),
                 "duree_s": round(time.perf_counter() - (debut if i == 0 else debut_image), 2),
                 **({"dossier": dossier} if dossier else {}),
             }))
+
+    @staticmethod
+    def _image_de_depart(c: Commande):
+        """L'image à animer, telle quelle ou recadrée au centre au format choisi (c.cadrage), prête à téléverser."""
+        chemin = chemin_image(c.parent)
+        if not c.cadrage:
+            return chemin
+        image = retouche.recadrer_centre(retouche.ouvrir(chemin.read_bytes()), c.cadrage)
+        return (f"aria_{c.id}.png", retouche.png(image))
 
     async def _tourner(self, c: Commande):
         """Montage : un clip MP4 + sa vignette par seed, sur le prompt écrit au Scénario (tel quel)."""
@@ -647,7 +673,8 @@ class Plateau:
                        "prefixe": "aria_montage"}
             async with self.orchestrateur.comfyui() as comfy:
                 if c.mode_video == "animer":
-                    source = source or await comfy.televerser(chemin_image(c.parent))
+                    if source is None:
+                        source = await comfy.televerser(await asyncio.to_thread(self._image_de_depart, c))
                     valeurs["image"] = source
                 else:
                     valeurs["ratio"] = c.format
@@ -670,7 +697,8 @@ class Plateau:
                 "steps": wf.steps_de(wf.choisi(c.modele)),
                 "modele": wf.choisi(c.modele),
                 "loras": c.loras,
-                "format": c.format if c.mode_video == "texte" else "image source",
+                "format": c.format if c.mode_video == "texte" else FORMAT_IMAGE,
+                **({"cadrage": c.cadrage} if c.cadrage else {}),
                 "seed": seed,
                 "parent": c.parent,
                 **({"dossier": c.dossier} if c.dossier else {}),

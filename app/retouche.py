@@ -6,6 +6,7 @@ on remet ensuite l'original au pixel près partout ailleurs, avec un fondu sur l
 
 import base64
 import io
+import re
 
 from PIL import Image, ImageFilter, ImageOps, ImageStat
 
@@ -18,6 +19,24 @@ TAILLE_MAX = 4096
 
 class ErreurRetouche(ValueError):
     pass
+
+
+def recadrer_centre(image: Image.Image, format_: str) -> Image.Image:
+    """L'image coupée au centre au rapport d'un format de FORMATS (« 16:9 (Widescreen) »), sans la déformer ni la
+    rééchantillonner : on retire ce qui dépasse, rien d'autre."""
+    m = re.match(r"\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)", format_ or "")
+    if not m or float(m[1]) <= 0 or float(m[2]) <= 0:
+        raise ErreurRetouche(f"Format inconnu : {format_}")
+    rapport = float(m[1]) / float(m[2])
+    largeur, hauteur = image.size
+    if largeur / hauteur > rapport:
+        nouvelle, hauteur_ = max(1, round(hauteur * rapport)), hauteur
+        gauche, haut = (largeur - nouvelle) // 2, 0
+        largeur_ = nouvelle
+    else:
+        largeur_, hauteur_ = largeur, max(1, round(largeur / rapport))
+        gauche, haut = 0, (hauteur - hauteur_) // 2
+    return image.crop((gauche, haut, gauche + largeur_, haut + hauteur_))
 
 
 def ouvrir(donnees: bytes) -> Image.Image:

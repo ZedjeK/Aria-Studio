@@ -64,6 +64,17 @@ function allerRetouche() {
     if (!onglet.classList.contains("actif")) onglet.click();
 }
 
+// Retouche : « Celui de l'image » (par défaut) ou un format, qui recadre l'image au centre avant la retouche.
+function remplirFormatRetouche() {
+    if (!optionsPlateau) return;
+    remplirSelect("format-retouche", [[optionsPlateau.format_image, "Celui de l'image"],
+        ...optionsPlateau.formats.map((f) => [f, f])], optionsPlateau.format_image);
+}
+const formatRetouche = () => {
+    const v = $r("format-retouche").value;
+    return !v || v === optionsPlateau?.format_image ? null : v;
+};
+
 // Ouvre l'atelier sur une image (fiche d'un rush), dans le mode demandé. Rend une promesse tenue quand l'image est
 // chargée et le masque gardé repeint : une retouche lancée dans la foulée (Scénario) part avec lui.
 function ouvrirRetouche(f, mode = modeRetouche) {
@@ -90,6 +101,9 @@ function ouvrirRetouche(f, mode = modeRetouche) {
     $r("consigne-retouche").value = "";
     $r("fondu-retouche").value = agrandir ? 96 : 24;
     majFondu();
+    remplirFormatRetouche();
+    $r("format-retouche").value = optionsPlateau?.format_image ?? "";  // chaque image repart de son propre format
+    $r("bloc-format-retouche").hidden = agrandir;
     $r("erreur-retouche").hidden = true;
 
     const img = $r("image-retouche");
@@ -297,7 +311,8 @@ $r("lancer-retouche").addEventListener("click", async () => {
         commande = agrandir
             ? await api("POST", "/api/agrandissements", { ...commun, precision: consigne, ancrage,
                 largeur: lancee.largeur, hauteur: lancee.hauteur })
-            : await api("POST", "/api/retouches", { ...commun, instruction: consigne, masque: masquePeint() });
+            : await api("POST", "/api/retouches", { ...commun, instruction: consigne, masque: masquePeint(),
+                format: formatRetouche() });
     } catch (err) {
         afficherErreur(erreur, err.message);
         return;
@@ -431,10 +446,11 @@ $r("vers-scenario-retouche").addEventListener("click", () => {
 });
 
 // Le Scénario envoie une consigne prête : l'onglet s'ouvre sur l'image, consigne posée (masque et fondu ici).
-async function recevoirRetouche({ prompt, images, workflow, lancer }) {
+async function recevoirRetouche({ prompt, images, workflow, lancer, format = null }) {
     await chargerOptionsPlateau();
     await ouvrirRetouche(await api("GET", `/api/creations/${encodeURIComponent(images[0])}`), "retouche");
     $r("consigne-retouche").value = prompt;
+    if (format) $r("format-retouche").value = format;  // choisi au Scénario ; sinon « Celui de l'image »
     const select = $r("workflow-retouche");
     const ligne = [...select.options].find((o) => o.value.startsWith(`${workflow}::`));
     if (ligne && choixModele("workflow-retouche").workflow !== workflow) {
