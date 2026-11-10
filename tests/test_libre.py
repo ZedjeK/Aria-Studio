@@ -103,6 +103,38 @@ class Tour(unittest.TestCase):
         tour(o, [{"role": "user", "content": "Un chat"}], role="inspirer")  # sans image : rien à regarder
         self.assertNotIn("Picture 1", o.appels[0][0][0]["content"])
 
+    def test_clip_h3_en_trois_champs(self):
+        """Le clip écrit au chat part vers H3 dans le même format qu'à la réécriture directe (reecrire)."""
+        brut = "A cat wakes up. overall_soundscape: Soft purring. non_diegetic_music: N/A"
+        o = FauxLlm(json.dumps({**TOUR, "prompt": brut}))
+        r = tour(o, [{"role": "user", "content": "ÉCRIS LE PROMPT"}], forme="clip", workflow="minimax_h3_t2v")
+        self.assertIn("overall_soundscape", o.appels[0][0][0]["content"])
+        self.assertEqual(r["prompt"].split("\n\n"), ["integrated_multimodal_description: [Shot 1] A cat wakes up.",
+                                                      "overall_soundscape: Soft purring.", "non_diegetic_music: N/A"])
+        o = FauxLlm(json.dumps({**TOUR, "prompt": brut}))  # image à animer : la ligne d'alignement, une seule fois
+        r = tour(o, [{"role": "user", "content": "ÉCRIS LE PROMPT"}], forme="clip", workflow="minimax_h3_i2v",
+                 role="animer", vues=[prompt.Vue(b"PNG", "A cat.")])
+        self.assertTrue(r["prompt"].startswith(prompt.ALIGNEMENT_I2V + "\n\nintegrated_multimodal_description:"))
+        o = FauxLlm(json.dumps({**TOUR, "prompt": r["prompt"]}))  # ajustement : le LLM rend le prompt avec la ligne
+        r2 = tour(o, [{"role": "user", "content": "Plus lent"}], forme="clip", workflow="minimax_h3_i2v", role="animer")
+        self.assertEqual(r2["prompt"], r["prompt"])
+        self.assertEqual(r2["prompt"].count(prompt.ALIGNEMENT_I2V), 1)
+
+    def test_champs_seulement_pour_h3(self):
+        for forme, wf in (("image", "krea2_turbo"), ("clip", None)):
+            o = FauxLlm(json.dumps({**TOUR, "prompt": "A cat."}))
+            r = tour(o, [{"role": "user", "content": "ÉCRIS LE PROMPT"}], forme=forme, workflow=wf)
+            self.assertNotIn("overall_soundscape", o.appels[0][0][0]["content"])
+            self.assertEqual(r["prompt"], "A cat.")
+
+    def test_longueur_de_reponse_selon_les_mots(self):
+        o = FauxLlm(json.dumps(TOUR))
+        tour(o, [{"role": "user", "content": "Un chat"}], workflow="qwen_image_2_1")  # 450 mots
+        self.assertGreaterEqual(o.appels[0][1]["max_tokens"], 600 + prompt.tokens_pour_mots(450))
+        o = FauxLlm(json.dumps(TOUR))
+        tour(o, [{"role": "user", "content": "Un chat"}])
+        self.assertEqual(o.appels[0][1]["max_tokens"], 1200)
+
     def test_as18(self):
         with self.assertRaises(ErreurSecurite):
             tour(FauxLlm(json.dumps(TOUR)), [{"role": "user", "content": "Une adolescente de 15 ans en lingerie"}])
