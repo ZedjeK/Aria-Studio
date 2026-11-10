@@ -36,19 +36,13 @@ packs:
 
     llm:
         nom: Réécriture des prompts
-        usage: Un LLM local transforme ton idée en français en prompt détaillé pour le modèle (Ministral 3 14B)
-        llm: [Ministral-3-14B-Instruct-2512-Q4_K_M.gguf]
-        moteurs: [llama]
+        usage: Un LLM local (Bonsai 2 27B, compressé en ternaire) transforme ton idée en français en prompt détaillé pour le modèle
+        llm: [Ternary-Bonsai-2-27B-PTQ1_0.gguf]
+        # Le moteur officiel reste nécessaire : l'appli le cherche pour son état (pastille Llama) et les LLM spécialisés
+        # de Qwen-Image 2.1 le lancent ; Bonsai 2, lui, tourne sur le fork PrismML.
+        moteurs: [llama, llama-prism]
         conseille: true
         testee: RTX 4080 SUPER 16 Go
         favoris:
             llama:
-                modele: Ministral-3-14B-Instruct-2512-Q4_K_M.gguf
-
-    bonsai:
-        nom: Bonsai 2 27B
-        usage: Un second LLM, plus gros mais compressé en ternaire, au choix dans l'appli
-        llm: [Ternary-Bonsai-2-27B-PTQ1_0.gguf]
-        moteurs: [llama-prism]
-        facultatif: true
-        testee: RTX 4080 SUPER 16 Go
+                modele: Ternary-Bonsai-2-27B-PTQ1_0.gguf

@@ -70,10 +70,9 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 | Pack | Pour | Taille |
 |---|---|---|
 | Images (conseillé) | Créer depuis une idée ou des références | 16 Go |
-| Réécriture des prompts (conseillé) | Le LLM qui transforme ton idée en prompt | 8 Go |
+| Réécriture des prompts (conseillé) | Le LLM qui transforme ton idée en prompt (Bonsai 2 27B, compressé en ternaire) | 6 Go |
 | Retouche avancée | Retouche plus précise, avec masque | 29 Go |
 | Vidéo | Clips et séquences avec voix | 39 Go |
-| Bonsai 2 27B (facultatif) | Un second LLM, compressé en ternaire | 6 Go |
 
 Les packs partagent certains fichiers : Images, Retouche et Vidéo ensemble font environ 84 Go. Compte en plus
 environ 8 Go pour les moteurs (archives gardées pour pouvoir revenir en arrière), et 10 Go de marge que l'assistant
@@ -136,7 +135,7 @@ Aria ne fournit aucun modèle : chacun a sa propre licence, affichée dans l'ass
 |---|---|---|
 | Qwen-Image 2.1 et 2.1 Edit | [Qwen Research License](https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE) | Usage non commercial seulement |
 | MiniMax H3 | [MiniMax H3 Community License](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE) | Non autorisé dans l'Union européenne, au Royaume-Uni, en Corée du Sud et aux États-Unis ; lis les conditions commerciales ; le Turbo 8 steps n'a pas de licence déclarée |
-| Ministral 3 14B, Bonsai 2 27B | Apache 2.0 | Usage commercial permis |
+| Bonsai 2 27B | Apache 2.0 | Usage commercial permis |
 
 ## Contenu et sécurité
 
@@ -207,7 +206,6 @@ git tag -a v2.0.0 -m "Version 2.0.0"; git push origin v2.0.0
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI), [llama.cpp](https://github.com/ggml-org/llama.cpp) et le
   [llama.cpp de PrismML](https://github.com/PrismML-Eng/llama.cpp) pour les GGUF ternaires ;
 - les modèles [Qwen-Image](https://github.com/QwenLM/Qwen-Image-2.1), [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3),
-  [Ministral 3](https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512) et
   [Bonsai 2](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf), avec les versions préparées pour ComfyUI
   par [Comfy-Org](https://huggingface.co/Comfy-Org) ;
 - [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/), [Pillow](https://python-pillow.org/),

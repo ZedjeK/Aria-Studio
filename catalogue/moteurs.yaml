@@ -29,7 +29,7 @@ moteurs:
 
     llama:
         nom: llama.cpp officiel (CUDA 13.4)
-        role: Réécrit les prompts (Ministral et la plupart des GGUF)
+        role: Les GGUF au format standard, dont les LLM spécialisés de Qwen-Image 2.1
         version: b11734
         dossier: llama
         preuve: llama-server.exe
@@ -48,7 +48,7 @@ moteurs:
 
     llama-prism:
         nom: llama.cpp PrismML
-        role: Seulement pour les GGUF ternaires (Bonsai PQ2_0, PTQ1_0)
+        role: Les GGUF ternaires : Bonsai 2 et ses dérivés (PQ2_0, PTQ1_0)
         version: prism-b10777-e3de715
         dossier: llama-prism
         preuve: llama-server.exe

@@ -33,7 +33,7 @@ class Projecteur(unittest.TestCase):
         self.dossier = tempfile.TemporaryDirectory()
         d = Path(self.dossier.name)
         (d / "llm").mkdir()
-        for nom, taille in ((BONSAI, 10), (HERETIC, 10), ("Ministral-3-14B.gguf", 10),
+        for nom, taille in ((BONSAI, 10), (HERETIC, 10), ("Autre-LLM-14B.gguf", 10),
                             ("Ternary-Bonsai-2-27B-mmproj-BF16.gguf", 9), ("Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf", 6)):
             (d / "llm" / nom).write_bytes(b"x" * taille)
         self.patchs = [mock.patch.object(reglages, "FICHIER", d / "reglages.yaml"),
@@ -50,7 +50,7 @@ class Projecteur(unittest.TestCase):
     def test_le_plus_leger_de_la_famille_pour_le_modele_et_ses_derives(self):
         for llm in (BONSAI, HERETIC):
             self.assertEqual(reglages.projecteur_llm(llm)[0], "Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf", llm)
-        self.assertEqual(reglages.projecteur_llm("Ministral-3-14B.gguf")[0], None)  # pas de sa famille
+        self.assertEqual(reglages.projecteur_llm("Autre-LLM-14B.gguf")[0], None)  # pas de sa famille
         self.assertNotIn("Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf", modeles.llm_disponibles())  # pas un LLM
 
     def test_choix_a_la_main(self):
@@ -65,7 +65,7 @@ class Projecteur(unittest.TestCase):
         llms = {m["fichier"]: m for m in reglages.etat()["llm"]}
         vision = next(p for p in llms[HERETIC]["params"] if p["cle"] == "vision")
         self.assertTrue(vision["aide"].startswith("En service : Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf"))
-        aveugle = next(p for p in llms["Ministral-3-14B.gguf"]["params"] if p["cle"] == "vision")
+        aveugle = next(p for p in llms["Autre-LLM-14B.gguf"]["params"] if p["cle"] == "vision")
         self.assertTrue(aveugle["aide"].startswith("Aveugle"))
 
 

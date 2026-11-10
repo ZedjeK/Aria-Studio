@@ -17,7 +17,7 @@ from app.llm import Llama
 from app.reglages import ErreurReglages
 from tests import steps_connus
 
-LLM = "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf"
+LLM = "Autre-LLM-14B-Q4_K_M.gguf"  # un GGUF quelconque, hors catalogue
 
 
 

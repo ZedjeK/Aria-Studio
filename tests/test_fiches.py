@@ -49,7 +49,7 @@ class FichesLivrees(unittest.TestCase):
             self.assertIn(m["fichier"], llm)
         for fichier in CONFIG["llama"].get("serveurs_specifiques", {}):
             self.assertEqual(llm[fichier]["serveur"], "llama-prism")
-        self.assertEqual(llm[CONFIG["llama"]["modele"]]["serveur"], "llama")
+        self.assertEqual(llm[CONFIG["llama"]["modele"]]["serveur"], "llama-prism")  # Bonsai 2, le LLM par défaut
         self.assertEqual(fiches.fiche_llm("Ternary-Bonsai-2-27B-PTQ1_0.gguf")["nom"], "Bonsai 2 27B")
         self.assertIsNone(fiches.fiche_llm("inconnu.gguf"))
 
@@ -157,8 +157,8 @@ class Optimiseur(unittest.TestCase):
         """Un nouvel utilisateur n'a pas modeles/llm/recommandations.yaml (non versionné) : le catalogue suffit."""
         with mock.patch.object(optimiseur, "FICHIER_LLM", Path(tempfile.gettempdir()) / "absent_aria.yaml"):
             recos = optimiseur._recommandations_llm()
-        self.assertEqual(recos["Ministral-3-14B-Instruct-2512-Q4_K_M.gguf"]["valeurs"][0]["cle"], "temperature_traduction")
-        self.assertIn("Ternary-Bonsai-2-27B-PTQ1_0.gguf", recos)
+        self.assertEqual(recos["Ternary-Bonsai-2-27B-PTQ1_0.gguf"]["valeurs"][0]["cle"], "temperature_reecriture")
+        self.assertNotIn("Ministral-3-14B-Instruct-2512-Q4_K_M.gguf", recos)  # retiré du catalogue
 
 
 if __name__ == "__main__":
