@@ -227,11 +227,24 @@ function notifierFin(titre, texte, vue, reussi = true) {
     const ouvrir = () => { window.focus(); document.querySelector(`.onglet[data-vue="${vue}"]`)?.click(); };
     if (prefsNotifications.son) jouerSonFin(reussi);
     if ("Notification" in window && Notification.permission === "granted") {
-        // silent : le son est celui d'Aria (réglable), pas un second celui de Windows
-        const n = new Notification(`Aria Studio · ${titre}`, { body: texte, icon: "/static/favicon.png", tag: `aria-${vue}`, silent: true });
-        n.onclick = () => { n.close(); ouvrir(); };
-        return;
+        try {
+            // silent : le son est celui d'Aria (réglable), pas un second celui de Windows.
+            // Un tag propre à chaque job : avec un tag commun à l'onglet, une notification restée au centre de notifications
+            // est remplacée sans reparaître en bannière.
+            const n = new Notification(`Aria Studio · ${titre}`, { body: texte, icon: "/static/favicon.png",
+                                                                  tag: `aria-${vue}-${Date.now()}`, silent: true });
+            n.onclick = () => { n.close(); ouvrir(); };
+            n.onerror = () => afficherBandeauFin(titre, texte, reussi, ouvrir);  // le navigateur n'a pas pu l'afficher
+            return;
+        } catch {
+            // constructeur refusé : le bandeau prend le relais
+        }
     }
+    afficherBandeauFin(titre, texte, reussi, ouvrir);
+}
+
+// Le bandeau dans l'appli : le repli quand la notification Windows n'est pas autorisée, absente ou en échec.
+function afficherBandeauFin(titre, texte, reussi, ouvrir) {
     let bandeau = document.getElementById("notification-fin");
     if (!bandeau) {
         bandeau = document.createElement("button");
