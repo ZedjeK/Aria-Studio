@@ -11,7 +11,8 @@ HF = "https://huggingface.co"
 
 # Noms de dossiers rencontrés dans les dépôts, ramenés aux dossiers ComfyUI.
 ALIAS = {"unet": "diffusion_models", "clip": "text_encoders", "lora": "loras"}
-# Ces types dépendent d'une famille (dossier <Famille>/modeles ou <Famille>/loras) : c'est à toi de la choisir.
+# Ces types dépendent d'une famille (dossier <nature>/<Famille>/modeles ou loras) : c'est à toi de la choisir. Les
+# autres vont côté image par défaut : le dossier se change avant de télécharger.
 PAR_FAMILLE = {"diffusion_models", "loras", "checkpoints"}
 
 
@@ -32,7 +33,7 @@ def _deviner_dossier(chemin_fichier: str) -> str | None:
     for partie in reversed(chemin_fichier.split("/")[:-1]):
         partie = ALIAS.get(partie.lower(), partie.lower())
         if partie in modeles.TYPES_BASE and partie not in PAR_FAMILLE:
-            return f"_base/{partie}"
+            return modeles.dossier_base("image", partie)
     return None
 
 

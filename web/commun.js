@@ -5,6 +5,18 @@ const echapper = (texte) => String(texte ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[c]);
 
+// Les dossiers de modeles/ regroupés : l'image et la vidéo ont chacune les leurs (app/modeles.py), le LLM à part.
+const GROUPES_DOSSIERS = [["image/", "🖼️ Image"], ["video/", "🎬 Vidéo"], ["", "🧠 LLM"]];
+
+function optionsDossiers(liste, choisi) {
+    const option = (d) => `<option value="${echapper(d)}" ${d === choisi ? "selected" : ""}>${echapper(d)}</option>`;
+    return GROUPES_DOSSIERS.map(([prefixe, nom]) => {
+        const siens = liste.filter((d) => prefixe ? d.startsWith(prefixe)
+            : !GROUPES_DOSSIERS.some(([p]) => p && d.startsWith(p)));
+        return siens.length ? `<optgroup label="${nom}">${siens.map(option).join("")}</optgroup>` : "";
+    }).join("");
+}
+
 const taille = (octets) => {
     if (octets >= 2 ** 30) return `${(octets / 2 ** 30).toFixed(2)} Go`;
     if (octets >= 2 ** 20) return `${(octets / 2 ** 20).toFixed(1)} Mo`;

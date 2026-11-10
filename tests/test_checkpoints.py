@@ -24,17 +24,17 @@ DASIWA = "DasiwaMinimaxH3_dasiwaHybridV4Turbo_int8.safetensors"
 
 def deposes(dossier, extensions):
     """modeles.fichiers simulé (trié, comme le vrai) : l'origine de H3 et un checkpoint déposé, rien d'autre."""
-    return sorted([ORIGINE_H3, DASIWA]) if dossier == "MiniMax-H3/modeles" else []
+    return sorted([ORIGINE_H3, DASIWA]) if dossier == "video/MiniMax-H3/modeles" else []
 
 
 def sans_origine(dossier, extensions):
     """L'origine de H3 supprimée : il ne reste que le checkpoint déposé."""
-    return [DASIWA] if dossier == "MiniMax-H3/modeles" else []
+    return [DASIWA] if dossier == "video/MiniMax-H3/modeles" else []
 
 
 def presents_sauf_checkpoints(dossier, nom):
     """modeles.destination simulé : les fichiers communs (encodeurs, VAE, LoRA du workflow) sont là."""
-    return SimpleNamespace(is_file=lambda: dossier != "MiniMax-H3/modeles")
+    return SimpleNamespace(is_file=lambda: dossier != "video/MiniMax-H3/modeles")
 
 
 
@@ -73,7 +73,7 @@ class ModeleParDefaut(Base):
     def test_propose_l_origine_et_les_checkpoints_deposes(self):
         p = reglages.params_workflow(self.wf)["modele"]
         self.assertEqual((p.defaut, p.choix), (ORIGINE_H3, (ORIGINE_H3, DASIWA)))
-        self.assertIn("modeles/MiniMax-H3/modeles", p.aide)
+        self.assertIn("modeles/video/MiniMax-H3/modeles", p.aide)
 
     def test_le_defaut_s_applique_quand_rien_n_est_choisi(self):
         self.assertEqual(self.unet(self.preparer()), ORIGINE_H3)
@@ -152,7 +152,7 @@ class ReglagesParCheckpoint(Base):
     def test_lora_choisie_par_l_utilisateur_gardee(self):
         reglages.modifier_variante(H3, DASIWA, {"lora_workflow": False})
         with mock.patch.object(modeles, "fichiers", side_effect=lambda d, e: ["style.safetensors"]
-                               if d == "MiniMax-H3/loras" else deposes(d, e)):
+                               if d == "video/MiniMax-H3/loras" else deposes(d, e)):
             api = self.preparer(modele=DASIWA, loras=[{"fichier": "style.safetensors", "force": 0.8}])
         self.assertEqual([l["inputs"]["lora_name"] for l in self.noeuds(api, "LoraLoaderModelOnly")], ["style.safetensors"])
 

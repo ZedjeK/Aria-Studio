@@ -50,8 +50,25 @@ async function chargerModeles() {
         ? "Envoie l'empreinte SHA-256 de chaque fichier déposé à la main à Civitai, pour retrouver sa page"
         : "Tous tes fichiers ont une source connue";
     document.getElementById("groupes-collection").innerHTML = c.groupes.map(groupeCollection).join("")
-        + c.fiches_ecartees.map((e) => `<p class="ko">Fiche de workflow écartée : ${echapper(e)}</p>`).join("");
+        + c.fiches_ecartees.map((e) => `<p class="ko">Fiche de workflow écartée : ${echapper(e)}</p>`).join("")
+        + noteMigration(c.migration);
     filtrerLoras();
+}
+
+// Rangement des modèles côté image et côté vidéo (app/migration_modeles.py) : ce qui a coincé, ou ce qui reste à trier.
+function noteMigration(m) {
+    if (!m) return "";
+    if (m.statut === "echec") {
+        return `<p class="ko">Le rangement des modèles en image et vidéo a été annulé, rien n'a bougé : ${echapper(m.erreur)}.
+            Ferme ce qui utilise les modèles (un ComfyUI resté ouvert…) : Aria réessaie à son prochain démarrage.</p>`;
+    }
+    const notes = [];
+    if (m.a_trier?.length) {
+        notes.push(`rangés côté image faute de workflow qui les cite, à déplacer dans video/_base s'ils servent à la vidéo : ${
+            m.a_trier.map(echapper).join(", ")}`);
+    }
+    if (m.conflits?.length) notes.push(`déjà présents à l'arrivée, laissés à l'ancienne place : ${m.conflits.map(echapper).join(", ")}`);
+    return notes.length ? `<p class="discret">Rangement image / vidéo du ${echapper(m.date.slice(0, 10))} · ${notes.join(" · ")}</p>` : "";
 }
 
 const TYPES_CHERCHER = { image: "des modèles image", video: "des modèles vidéo", lora: "des LoRA", llm: "un LLM" };
@@ -115,7 +132,7 @@ function groupeCollection(g) {
         : `<p class="discret">Rien pour l'instant.</p>`;
     const chercher = TYPES_CHERCHER[g.id]
         ? `<button type="button" class="petit" data-chercher="${g.id}">🔎 Chercher ${TYPES_CHERCHER[g.id]}</button>` : "";
-    if (g.id === "commun") {
+    if (g.id.startsWith("commun")) {
         return `<details class="carte groupe-collection"><summary><h2>${titre}</h2></summary>
             <p class="discret">Encodeurs de texte, VAE et LoRA internes : les workflows les chargent eux-mêmes.</p>${liste}</details>`;
     }
@@ -431,7 +448,7 @@ function carteWorkflow(wf, idUsage, u) {
         <div class="colonnes-workflow">
             <div class="panneau-wf">
                 <div class="entete-panneau"><h3>Checkpoints</h3>
-                    <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.famille)}/modeles" title="Ouvrir le dossier">📂</button></div>
+                    <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.dossier_modeles)}" title="Ouvrir le dossier">📂</button></div>
                 <ul class="liste liste-nette">${wf.modeles.map((m) => `<li><span class="nom">${echapper(m)}</span>
                     ${m === wf.origine ? '<span class="badge">d\'origine</span>' : ""}
                     ${m === wf.modele_defaut ? '<span class="badge ok">par défaut</span>'
@@ -441,7 +458,7 @@ function carteWorkflow(wf, idUsage, u) {
             </div>
             <div class="panneau-wf">
                 <div class="entete-panneau"><h3>LoRA</h3>
-                    <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.famille)}/loras" title="Ouvrir le dossier">📂</button></div>
+                    <button type="button" class="petit" data-ouvrir="modeles" data-sous="${echapper(wf.dossier_loras)}" title="Ouvrir le dossier">📂</button></div>
                 ${wf.loras.length ? `<ul class="liste liste-nette">${wf.loras.map((l) => `<li><span class="nom">${echapper(l.nom)}</span>${l.declencheurs
                     ? `<span class="discret">${echapper(l.declencheurs)}</span>` : ""}</li>`).join("")}</ul>`
                     : '<p class="discret">Aucune LoRA pour cette famille.</p>'}

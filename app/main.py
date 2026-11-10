@@ -1,6 +1,7 @@
 """Serveur FastAPI d'Aria - Studio : sert l'interface web et l'API."""
 
 import asyncio
+import logging
 import os
 import re
 import threading
@@ -16,9 +17,9 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, casting, cles, collection, decouvrir, emplacements, estimation, garde, mesures, mises_a_jour,
-                 modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages, retouche, routes_montage,
-                 routes_scenario, rushes, securite, services, workflows)
+from app import (assistant, casting, cles, collection, decouvrir, emplacements, estimation, garde, mesures,
+                 migration_modeles, mises_a_jour, modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages,
+                 retouche, routes_montage, routes_scenario, rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
 from app.comfy import ErreurComfy
 from app.config import CONFIG, ROOT, dossier_comfyui_livre
@@ -36,6 +37,10 @@ _taches_fond: set[asyncio.Task] = set()
 
 @asynccontextmanager
 async def cycle_de_vie(_app: FastAPI):
+    try:  # avant ComfyUI : l'ancienne organisation des modèles rangée côté image et vidéo (app/migration_modeles.py)
+        migration_modeles.migrer()
+    except Exception:  # noqa: BLE001 : la migration ne doit jamais empêcher Aria de démarrer
+        logging.getLogger(__name__).exception("Migration des modèles impossible")
     await orchestrateur.reprendre()  # un ComfyUI laissé par une Aria fermée brutalement : repris, arrêté en quittant
     telechargeur.demarrer()
     plateau_.demarrer()
@@ -199,7 +204,7 @@ def regler_notifications(d: DemandeNotifications):
 
 class DemandeOuverture(BaseModel):
     dossier: str  # racine, data, modeles ou moteurs
-    sous: str | None = None  # sous-dossier des modèles (« MiniMax-H3/modeles ») ou d'un moteur (« comfyui »)
+    sous: str | None = None  # sous-dossier des modèles (« video/MiniMax-H3/modeles ») ou d'un moteur (« comfyui »)
 
 
 class DemandeDossierModeles(BaseModel):

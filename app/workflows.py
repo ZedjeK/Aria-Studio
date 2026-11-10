@@ -46,6 +46,15 @@ class Workflow:
         return self.fiche["famille"]
 
     @property
+    def dossier_modeles(self) -> str:
+        """Ses checkpoints : « image/Krea2/modeles »."""
+        return modeles.dossier_famille(self.famille)
+
+    @property
+    def dossier_loras(self) -> str:
+        return modeles.dossier_famille(self.famille, "loras")
+
+    @property
     def licence(self) -> dict:
         return self.fiche["licence"]
 
@@ -61,11 +70,11 @@ class Workflow:
     def modele_origine(self) -> str:
         """Le modèle de diffusion livré avec le workflow (dans <Famille>/modeles) : celui qu'on télécharge quand la
         famille n'en a aucun, pas un passage obligé."""
-        return next(f["nom"] for f in self.fiche["fichiers"] if f["dossier"] == f"{self.famille}/modeles")
+        return next(f["nom"] for f in self.fiche["fichiers"] if f["dossier"] == self.dossier_modeles)
 
     def presents(self) -> list[str]:
         """Checkpoints déposés dans <Famille>/modeles, validés ou non, celui d'origine d'abord s'il est là."""
-        deposes = modeles.fichiers(f"{self.famille}/modeles", modeles.EXTENSIONS_IMAGE)
+        deposes = modeles.fichiers(self.dossier_modeles, modeles.EXTENSIONS_IMAGE)
         return sorted(deposes, key=lambda m: m != self.modele_origine)
 
     def variantes(self) -> list[str]:
@@ -105,7 +114,7 @@ class Workflow:
     def manquants(self) -> list[dict]:
         """Fichiers de la fiche absents. Le checkpoint d'origine n'en est que si la famille n'a aucun checkpoint (même à
         valider : il est là, on ne le retélécharge pas) ; les fichiers communs (encodeurs, VAE, LoRA) restent nécessaires."""
-        dossier, un_checkpoint = f"{self.famille}/modeles", bool(self.presents())
+        dossier, un_checkpoint = self.dossier_modeles, bool(self.presents())
         return [f for f in self.fiche["fichiers"] if not (f["dossier"] == dossier and un_checkpoint)
                 and not modeles.destination(f["dossier"], f["nom"]).is_file()]
 
@@ -116,6 +125,8 @@ class Workflow:
             "nom": self.fiche["nom"],
             "tache": self.fiche["tache"],
             "famille": self.famille,
+            "dossier_modeles": self.dossier_modeles,
+            "dossier_loras": self.dossier_loras,
             "licence": self.licence["nom"],
             "licence_fiche": {**self.licence, "verifiee": str(self.licence["verifiee"])},
             "vram_estimee_go": self.materiel["vram_estimee_go"],
@@ -144,7 +155,7 @@ class Workflow:
         if tout.get("modele") is None:
             tout.pop("modele", None)  # le modèle d'origine, déjà dans api.json
         elif tout["modele"] not in self.presents():
-            raise ErreurWorkflow(f"Modèle absent de {self.famille}/modeles : {tout['modele']}")
+            raise ErreurWorkflow(f"Modèle absent de {self.dossier_modeles} : {tout['modele']}")
         checkpoint = tout.get("modele") or self.modele_origine
         if self.a_valider(checkpoint):
             raise ErreurWorkflow(f"Checkpoint à valider : {checkpoint}. Ses steps ne sont pas connus : valide-les dans "
@@ -256,14 +267,14 @@ class Workflow:
     def _inserer_loras(self, api: dict, choix: list[dict]):
         """Chaîne des LoraLoaderModelOnly juste après le chargeur du modèle de diffusion :
         tout ce qui lisait le modèle lit désormais la sortie de la dernière LoRA."""
-        disponibles = modeles.fichiers(f"{self.famille}/loras", modeles.EXTENSIONS_IMAGE)
+        disponibles = modeles.fichiers(self.dossier_loras, modeles.EXTENSIONS_IMAGE)
         chargeur = self.fiche["entrees"]["modele"][0]
         lecteurs = [(nid, entree) for nid, noeud in api.items() for entree, valeur in noeud["inputs"].items()
                     if valeur == [chargeur, 0]]
         precedent = [chargeur, 0]
         for i, lora in enumerate(choix, 1):
             if lora["fichier"] not in disponibles:
-                raise ErreurWorkflow(f"LoRA absente de modeles/{self.famille}/loras : {lora['fichier']}")
+                raise ErreurWorkflow(f"LoRA absente de modeles/{self.dossier_loras} : {lora['fichier']}")
             force = float(lora["force"])
             if not modeles.FORCE_LORA[0] <= force <= modeles.FORCE_LORA[1]:
                 raise ErreurWorkflow(f"Force de LoRA entre {modeles.FORCE_LORA[0]:g} et {modeles.FORCE_LORA[1]:g} : {force}")
@@ -309,7 +320,7 @@ def valider_checkpoint(cle_modele: str, steps: int) -> dict:
         raise ErreurWorkflow(f"Pas un checkpoint de famille : {cle_modele}")
     if not isinstance(steps, int) or not 1 <= steps <= 150:
         raise ErreurWorkflow("Steps : un entier entre 1 et 150")
-    famille = dossier.removesuffix("/modeles")
+    famille = modeles.decouper(dossier)[1]
     concernes = [wf for wf in catalogue() if wf.famille == famille and "steps" in wf.fiche["entrees"]]
     if not any(nom in wf.presents() for wf in concernes):
         raise ErreurWorkflow(f"Checkpoint absent, ou sans workflow qui règle ses steps : {cle_modele}")
@@ -327,7 +338,7 @@ def catalogue() -> list[Workflow]:
 
 
 # Familles : ce que les fiches en disent, pour ranger et chercher un modèle (onglet Modèles).
-NATURES = {"texte_vers_image": "image", "retouche": "image", "image_vers_video": "video", "texte_vers_video": "video"}
+NATURES = modeles.NATURES_TACHE
 # Usages d'une famille (le classement des LoRA de Ma collection) : une LoRA se charge dans tous les workflows de sa
 # famille, donc Qwen-Image 2.1 sert à la fois l'image et la retouche.
 USAGES = {"texte_vers_image": "image", "retouche": "retouche", "image_vers_video": "video", "texte_vers_video": "video"}

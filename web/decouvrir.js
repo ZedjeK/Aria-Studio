@@ -151,8 +151,7 @@ function carte(r) {
 // Le dossier proposé d'abord ; un LLM ne va que dans llm, un modèle de diffusion jamais.
 function choixDossier(propose) {
     const possibles = dossiersDecouvrir.filter((d) => (typeDecouvrir === "llm") === (d === "llm"));
-    return `<select>${propose ? "" : '<option value="">— dossier —</option>'}${possibles.map((d) =>
-        `<option value="${echapper(d)}" ${d === propose ? "selected" : ""}>${echapper(d)}</option>`).join("")}</select>`;
+    return `<select>${propose ? "" : '<option value="">— dossier —</option>'}${optionsDossiers(possibles, propose)}</select>`;
 }
 
 function ligneFichier(f) {

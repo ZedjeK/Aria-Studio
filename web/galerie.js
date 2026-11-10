@@ -13,9 +13,10 @@ const actionDepot = (cle) => (cle?.startsWith("dossier:") ? ["ranger", cle.slice
 
 // `actions(fiche)` : actions propres au genre du menu clic droit, [[libellé, fonction]] (variante, animer…).
 // `cleDestination` : où retenir le dossier de destination (par genre par défaut ; l'onglet Retouche a le sien) ;
+// `modeleDestination()` : le modèle choisi dans le formulaire, chacun retenant son propre dossier (null : un seul choix) ;
 // `libelleAucun` : le nom de l'entrée sans dossier dans la liste « 📥 Ranger dans ».
 function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = () => [], destination = null,
-    cleDestination = null, libelleAucun = "Non rangés" }) {
+    cleDestination = null, modeleDestination = null, libelleAucun = "Non rangés" }) {
     const $ = (role) => racine.querySelector(`[data-role="${role}"]`);
     const g = { fiches: [], etat: null, vue: { vue: "masque", dossier: null }, selection: new Set(), modeSelection: false };
     let dernierClic = null;  // pour Maj + clic
@@ -23,12 +24,18 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
     const cleVue = () => (g.vue.dossier ? `dossier:${g.vue.dossier}` : g.vue.vue);
 
     // Le dossier de destination : celui où sont rangés les prochains rushs ou clips (créés, importés, tournés). Il se choisit
-    // dans le formulaire (liste « 📥 Ranger dans »), indépendamment de ce qui est affiché ; retenu entre deux ouvertures.
-    const cleCible = cleDestination ?? `aria.destination.${genre}`;
+    // dans le formulaire (liste « 📥 Ranger dans »), indépendamment de ce qui est affiché ; retenu entre deux ouvertures,
+    // pour chaque modèle : changer de modèle reprend son dossier. Un modèle encore jamais réglé part du choix commun
+    // d'avant (« Non rangés » se retient aussi, par une valeur vide).
+    const cleCommune = cleDestination ?? `aria.destination.${genre}`;
+    const cleCible = () => {
+        const modele = modeleDestination?.();
+        return modele ? `${cleCommune}.${modele}` : cleCommune;
+    };
     let cible = null;
     const relireCible = () => {
         try {
-            cible = localStorage.getItem(cleCible) || null;
+            cible = (localStorage.getItem(cleCible()) ?? localStorage.getItem(cleCommune)) || null;
         } catch { /* stockage indisponible : on garde le choix de cette session */ }
         return cible;
     };
@@ -43,12 +50,14 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
             `<option value="${echapper(n)}" ${n === cible ? "selected" : ""}>📁 ${echapper(n)}</option>`).join("");
         if (destination) destination.innerHTML = options;
     }
+    g.rafraichirDestination = rendreDestination;  // le modèle du formulaire a changé : son dossier revient
     if (destination) {
         destination.addEventListener("change", () => {
             cible = destination.value || null;
             try {
-                if (cible) localStorage.setItem(cleCible, cible);
-                else localStorage.removeItem(cleCible);
+                const cle = cleCible();
+                if (cible || cle !== cleCommune) localStorage.setItem(cle, cible ?? "");
+                else localStorage.removeItem(cle);
             } catch { /* tant pis : le choix vaut pour cette session */ }
         });
     }

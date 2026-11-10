@@ -8,7 +8,7 @@ comfyui:
     dossier: comfyui
     port: 8195
 
-# Modèles : <Famille>/modeles et <Famille>/loras, _base/<type>, llm (GGUF). Le dossier se choisit dans l'onglet
+# Modèles : image/ et video/ chacun avec <Famille>/modeles, <Famille>/loras et _base/<type> ; llm (GGUF). Le dossier se choisit dans l'onglet
 # Modèles (aria.yaml, app/emplacements.py) ; ses sous-dossiers sont déclarés à ComfyUI à chaque démarrage. La base
 # Civitai d'une famille (pour ranger une LoRA ou une variante) est dans le bloc « civitai » des fiches de workflow.
 

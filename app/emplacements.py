@@ -138,7 +138,7 @@ def etat() -> dict:
 def ouvrir(cle: str, sous: str | None = None) -> Path:
     """Ouvre l'un des dossiers connus dans l'Explorateur (jamais un chemin venu de l'interface).
 
-    `sous` : un sous-dossier des modèles déjà validé par l'appelant (« MiniMax-H3/modeles »)."""
+    `sous` : un sous-dossier des modèles déjà validé par l'appelant (« video/MiniMax-H3/modeles »)."""
     dossiers = {"racine": RACINE, "data": DATA, "modeles": MODELES, "moteurs": MOTEURS}
     if cle not in dossiers:
         raise ErreurEmplacement(f"Dossier inconnu : {cle}")

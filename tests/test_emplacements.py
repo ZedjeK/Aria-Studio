@@ -150,8 +150,8 @@ class Ouvrir(Base):
             self.assertEqual(emplacements.ouvrir("data"), self.maison / "data")
             startfile.assert_called_once_with(self.maison / "data")
             self.assertTrue((self.maison / "data").is_dir())
-            ouvert = emplacements.ouvrir("modeles", "MiniMax-H3/modeles")
-            self.assertEqual(ouvert, (self.maison / "modeles" / "MiniMax-H3" / "modeles").resolve())
+            ouvert = emplacements.ouvrir("modeles", "video/MiniMax-H3/modeles")
+            self.assertEqual(ouvert, (self.maison / "modeles" / "video" / "MiniMax-H3" / "modeles").resolve())
             for cle, sous in (("C:\\Windows", None), ("modeles", "../../.."), ("modeles", "..")):
                 with self.subTest(cle=cle, sous=sous), self.assertRaises(emplacements.ErreurEmplacement):
                     emplacements.ouvrir(cle, sous)

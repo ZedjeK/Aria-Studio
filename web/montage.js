@@ -23,6 +23,7 @@ const bobines = creerGalerie({
         preload="none" draggable="true" data-creation="${echapper(f.id)}" class="${choisi ? "choisi" : ""}"></video>`,
     ouvrir: (f) => ouvrirClip(f),
     destination: document.getElementById("destination-montage"),
+    modeleDestination: () => workflowDuMode(),
     actions: (f) => {
         const via = (bouton) => () => {
             ouvrirClip(f);
@@ -36,6 +37,13 @@ const bobines = creerGalerie({
         ];
     },
 });
+
+// Le workflow du mode : image ou texte vers vidéo (une séquence a son propre dossier, « sequence »).
+function workflowDuMode() {
+    if (modeMontage === "sequence") return "sequence";
+    const t = optionsMontage?.workflows[modeMontage === "animer" ? "image_vers_video" : "texte_vers_video"];
+    return t ? (t.defaut ?? t.choix[0]?.id ?? null) : null;  // options pas encore lues : le choix commun
+}
 
 // Le workflow vidéo dont la famille donne checkpoints et LoRA (image et texte vers vidéo partagent MiniMax-H3).
 function workflowVideo() {
@@ -99,6 +107,7 @@ async function preparerMontageMaintenant() {
     remplirSelect("format-montage", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
     poserMaxNombre("nombre-montage", v.nombre_max);  // un champ à taper : le max vient du serveur
     rendreLoras("loras-montage", workflowVideo());  // plateau.js : ce qui est déjà coché reste coché
+    bobines.rafraichirDestination();  // le workflow du mode est connu : son « 📥 Ranger dans »
     rendreSource();
     reestimerMontage();
     await bobines.charger();
@@ -177,6 +186,7 @@ brancherNombre("nombre-montage", reestimerMontage);  // l'estimation suit le nom
 document.querySelectorAll('input[name="mode-montage"]').forEach((radio) => {
     radio.addEventListener("change", () => {
         modeMontage = radio.value;
+        bobines.rafraichirDestination();  // texte ou image vers vidéo : chacun retient son « 📥 Ranger dans »
         chargerCalculMontage();
         document.getElementById("bloc-source-montage").hidden = modeMontage !== "animer";
         document.getElementById("bloc-format-montage").hidden = modeMontage !== "texte";

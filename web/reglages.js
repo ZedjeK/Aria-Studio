@@ -135,7 +135,7 @@ function afficherWorkflow() {
 function afficherVariantes(w) {
     const bloc = document.getElementById("variantes-workflow");
     bloc.hidden = !w.variantes.length;
-    document.getElementById("ouvrir-variantes").dataset.sous = `${w.famille}/modeles`;
+    document.getElementById("ouvrir-variantes").dataset.sous = w.dossier_modeles;
     bloc.querySelector(".liste-variantes").innerHTML = w.variantes.map((v, i) => `
         <details class="variante" data-variante="${echapper(v.fichier)}" ${v.params.some((p) => p.modifie) ? "open" : ""}>
             <summary>${echapper(v.fichier.replace(/\.safetensors$/, ""))}

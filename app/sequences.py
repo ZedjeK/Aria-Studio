@@ -333,7 +333,7 @@ def _valider(donnees: dict, pour_tourner: bool = False) -> dict:
 
     modele = donnees.get("modele") or None  # None : creer() prend le défaut des réglages, modifier() garde l'ancien
     if modele and modele not in _workflow().variantes():
-        raise ErreurSequence(f"Checkpoint absent de modeles/{_workflow().famille}/modeles : {modele}")
+        raise ErreurSequence(f"Checkpoint absent de modeles/{_workflow().dossier_modeles} : {modele}")
     try:  # les LoRA de la famille vidéo, les mêmes sur tous les plans ; leurs réglages retenus pour la prochaine fois
         loras = plateau.valider_loras(_workflow(), donnees.get("loras"), titre)
     except plateau.ErreurPlateau as e:

@@ -345,7 +345,7 @@ def params_workflow(wf) -> dict[str, Param]:
         params.append(Param("modele", "Modèle par défaut", "choix", (presents or [wf.modele_origine])[0],
                             choix=tuple(presents),
                             aide=f"Checkpoint utilisé partout (Plateau, Montage, séquences) quand rien d'autre n'est "
-                                 f"choisi. Dépose les tiens dans modeles/{wf.famille}/modeles"))
+                                 f"choisi. Dépose les tiens dans modeles/{wf.dossier_modeles}"))
     return {p.cle: p for p in params}
 
 
@@ -390,7 +390,7 @@ def modifier_variante(id_workflow: str, fichier: str, changements: dict) -> dict
     from app import workflows
     wf = workflows.obtenir(id_workflow)
     if fichier not in wf.presents():
-        raise ErreurReglages(f"Checkpoint absent de modeles/{wf.famille}/modeles : {fichier}")
+        raise ErreurReglages(f"Checkpoint absent de modeles/{wf.dossier_modeles} : {fichier}")
     donnees = lire()
     donnees = {"llm": dict(donnees["llm"]), "workflows": {k: dict(v) for k, v in donnees["workflows"].items()}}
     section = donnees["workflows"].setdefault(wf.id, {})
@@ -446,10 +446,11 @@ def _etat_workflow(wf, modeles) -> dict:
     def variante(fichier: str) -> dict:
         v = valeurs_variante(wf, fichier)
         return {"fichier": fichier, "origine": fichier == wf.modele_origine,
-                "connue": fichier == wf.modele_origine or modeles.connu(f"{wf.famille}/modeles", fichier),
+                "connue": fichier == wf.modele_origine or modeles.connu(wf.dossier_modeles, fichier),
                 "params": [p.public(v[cle]) for cle, p in params_variante(wf).items()]}
 
     return {"id": wf.id, "nom": wf.fiche["nom"], "tache": wf.fiche["tache"], "famille": wf.famille,
+            "dossier_modeles": wf.dossier_modeles,
             "params": [p.public(valeurs[cle]) for cle, p in params_workflow(wf).items()],
             "variantes": [variante(f) for f in wf.variantes()] if "modele" in wf.fiche["entrees"] else []}
 

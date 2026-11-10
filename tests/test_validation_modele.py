@@ -12,11 +12,11 @@ from app.sources import steps
 H3 = "minimax_h3_i2v"
 NEUF = "10Eros_Max_h3_8stepTURBO_beta7.safetensors"
 ORIGINE = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
-CLE = f"MiniMax-H3/modeles/{NEUF}"
+CLE = f"video/MiniMax-H3/modeles/{NEUF}"
 
 
 def deposes(dossier, extensions):
-    return sorted([ORIGINE, NEUF]) if dossier == "MiniMax-H3/modeles" else []
+    return sorted([ORIGINE, NEUF]) if dossier == "video/MiniMax-H3/modeles" else []
 
 
 class Suggestion(unittest.TestCase):
@@ -65,7 +65,7 @@ class Validation(unittest.TestCase):
         self.assertEqual(self.wf.variantes(), [])
         self.assertEqual(self.wf.en_attente(), [ORIGINE, NEUF])
         # Présents mais à valider : on ne retélécharge pas l'origine pour autant.
-        self.assertFalse(any(f["dossier"] == "MiniMax-H3/modeles" for f in self.wf.manquants()))
+        self.assertFalse(any(f["dossier"] == "video/MiniMax-H3/modeles" for f in self.wf.manquants()))
 
     def test_fiche_claire_ou_pas(self):
         self.assertEqual(self.wf.steps_clairs(), 0)  # H3 : 8 par défaut, 12 recommandé
@@ -89,7 +89,7 @@ class Validation(unittest.TestCase):
         self.assertIsNone(modeles.suggestion_steps(CLE))  # la suggestion a servi
 
     def test_l_origine_se_valide_comme_les_autres(self):
-        workflows.valider_checkpoint(f"MiniMax-H3/modeles/{ORIGINE}", 12)
+        workflows.valider_checkpoint(f"video/MiniMax-H3/modeles/{ORIGINE}", 12)
         self.assertEqual(self.wf.variantes(), [ORIGINE])
         self.assertEqual(self.wf.steps_de(ORIGINE), 12)
 
@@ -102,7 +102,7 @@ class Validation(unittest.TestCase):
 
     def test_checkpoint_absent_refuse(self):
         with self.assertRaises(workflows.ErreurWorkflow):
-            workflows.valider_checkpoint("MiniMax-H3/modeles/inconnu.safetensors", 8)
+            workflows.valider_checkpoint("video/MiniMax-H3/modeles/inconnu.safetensors", 8)
 
     def test_remettre_les_steps_a_zero_le_remet_en_attente(self):
         workflows.valider_checkpoint(CLE, 8)
@@ -111,7 +111,7 @@ class Validation(unittest.TestCase):
 
     def test_ma_collection_dit_quoi_decider(self):
         etat = collection._steps_des_checkpoints([self.wf])
-        origine = etat[f"MiniMax-H3/modeles/{ORIGINE}"]["a_valider"]
+        origine = etat[f"video/MiniMax-H3/modeles/{ORIGINE}"]["a_valider"]
         self.assertEqual([f["valeur"] for f in origine["fiche"]], [8, 12])  # la fiche se contredit : à toi
         self.assertIsNone(origine["steps"])
         neuf = etat[CLE]["a_valider"]
@@ -120,8 +120,8 @@ class Validation(unittest.TestCase):
         self.assertEqual(collection._steps_des_checkpoints([self.wf])[CLE], {"valides": 8})
 
     def test_seuls_les_checkpoints_de_famille_attendent(self):
-        self.assertTrue(modeles.est_checkpoint("MiniMax-H3/modeles"))
-        self.assertFalse(modeles.est_checkpoint("MiniMax-H3/loras"))
+        self.assertTrue(modeles.est_checkpoint("video/MiniMax-H3/modeles"))
+        self.assertFalse(modeles.est_checkpoint("video/MiniMax-H3/loras"))
         self.assertFalse(modeles.est_checkpoint("llm"))
 
 
