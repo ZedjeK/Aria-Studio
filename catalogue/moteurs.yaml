@@ -48,7 +48,7 @@ moteurs:
 
     llama-prism:
         nom: llama.cpp PrismML
-        role: Les GGUF ternaires : Bonsai 2 et ses dérivés (PQ2_0, PTQ1_0)
+        role: "Les GGUF ternaires : Bonsai 2 et ses dérivés (PQ2_0, PTQ1_0)"
         version: prism-b10777-e3de715
         dossier: llama-prism
         preuve: llama-server.exe
