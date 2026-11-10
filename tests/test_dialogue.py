@@ -33,3 +33,16 @@ class CasesDuScenario(Base):
     def test_longueur_de_la_musique(self):
         with self.assertRaisesRegex(sequences.ErreurSequence, "Musique de 200"):
             self.decouper(blocs("a", "b"), musique="x" * 201)
+
+
+class FormatDeLaSequence(Base):
+    """Le format choisi au Scénario atteint le LLM qui découpe ; sans format, rien n'est ajouté."""
+
+    def systeme(self, **options):
+        llama = FauxLlama(blocs("A.", "B."))
+        asyncio.run(decoupage.decouper(llama, "Une pilote rentre.", "", "", PLANS, None, **options))
+        return llama.messages[0][0]["content"]
+
+    def test_le_cadre_est_dans_la_consigne(self):
+        self.assertIn("9:16", self.systeme(format_="9:16 (Portrait Widescreen)"))
+        self.assertNotIn("Output frame", self.systeme())

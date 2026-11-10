@@ -238,6 +238,7 @@ class DemandeDecoupage(BaseModel):
     musique: str | None = None  # case 🎵 Musique d'ambiance : sa description ; None = pas de musique de fond
     plan: int | None = None  # ✨ d'un plan : son numéro (0 = le premier) ; None = tous les plans
     contrainte_en: dict | None = None  # {fr, en} : traduction déjà faite de la contrainte, reprise si elle vaut
+    format: str | None = None  # le format de la séquence (départ du texte) : le LLM compose pour ce cadre
 
 
 @routeur.post("/api/sequences/decouper")
@@ -245,11 +246,14 @@ async def decouper_sequence(d: DemandeDecoupage, requete: Request = None):
     """Scénario, atelier Séquence : les prompts de tous les plans écrits ensemble par Llama (✨ Tout écrire), ou
     d'un seul (✨ d'un plan), les autres servant de contexte. ✕ Annuler coupe la connexion : le LLM s'arrête."""
     services.verifier_llm(d.llm)
+    if d.format and d.format not in workflows.FORMATS:
+        raise HTTPException(400, f"Format inconnu : {d.format}")
     try:
         desc = listes.description_sequence(d.sujet, d.choix, d.age)
         return await services.tant_que_connecte(requete, decoupage.decouper(
             services.orchestrateur, d.synopsis, desc["personnage"], desc["decor"], d.plans, d.reference, d.llm,
-            desc["mineur"], d.contrainte, musique=d.musique, cible=d.plan, contrainte_en=d.contrainte_en))
+            desc["mineur"], d.contrainte, musique=d.musique, cible=d.plan, contrainte_en=d.contrainte_en,
+            format_=d.format))
     except ErreurSecurite as e:
         raise HTTPException(422, str(e))
     except (sequences.ErreurSequence, plateau.ErreurPlateau, listes.ErreurListes) as e:

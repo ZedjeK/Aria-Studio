@@ -223,13 +223,14 @@ const formatScenario = () => {
 
 function majFormat() {
     const cas = casDepartImage();
+    const sequence = formeScenario === "sequence" && formatSequenceCompte();  // decoupage.js
     const source = selectFormatSource();
     const ici = document.getElementById("format-scenario");
     document.getElementById("bloc-duree-scenario").hidden = formeScenario !== "clip";
     majDuree();
     const image = optionsPlateau?.format_image;
-    document.getElementById("bloc-format-scenario").hidden = !(cas || source) || !optionsPlateau;
-    if (!(cas || source) || !optionsPlateau) return;
+    document.getElementById("bloc-format-scenario").hidden = !(cas || source || sequence) || !optionsPlateau;
+    if (!(cas || source || sequence) || !optionsPlateau) return;
     // « Celui de l'image » : seulement quand on part d'une image (Redessiner, Retouche, Clip animé).
     const formats = optionsPlateau.formats.map((f) => [f, f]);
     const lignes = cas ? [["Celui de l'image", image], ...formats] : formats;
@@ -240,7 +241,8 @@ function majFormat() {
     }
     // Image : le Plateau. Clip texte : le Montage s'il est prêt et n'est pas resté sur « Celui de l'image » (mode animer).
     const miroir = source?.options.length && source.value !== image;
-    ici.value = cas ? (formatsDepartImage[cas] ?? image) : (miroir ? source.value : formatClipTexte);
+    ici.value = cas ? (formatsDepartImage[cas] ?? image) : sequence ? decoupage.format
+        : (miroir ? source.value : formatClipTexte);
 }
 
 // La durée du clip : « duree-prompt » (Compléments) reste la source ; la liste du haut en est le miroir.
@@ -266,6 +268,12 @@ document.getElementById("format-scenario").addEventListener("change", (e) => {
     const cas = casDepartImage();
     if (cas) {  // le Plateau, la Retouche ou le Montage le recevront à l'envoi
         formatsDepartImage[cas] = e.target.value === optionsPlateau?.format_image ? null : e.target.value;
+        majFinal();
+        return;
+    }
+    if (formeScenario === "sequence") {  // le cadre de la séquence : il part avec le découpage et à la création
+        decoupage.format = e.target.value;
+        garderBrouillon();
         majFinal();
         return;
     }
@@ -369,7 +377,7 @@ function garderBrouillon() {
                        sequence: { reference: decoupage.reference, contrainte: decoupage.contrainte,
                                    contrainteEn: decoupage.contrainteEn, plans: decoupage.plans, alertes: decoupage.alertes,
                                    avecMusique: decoupage.avecMusique, musique: decoupage.musique,
-                                   sequenceId: decoupage.sequenceId,
+                                   sequenceId: decoupage.sequenceId, format: decoupage.format,
                                    titre: document.getElementById("titre-sequence-scenario").value } };
         try {
             localStorage.setItem(BROUILLON, JSON.stringify(etat));
@@ -402,6 +410,7 @@ function relireBrouillon() {
     decoupage.contrainteEn = s.contrainteEn ?? null;
     decoupage.alertes = Array.isArray(s.alertes) ? s.alertes : [];
     decoupage.sequenceId = s.sequenceId ?? null;
+    decoupage.format = s.format ?? decoupage.format;
     document.getElementById("titre-sequence-scenario").value = s.titre ?? "";
     if (Array.isArray(s.plans) && s.plans.length >= 2) {
         decoupage.plans = s.plans.map(normaliserPlan);  // decoupage.js : les anciens plans n'avaient pas de réplique
