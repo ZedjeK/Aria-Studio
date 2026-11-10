@@ -272,6 +272,15 @@ function afficherBandeauFin(titre, texte, reussi, ouvrir) {
     bandeau.minuteur = setTimeout(() => { bandeau.hidden = true; }, 10000);
 }
 
+// Conversations en bulles (libre.js, guide.js) : la zone grandit avec la page, sans défilement interne qui
+// capterait la molette. Quand une bulle s'ajoute, la page ne bouge que si elle sort de l'écran.
+const nombreBulles = new WeakMap();
+function suivreDerniereBulle(zone) {
+    const avant = nombreBulles.get(zone) ?? zone.children.length;
+    nombreBulles.set(zone, zone.children.length);
+    if (zone.children.length > avant) zone.lastElementChild.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
 // Zones de texte : elles grandissent vers le bas avec leur contenu (plafond à 70 % de l'écran, puis défilement).
 // `rows` donne la hauteur minimale. Les remplissages par le code (prompt écrit par le LLM, valeur rechargée) et les
 // zones masquées puis affichées sont suivis aussi.

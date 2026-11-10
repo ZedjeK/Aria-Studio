@@ -96,7 +96,7 @@ function rendreLibre() {
     }
     const conversation = document.getElementById("conversation-libre");
     conversation.innerHTML = html;
-    conversation.scrollTop = conversation.scrollHeight;
+    suivreDerniereBulle(conversation);
 
     const fiche = a.dernier?.fiche ?? {};
     document.getElementById("fiche-libre").innerHTML = Object.entries(fiche).map(([k, v]) => `<li>
