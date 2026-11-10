@@ -23,7 +23,7 @@ class DemandeClip(BaseModel):
     nombre: int = 1
     dossier: str | None = None
     modele: str | None = None  # checkpoint de la famille ; absent = le modèle par défaut des réglages
-    loras: list[dict] = []  # [{fichier, force, declencheurs}] de modeles/MiniMax-H3/loras
+    loras: list[dict] = []  # [{fichier, force, declencheurs}] de modeles/video/MiniMax-H3/loras
     ecrit_par: str | None = None  # le LLM qui a écrit le prompt au Scénario (noté sur la fiche)
 
 

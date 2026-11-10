@@ -191,11 +191,11 @@ def valider_loras(wf: workflows.Workflow, loras: list[dict] | None, texte: str, 
     passe leurs mots déclencheurs au filtre AS-18 avec le texte de la demande. N'écrit rien."""
     if not loras:
         return []
-    disponibles = modeles.fichiers(f"{wf.famille}/loras", modeles.EXTENSIONS_IMAGE)
+    disponibles = modeles.fichiers(wf.dossier_loras, modeles.EXTENSIONS_IMAGE)
     propres = []
     for lora in loras:
         if lora.get("fichier") not in disponibles:
-            raise ErreurPlateau(f"LoRA absente de modeles/{wf.famille}/loras : {lora.get('fichier')}")
+            raise ErreurPlateau(f"LoRA absente de modeles/{wf.dossier_loras} : {lora.get('fichier')}")
         force = float(lora.get("force", 1.0))
         if not modeles.FORCE_LORA[0] <= force <= modeles.FORCE_LORA[1]:
             raise ErreurPlateau(f"Force de LoRA entre {modeles.FORCE_LORA[0]:g} et {modeles.FORCE_LORA[1]:g} : {force}")
@@ -333,7 +333,7 @@ class Plateau:
                        ecrit_par: str | None = None) -> Commande:
         """Montage : un clip H3 (avec le son), en animant un rush ou à partir d'un texte. Le prompt est tourné tel
         quel : il s'écrit au Scénario. `modele` : un checkpoint de la famille ; None = le défaut des réglages.
-        `loras` : celles de la famille (modeles/MiniMax-H3/loras), leurs mots déclencheurs en tête du prompt."""
+        `loras` : celles de la famille (modeles/video/MiniMax-H3/loras), leurs mots déclencheurs en tête du prompt."""
         if not prompt_clip.strip():
             raise ErreurPlateau("Écris le prompt du clip, ou passe par le ✍️ Scénario")
         if mode not in MODES_VIDEO:
@@ -461,7 +461,7 @@ class Plateau:
     @staticmethod
     def _valider_modele(wf: workflows.Workflow, modele: str | None):
         if modele is not None and modele not in wf.variantes():
-            raise ErreurPlateau(f"Modèle absent de modeles/{wf.famille}/modeles : {modele}")
+            raise ErreurPlateau(f"Modèle absent de modeles/{wf.dossier_modeles} : {modele}")
 
     @staticmethod
     def _valider_loras(wf: workflows.Workflow, loras: list[dict] | None, texte: str,

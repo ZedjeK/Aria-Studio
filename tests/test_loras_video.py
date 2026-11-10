@@ -27,10 +27,10 @@ class ModelesTemporaires:
         self.temp = tempfile.TemporaryDirectory()
         d = Path(self.temp.name)
         for famille, nom in (("MiniMax-H3", STYLE), ("Qwen-Image2.1", "detail.safetensors")):
-            (d / "modeles" / famille / "loras").mkdir(parents=True)
-            (d / "modeles" / famille / "loras" / nom).write_bytes(b"x")
-        (d / "modeles" / "MiniMax-H3" / "modeles").mkdir()  # sans checkpoint, la famille n'a rien à charger
-        (d / "modeles" / "MiniMax-H3" / "modeles" / workflows.obtenir("minimax_h3_t2v").modele_origine).touch()
+            (d / "modeles" / modeles.dossier_famille(famille, "loras")).mkdir(parents=True)
+            (d / "modeles" / modeles.dossier_famille(famille, "loras") / nom).write_bytes(b"x")
+        (d / "modeles" / "video" / "MiniMax-H3" / "modeles").mkdir()  # sans checkpoint, la famille n'a rien à charger
+        (d / "modeles" / "video" / "MiniMax-H3" / "modeles" / workflows.obtenir("minimax_h3_t2v").modele_origine).touch()
         self.patchs_modeles = [mock.patch.object(modeles, "DOSSIER", d / "modeles"),
                                mock.patch.object(modeles, "REGISTRE", d / "modeles.json"),
                                mock.patch.object(modeles, "MEMOIRE_LORAS", d / "loras.json")]
@@ -95,7 +95,7 @@ class Clip(unittest.TestCase, ModelesTemporaires):
         self.assertEqual(modeles.loras("MiniMax-H3")[0]["force"], 0.8)  # retenue pour la prochaine fois
 
     def test_refus(self):
-        with self.assertRaisesRegex(ErreurPlateau, "absente de modeles/MiniMax-H3/loras"):
+        with self.assertRaisesRegex(ErreurPlateau, "absente de modeles/video/MiniMax-H3/loras"):
             self.clip(loras=[{"fichier": "detail.safetensors", "force": 1}])  # une LoRA image n'entre pas en vidéo
         with self.assertRaisesRegex(ErreurPlateau, "entre 0 et 2"):
             self.clip(loras=[{**LORA, "force": 2.5}])
@@ -142,5 +142,5 @@ class Sequence(BaseSequence, ModelesTemporaires):
         self.assertEqual(sequences.lire(s["id"])["loras"], [])
 
     def test_refus(self):
-        with self.assertRaisesRegex(sequences.ErreurSequence, "absente de modeles/MiniMax-H3/loras"):
+        with self.assertRaisesRegex(sequences.ErreurSequence, "absente de modeles/video/MiniMax-H3/loras"):
             self.creer(loras=[{"fichier": "detail.safetensors", "force": 1}])

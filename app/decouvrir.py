@@ -96,7 +96,7 @@ async def chercher_civitai(texte: str, type_: str, famille: str | None, tri: str
         versions = []
         for v in m.get("modelVersions") or []:
             dossier = civitai._dossier_famille(m.get("type"), v.get("baseModel"), m.get("name", ""), infos)
-            if dossier is None or (famille and not dossier.startswith(f"{famille}/")):
+            if dossier is None or (famille and modeles.decouper(dossier)[1] != famille):
                 continue  # base sans famille dans Aria (ex. « Qwen » sans « edit ») : pas utilisable ici
             fichiers = []
             for f in v.get("files") or []:
@@ -111,7 +111,7 @@ async def chercher_civitai(texte: str, type_: str, famille: str | None, tri: str
                 "id": v["id"],
                 "nom": v.get("name"),
                 "base": v.get("baseModel"),
-                "famille": dossier.split("/")[0],
+                "famille": modeles.decouper(dossier)[1],
                 "mots_declencheurs": v.get("trainedWords") or [],
                 "fichiers": fichiers,
                 "lien": f"https://civitai.com/api/download/models/{v['id']}",
@@ -209,16 +209,18 @@ def _dossier_hf(chemin: str, type_: str, famille: str | None) -> str | None:
     « repackaged » pour ComfyUI), sinon le type cherché et la famille."""
     if type_ == "llm":
         return "llm"
+    # Les fichiers de base vont du côté de la famille ; sans famille, de celui du type cherché (image par défaut).
+    nature = modeles.nature(famille) if famille else type_ if type_ in modeles.NATURES else "image"
     parties = [p.lower() for p in PurePosixPath(chemin).parts[:-1]]
     for p in reversed(parties):
         if p in ("loras", "lora"):
-            return f"{famille}/loras" if famille else None
+            return modeles.dossier_famille(famille, "loras") if famille else None
         if p in _SOUS_MODELES:  # avant _base : diffusion_models et checkpoints vont dans la famille
-            return f"{famille}/modeles" if famille else None
+            return modeles.dossier_famille(famille) if famille else None
         if p in modeles.TYPES_BASE:
-            return f"_base/{p}"
+            return modeles.dossier_base(nature, p)
     if famille:
-        return f"{famille}/{'loras' if type_ == 'lora' else 'modeles'}"
+        return modeles.dossier_famille(famille, "loras" if type_ == "lora" else "modeles")
     return None  # à choisir : Hugging Face ne dit pas à quelle famille un fichier appartient
 
 

@@ -1,15 +1,18 @@
 """Registre, inventaire et suppression des modèles du dossier modeles/.
 
-Rangement :
-    modeles/<Famille>/modeles/   variantes du modèle de diffusion d'une famille (ex. Krea2, Qwen-Image2.1)
-    modeles/<Famille>/loras/     LoRAs compatibles avec cette famille
-    modeles/_base/<type>/        fichiers communs : encodeurs de texte, VAE, LoRAs internes aux workflows…
-    modeles/llm/                 GGUF pour llama.cpp
-Les familles sont celles déclarées par les fiches de workflow ; déposer un fichier au bon endroit suffit.
+Rangement, l'image et la vidéo chacune de son côté, sans rien partager :
+    modeles/<nature>/<Famille>/modeles/   variantes du modèle de diffusion d'une famille (ex. image/Krea2)
+    modeles/<nature>/<Famille>/loras/     LoRAs compatibles avec cette famille
+    modeles/<nature>/_base/<type>/        fichiers de la nature : encodeurs de texte, VAE, LoRAs internes aux workflows…
+    modeles/llm/                          GGUF pour llama.cpp
+<nature> : image ou video. Les familles et leur nature sont celles déclarées par les fiches de workflow ; déposer un
+fichier au bon endroit suffit. Avant le 2026-11-10, tout était à plat (modeles/_base, modeles/<Famille>) :
+app/migration_modeles.py range l'ancienne organisation au démarrage.
 """
 
 import hashlib
 import json
+import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +34,14 @@ EXTENSIONS_MODELES = EXTENSIONS_IMAGE | {".gguf"}  # l'inventaire ignore le rest
 EMPREINTES = DATA / "empreintes.json"  # SHA-256 déjà calculés : {clé: {taille, date, sha256}}
 
 
+NATURES = ("image", "video")
+# La nature d'une famille : vidéo dès qu'un de ses workflows fait de la vidéo (app.workflows s'en sert aussi).
+NATURES_TACHE = {"texte_vers_image": "image", "retouche": "image", "image_vers_video": "video",
+                 "texte_vers_video": "video"}
+BASE = "_base"
+log = logging.getLogger(__name__)
+
+
 class ErreurModele(ValueError):
     pass
 
@@ -38,21 +49,58 @@ class ErreurModele(ValueError):
 _familles = memo.SelonFichiers()
 
 
-def familles() -> list[str]:
-    """Familles déclarées par les fiches de workflow (lues sans importer app.workflows), relues seulement quand une
+def _natures() -> dict[str, str]:
+    """{famille: nature} d'après les fiches de workflow (lues sans importer app.workflows), relues seulement quand une
     fiche change : destination() s'en sert pour chaque fichier vérifié."""
     chemins = sorted((ROOT / "workflows").glob("*/fiche.yaml"))
 
-    def lire() -> list[str]:
-        return sorted({f for f in ((memo.lire_yaml(c) or {}).get("famille") for c in chemins) if f})
+    def lire() -> dict[str, str]:
+        natures = {}
+        for c in chemins:
+            fiche = memo.lire_yaml(c) or {}
+            if fiche.get("famille"):
+                nature = NATURES_TACHE.get(fiche.get("tache"), "image")
+                if natures.get(fiche["famille"]) != "video":
+                    natures[fiche["famille"]] = nature
+        return dict(sorted(natures.items()))
 
-    return list(_familles.lire(memo.empreinte(chemins), lire))
+    return dict(_familles.lire(memo.empreinte(chemins), lire))
+
+
+def familles() -> list[str]:
+    return list(_natures())
+
+
+def nature(famille: str) -> str:
+    """image ou video : le côté du dossier modeles/ où vit la famille."""
+    try:
+        return _natures()[famille]
+    except KeyError:
+        raise ErreurModele(f"Famille inconnue : {famille}") from None
+
+
+def dossier_famille(famille: str, sous: str = "modeles") -> str:
+    """« image/Krea2/modeles », « video/MiniMax-H3/loras »…"""
+    return f"{nature(famille)}/{famille}/{sous}"
+
+
+def dossier_base(nature_: str, type_: str) -> str:
+    return f"{nature_}/{BASE}/{type_}"
+
+
+def decouper(dossier: str) -> tuple[str | None, str | None, str]:
+    """(nature, famille ou None pour _base, sous-dossier) : « image/Krea2/loras » → (image, Krea2, loras),
+    « video/_base/vae » → (video, None, vae), « llm » → (None, None, llm)."""
+    morceaux = dossier.split("/")
+    if len(morceaux) == 3 and morceaux[0] in NATURES:
+        return morceaux[0], None if morceaux[1] == BASE else morceaux[1], morceaux[2]
+    return None, None, dossier
 
 
 def dossiers() -> list[str]:
     """Sous-dossiers où l'appli peut ranger un fichier."""
-    return ([f"_base/{t}" for t in TYPES_BASE]
-            + [f"{f}/{sous}" for f in familles() for sous in ("modeles", "loras")]
+    return ([dossier_base(n, t) for n in NATURES for t in TYPES_BASE]
+            + [dossier_famille(f, sous) for f in familles() for sous in ("modeles", "loras")]
             + ["llm"])
 
 
@@ -113,8 +161,9 @@ def reglage_lora(cle_lora: str, registre: dict | None = None, memoire: dict | No
 def loras(famille: str) -> list[dict]:
     registre, memoire = charger_registre(), _memoire_loras()
     liste = []
-    for nom in fichiers(f"{famille}/loras", EXTENSIONS_IMAGE):
-        cle_lora = f"{famille}/loras/{nom}"
+    dossier = dossier_famille(famille, "loras")
+    for nom in fichiers(dossier, EXTENSIONS_IMAGE):
+        cle_lora = f"{dossier}/{nom}"
         r = reglage_lora(cle_lora, registre, memoire)
         liste.append({"fichier": nom, "nom": Path(nom).stem, "declencheurs": r["declencheurs"], "force": r["force"],
                       "page": (registre.get(cle_lora) or {}).get("page")})
@@ -122,11 +171,13 @@ def loras(famille: str) -> list[dict]:
 
 
 def _famille_lora(cle_lora: str) -> tuple[str, str]:
-    morceaux = cle_lora.split("/")
-    if len(morceaux) != 3 or morceaux[1] != "loras" or morceaux[0] == "_base" \
-            or morceaux[2] not in fichiers(f"{morceaux[0]}/loras", EXTENSIONS_IMAGE):
+    """<nature>/<Famille>/loras/<fichier> → (famille, fichier) ; les LoRA de _base sont internes aux workflows."""
+    dossier, _, fichier = cle_lora.rpartition("/")
+    _, famille, sous = decouper(dossier)
+    if famille is None or sous != "loras" or famille not in familles() or dossier != dossier_famille(famille, "loras") \
+            or fichier not in fichiers(dossier, EXTENSIONS_IMAGE):
         raise ErreurModele(f"LoRA inconnue : {cle_lora}")
-    return morceaux[0], morceaux[2]
+    return famille, fichier
 
 
 def regler_lora(cle_lora: str, declencheurs: str, force: float) -> dict:
@@ -165,24 +216,27 @@ def mettre_a_jour_source(cle_lora: str, infos: dict):
 def memoriser_loras(famille: str, choix: list[dict]):
     memoire = _memoire_loras()
     for c in choix:
-        memoire[f"{famille}/loras/{c['fichier']}"] = {"declencheurs": c["declencheurs"], "force": c["force"]}
+        memoire[f"{dossier_famille(famille, 'loras')}/{c['fichier']}"] = {"declencheurs": c["declencheurs"], "force": c["force"]}
     MEMOIRE_LORAS.parent.mkdir(parents=True, exist_ok=True)
     MEMOIRE_LORAS.write_text(json.dumps(memoire, indent=4, ensure_ascii=False), encoding="utf-8")
 
 
 def ecrire_chemins_comfyui() -> Path:
-    """Déclare à ComfyUI les dossiers de modèles, familles comprises (relu à chaque démarrage)."""
+    """Déclare à ComfyUI les dossiers de modèles, une racine par nature (relu à chaque démarrage). ComfyUI cherche un
+    fichier par son nom dans toutes les racines : homonymes() signale deux fichiers du même nom de part et d'autre."""
     for f in familles():
         for sous in ("modeles", "loras"):
-            (DOSSIER / f / sous).mkdir(parents=True, exist_ok=True)
-    declaration = {
-        "aria_base": {"base_path": str(DOSSIER / "_base"), "is_default": True, **{t: f"{t}/" for t in TYPES_BASE}},
-        "aria_familles": {
-            "base_path": str(DOSSIER),
-            "diffusion_models": "\n".join(f"{f}/modeles/" for f in familles()),
-            "loras": "\n".join(f"{f}/loras/" for f in familles()),
-        },
-    }
+            (DOSSIER / dossier_famille(f, sous)).mkdir(parents=True, exist_ok=True)
+    declaration = {}
+    for n in NATURES:
+        siennes = [f for f in familles() if nature(f) == n]
+        chemins = {t: f"{BASE}/{t}/" for t in TYPES_BASE}
+        chemins["diffusion_models"] = "\n".join([chemins["diffusion_models"], *(f"{f}/modeles/" for f in siennes)])
+        chemins["loras"] = "\n".join([chemins["loras"], *(f"{f}/loras/" for f in siennes)])
+        declaration[f"aria_{n}"] = {"base_path": str(DOSSIER / n), **({"is_default": True} if n == "image" else {}),
+                                    **chemins}
+    if doubles := homonymes():
+        log.warning("Même nom côté image et côté vidéo, ComfyUI n'en verra qu'un : %s", ", ".join(doubles))
     CHEMINS_COMFYUI.parent.mkdir(parents=True, exist_ok=True)
     CHEMINS_COMFYUI.write_text(yaml.safe_dump(declaration, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return CHEMINS_COMFYUI
@@ -201,8 +255,21 @@ def cle(chemin_fichier: Path) -> str:
 
 
 def est_checkpoint(dossier: str) -> bool:
-    """<Famille>/modeles : les checkpoints que les workflows proposent en variantes."""
-    return dossier.endswith("/modeles") and not dossier.startswith("_base/")
+    """<nature>/<Famille>/modeles : les checkpoints que les workflows proposent en variantes."""
+    _, famille, sous = decouper(dossier)
+    return famille is not None and sous == "modeles"
+
+
+def homonymes() -> list[str]:
+    """Fichiers du même nom côté image et côté vidéo : ComfyUI, qui cherche par nom, n'en verrait qu'un."""
+    vus: dict[str, set[str]] = {}
+    for n in NATURES:
+        racine = DOSSIER / n
+        if racine.is_dir():
+            for f in racine.rglob("*"):
+                if f.is_file() and f.suffix.lower() in EXTENSIONS_MODELES:
+                    vus.setdefault(f.name, set()).add(n)
+    return sorted(nom for nom, natures in vus.items() if len(natures) > 1)
 
 
 def suggestion_steps(cle_modele: str) -> dict | None:

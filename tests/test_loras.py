@@ -12,7 +12,7 @@ from app import modeles
 from app.sources import civitai
 
 FICHIER = "pubes_krea2_loraholic.safetensors"
-CLE = f"Krea2/loras/{FICHIER}"
+CLE = f"image/Krea2/loras/{FICHIER}"
 
 
 def image(*ressources, prompt="a woman, film photo"):
@@ -46,8 +46,8 @@ class Reglage(unittest.TestCase):
     def setUp(self):
         self.dossier = tempfile.TemporaryDirectory()
         d = Path(self.dossier.name)
-        (d / "modeles" / "Krea2" / "loras").mkdir(parents=True)
-        (d / "modeles" / "Krea2" / "loras" / FICHIER).write_bytes(b"x")
+        (d / "modeles" / "image" / "Krea2" / "loras").mkdir(parents=True)
+        (d / "modeles" / "image" / "Krea2" / "loras" / FICHIER).write_bytes(b"x")
         (d / "modeles.json").write_text(json.dumps({CLE: {
             "source": "civitai", "page": "https://civitai.red/models/2617090?modelVersionId=3136749",
             "mots_declencheurs": [], "force_auteur": 0.8, "images_force": 3, "prompt_exemple": "a woman"}}),
@@ -80,7 +80,7 @@ class Reglage(unittest.TestCase):
         self.assertEqual((r["declencheurs"], r["force"]), ("loraholic", 1.0))  # plus de force d'auteur : 1,0
 
     def test_validation(self):
-        for cle, force in (("Krea2/loras/absente.safetensors", 1.0), ("_base/loras/x.safetensors", 1.0),
+        for cle, force in (("image/Krea2/loras/absente.safetensors", 1.0), ("image/_base/loras/x.safetensors", 1.0),
                            ("../../secret", 1.0), (CLE, 2.5)):
             with self.assertRaises(modeles.ErreurModele, msg=cle):
                 modeles.regler_lora(cle, "", force)

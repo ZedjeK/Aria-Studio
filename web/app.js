@@ -139,8 +139,7 @@ function afficherFiche(fiche) {
     if (!fiche.sha256) alertes.push("Aucune empreinte publiée : seule la taille sera vérifiée.");
     if (!fiche.dossier) alertes.push("Dossier non reconnu : choisis-le ci-dessous.");
 
-    const options = dossiers.map((d) =>
-        `<option value="${echapper(d)}" ${d === fiche.dossier ? "selected" : ""}>${echapper(d)}</option>`).join("");
+    const options = optionsDossiers(dossiers, fiche.dossier);
 
     bloc.innerHTML = `
         <dl>

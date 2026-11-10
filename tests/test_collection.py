@@ -35,8 +35,8 @@ class Familles(unittest.TestCase):
         self.assertIsNone(f(None))
 
     def test_dossier_selon_le_type_civitai(self):
-        self.assertEqual(civitai._dossier_famille("LORA", "MiniMax H3", "x", FAMILLES), "MiniMax-H3/loras")
-        self.assertEqual(civitai._dossier_famille("Checkpoint", "Qwen 2.1", "x", FAMILLES), "Qwen-Image2.1/modeles")
+        self.assertEqual(civitai._dossier_famille("LORA", "MiniMax H3", "x", FAMILLES), "video/MiniMax-H3/loras")
+        self.assertEqual(civitai._dossier_famille("Checkpoint", "Qwen 2.1", "x", FAMILLES), "image/Qwen-Image2.1/modeles")
         self.assertIsNone(civitai._dossier_famille("Workflows", "Qwen 2.1", "x", FAMILLES))
 
     def test_fiches_livrees_et_validation(self):
@@ -54,11 +54,11 @@ class Familles(unittest.TestCase):
 class RechercherHF(unittest.TestCase):
     def test_dossier_d_un_fichier_hf(self):
         d = decouvrir._dossier_hf
-        self.assertEqual(d("vae/qwen_image_vae.safetensors", "image", "Krea2"), "_base/vae")
-        self.assertEqual(d("split_files/text_encoders/x.safetensors", "image", None), "_base/text_encoders")
-        self.assertEqual(d("loras/style.safetensors", "image", "Krea2"), "Krea2/loras")
-        self.assertEqual(d("diffusion_models/krea.safetensors", "image", "Krea2"), "Krea2/modeles")
-        self.assertEqual(d("model.safetensors", "lora", "MiniMax-H3"), "MiniMax-H3/loras")
+        self.assertEqual(d("vae/qwen_image_vae.safetensors", "image", "Krea2"), "image/_base/vae")
+        self.assertEqual(d("split_files/text_encoders/x.safetensors", "image", None), "image/_base/text_encoders")
+        self.assertEqual(d("loras/style.safetensors", "image", "Krea2"), "image/Krea2/loras")
+        self.assertEqual(d("diffusion_models/krea.safetensors", "image", "Krea2"), "image/Krea2/modeles")
+        self.assertEqual(d("model.safetensors", "lora", "MiniMax-H3"), "video/MiniMax-H3/loras")
         self.assertIsNone(d("model.safetensors", "image", None))  # la famille est à choisir
         self.assertEqual(d("Q4_K_M.gguf", "llm", None), "llm")
 
@@ -111,7 +111,7 @@ class RechercherCivitai(unittest.TestCase):
         self.assertEqual(url.params.get_list("baseModels"), ["MiniMax H3"])  # les bases des familles vidéo
         self.assertEqual([x["nom"] for x in r["resultats"]], ["DaSiWa MiniMax H3"])
         version = r["resultats"][0]["versions"][0]
-        self.assertEqual((version["dossier"], version["famille"]), ("MiniMax-H3/modeles", "MiniMax-H3"))
+        self.assertEqual((version["dossier"], version["famille"]), ("video/MiniMax-H3/modeles", "MiniMax-H3"))
         self.assertEqual([f["nom"] for f in version["fichiers"]], ["dasiwa.safetensors", "encodeur.safetensors"])
 
     def test_installe_d_apres_le_fichier_principal(self):
@@ -176,7 +176,7 @@ class Base(unittest.TestCase):
 
 class Empreintes(Base):
     def test_calculee_une_fois_puis_recalculee_si_le_fichier_change(self):
-        f = self.poser("Krea2/modeles", "moody.safetensors", b"abc")
+        f = self.poser("image/Krea2/modeles", "moody.safetensors", b"abc")
         attendu = hashlib.sha256(b"abc").hexdigest()
         self.assertEqual(modeles.empreinte(f), attendu)
         with mock.patch.object(modeles.hashlib, "sha256", side_effect=AssertionError("recalcul")):
@@ -189,24 +189,24 @@ class Empreintes(Base):
         """Civitai nomme un même fichier « …_int8 » ou « …_3281858 » selon son API : l'empreinte tranche."""
         from app.sources import Fiche
         from app.telechargement import ErreurTelechargement, Telechargeur
-        f = self.poser("MiniMax-H3/modeles", "dasiwa_int8.safetensors", b"dasiwa")
+        f = self.poser("video/MiniMax-H3/modeles", "dasiwa_int8.safetensors", b"dasiwa")
         sha = modeles.empreinte(f)
-        self.assertEqual(modeles.cle_par_empreinte(sha.upper()), "MiniMax-H3/modeles/dasiwa_int8.safetensors")
+        self.assertEqual(modeles.cle_par_empreinte(sha.upper()), "video/MiniMax-H3/modeles/dasiwa_int8.safetensors")
         fiche = Fiche(source="civitai", nom="dasiwa_3281858.safetensors", taille=6, sha256=sha,
-                      url="https://civitai.com/api/download/models/1", page="p", dossier="MiniMax-H3/modeles",
+                      url="https://civitai.com/api/download/models/1", page="p", dossier="video/MiniMax-H3/modeles",
                       licence=None, jeton_requis=False)
-        with self.assertRaisesRegex(ErreurTelechargement, "Déjà installé sous un autre nom : MiniMax-H3/modeles/dasiwa_int8"):
-            Telechargeur().ajouter(fiche, "MiniMax-H3/modeles")
+        with self.assertRaisesRegex(ErreurTelechargement, "Déjà installé sous un autre nom : video/MiniMax-H3/modeles/dasiwa_int8"):
+            Telechargeur().ajouter(fiche, "video/MiniMax-H3/modeles")
         fiche.sha256, fiche.jeton_requis = "0" * 64, True
         with self.assertRaisesRegex(ErreurTelechargement, "Clés d.accès"):  # dit quoi faire, sans parler de licence
-            Telechargeur().ajouter(fiche, "MiniMax-H3/modeles")
+            Telechargeur().ajouter(fiche, "video/MiniMax-H3/modeles")
         f.unlink()
         self.assertIsNone(modeles.cle_par_empreinte(sha))  # fichier supprimé depuis : plus un doublon
 
     def test_l_inventaire_ignore_ce_qui_n_est_pas_un_modele(self):
         self.poser("llm", "petit.gguf")
         self.poser("llm", "recommandations.yaml")
-        self.poser("Krea2/modeles", "x.safetensors.part")
+        self.poser("image/Krea2/modeles", "x.safetensors.part")
         self.assertEqual([m["cle"] for m in modeles.inventaire()], ["llm/petit.gguf"])
 
 
@@ -225,9 +225,9 @@ class Sources(Base):
         return collection.identification()
 
     def test_catalogue_puis_civitai_puis_introuvable(self):
-        aria = self.poser("Krea2/modeles", "krea.safetensors", b"aria")
-        moody = self.poser("Krea2/modeles", "moody.safetensors", b"moody")
-        self.poser("MiniMax-H3/modeles", "inconnu.safetensors", b"?")
+        aria = self.poser("image/Krea2/modeles", "krea.safetensors", b"aria")
+        moody = self.poser("image/Krea2/modeles", "moody.safetensors", b"moody")
+        self.poser("video/MiniMax-H3/modeles", "inconnu.safetensors", b"?")
         sha = lambda c: hashlib.sha256(c).hexdigest()  # noqa: E731
         connus = {sha(b"aria"): ({"url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/k.safetensors"}, {"nom": "Krea 2"})}
         trouve = {"source": "civitai", "page": "https://civitai.com/models/9?modelVersionId=90", "url": "https://civitai.com/api/download/models/90",

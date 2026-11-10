@@ -15,11 +15,12 @@ API = "https://civitai.com/api/v1"
 # nsfwLevel est un masque : 1 PG, 2 PG-13, 4 R, 8 X, 16 XXX (le drapeau « nsfw » du modèle reste souvent à false).
 NIVEAUX_ADULTES = 4 | 8 | 16
 
-# Les checkpoints et LoRAs dépendent d'une famille (<Famille>/modeles, <Famille>/loras) : dossier à choisir.
+# Les checkpoints et LoRAs dépendent d'une famille (<nature>/<Famille>/modeles ou loras) : dossier à choisir. Le
+# reste va côté image : Civitai sert l'image, et le dossier se change avant de télécharger.
 TYPES = {
-    "VAE": "_base/vae",
-    "Controlnet": "_base/controlnet",
-    "Upscaler": "_base/upscale_models",
+    "VAE": "image/_base/vae",
+    "Controlnet": "image/_base/controlnet",
+    "Upscaler": "image/_base/upscale_models",
 }
 
 
@@ -144,17 +145,17 @@ TYPES_LORA = ("LORA", "LoCon", "DoRA")
 
 def _dossier_famille(type_civitai: str | None, base: str | None, nom_modele: str,
                      familles: dict | None = None) -> str | None:
-    """Propose <Famille>/loras ou <Famille>/modeles d'après la base Civitai (bloc civitai des fiches de workflow) ;
+    """Propose <nature>/<Famille>/loras ou …/modeles d'après la base Civitai (bloc civitai des fiches de workflow) ;
     à confirmer avant téléchargement."""
-    from app import workflows  # workflows importe modeles, qui ne doit pas dépendre des sources
+    from app import modeles, workflows  # workflows importe modeles, qui ne doit pas dépendre des sources
 
     famille = workflows.famille_civitai(base, nom_modele, familles)
     if famille is None:
         return None
     if type_civitai in TYPES_LORA:
-        return f"{famille}/loras"
+        return modeles.dossier_famille(famille, "loras")
     if type_civitai == "Checkpoint":
-        return f"{famille}/modeles"
+        return modeles.dossier_famille(famille)
     return None
 
 

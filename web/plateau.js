@@ -9,6 +9,7 @@ document.getElementById("workflow-creation").addEventListener("change", () => {
     // Changer de modèle propose son format par défaut (réglable dans l'onglet Réglages).
     const w = tousWorkflows().find((x) => x.id === choixModele("workflow-creation").workflow);
     if (w?.format) document.getElementById("format-creation").value = w.format;
+    rushes.rafraichirDestination();  // chaque modèle retient son « 📥 Ranger dans »
 });
 document.getElementById("workflow-retouche").addEventListener("change", () => {
     afficherLoras("loras-retouche", "workflow-retouche");
@@ -80,6 +81,7 @@ function remplirModelesCreation() {
     // Présélection : le checkpoint par défaut réglé dans l'onglet Réglages (l'origine tant que rien n'est réglé).
     remplirSelect("workflow-creation", lignesModeles(t), origine && `${origine.id}::${origine.modele_defaut}`);
     afficherLoras("loras-creation", "workflow-creation");
+    rushes.rafraichirDestination();
     const variation = referencesActives().length > 0 && modeReference === "variation";
     const format = document.getElementById("format-creation");
     format.disabled = variation;
@@ -402,6 +404,7 @@ const rushes = creerGalerie({
         data-creation="${echapper(f.id)}" class="${choisi ? "choisi" : ""}">`,
     ouvrir: (f) => ouvrirFiche(f),
     destination: document.getElementById("destination-plateau"),
+    modeleDestination: () => choixModele("workflow-creation").workflow || null,
     // Clic droit : on ouvre la fiche en coulisse puis on déclenche le bouton correspondant, une seule logique.
     actions: (f) => {
         const via = (bouton) => () => {
@@ -505,6 +508,7 @@ function reprendreReglages(f) {
     const ligne = [...select.options].find((o) => o.value === exact)
         ?? [...select.options].find((o) => o.value.startsWith(`${f.workflow}::`));
     if (ligne) select.value = ligne.value;
+    rushes.rafraichirDestination();
     document.getElementById("format-creation").value = f.format;
 }
 

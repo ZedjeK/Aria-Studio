@@ -11,7 +11,7 @@ from app import assistant, emplacements
 from app.telechargement import ErreurTelechargement
 
 GO = 1024 ** 3
-COMMUN = {"dossier": "_base/vae", "nom": "vae.safetensors", "url": "https://huggingface.co/org/depot/resolve/main/vae.safetensors",
+COMMUN = {"dossier": "image/_base/vae", "nom": "vae.safetensors", "url": "https://huggingface.co/org/depot/resolve/main/vae.safetensors",
           "taille": 1 * GO, "sha256": "a" * 64}
 IMAGE = {"dossier": "Image/modeles", "nom": "image.safetensors", "url": "https://huggingface.co/org/image/resolve/main/image.safetensors",
          "taille": 10 * GO, "sha256": "b" * 64}

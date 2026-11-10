@@ -17,17 +17,17 @@ licence:
     territoires_exclus: []
     verifiee: 2026-10-26
 fichiers:
--   dossier: Qwen-Image2.1/modeles
+-   dossier: image/Qwen-Image2.1/modeles
     nom: qwen_image_2.1_int8_convrot.safetensors
     url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors
     taille: 7256783064
     sha256: cb74113cb03faecd79611b01fd7fd642f0aa60d6f0b95086abee214d75eaa57d
--   dossier: _base/text_encoders
+-   dossier: image/_base/text_encoders
     nom: qwen3vl_8b_int8_convrot.safetensors
     url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors
     taille: 9350798360
     sha256: 8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f
--   dossier: _base/vae
+-   dossier: image/_base/vae
     nom: qwen_image_2.1_vae_bf16.safetensors
     url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors
     taille: 675509688

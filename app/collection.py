@@ -12,12 +12,13 @@ import copy
 
 import httpx
 
-from app import assistant, emplacements, fiches, modeles, plateau, reglages, workflows
+from app import assistant, emplacements, fiches, migration_modeles, modeles, plateau, reglages, workflows
 from app.config import CONFIG
 from app.sources import Fiche, civitai
 
 GROUPES = {"image": "Modèles image", "video": "Modèles vidéo", "lora": "LoRA", "llm": "LLM",
-           "commun": "Fichiers communs (encodeurs, VAE…)"}
+           "commun_image": "Fichiers de base · image (encodeurs, VAE…)",
+           "commun_video": "Fichiers de base · vidéo (encodeurs, VAE…)"}
 
 # Onglets d'usage : les tâches de leurs workflows, et les favoris qu'on y règle (config.yaml, section generation).
 USAGES = {
@@ -38,9 +39,9 @@ def _groupe(dossier: str, infos: dict) -> tuple[str, str | None]:
     """(groupe, famille) d'un sous-dossier des modèles."""
     if dossier == "llm":
         return "llm", None
-    if dossier.startswith("_base/"):
-        return "commun", None
-    famille, sous = dossier.split("/", 1)
+    nature, famille, sous = modeles.decouper(dossier)
+    if famille is None:
+        return f"commun_{nature}", None
     if sous == "loras":
         return "lora", famille
     return infos.get(famille, {}).get("nature", "image"), famille
@@ -53,8 +54,9 @@ def _utilisations(catalogue: list) -> dict[str, list[str]]:
         for f in wf.fiche["fichiers"]:
             par_cle.setdefault(f"{f['dossier']}/{f['nom']}", []).append(wf.fiche["nom"])
         for sous in ("modeles", "loras"):
-            for nom in modeles.fichiers(f"{wf.famille}/{sous}", modeles.EXTENSIONS_IMAGE):
-                noms = par_cle.setdefault(f"{wf.famille}/{sous}/{nom}", [])
+            dossier = modeles.dossier_famille(wf.famille, sous)
+            for nom in modeles.fichiers(dossier, modeles.EXTENSIONS_IMAGE):
+                noms = par_cle.setdefault(f"{dossier}/{nom}", [])
                 if wf.fiche["nom"] not in noms:
                     noms.append(wf.fiche["nom"])
     return par_cle
@@ -79,7 +81,7 @@ def _steps_des_checkpoints(catalogue: list) -> dict[str, dict]:
         if "steps" not in wf.fiche["entrees"]:
             continue
         for nom in wf.presents():
-            cle = f"{wf.famille}/modeles/{nom}"
+            cle = f"{modeles.dossier_famille(wf.famille)}/{nom}"
             if cle in sortie:
                 continue
             if wf.a_valider(nom):
@@ -93,7 +95,9 @@ def _steps_des_checkpoints(catalogue: list) -> dict[str, dict]:
 
 
 def est_lora(dossier: str) -> bool:
-    return dossier.endswith("/loras") and not dossier.startswith("_base")
+    """LoRA d'une famille (celles de _base sont internes aux workflows)."""
+    _, famille, sous = modeles.decouper(dossier)
+    return famille is not None and sous == "loras"
 
 
 def collection() -> dict:
@@ -133,6 +137,7 @@ def collection() -> dict:
         "orphelins": sum(x["origine"] == "main" for e in groupes.values() for x in e),
         "espace_libre": modeles.espace_libre(),
         "fiches_ecartees": workflows.erreurs(),
+        "migration": migration_modeles.etat(),  # rangement image / vidéo du 2026-11-10 : son rapport
     }
 
 
