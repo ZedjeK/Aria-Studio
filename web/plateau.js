@@ -8,7 +8,7 @@ document.getElementById("workflow-creation").addEventListener("change", () => {
     afficherLoras("loras-creation", "workflow-creation");
     // Changer de modèle propose son format par défaut (réglable dans l'onglet Réglages).
     const w = tousWorkflows().find((x) => x.id === choixModele("workflow-creation").workflow);
-    if (w?.format) document.getElementById("format-creation").value = w.format;
+    if (w?.format && !redessiner()) document.getElementById("format-creation").value = w.format;
     rushes.rafraichirDestination();  // chaque modèle retient son « 📥 Ranger dans »
 });
 document.getElementById("workflow-retouche").addEventListener("change", () => {
@@ -36,7 +36,7 @@ async function chargerOptionsPlateau() {
     const origineEdit = edit.choix.find((w) => w.id === edit.defaut);
     remplirSelect("workflow-retouche", lignesModeles(edit), origineEdit && `${origineEdit.id}::${origineEdit.modele_defaut}`);
     const choisi = t2i.choix.find((w) => w.id === choixModele("workflow-creation").workflow);
-    remplirSelect("format-creation", o.formats.map((f) => [f, f]), choisi?.format ?? o.formats[0]);
+    remplirSelect("format-creation", o.formats.map((f) => [f, f]), choisi?.format ?? o.formats[0]);  // l'entrée « Celui de l'image » revient avec rendreReferences
     poserMaxNombre("nombre-creation", o.nombre_max);  // un champ à taper : le max vient du serveur
     poserMaxNombre("nombre-retouche", o.nombre_max);
     afficherLoras("loras-creation", "workflow-creation");
@@ -58,7 +58,7 @@ const AIDES_REFERENCES = {
         + "référence » dans la fiche d'un rush ; une case de plus apparaît quand les autres sont remplies. Cite-les "
         + "dans ton idée : « la femme de l'image 1 sur le dragon de l'image 2 ».",
     variation: "Une seule image : sa composition est gardée. Plus de liberté = plus de changements. Le format est celui "
-        + "de l'image.",
+        + "de l'image, sauf si tu en choisis un autre : elle est alors recadrée au centre.",
 };
 
 function listeCreation() {
@@ -82,11 +82,31 @@ function remplirModelesCreation() {
     remplirSelect("workflow-creation", lignesModeles(t), origine && `${origine.id}::${origine.modele_defaut}`);
     afficherLoras("loras-creation", "workflow-creation");
     rushes.rafraichirDestination();
-    const variation = referencesActives().length > 0 && modeReference === "variation";
+    // Redessiner : « Celui de l'image » s'ajoute aux formats (choisi d'office) ; choisir un autre format recadre l'image
+    // de départ au centre. Hors Redessiner, cette entrée disparaît et le format du modèle revient.
+    const variation = redessiner();
     const format = document.getElementById("format-creation");
-    format.disabled = variation;
-    format.title = variation ? "Redessiner une image garde son format" : "";
+    const image = optionsPlateau.format_image;
+    const present = [...format.options].some((o) => o.value === image);
+    if (variation && !present) {
+        format.prepend(new Option("Celui de l'image", image));
+        format.value = formatRedessiner ?? image;
+    }
+    if (!variation && present) {
+        const quitte = format.value === image;
+        [...format.options].find((o) => o.value === image).remove();
+        formatRedessiner = null;
+        if (quitte) format.value = choixModeleCreation()?.format ?? optionsPlateau.formats[0];
+    }
+    format.title = variation ? "« Celui de l'image » garde son format ; un autre format recadre l'image au centre" : "";
 }
+
+const redessiner = () => referencesActives().length > 0 && modeReference === "variation";
+let formatRedessiner = null;  // le format choisi à la main pendant qu'on redessine (relire les listes ne le perd pas)
+document.getElementById("format-creation").addEventListener("change", (e) => {
+    if (redessiner()) formatRedessiner = e.target.value;
+});
+const choixModeleCreation = () => listeCreation().choix.find((w) => w.id === choixModele("workflow-creation").workflow);
 
 const liberteReference = () => Number(document.getElementById("liberte-reference").value);
 
@@ -193,7 +213,8 @@ emplacements.addEventListener("drop", async (e) => {
 // Le prompt reçu du Scénario, avec son idée et le LLM qui l'a écrit : ils partent avec lui tant qu'il n'est pas changé.
 let envoiScenario = null;
 
-async function recevoirAuPlateau({ prompt, workflow, images, role, liberte = null, lancer, idee = "", llm = null }) {
+async function recevoirAuPlateau({ prompt, workflow, images, role, liberte = null, lancer, idee = "", llm = null,
+    format = null }) {
     envoiScenario = { prompt: prompt.trim(), idee, llm };
     await chargerOptionsPlateau();
     referencesChoisies = [...images];
@@ -206,6 +227,7 @@ async function recevoirAuPlateau({ prompt, workflow, images, role, liberte = nul
         document.getElementById("liberte-reference").value = liberte;
         document.getElementById("valeur-liberte").textContent = virgule(liberte);
     }
+    formatRedessiner = role === "variation" ? format : null;  // le format choisi au Scénario pour redessiner
     rendreReferences();  // refait la liste des modèles : édition pour s'inspirer, variation, texte vers image
     const w = listeCreation().choix.find((x) => x.id === workflow);
     if (w && choixModele("workflow-creation").workflow !== workflow) {  // même workflow : on garde la variante
@@ -213,6 +235,7 @@ async function recevoirAuPlateau({ prompt, workflow, images, role, liberte = nul
         select.value = `${w.id}::${w.modele_defaut}`;
         select.dispatchEvent(new Event("change"));
     }
+    if (role === "variation") document.getElementById("format-creation").value = format ?? optionsPlateau.format_image;
     document.getElementById("prompt-plateau").value = prompt;
     document.querySelector('.onglet[data-vue="plateau"]').click();
     if (lancer) document.getElementById("form-creation").requestSubmit();

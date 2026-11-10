@@ -67,6 +67,25 @@ class Graphes(unittest.TestCase):
             workflows.obtenir("qwen_image_2_1").preparer({"prompt": "x", "seed": 1,
                                                           "variation": {"image": "a.png", "denoise": 1.5}})
 
+    def test_variation_recadree_a_un_autre_format(self):
+        """Redessiner au format choisi : l'image de départ est recadrée au centre (jamais étirée), au nombre de
+        mégapixels réglé ; sans format, elle garde le sien."""
+        for id_wf in ("qwen_image_2_1", "krea2_turbo"):
+            wf = workflows.obtenir(id_wf)
+            sans = wf.preparer({"prompt": "x", "seed": 1, "variation": {"image": "a.png", "denoise": 0.6}})
+            self.assertEqual(sans["aria_var_echelle"]["class_type"], "ImageScaleToTotalPixels", id_wf)
+            self.assertNotIn("aria_var_format", sans)
+            api = wf.preparer({"prompt": "x", "seed": 1,
+                               "variation": {"image": "a.png", "denoise": 0.6, "format": "16:9 (Widescreen)"}})
+            self.assertEqual(api["aria_var_format"]["inputs"]["aspect_ratio"], "16:9 (Widescreen)", id_wf)
+            echelle = api["aria_var_echelle"]["inputs"]
+            self.assertEqual((api["aria_var_echelle"]["class_type"], echelle["crop"]), ("ImageScale", "center"), id_wf)
+            self.assertEqual((echelle["width"], echelle["height"]), (["aria_var_format", 0], ["aria_var_format", 1]))
+            self.assertEqual(api["aria_var_latent"]["inputs"]["pixels"], ["aria_var_echelle", 0], id_wf)
+        with self.assertRaisesRegex(workflows.ErreurWorkflow, "Format inconnu"):
+            workflows.obtenir("krea2_turbo").preparer({"prompt": "x", "seed": 1,
+                                                       "variation": {"image": "a.png", "denoise": 0.6, "format": "5:7"}})
+
 
 class Commandes(unittest.TestCase):
     def setUp(self):
@@ -107,6 +126,44 @@ class Commandes(unittest.TestCase):
             self.commander("x", [a], "variation", liberte=2)
         with self.assertRaisesRegex(ErreurPlateau, "ne permet pas"):
             self.commander("x", [a], "variation", workflow="qwen_image_2_1_edit")
+
+    def test_format_de_l_image_seulement_pour_redessiner(self):
+        a = self.rush("une pilote")
+        c = self.plateau.commander("x", "x", None, None, plateau.FORMAT_IMAGE, None, 1,
+                                   references=[a], mode_reference="variation")
+        self.assertEqual(c.format, plateau.FORMAT_IMAGE)
+        with self.assertRaisesRegex(ErreurPlateau, "Format inconnu"):  # ni créer, ni mélanger des images
+            self.plateau.commander("x", "x", None, "qwen_image_2_1", plateau.FORMAT_IMAGE, None, 1)
+        with self.assertRaisesRegex(ErreurPlateau, "Format inconnu"):
+            self.plateau.commander("x", "x", None, None, plateau.FORMAT_IMAGE, None, 1,
+                                   references=[a], mode_reference="inspirer")
+        self.assertEqual(self.plateau.options()["format_image"], plateau.FORMAT_IMAGE)
+
+    def test_le_format_part_a_comfyui_en_redessinant(self):
+        """Bout en bout : « Celui de l'image » n'envoie aucun format, un autre format recadre l'image de départ."""
+        graphes = []
+
+        class FauxComfy:
+            async def televerser(self, _chemin):
+                return "a.png"
+
+            async def executer(self, api, progression=None):
+                graphes.append(api)
+                return [("s.png", PNG + bytes(16))]
+
+        @asynccontextmanager
+        async def comfyui():
+            yield FauxComfy()
+
+        p = Plateau(orchestrateur=SimpleNamespace(comfyui=comfyui))
+        a = self.rush("une pilote")
+        for format_ in (plateau.FORMAT_IMAGE, "16:9 (Widescreen)"):
+            c = p.commander("x", "x", None, None, format_, 1, 1, references=[a], mode_reference="variation")
+            asyncio.run(p._creer(c))
+        garde, recadre = graphes
+        self.assertEqual(garde["aria_var_echelle"]["class_type"], "ImageScaleToTotalPixels")
+        self.assertEqual(recadre["aria_var_echelle"]["class_type"], "ImageScale")
+        self.assertEqual(recadre["aria_var_format"]["inputs"]["aspect_ratio"], "16:9 (Widescreen)")
 
     def test_validations(self):
         a = self.rush("x")

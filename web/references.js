@@ -76,6 +76,7 @@ function rendreReferencesScenario() {
 // Un changement d'images peut changer de famille de modèles (édition pour s'inspirer) : la liste est refaite.
 async function referencesChangees() {
     rendreReferencesScenario();
+    majFormat();  // web/scenario.js : « Celui de l'image » n'existe que pour Redessiner
     await chargerModelesPrompt();
     planifierAssemblage();
 }
