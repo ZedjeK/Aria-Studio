@@ -104,7 +104,7 @@ async function preparerMontageMaintenant() {
         remplirSelect("qualite-sequence", v.qualites.map((q) => [q.cle, `${q.nom} · ${q.aide}`]), "rapide");
     }
     remplirSelect("duree-montage", v.durees.map((d) => [String(d), `${d} s`]), "5");
-    remplirSelect("format-montage", optionsMontage.formats.map((f) => [f, f]), "16:9 (Widescreen)");
+    majFormatMontage();
     poserMaxNombre("nombre-montage", v.nombre_max);  // un champ à taper : le max vient du serveur
     rendreLoras("loras-montage", workflowVideo());  // plateau.js : ce qui est déjà coché reste coché
     bobines.rafraichirDestination();  // le workflow du mode est connu : son « 📥 Ranger dans »
@@ -183,13 +183,27 @@ brancherNombre("nombre-montage", reestimerMontage);  // l'estimation suit le nom
 
 // Mode et source
 
+// Texte → vidéo : un format. Animer un rush : « Celui de l'image » (par défaut) ou un format, qui recadre l'image au centre.
+let modeDuFormatMontage = null;
+function majFormatMontage() {
+    if (!optionsMontage) return;
+    const animer = modeMontage === "animer";
+    const image = optionsMontage.format_image;
+    const select = document.getElementById("format-montage");
+    if (animer && modeDuFormatMontage !== null && modeDuFormatMontage !== "animer") select.value = "";  // repart de « Celui de l'image »
+    modeDuFormatMontage = modeMontage;
+    remplirSelect("format-montage", [...(animer ? [[image, "Celui de l'image"]] : []),
+        ...optionsMontage.formats.map((f) => [f, f])], animer ? image : "16:9 (Widescreen)");
+    document.getElementById("bloc-format-montage").hidden = modeMontage === "sequence";
+}
+
 document.querySelectorAll('input[name="mode-montage"]').forEach((radio) => {
     radio.addEventListener("change", () => {
         modeMontage = radio.value;
         bobines.rafraichirDestination();  // texte ou image vers vidéo : chacun retient son « 📥 Ranger dans »
         chargerCalculMontage();
         document.getElementById("bloc-source-montage").hidden = modeMontage !== "animer";
-        document.getElementById("bloc-format-montage").hidden = modeMontage !== "texte";
+        majFormatMontage();
         // Séquence : le formulaire du clip seul s'efface au profit du panneau de la séquence (sequence.js).
         const enSequence = modeMontage === "sequence";
         document.getElementById("form-montage").closest(".carte").classList.toggle("mode-sequence", enSequence);
@@ -208,7 +222,7 @@ function rendreSource() {
 }
 
 // Le Scénario envoie un prompt prêt : il part tel quel, sur le rush à animer s'il y en a un, sinon du texte seul.
-async function recevoirAuMontage({ prompt, images, role, duree, lancer, idee = "", llm = null }) {
+async function recevoirAuMontage({ prompt, images, role, duree, lancer, idee = "", llm = null, format = null }) {
     envoiScenarioClip = { prompt: prompt.trim(), idee, llm };
     if (!optionsMontage) await preparerMontage();  // remplit les listes du Montage avant d'y poser nos valeurs
     const animer = role === "animer";
@@ -218,6 +232,9 @@ async function recevoirAuMontage({ prompt, images, role, duree, lancer, idee = "
         rendreSource();
     }
     document.getElementById("prompt-clip").value = prompt;
+    // Animer : le format choisi au Scénario, sinon « Celui de l'image » (le mode vient d'être changé, la liste refaite).
+    if (animer) document.getElementById("format-montage").value = format ?? optionsMontage.format_image;
+    else if (format) document.getElementById("format-montage").value = format;
     const choixDuree = document.getElementById("duree-montage");
     choixDuree.value = String(duree);
     choixDuree.dispatchEvent(new Event("change"));
@@ -437,7 +454,7 @@ function ouvrirClip(f) {
         ["Résolution", [f.megapixels ? `${String(f.megapixels).replace(".", ",")} MP` : nomQualite(f.qualite),
                         f.steps && `${f.steps} steps`].filter(Boolean).join(" · ")],
         ["LoRA", f.loras?.length ? f.loras.map((l) => `${l.fichier.replace(/\.safetensors$/, "")} (${virgule(l.force)})`).join(" · ") : "aucune"],
-        ["Clip", [`${f.duree} s`, `${f.largeur}×${f.hauteur}`, f.format].filter(Boolean).join(" · ")],
+        ["Clip", [`${f.duree} s`, `${f.largeur}×${f.hauteur}`, f.cadrage ?? f.format].filter(Boolean).join(" · ")],
         ["Seed", f.seed],
         ["Tournage", enMinutes(f.duree_s)],
         ["Date", f.date.replace("T", " ")],
@@ -476,7 +493,7 @@ document.getElementById("variante-clip").addEventListener("click", () => {
     fermerClip();
     window.scrollTo({ top: 0, behavior: "smooth" });
     tourner({ idee: f.idee, prompt: f.prompt, mode: f.mode_video, source: f.parent, qualite: f.qualite, duree: f.duree,
-              format: f.mode_video === "texte" ? f.format : "16:9 (Widescreen)", nombre: 1, dossier: f.dossier ?? null,
+              format: f.mode_video === "texte" ? f.format : (f.cadrage ?? optionsMontage.format_image), nombre: 1, dossier: f.dossier ?? null,
               modele: f.modele ?? null, loras: f.loras ?? [] });  // le même checkpoint et les mêmes LoRA
 });
 
@@ -488,7 +505,7 @@ document.getElementById("reutiliser-clip").addEventListener("click", () => {
     sourceMontage = f.mode_video === "animer" ? f.parent : sourceMontage;
     document.getElementById("qualite-montage").value = f.qualite;
     document.getElementById("duree-montage").value = String(f.duree);
-    if (f.mode_video === "texte") document.getElementById("format-montage").value = f.format;
+    document.getElementById("format-montage").value = f.mode_video === "texte" ? f.format : (f.cadrage ?? optionsMontage.format_image);
     const modele = document.getElementById("modele-montage");
     if (f.modele && [...modele.options].some((o) => o.value === f.modele)) modele.value = f.modele;
     rendreLoras("loras-montage", workflowVideo(), f.loras ?? []);  // ses LoRA, cochées comme au tournage

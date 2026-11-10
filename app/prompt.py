@@ -618,9 +618,10 @@ def catalogue_guide(sujet: str | None, sans_sujet: bool = False, video: bool = F
             "fiche or the fixed part already covers it:\n" + "\n".join(lignes))
 
 
-def cadre_format(format_: str | None) -> str:
+def cadre_format(format_: str | None, forme_: str = "image") -> str:
     """Le format choisi au Scénario, dit au LLM : « 16:9 (Widescreen) » → rapport, orientation et ce que ça change à la
-    composition. Vide sans format (Retouche, Redessiner : l'image garde le sien)."""
+    composition. Vide sans format (Redessiner, Retouche, Clip animé : « Celui de l'image », l'image garde le sien).
+    Retouche : l'image est recadrée au centre à ce format avant l'édition ; Séquence et plan : le cadre des plans."""
     m = re.match(r"\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)", format_ or "")
     if not m:
         return ""
@@ -634,6 +635,11 @@ def cadre_format(format_: str | None) -> str:
     else:
         forme = "portrait (taller than wide)"
         conseil = "stack the scene vertically, favour a tall framing of the subject"
+    if forme_ == "retouche":
+        return (f"Output frame chosen by the user: {format_.strip()}, {forme}. The attached picture is cropped around its "
+                "centre to this frame before the edit, so only what stays inside the frame can be edited: write the "
+                "instruction for that framing, and never ask about the frame. If an instruction already exists and "
+                "the frame changed, adapt it and give the whole new instruction.")
     return (f"Output frame chosen by the user: {format_.strip()}, {forme}. Compose the prompt for this frame ({conseil}). "
             "It is fixed: never ask about it. If a prompt already exists and the frame differs from the one it was "
             "written for, adapt its framing and composition to the new frame and give the whole new prompt.")
@@ -730,7 +736,7 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
         langue_prompt=langue_prompt, longueur=f"At most {mots} words." if mots else "")
     if vues and role in IMAGES_LIBRE:
         systeme += f"\n\n{avec_noms_images(IMAGES_LIBRE[role], workflow)}"
-    if forme in ("image", "clip") and (cadre := cadre_format(format_)):
+    if cadre := cadre_format(format_, forme):
         systeme += f"\n\n{cadre}"
     if forme in ("image", "clip") and (guide := catalogue_guide(
             sujet, sans_sujet, forme == "clip", lancement_llm(modele)["contexte"] < CONTEXTE_CATALOGUE,

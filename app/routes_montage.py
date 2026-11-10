@@ -18,7 +18,7 @@ class DemandeClip(BaseModel):
     source: str | None = None  # rush à animer
     qualite: str = "compromis"  # rapide, compromis, qualite
     duree: int = 5
-    format: str = "16:9 (Widescreen)"  # texte → vidéo seulement
+    format: str = "16:9 (Widescreen)"  # texte → vidéo ; animer : un format (recadrage au centre) ou « image source »
     seed: int | None = None
     nombre: int = 1
     dossier: str | None = None

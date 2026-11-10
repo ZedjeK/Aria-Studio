@@ -299,6 +299,8 @@
                         <label title="Largeur, en pixels, de la transition entre la retouche et l'image d'origine">Fondu
                             <input id="fondu-retouche" type="range" min="0" max="128" value="24">
                             <span id="valeur-fondu" class="valeur">24 px</span></label>
+                        <label id="bloc-format-retouche" title="« Celui de l'image » garde l'image telle quelle ; un format la recadre au centre avant la retouche (pas avec un masque)">Format
+                            <select id="format-retouche"></select></label>
                         <label>Seed <input id="seed-retouche" type="number" min="0" placeholder="aléatoire"></label>
                         <label>Images <input id="nombre-retouche" class="nombre" type="number" min="1" max="1" step="1" value="1"
                                              inputmode="numeric" title="Combien de variantes à la suite (la seed augmente de 1 à chaque image)"></label>
