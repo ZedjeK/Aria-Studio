@@ -340,7 +340,10 @@ def mettre_en_champs(texte: str, animer: bool = False) -> str:
     """Prompt H3 en trois champs, un par paragraphe. Le LLM a écrit sur une ligne (nettoyer_markdown) : on remet les
     sauts de ligne, on garantit le premier champ et [Shot 1], et on ajoute la ligne d'alignement de l'image à animer.
     Rien n'est inventé : un champ que le LLM a omis reste omis."""
-    champs = assembler_champs(*separer_champs(texte.strip()))
+    texte = texte.strip()
+    if texte.startswith(ALIGNEMENT_I2V):  # un prompt déjà mis en champs (ajustement au chat) : la ligne est remise ci-dessous
+        texte = texte[len(ALIGNEMENT_I2V):].strip()
+    champs = assembler_champs(*separer_champs(texte))
     return f"{ALIGNEMENT_I2V}\n\n{champs}" if animer else champs
 
 
@@ -370,6 +373,12 @@ def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
     if champs and nom in ("video", "decoupage"):
         texte += f"\n\n{FORMAT_CHAMPS}"
     return f"{texte}\n\n{CLAUSE_MINEURS}"
+
+
+def tokens_pour_mots(mots: int | None) -> int:
+    """Tokens à prévoir pour un prompt anglais de `mots` mots (≈ 1,3 token par mot, plus une marge). Sans cela, la
+    longueur de réponse de Réglages (512 d'origine) coupait en pleine phrase un prompt de 450 mots (Qwen-Image 2.1)."""
+    return int(mots * 1.5) + 64 if mots else 0
 
 
 def mots_max_de(workflow: str | None) -> int | None:
@@ -457,23 +466,26 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
                 "ecriture_tps": reponse.ecriture_tps}
     modele = generaliste(modele)
     regle = reglages.valeurs_llm(modele)
+    mots = None  # longueur visée du prompt : la réponse doit pouvoir la contenir
     if video:
         cadre = "animate the provided image" if video == "animer" else "from text only"
         champs = workflows.champs_video(workflow)
-        echanges = [{"role": "system", "content": consigne("video", modele, mots_pour_duree(mots_max_de(workflow), duree),
-                                                           regles, champs=champs)},
+        mots = mots_pour_duree(mots_max_de(workflow), duree)
+        echanges = [{"role": "system", "content": consigne("video", modele, mots, regles, champs=champs)},
                     {"role": "user", "content": f"{idee}\n\n(Clip: {duree} s, {cadre})"}]
     elif references:
         echanges = [{"role": "system", "content": consigne("references", modele, regles=regles, workflow=workflow)},
                     {"role": "user", "content": f"{idee}\n\n(Reference pictures: {references})"}]
     else:
-        echanges = messages(idee, modele, regles, mots_max_de(workflow))
+        mots = mots_max_de(workflow)
+        echanges = messages(idee, modele, regles, mots)
     usage = "animer" if video else "references" if references else "variation"
     async with orchestrateur.llm(modele) as llama:
         echanges[-1]["content"] = montrer(echanges[-1]["content"], vues, usage, voit=_voit(llama), workflow=workflow)
         debut = time.perf_counter()
         reponse = await llama.generer(echanges, temperature=regle["temperature_reecriture"],
-                                      max_tokens=regle["max_tokens"], **reglages.echantillonnage(modele))
+                                      max_tokens=max(regle["max_tokens"], tokens_pour_mots(mots)),
+                                      **reglages.echantillonnage(modele))
         duree = time.perf_counter() - debut
     texte = garde_cjk(nettoyer_markdown(reponse.texte), idee)  # **gras**, *italique*, titres : ni ComfyUI ni H3 n'en veulent
     if video and workflows.dialogue_en_balise(workflow):
@@ -728,6 +740,10 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     # les applique ensuite plan par plan). À l'essai, elles en faisaient un brief anglais en plans.
     if forme != "sequence" and (regles := workflows.regles_prompt(workflow)):
         systeme += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
+    # Un clip pour H3 s'écrit en trois champs, comme à la réécriture directe (reecrire) : même format, quel que soit l'onglet.
+    en_champs = forme == "clip" and workflows.champs_video(workflow)
+    if en_champs:
+        systeme += f"\n\n{FORMAT_CHAMPS}"
     systeme += f"\n\n{CLAUSE_MINEURS}"
     rubriques = noms_guide(sujet, sans_sujet, forme == "clip", workflows.rubriques_ignorees(workflow)) if forme in ("image", "clip") else set()
     ecrire = bool(echanges) and echanges[-1]["role"] == "user" and echanges[-1]["content"].strip() == ECRIRE
@@ -742,7 +758,8 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
             messages_.append({"role": e["role"], "content": contenu})
         debut = time.perf_counter()
         for essai in range(2):  # une réponse sans JSON est redemandée une fois
-            reponse = await llama.generer(messages_, temperature=regle["temperature_reecriture"], max_tokens=1200,
+            reponse = await llama.generer(messages_, temperature=regle["temperature_reecriture"],
+                                          max_tokens=max(1200, 600 + tokens_pour_mots(mots)),  # JSON : message, fiche, questions + prompt
                                           reflechir=ecrire, **reglages.echantillonnage(modele))
             try:
                 tour = lire_libre(reponse.texte, rubriques)
@@ -763,6 +780,8 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
         duree_s = time.perf_counter() - debut
     if tour["prompt"] and forme in ("clip", "plan") and workflows.dialogue_en_balise(workflow):
         tour = {**tour, "prompt": vers_balises(tour["prompt"])}  # les répliques dans la balise <d> de H3
+    if tour["prompt"] and en_champs:
+        tour = {**tour, "prompt": mettre_en_champs(tour["prompt"], animer=role == "animer")}
     securite.verifier(contexte, *textes, *tour["fiche"].values(), tour["prompt"] or "")
     return {**tour, "brut": json.dumps({k: tour[k] for k in ("message", "fiche", "questions", "prompt")},
                                        ensure_ascii=False),

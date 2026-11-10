@@ -124,8 +124,10 @@ class ChatDeClip(unittest.TestCase):
         tour = {"message": "ok", "fiche": {}, "questions": [], "prompt": 'She turns and says: "Salut."'}
         o = FauxLlm(json.dumps(tour))
         r = asyncio.run(prompt.libre(o, [{"role": "user", "content": "Elle dit salut"}], "clip", "minimax_h3_t2v"))
-        self.assertEqual(r["prompt"], "She turns and says: <d>[French] Salut.</d>")
-        self.assertEqual(json.loads(r["brut"])["prompt"], "She turns and says: <d>[French] Salut.</d>")
+        # H3 lit son prompt en trois champs : la réplique reste dans la balise, au sein de la description.
+        attendu = "integrated_multimodal_description: [Shot 1] She turns and says: <d>[French] Salut.</d>"
+        self.assertEqual(r["prompt"], attendu)
+        self.assertEqual(json.loads(r["brut"])["prompt"], attendu)
 
     def test_un_chat_d_image_ne_touche_pas_aux_guillemets(self):
         tour = {"message": "ok", "fiche": {}, "questions": [], "prompt": 'A sign that says "OPEN".'}

@@ -101,6 +101,29 @@ class Consignes(unittest.TestCase):
         self.assertIn("<Audio 1>.\n\noverall_soundscape", ref)
         self.assertEqual(sequences.avec_contrainte("She walks.", "no rain"), "She walks. Constraint for every shot: no rain.")
 
+    def test_reponse_assez_longue_pour_les_mots_vises(self):
+        """512 tokens (réglage d'origine) coupaient un prompt de 450 mots : la réponse suit la longueur de la fiche."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from types import SimpleNamespace
+
+        appels = []
+
+        class Faux:
+            @asynccontextmanager
+            async def llm(self, modele=None):
+                async def generer(messages, **options):
+                    appels.append(options)
+                    return SimpleNamespace(texte="A cat.", tokens_sortie=3, ecriture_tps=1.0)
+                yield SimpleNamespace(generer=generer, modele=None, vision=None)
+
+        self.assertEqual(prompt.tokens_pour_mots(None), 0)
+        self.assertGreater(prompt.tokens_pour_mots(450), 600)
+        asyncio.run(prompt.reecrire(Faux(), "un chat", workflow="qwen_image_2_1"))
+        asyncio.run(prompt.reecrire(Faux(), "un chat"))  # sans modèle cible : le réglage reste tel quel
+        self.assertGreaterEqual(appels[0]["max_tokens"], prompt.tokens_pour_mots(450))
+        self.assertEqual(appels[1]["max_tokens"], 512)
+
     def test_fiches_apres_audit_des_guides(self):
         from app import workflows
         for w in ("minimax_h3_t2v", "minimax_h3_i2v"):
