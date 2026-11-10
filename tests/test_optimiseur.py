@@ -14,7 +14,7 @@ from app import modeles, optimiseur, reglages, workflows
 from tests import steps_connus
 
 GO = 2**30
-LLM = "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf"
+LLM = "Autre-LLM-14B-Q4_K_M.gguf"  # un GGUF quelconque, hors catalogue
 BONSAI = "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
 
 
@@ -56,7 +56,8 @@ class Optimiseur(unittest.TestCase):
         # Les steps se valident par checkpoint (Modèles → Ma collection) : l'Optimiser ne les propose plus.
         self.assertNotIn(("qwen_image_2_1", "steps"), props)
         self.assertFalse([cle for (cible, cle) in props if cle == "shift"])  # plus aucun workflow livré ne le recommande
-        self.assertEqual(props[(LLM, "temperature_traduction")]["propose"], 0.05)
+        self.assertNotIn((BONSAI, "temperature_reecriture"), props)  # déjà à la valeur de sa fiche (0,7)
+        self.assertNotIn((LLM, "temperature_traduction"), props)  # hors catalogue : aucune recommandation
         self.assertEqual(props[(BONSAI, "presence_penalty")]["propose"], 1.5)
         self.assertEqual(r["materiel"]["gpu"], "GPU de test")
 
@@ -118,13 +119,13 @@ class Optimiseur(unittest.TestCase):
         self.carte(9)  # 8 Go libres : 6 + 1,5 (contexte 4096) tiennent ; 6 + 1,5 + 1,44 (16 384) non
         with mock.patch.object(optimiseur, "lancement_llm", lambda f: self.lancement(16384)):
             _, r = self.propositions()
-        alerte = next((a for a in r["alertes"] if a.startswith("Ministral 3 14B")), None)
+        alerte = next((a for a in r["alertes"] if a.startswith(LLM.removesuffix(".gguf"))), None)
         self.assertIsNotNone(alerte, r["alertes"])
         self.assertIn("contexte 16384", alerte)
         self.assertIn("Sans la Réflexion", alerte)  # couper la Réflexion le ferait tenir : on le dit
         with mock.patch.object(optimiseur, "lancement_llm", lambda f: self.lancement(4096, reflexion=False)):
             _, r = self.propositions()
-        self.assertFalse(any(a.startswith("Ministral 3 14B") for a in r["alertes"]))
+        self.assertFalse(any(a.startswith(LLM.removesuffix(".gguf")) for a in r["alertes"]))
 
     def test_mégapixels_selon_la_carte(self):
         self.carte(48)

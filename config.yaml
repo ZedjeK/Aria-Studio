@@ -17,13 +17,13 @@ llama:
     server: llama/llama-server.exe
     port: 8095
     # GGUF par défaut, dans modeles/llm : présélectionné dans le sélecteur de l'appli.
-    modele: "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf"
+    modele: "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
     # Modèles proposés au choix dans l'appli (gagnants du Casting LLM).
     modeles_au_choix:
-        - nom: Ministral 3 14B
-          fichier: Ministral-3-14B-Instruct-2512-Q4_K_M.gguf
         - nom: Bonsai 2 27B
           fichier: Ternary-Bonsai-2-27B-PTQ1_0.gguf
+        - nom: Bonsai 2 Heretic
+          fichier: Ternary-Bonsai-2-27B-Uncensored-Heretic-PQ2_0.gguf
     contexte: 4096
     # Fork PrismML de llama.cpp, pour les formats ternaires (Bonsai 2 et ses dérivés). Aria le choisit seule quand un
     # GGUF a des tenseurs d'un type que l'officiel ne connaît pas (app/gguf.py) ; Réglages permet de l'imposer.
@@ -50,10 +50,8 @@ casting:
     # Casting LLM : jeu d'idées, candidats (GGUF de modeles/llm, « temoin » = idée brute sans LLM) et seed de rendu.
     idees: casting/idees.yaml
     candidats_llm:
-        - Qwen3.5-9B-Q4_K_M.gguf
-        - Ministral-3-14B-Instruct-2512-Q4_K_M.gguf
-        - gemma-4-26B_q4_0-it.gguf
         - Ternary-Bonsai-2-27B-PTQ1_0.gguf
+        - Ternary-Bonsai-2-27B-Uncensored-Heretic-PQ2_0.gguf
     seed_llm: 42
 
 generation:

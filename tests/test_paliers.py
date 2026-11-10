@@ -134,9 +134,9 @@ class Report(unittest.TestCase):
                                                                   "8": {"etat": "ok", "temps_s": 30.0}}}}
         paliers.ecrire(resultats)
         bonsai = fiches.fiche_llm("Ternary-Bonsai-2-27B-PTQ1_0.gguf")["materiel"]
-        ministral = fiches.fiche_llm("Ministral-3-14B-Instruct-2512-Q4_K_M.gguf")["materiel"]
+        autre = fiches.fiche_llm("Qwen-Image-2.1-PE-T2I.Q5_K_M.gguf")["materiel"]
         self.assertEqual((bonsai["vram_min_go"], bonsai["vram_confort_go"]), (8, 12))
-        self.assertIsNone(ministral["vram_min_go"])  # seul le GGUF mesuré change
+        self.assertIsNone(autre["vram_min_go"])  # seul le GGUF mesuré change
 
     def test_deja_mesuree(self):
         resultats = {"carte": "RTX", "date": "2026-10-26", "llm": {},
