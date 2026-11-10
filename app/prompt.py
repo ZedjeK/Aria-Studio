@@ -635,6 +635,9 @@ def cadre_format(format_: str | None, forme_: str = "image") -> str:
     else:
         forme = "portrait (taller than wide)"
         conseil = "stack the scene vertically, favour a tall framing of the subject"
+    if forme_ == "sequence":
+        return (f"Output frame of the video, chosen by the user: {format_.strip()}, {forme}. Keep it in mind for the "
+                f"settings and the staging you imagine ({conseil}); never ask about it.")
     if forme_ == "retouche":
         return (f"Output frame chosen by the user: {format_.strip()}, {forme}. The attached picture is cropped around its "
                 "centre to this frame before the edit, so only what stays inside the frame can be edited: write the "

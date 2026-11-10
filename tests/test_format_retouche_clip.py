@@ -107,6 +107,13 @@ class DansLaConsigneDuLlm(unittest.TestCase):
         self.assertNotIn("cropped", prompt.cadre_format("9:16 (Portrait Widescreen)", "image"))
         self.assertEqual(prompt.cadre_format(None, "retouche"), "")
 
+    def test_sequence_dit_le_cadre_sans_composer_un_prompt(self):
+        texte = prompt.cadre_format("9:16 (Portrait Widescreen)", "sequence")
+        self.assertIn("portrait", texte)
+        self.assertIn("never ask", texte)
+        self.assertNotIn("Compose the prompt", texte)
+        self.assertIn("9:16", prompt.cadre_format("9:16 (Portrait Widescreen)", "plan"))
+
 
 if __name__ == "__main__":
     unittest.main()

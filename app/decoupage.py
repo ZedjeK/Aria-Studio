@@ -243,7 +243,8 @@ def preparer_ecriture(synopsis: str, personnage_: str, decor: str, plans: list[d
 
 async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, plans: list[dict],
                    reference: str | None, llm: str | None = None, mineur: bool = False, contrainte: str = "",
-                   musique: str | None = None, cible: int | None = None, contrainte_en: dict | None = None) -> dict:
+                   musique: str | None = None, cible: int | None = None, contrainte_en: dict | None = None,
+                   format_: str | None = None) -> dict:
     """Prompts des plans d'une séquence écrits par Llama, puis contrôlés ici : tous ensemble (✨ Tout écrire), ou
     un seul (`cible`, ✨ d'un plan), les autres servant de contexte.
     `mineur` : le personnage du Scénario est mineur (AS-18 le sait, même si aucun mot ne le dit).
@@ -261,6 +262,8 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     systeme = prompt.consigne("decoupage", llm, mots_max, wf.profil.get("regles"), champs=champs)
     systeme = (systeme.replace("{regle_personnage}", e["regle_personnage"]) if "{regle_personnage}" in systeme
                else f"{systeme}\n\nCharacter: {e['regle_personnage']}")  # consigne retouchée sans le repère
+    if cadre := prompt.cadre_format(format_, "plan"):  # le format de la séquence : chaque plan est composé pour ce cadre
+        systeme += f"\n\n{cadre}"
     echanges = [{"role": "system", "content": systeme}, {"role": "user", "content": e["demande"]}]
     regle = reglages.valeurs_llm(llm)
     debut = time.perf_counter()

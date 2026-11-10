@@ -18,7 +18,10 @@ const plansOuverts = new WeakSet();  // plans prêts dépliés à la main (ou to
 
 const decoupage = { reference: null, contrainte: "", contrainteEn: null, plans: [], alertes: [],
                     avecMusique: false, musique: "", aidePlan: null,  // aidePlan : le plan dont le chat est ouvert
-                    sequenceId: null };  // la séquence du Montage qu'un nouvel envoi mettra à jour
+                    sequenceId: null,  // la séquence du Montage qu'un nouvel envoi mettra à jour
+                    format: "16:9 (Widescreen)" };  // le cadre de la séquence (seulement si le plan 1 part du texte)
+// Le format ne compte que si le premier plan part du texte : avec un rush, la taille est celle du rush.
+const formatSequenceCompte = () => (decoupage.plans[0]?.enchainement ?? "texte") === "texte";
 let decoupagePret = false;
 
 const enSequence = () => formeScenario === "sequence";
@@ -226,6 +229,7 @@ function demandeSequence() {
         })),
         reference: decoupage.reference, contrainte: decoupage.contrainte, contrainte_en: decoupage.contrainteEn,
         musique: decoupage.avecMusique ? (decoupage.musique.trim() || "music that fits the story, your choice") : null,
+        format: formatSequenceCompte() ? decoupage.format : null,
     };
 }
 
@@ -295,6 +299,7 @@ document.getElementById("reference-scenario").addEventListener("click", (e) => {
     if (e.target.closest("[data-retirer]")) {
         decoupage.reference = null;
         if (decoupage.plans[0]?.enchainement === "rush") decoupage.plans[0].enchainement = "texte";
+        majFormat();
         rendreReference();
         rendrePlansDecoupage();
         garderBrouillon();
@@ -355,6 +360,7 @@ plansScenario.addEventListener("change", (e) => {
     else if (champ === "dialogue" || champ === "off") p[champ] = e.target.checked;
     else p[champ] = e.target.value;
     if (champ === "enchainement" && p.enchainement !== "transition") p.rush = null;
+    if (k === 0 && champ === "enchainement") majFormat();  // scenario.js : le format ne compte que si le plan 1 part du texte
     if (champ === "moment" || champ === "off") planChange(k);
     else {
         rendrePlansDecoupage();
@@ -438,12 +444,12 @@ async function envoyerSequence(mettreAJour) {
         const contrainteEn = enValide ? decoupage.contrainteEn : null;  // traduite à l'écriture : le tournage s'en sert
         const s = existante
             ? await api("PUT", `/api/sequences/${encodeURIComponent(existante.id)}`, {
-                titre: titre.value.trim(), qualite: existante.qualite, format: existante.format, llm: llmAtelier(),
+                titre: titre.value.trim(), qualite: existante.qualite, format: decoupage.format, llm: llmAtelier(),
                 modele: existante.modele, loras: existante.loras ?? [], contrainte_en: contrainteEn, plans,
                 casting: { ...existante.casting, personnage: decoupage.reference, contrainte: decoupage.contrainte.trim() },
             })
             : await api("POST", "/api/sequences", {
-                titre: titre.value.trim(), qualite: "rapide", format: "16:9 (Widescreen)", llm: llmAtelier(),
+                titre: titre.value.trim(), qualite: "rapide", format: decoupage.format, llm: llmAtelier(),
                 casting: { personnage: decoupage.reference, voix: "auto", ambiance: "",
                            contrainte: decoupage.contrainte.trim(), reference_partout: true },
                 contrainte_en: contrainteEn, plans,
@@ -483,6 +489,7 @@ function chargerSequenceAuScenario(s) {
     decoupage.reference = s.casting.personnage ?? (premier?.enchainement === "rush" ? premier.rush : null);
     decoupage.contrainte = s.casting.contrainte ?? "";
     decoupage.contrainteEn = s.contrainte_en ?? null;
+    decoupage.format = s.format ?? decoupage.format;
     decoupage.alertes = [];
     decoupage.aidePlan = null;
     decoupage.plans = s.plans.map((p, k) => {
