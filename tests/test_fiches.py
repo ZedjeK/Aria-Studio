@@ -49,7 +49,7 @@ class FichesLivrees(unittest.TestCase):
             self.assertIn(m["fichier"], llm)
         for fichier in CONFIG["llama"].get("serveurs_specifiques", {}):
             self.assertEqual(llm[fichier]["serveur"], "llama-prism")
-        self.assertEqual(llm[CONFIG["llama"]["modele"]]["serveur"], "llama")
+        self.assertEqual(llm[CONFIG["llama"]["modele"]]["serveur"], "llama-prism")  # Bonsai 2, le LLM par défaut
         self.assertEqual(fiches.fiche_llm("Ternary-Bonsai-2-27B-PTQ1_0.gguf")["nom"], "Bonsai 2 27B")
         self.assertIsNone(fiches.fiche_llm("inconnu.gguf"))
 
