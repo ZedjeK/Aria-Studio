@@ -20,6 +20,7 @@ from app.orchestrateur import Orchestrateur
 DOSSIER = DATA / "creations"
 
 FORMATS = workflows.FORMATS
+FORMAT_IMAGE = workflows.FORMAT_IMAGE
 # Images d'une même commande : un champ à taper (Plateau), plafonné contre une faute de frappe (« 400 »). Une commande
 # trop longue s'arrête avec ✕ Annuler, et ce qui est déjà produit reste dans les Rushes.
 NOMBRE_MAX = 50
@@ -226,6 +227,7 @@ class Plateau:
         prets = [wf for wf in workflows.catalogue() if not wf.manquants()]
         return {
             "formats": FORMATS,
+            "format_image": FORMAT_IMAGE,  # Redessiner : « celui de l'image », en plus des formats
             "nombre_max": NOMBRE_MAX,
             "workflows": {
                 tache: {
@@ -282,7 +284,7 @@ class Plateau:
             raise ErreurPlateau(f"Workflow indisponible pour créer : {workflow}")
         textes = textes_origine(references)
         self._valider_modele(wf, modele)
-        if format not in FORMATS:
+        if format not in FORMATS and not (mode_reference == "variation" and format == FORMAT_IMAGE):
             raise ErreurPlateau(f"Format inconnu : {format}")
         if not 1 <= nombre <= NOMBRE_MAX:
             raise ErreurPlateau(f"Nombre d'images entre 1 et {NOMBRE_MAX}")
@@ -702,7 +704,8 @@ class Plateau:
                 if c.mode_reference == "inspirer":
                     valeurs.update(image=noms_refs[0], references=noms_refs[1:], format_sortie=c.format)
                 elif c.mode_reference == "variation":
-                    valeurs["variation"] = {"image": noms_refs[0], "denoise": c.liberte}
+                    valeurs["variation"] = {"image": noms_refs[0], "denoise": c.liberte,
+                                            "format": None if c.format == FORMAT_IMAGE else c.format}
                 else:
                     valeurs["ratio"] = c.format
                 images = await comfy.executer(wf.preparer(valeurs), progression=self._suivi(c))

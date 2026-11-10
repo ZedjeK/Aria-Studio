@@ -15,6 +15,8 @@ FORMATS = [
     "1:1 (Square)", "2:3 (Portrait Photo)", "3:2 (Photo)", "3:4 (Portrait Standard)",
     "4:3 (Standard)", "9:16 (Portrait Widescreen)", "16:9 (Widescreen)", "21:9 (Ultrawide)",
 ]
+# Redessiner une image : sans autre choix, le résultat garde le format de l'image de départ.
+FORMAT_IMAGE = "image source"
 
 
 class ErreurWorkflow(ValueError):
@@ -166,7 +168,7 @@ class Workflow:
         choix_loras = tout.pop("loras", None) or []
         references = tout.pop("references", None) or []  # images 2 et 3 (déjà téléversées) ; l'image 1 = « image »
         format_sortie = tout.pop("format_sortie", None)  # S'inspirer : format choisi au lieu de celui de l'image 1
-        variation = tout.pop("variation", None)  # {"image": nom téléversé, "denoise": 0.3 à 0.9}
+        variation = tout.pop("variation", None)  # {"image": nom téléversé, "denoise": 0.3 à 0.9, "format": facultatif}
         # Point de passage obligé de tout prompt vers ComfyUI (génération, retouche, casting).
         if "prompt" in tout:
             securite.verifier(str(tout["prompt"]))
@@ -183,7 +185,7 @@ class Workflow:
         if references or format_sortie:
             self._brancher_references(api, references, format_sortie)
         if variation:
-            self._brancher_variation(api, variation["image"], variation["denoise"])
+            self._brancher_variation(api, variation["image"], variation["denoise"], variation.get("format"))
         if choix_loras:
             self._inserer_loras(api, choix_loras)
         return api
@@ -231,8 +233,10 @@ class Workflow:
                 "width": ["aria_format", 0], "height": ["aria_format", 1], "batch_size": 1}}
             api[ks]["inputs"]["latent_image"] = ["aria_latent", 0]
 
-    def _brancher_variation(self, api: dict, nom: str, denoise: float):
-        """img2img : le latent part de l'image de référence au lieu d'un latent vide ; denoise = liberté."""
+    def _brancher_variation(self, api: dict, nom: str, denoise: float, format_sortie: str | None = None):
+        """img2img : le latent part de l'image de référence au lieu d'un latent vide ; denoise = liberté.
+        `format_sortie` : un format de FORMATS, l'image de départ est alors recadrée au centre à ce format (sans la
+        déformer) avant d'être redessinée ; absent, le résultat garde le format de l'image."""
         ks, vae = reglages.noeud_unique(api, "KSampler"), reglages.noeud_unique(api, "VAELoader")
         if not (ks and vae):
             raise ErreurWorkflow(f"{self.id} ne permet pas la variation")
@@ -240,9 +244,18 @@ class Workflow:
             raise ErreurWorkflow(f"Liberté entre 0,05 et 1 : {denoise}")
         megapixels = reglages.valeurs_workflow(self).get("megapixels", 1.0)
         api["aria_var_image"] = {"class_type": "LoadImage", "inputs": {"image": nom}}
-        api["aria_var_echelle"] = {"class_type": "ImageScaleToTotalPixels", "inputs": {
-            "image": ["aria_var_image", 0], "upscale_method": "lanczos", "megapixels": megapixels,
-            "resolution_steps": 16}}
+        if format_sortie:
+            if format_sortie not in FORMATS:
+                raise ErreurWorkflow(f"Format inconnu : {format_sortie}")
+            api["aria_var_format"] = {"class_type": "ResolutionSelector", "inputs": {
+                "aspect_ratio": format_sortie, "megapixels": megapixels, "multiple": 32}}
+            api["aria_var_echelle"] = {"class_type": "ImageScale", "inputs": {
+                "image": ["aria_var_image", 0], "upscale_method": "lanczos", "width": ["aria_var_format", 0],
+                "height": ["aria_var_format", 1], "crop": "center"}}
+        else:
+            api["aria_var_echelle"] = {"class_type": "ImageScaleToTotalPixels", "inputs": {
+                "image": ["aria_var_image", 0], "upscale_method": "lanczos", "megapixels": megapixels,
+                "resolution_steps": 16}}
         api["aria_var_latent"] = {"class_type": "VAEEncode",
                                   "inputs": {"pixels": ["aria_var_echelle", 0], "vae": [vae, 0]}}
         api[ks]["inputs"]["latent_image"] = ["aria_var_latent", 0]
