@@ -2764,8 +2764,6 @@ button.quitter-appli:hover {
     flex-direction: column;
     gap: 10px;
     min-height: 120px;
-    max-height: min(60vh, 560px);
-    overflow-y: auto;
     padding: 12px;
 }
 

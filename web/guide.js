@@ -169,7 +169,7 @@ function rendreGuide() {
     html += e ? entete(e.onglet) + bulle("bulle-llm", "Guide", questionGuide(e) + (e.sl?.note ? `<p class="discret">${
         echapper(e.sl.note)}</p>` : "") + commandesGuide(e)) : bulle("bulle-llm", "Guide", recapGuide());
     zone.innerHTML = html;
-    zone.scrollTop = zone.scrollHeight;
+    suivreDerniereBulle(zone);
 }
 
 // ── Réponses ───────────────────────────────────────────────────────────────────────────────────────────────────────
