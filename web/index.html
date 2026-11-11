@@ -1001,6 +1001,33 @@
                     et Aria ne la réaffiche jamais.</p>
                 <ul id="liste-cles" class="liste"></ul>
             </section>
+            <!-- Sécurité (web/reglages.js, app/securite.py) : les listes du filtre AS-18. Le socle se lit et grandit
+                 (promotion) ; il ne se retire pas d'ici. -->
+            <section class="carte" id="carte-securite">
+                <h2>🛡️ Sécurité · Protection des mineurs</h2>
+                <p class="discret">Le filtre AS-18 bloque un personnage mineur associé à un terme sensible, et quelques
+                    termes en toutes circonstances. Il ne se désactive pas. Le <strong>socle</strong> est livré avec Aria :
+                    d'ici tu peux le lire et y promouvoir un terme, pas en retirer. <strong>Tes ajouts</strong> s'y
+                    additionnent et comptent dès la génération suivante.</p>
+                <p id="erreur-securite" class="ko" hidden></p>
+                <div id="listes-securite"></div>
+                <h3 class="titre-bloc">Essayer une phrase</h3>
+                <div class="ligne">
+                    <input id="phrase-securite" type="text" placeholder="Une phrase, comme dans un prompt" autocomplete="off">
+                    <button id="essayer-securite" type="button" class="petit">Essayer</button>
+                    <button id="temoin-bloque-securite" type="button" class="petit" title="Garder cette phrase comme témoin : elle doit bloquer">+ témoin « doit bloquer »</button>
+                    <button id="temoin-passe-securite" type="button" class="petit" title="Garder cette phrase comme témoin : elle doit passer">+ témoin « doit passer »</button>
+                </div>
+                <p id="resultat-securite" class="discret"></p>
+                <details id="bloc-temoins-securite">
+                    <summary><h3 class="titre-bloc">Phrases témoins <span id="bilan-temoins-securite" class="discret"></span></h3></summary>
+                    <p class="discret">Revérifiées à chaque changement de liste. Un point rouge : le filtre ne fait pas ce
+                        que la phrase attend.</p>
+                    <ul id="temoins-securite" class="temoins-securite"></ul>
+                </details>
+                <p class="discret">Corriger un terme du socle se fait à la main, dans <code id="fichier-socle-securite"></code>
+                    (resserre-le plutôt que de le supprimer, puis regarde les phrases témoins).</p>
+            </section>
             <section class="carte" id="carte-maj">
                 <h2>Mises à jour</h2>
                 <p id="etat-maj" class="discret"></p>

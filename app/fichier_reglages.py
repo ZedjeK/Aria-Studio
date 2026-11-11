@@ -11,6 +11,7 @@
         "mises_a_jour": {"active": true},
         "loras": {"<clé de la LoRA>": {"declencheurs": "…", "force": 0.8}},
         "llm": {…}, "workflows": {…}                                       réglages fins (app/reglages.py)
+        "securite": {"sensibles": ["…"], "temoins": [{"texte": "…", "attendu": "bloque"}]}   tes ajouts au filtre AS-18
     }
 
 Chaque module garde ses valeurs par défaut et ses contrôles ; ce module ne fait que lire et écrire les sections, d'un
@@ -50,7 +51,7 @@ log = logging.getLogger(__name__)
 
 NOM = "reglages.json"
 SECTIONS = ("emplacements", "favoris", "assistant", "installation", "fond", "notifications", "mises_a_jour", "loras",
-            "llm", "workflows")
+            "llm", "workflows", "securite")
 # Anciens fichiers (relatifs à la racine) : leur contenu, versé dans les sections de reglages.json.
 ANCIENS = ("aria.yaml", "data/reglages.yaml", "data/fond.json", "data/notifications.json", "data/mise_a_jour.json",
            "data/loras.json")

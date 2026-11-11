@@ -192,8 +192,14 @@ Aria ne fournit aucun modèle : chacun a sa propre licence, affichée dans l'ass
 
 Chaque prompt passe par le filtre **AS-18**, avant la file d'attente et juste avant d'être envoyé à ComfyUI. Un
 personnage mineur est autorisé (scène de famille, manga…), mais un personnage mineur associé à un terme sensible
-(nudité, sexualité, suggestif) est toujours bloqué. Le filtre ne se désactive pas : `securite/termes.yaml` peut
-seulement ajouter des termes, jamais en retirer.
+(nudité, sexualité, suggestif) est toujours bloqué. Le filtre ne se désactive pas.
+
+Ses listes se voient dans Réglages, carte **🛡️ Sécurité**. Le socle (`securite/socle.yaml`) est livré avec Aria : tu
+peux le lire et y promouvoir un terme, pas en retirer depuis l'interface. Tes ajouts s'y additionnent et comptent dès
+la génération suivante ; ils sont rangés avec tes autres réglages (`reglages.json`, section `securite`), qu'une mise à
+jour ne touche pas et qui garde une sauvegarde avant chaque changement. « Essayer une phrase » montre ce que le filtre en fait, et les phrases témoins signalent d'un point rouge une
+liste qui ne bloque plus ce qu'elle doit, ou qui bloque à tort. Si le socle manque ou est illisible, Aria refuse de
+générer.
 
 Aria n'écoute que sur ta machine (`127.0.0.1`), et ne répond qu'à l'interface ouverte par son lanceur (un jeton tiré à chaque lancement). Une fois par jour, elle demande à GitHub s'il existe une nouvelle
 release (option à couper dans Réglages). Elle ne télécharge rien d'elle-même : chaque téléchargement part d'un clic.
@@ -294,7 +300,7 @@ git tag -a v2.1.0 -m "Version 2.1.0"; git push origin v2.1.0
 | `web\` | L'interface (HTML, CSS, JavaScript, sans framework) |
 | `workflows\` | Un dossier par modèle : graphe ComfyUI (`api.json`) et sa fiche (fichiers, SHA-256, licence) |
 | `catalogue\` | Moteurs épinglés, LLM, packs de l'assistant |
-| `casting\`, `prompt\`, `securite\` | Idées des bancs, listes du prompt, termes du filtre AS-18 |
+| `casting\`, `prompt\`, `securite\` | Idées des bancs, listes du prompt, socle et phrases témoins du filtre AS-18 |
 | `tools\` | Construction de la version portable et son lanceur |
 
 ## Crédits
