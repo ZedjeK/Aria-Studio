@@ -100,6 +100,14 @@ class Validation(unittest.TestCase):
         self.assertIn("profil_prompt.style : prose, instruction, brief_video", p)
         self.assertIn("profil_prompt.mots_max : un entier de 20 à 1000", p)
         self.assertIn("profil_prompt.regles : une liste", p)
+        attendu = "profil_prompt.consigne : des listes de phrases, sous plan, contenu, dialogue, texte, interdits"
+        for faux in ("une phrase", {"plan": "une phrase"}, {"plan": [""]}, {"camera": ["Push in."]}):
+            f = fiche_valide()
+            f["profil_prompt"]["consigne"] = faux
+            self.assertIn(attendu, fiches.problemes_workflow(f), faux)
+        f = fiche_valide()
+        f["profil_prompt"]["consigne"] = {"plan": ["Open with the subject."], "interdits": ["Quality boosters."]}
+        self.assertEqual(fiches.problemes_workflow(f), [])
 
     def test_fiche_llm(self):
         f = copy.deepcopy(fiches.catalogue_llm()[0])
@@ -141,14 +149,22 @@ class ReglesDuProfil(unittest.TestCase):
         # Fiches livrées : des règles condensées des guides officiels, chacune avec sa source.
         for wf in workflows.catalogue():
             with self.subTest(workflow=wf.id):
-                self.assertTrue(wf.profil["regles"])
+                self.assertTrue(wf.profil["consigne"])  # rangées par section du gabarit (app/prompt.py)
+                self.assertNotIn("regles", wf.profil)  # plus de liste à plat dans les fiches livrées
                 self.assertTrue(wf.profil.get("regles_sources"))
         self.assertIn("lighting", " ".join(workflows.regles_prompt("qwen_image_2_1")))
         self.assertEqual(workflows.regles_prompt(None), [])
         self.assertEqual(workflows.regles_prompt("inconnu"), [])
-        wf = workflows.obtenir("qwen_image_2_1")
+        self.assertEqual(workflows.sections_prompt(None), {})
+        self.assertEqual(workflows.sections_prompt("inconnu"), {})
+        self.assertEqual(list(workflows.sections_prompt("qwen_image_2_1")), ["plan", "contenu", "texte", "interdits"])
+        self.assertNotIn("plan", workflows.sections_prompt("krea2_turbo"))  # son guide : un paragraphe libre
+        # Une fiche d'avant le gabarit (liste à plat) est toujours lue, sous la clé « regles ».
+        wf = copy.deepcopy(workflows.obtenir("qwen_image_2_1"))
+        wf.fiche["profil_prompt"].pop("consigne")
         wf.fiche["profil_prompt"]["regles"] = ["Short sentences."]
         with mock.patch.object(workflows, "obtenir", return_value=wf):
+            self.assertEqual(workflows.sections_prompt("qwen_image_2_1"), {"regles": ["Short sentences."]})
             self.assertEqual(workflows.regles_prompt("qwen_image_2_1"), ["Short sentences."])
 
 

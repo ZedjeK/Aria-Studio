@@ -69,17 +69,24 @@ profil_prompt:
     langue: en
     mots_max: 450  # son réécrivain officiel (PE-T2I, system_prompt.txt) vise ~20 phrases, « four to five hundred words » ; relevé le 2026-11-09. L'ancien 200 venait du polisseur de Qwen-Image 1. À confirmer au banc.
     nom_image: '<image{n}>'  # doc ComfyUI de Qwen-Image 2.1 : les images se désignent par indice, « <image1> »
-    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
-    # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
-    regles:
-    - 'Open with one sentence naming the medium, the style, the subject and the background or palette ("A vertical realistic photograph of ...").'
-    - 'Place each element in the frame with positional phrases (upper-left, across the top, lower third, far right, behind), reaching the edges and corners, not only the centre.'
-    - 'Give the lighting its own sentence: source, direction, quality, shadows and highlights.'
-    - 'End with one sentence on the whole frame: balance, palette, style and mood.'
-    - 'Name colours with a modifier (deep navy, warm terracotta, off-white) and give materials (brushed metal, coarse linen, frosted glass).'
-    - 'People: build, posture, gaze, expression, hair, and each garment with its colour and material; age as a life stage, never a number of years.'
-    - 'Text in the image: only if asked, exact characters in straight double quotes with position, weight and colour; never invent signage.'
-    - 'No quality boosters (masterpiece, 8K, highly detailed); never write an aspect ratio or a resolution in the prompt.'
+    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) et rangées dans les sections
+    # de la consigne d'un LLM généraliste (app/prompt.py, « Gabarit »). Un LLM spécialisé (catalogue/llm.yaml) garde
+    # sa propre consigne. Le « plan » suit les étapes du réécrivain officiel : ouverture, placements, lumière, clôture.
+    consigne:
+        plan:
+        - 'Open with one sentence naming the medium, the style, the subject and the background or palette ("A vertical realistic photograph of ...").'
+        - 'Then place each element in the frame with positional phrases (upper-left, across the top, lower third, far right, behind), reaching the edges and corners, not only the centre.'
+        - 'Give the lighting its own sentence: source, direction, quality, shadows and highlights.'
+        - 'End with one sentence on the whole frame: balance, palette, style and mood.'
+        contenu:
+        - 'Name colours with a modifier (deep navy, warm terracotta, off-white) and give materials (brushed metal, coarse linen, frosted glass).'
+        - 'People: build, posture, gaze, expression, hair, and each garment with its colour and material; age as a life stage, never a number of years.'
+        texte:
+        - 'Only if the idea asks for written text: the exact characters in straight double quotes, with position, weight and colour. Otherwise mention no text.'
+        interdits:
+        - 'Invent signage.'
+        - 'Quality boosters (masterpiece, 8K, highly detailed).'
+        - 'An aspect ratio or a resolution in the prompt.'
     regles_sources:
     - 'https://huggingface.co/Qwen/Qwen-Image-2.1-PE-T2I (system_prompt.txt)'
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).

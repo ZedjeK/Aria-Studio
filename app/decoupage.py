@@ -259,7 +259,7 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     # Le LLM de ce workflow (onglet Modèles), sinon celui par défaut ; un spécialiste ne fait pas de découpage.
     llm = prompt.generaliste(llm or workflows.llm_de(wf.id))
     champs = workflows.champs_video(wf.id)
-    systeme = prompt.consigne("decoupage", llm, mots_max, wf.profil.get("regles"), champs=champs)
+    systeme = prompt.consigne("decoupage", llm, mots_max, workflows.sections_prompt(wf.id), champs=champs)
     systeme = (systeme.replace("{regle_personnage}", e["regle_personnage"]) if "{regle_personnage}" in systeme
                else f"{systeme}\n\nCharacter: {e['regle_personnage']}")  # consigne retouchée sans le repère
     if cadre := prompt.cadre_format(format_, "plan"):  # le format de la séquence : chaque plan est composé pour ce cadre
