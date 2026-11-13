@@ -1,11 +1,28 @@
 // Lanceur d'Aria - Studio : démarre le serveur sans console (Python portable du dossier, « pythonw -m app »),
 // attend qu'il réponde, puis ouvre l'interface dans le navigateur par défaut. Si Aria tourne déjà, il ouvre juste
-// l'interface. Compilé par tools/build_portable.py avec le csc.exe fourni par Windows.
+// l'interface. Compilé par tools/build_portable.py avec le csc.exe fourni par Windows (C# 5 : pas de $"", ni de ?.).
+//
+// Installation par l'exe : lancé depuis un zip décompressé, il propose « Installer » ou « Lancer sans installer ».
+// Installer copie son dossier dans %USERPROFILE%\.Aria-Studio\programme (la version d'avant devient
+// programme.precedent), sans la marque « téléchargé depuis Internet », crée le raccourci du Bureau si la case est
+// cochée, puis relance depuis programme\. Pas de proposition si : Aria répond déjà, le lanceur est déjà dans
+// programme\, un dossier data\ est à côté de lui (mode portable), --portable, ou « installation_proposee: false »
+// dans aria.yaml (case « Ne plus me proposer », réactivable dans Réglages → Système).
+//
+// Réservés aux essais (tests/test_lanceur.py, sans fenêtre ni lancement) :
+//   --essai-proposer          code 0 si la fenêtre serait proposée, 2 sinon
+//   --essai-installer         installe sans fenêtre (code 0 si c'est fait) ; avec --raccourci, crée le raccourci
+//                             dans %USERPROFILE%\Desktop (jamais remplacé s'il existe)
+//   --essai-ne-plus-proposer  écrit « installation_proposee: false » dans aria.yaml
 
 using System;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Net;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
@@ -14,13 +31,332 @@ static class Launcher
 {
     const int PortParDefaut = 8075;
     const int DelaiDemarrageSecondes = 90;
+    const string Titre = "Aria Studio";
+    const string NomRaccourci = "Aria Studio.lnk";
+
+    static bool essai;  // pas de fenêtre : les erreurs sortent par le code de retour
 
     [STAThread]
-    static int Main()
+    static int Main(string[] args)
     {
-        string racine = AppDomain.CurrentDomain.BaseDirectory;
-        string url = "http://127.0.0.1:" + LirePort(racine) + "/";
+        string racine = Dossier(AppDomain.CurrentDomain.BaseDirectory);
+        essai = A(args, "--essai-proposer") || A(args, "--essai-installer") || A(args, "--essai-ne-plus-proposer");
+        bool portable = A(args, "--portable");
 
+        if (A(args, "--essai-proposer")) return DoitProposer(racine, portable) ? 0 : 2;
+        if (A(args, "--essai-ne-plus-proposer")) return NePlusProposer() ? 0 : 1;
+        if (A(args, "--essai-installer")) return Installer(racine, A(args, "--raccourci")) != null ? 0 : 1;
+
+        string url = "http://127.0.0.1:" + LirePort(racine) + "/";
+        if (!Repond(url) && DoitProposer(racine, portable))
+        {
+            Application.EnableVisualStyles();
+            bool raccourci, nePlus;
+            DialogResult choix = Proposer(out raccourci, out nePlus);
+            if (nePlus) NePlusProposer();
+            if (choix == DialogResult.Yes)
+            {
+                string exe = Installer(racine, raccourci);
+                if (exe == null) return 1;  // le message est déjà affiché, rien n'a changé dans programme\
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) });
+                return 0;
+            }
+            if (choix != DialogResult.No) return 0;  // fenêtre fermée : on ne lance rien
+        }
+        return Lancer(racine, url);
+    }
+
+    static bool A(string[] args, string option)
+    {
+        return Array.IndexOf(args, option) >= 0;
+    }
+
+    // --- emplacements (même règle qu'app/emplacements.py : USERPROFILE, comme Path.home() de Python) ---
+
+    static string Maison()
+    {
+        string profil = Environment.GetEnvironmentVariable("USERPROFILE");
+        if (string.IsNullOrEmpty(profil)) profil = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(profil, ".Aria-Studio");
+    }
+
+    static string Programme() { return Path.Combine(Maison(), "programme"); }
+
+    static string Dossier(string chemin)
+    {
+        return Path.GetFullPath(chemin).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    static bool MemeDossier(string a, string b)
+    {
+        return string.Equals(Dossier(a), Dossier(b), StringComparison.OrdinalIgnoreCase);
+    }
+
+    static string NomExe()
+    {
+        return Path.GetFileName(Assembly.GetEntryAssembly().Location);
+    }
+
+    // --- la proposition ---
+
+    static bool DoitProposer(string racine, bool portable)
+    {
+        if (portable) return false;
+        if (MemeDossier(racine, Programme())) return false;  // déjà installé
+        if (MemeDossier(racine, Programme() + ".precedent")) return false;  // retour à la version d'avant
+        if (MemeDossier(racine, Maison())) return false;  // ancienne disposition (tools/build_portable.py la range)
+        if (Directory.Exists(Path.Combine(racine, "data"))) return false;  // mode portable
+        return !NeProposePlus();
+    }
+
+    static string FichierChoix() { return Path.Combine(Maison(), "aria.yaml"); }
+
+    static readonly Regex ClePropose = new Regex(@"^installation_proposee:.*$", RegexOptions.Multiline);
+
+    static bool NeProposePlus()
+    {
+        try
+        {
+            return Regex.IsMatch(File.ReadAllText(FichierChoix()), @"^installation_proposee:\s*false\s*$",
+                                 RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    // Une ligne dans aria.yaml, le reste du fichier gardé tel quel (app/emplacements.py le relit avec PyYAML).
+    static bool NePlusProposer()
+    {
+        const string ligne = "installation_proposee: false";
+        try
+        {
+            string fichier = FichierChoix();
+            Directory.CreateDirectory(Path.GetDirectoryName(fichier));
+            string texte = File.Exists(fichier) ? File.ReadAllText(fichier) : "";
+            if (ClePropose.IsMatch(texte))
+                texte = ClePropose.Replace(texte, ligne, 1);
+            else
+                texte = (texte.Length == 0 || texte.EndsWith("\n") ? texte : texte + "\n") + ligne + "\n";
+            File.WriteAllText(fichier, texte, new UTF8Encoding(false));
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    static readonly Color Fond = ColorTranslator.FromHtml("#06101f");
+    static readonly Color Texte = ColorTranslator.FromHtml("#ddebff");
+    static readonly Color Secondaire = ColorTranslator.FromHtml("#93a8c8");
+    static readonly Color Cyan = ColorTranslator.FromHtml("#7df9ff");
+    static readonly Color Orange = ColorTranslator.FromHtml("#ff8a1f");
+
+    static DialogResult Proposer(out bool raccourci, out bool nePlus)
+    {
+        var f = new Form
+        {
+            Text = Titre, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterScreen,
+            MaximizeBox = false, MinimizeBox = false, ShowInTaskbar = true, BackColor = Fond, ForeColor = Texte,
+            Font = new Font("Segoe UI", 10f), ClientSize = new Size(520, 250), Padding = new Padding(20),
+        };
+        try { f.Icon = Icon.ExtractAssociatedIcon(Assembly.GetEntryAssembly().Location); } catch (ArgumentException) { }
+        var titre = new Label
+        {
+            Text = "Installer Aria Studio sur cet ordinateur ?", Font = new Font("Segoe UI", 12f, FontStyle.Bold),
+            AutoSize = true, Location = new Point(20, 18),
+        };
+        var detail = new Label
+        {
+            Text = "Le programme sera rangé dans " + Programme() + ", à côté de tes données. "
+                   + "Rien d'autre n'est modifié. Tu peux aussi le lancer d'ici, sans rien installer.",
+            ForeColor = Secondaire, Location = new Point(20, 50), Size = new Size(480, 60),
+        };
+        var caseRaccourci = new CheckBox { Text = "Créer un raccourci sur le Bureau", AutoSize = true, Location = new Point(20, 118) };
+        var caseNePlus = new CheckBox { Text = "Ne plus me proposer", AutoSize = true, Location = new Point(20, 146) };
+        var installer = new Button
+        {
+            Text = "Installer", DialogResult = DialogResult.Yes, FlatStyle = FlatStyle.Flat, BackColor = Orange,
+            ForeColor = ColorTranslator.FromHtml("#1a0d00"), Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+            Size = new Size(140, 36), Location = new Point(20, 192),
+        };
+        installer.FlatAppearance.BorderColor = Orange;
+        var sansInstaller = new Button
+        {
+            Text = "Lancer sans installer", DialogResult = DialogResult.No, FlatStyle = FlatStyle.Flat,
+            ForeColor = Cyan, BackColor = Fond, Size = new Size(190, 36), Location = new Point(172, 192),
+        };
+        sansInstaller.FlatAppearance.BorderColor = Cyan;
+        f.Controls.AddRange(new Control[] { titre, detail, caseRaccourci, caseNePlus, installer, sansInstaller });
+        f.AcceptButton = installer;
+        DialogResult r = f.ShowDialog();
+        raccourci = caseRaccourci.Checked;
+        nePlus = caseNePlus.Checked;
+        return r;
+    }
+
+    // --- l'installation ---
+
+    // Renvoie l'exe installé, ou null (message déjà donné) : dans ce cas programme\ n'a pas changé.
+    static string Installer(string racine, bool raccourci)
+    {
+        string maison = Maison(), programme = Programme();
+        string nouveau = programme + ".nouveau", precedent = programme + ".precedent";
+        if (MemeDossier(racine, programme) || MemeDossier(racine, precedent))
+        {
+            Erreur("Ce lanceur est déjà celui du dossier d'installation : rien à installer.");
+            return null;
+        }
+        try
+        {
+            Directory.CreateDirectory(maison);
+            foreach (string dossier in new[] { programme, precedent })
+            {
+                if (Directory.Exists(dossier) && !Libre(dossier))
+                {
+                    Erreur("Aria Studio tourne encore depuis " + dossier + ".\nQuitte-la (⏻ Quitter), puis relance.");
+                    return null;
+                }
+            }
+            if (Directory.Exists(nouveau)) Directory.Delete(nouveau, true);  // reste d'une installation interrompue
+            Exception echec = Attendre("Installation d'Aria Studio en cours…", delegate { Copier(racine, nouveau); });
+            if (echec != null) throw echec;
+
+            if (Directory.Exists(programme))
+            {
+                if (Directory.Exists(precedent)) Directory.Delete(precedent, true);
+                Directory.Move(programme, precedent);
+            }
+            try
+            {
+                Directory.Move(nouveau, programme);
+            }
+            catch (Exception)
+            {
+                if (!Directory.Exists(programme) && Directory.Exists(precedent)) Directory.Move(precedent, programme);
+                throw;
+            }
+        }
+        catch (Exception e)
+        {
+            try { if (Directory.Exists(nouveau)) Directory.Delete(nouveau, true); } catch (Exception) { }
+            Erreur("L'installation n'a pas pu se faire : " + e.Message + "\nRien n'a changé dans " + programme + ".");
+            return null;
+        }
+
+        string exe = Path.Combine(programme, NomExe());
+        if (raccourci) CreerRaccourci(exe);
+        return exe;
+    }
+
+    // Un dossier dont un fichier est ouvert (Aria lancée depuis là) ne se renomme pas.
+    static bool Libre(string dossier)
+    {
+        string essaiNom = dossier + ".verif";
+        try
+        {
+            Directory.Move(dossier, essaiNom);
+            Directory.Move(essaiNom, dossier);
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    static void Copier(string source, string cible)
+    {
+        Directory.CreateDirectory(cible);
+        foreach (string f in Directory.GetFiles(source))
+        {
+            string copie = Path.Combine(cible, Path.GetFileName(f));
+            File.Copy(f, copie, true);
+            RetirerMarque(copie);
+        }
+        foreach (string d in Directory.GetDirectories(source))
+            Copier(d, Path.Combine(cible, Path.GetFileName(d)));
+    }
+
+    // CopyFile recopie aussi le flux « Zone.Identifier » (la marque « téléchargé depuis Internet ») : on l'efface,
+    // l'utilisateur a lancé l'exe et accepté l'installation.
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "DeleteFileW", SetLastError = true)]
+    static extern bool SupprimerFichier(string chemin);
+
+    static void RetirerMarque(string fichier)
+    {
+        SupprimerFichier(fichier + ":Zone.Identifier");
+    }
+
+    // Une tâche longue, avec une petite fenêtre d'attente (sans fenêtre pendant les essais).
+    static Exception Attendre(string message, ThreadStart tache)
+    {
+        Exception erreur = null;
+        ThreadStart enveloppe = delegate { try { tache(); } catch (Exception e) { erreur = e; } };
+        if (essai)
+        {
+            enveloppe();
+            return erreur;
+        }
+        var t = new Thread(enveloppe);
+        var f = new Form
+        {
+            Text = Titre, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterScreen,
+            ControlBox = false, BackColor = Fond, ForeColor = Texte, Font = new Font("Segoe UI", 10f),
+            ClientSize = new Size(420, 110),
+        };
+        f.Controls.Add(new Label { Text = message, AutoSize = true, Location = new Point(20, 20) });
+        f.Controls.Add(new ProgressBar { Style = ProgressBarStyle.Marquee, Location = new Point(20, 56), Size = new Size(380, 18) });
+        var minuterie = new System.Windows.Forms.Timer { Interval = 200 };
+        minuterie.Tick += delegate { if (!t.IsAlive) { minuterie.Stop(); f.Close(); } };
+        f.FormClosing += delegate(object s, FormClosingEventArgs e) { if (t.IsAlive) e.Cancel = true; };
+        t.Start();
+        minuterie.Start();
+        f.ShowDialog();
+        return erreur;
+    }
+
+    // Raccourci sur le Bureau de l'utilisateur (jamais le Bureau public), vers programme\ : la cible ne change pas
+    // d'une version à l'autre. Un raccourci déjà là n'est jamais remplacé sans le demander.
+    static void CreerRaccourci(string exe)
+    {
+        string bureau = essai
+            ? Path.Combine(Environment.GetEnvironmentVariable("USERPROFILE") ?? "", "Desktop")
+            : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        string lien = Path.Combine(bureau, NomRaccourci);
+        if (File.Exists(lien))
+        {
+            if (essai) return;
+            DialogResult r = MessageBox.Show(
+                "Un raccourci « Aria Studio » existe déjà sur ton Bureau.\nLe mettre à jour pour qu'il ouvre la version installée ?",
+                Titre, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (r != DialogResult.Yes) return;
+        }
+        object coquille = null, raccourci = null;
+        try
+        {
+            Directory.CreateDirectory(bureau);
+            Type type = Type.GetTypeFromProgID("WScript.Shell");
+            coquille = Activator.CreateInstance(type);
+            raccourci = type.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, coquille, new object[] { lien });
+            Type t = raccourci.GetType();
+            t.InvokeMember("TargetPath", BindingFlags.SetProperty, null, raccourci, new object[] { exe });
+            t.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, raccourci, new object[] { Path.GetDirectoryName(exe) });
+            t.InvokeMember("Description", BindingFlags.SetProperty, null, raccourci, new object[] { "Aria Studio" });
+            t.InvokeMember("IconLocation", BindingFlags.SetProperty, null, raccourci, new object[] { exe + ",0" });
+            t.InvokeMember("Save", BindingFlags.InvokeMethod, null, raccourci, null);
+        }
+        catch (Exception e)
+        {
+            Erreur("Aria Studio est installée, mais le raccourci du Bureau n'a pas pu être créé : " + e.Message);
+        }
+        finally
+        {
+            if (raccourci != null && Marshal.IsComObject(raccourci)) Marshal.ReleaseComObject(raccourci);
+            if (coquille != null && Marshal.IsComObject(coquille)) Marshal.ReleaseComObject(coquille);
+        }
+    }
+
+    // --- le lancement (inchangé) ---
+
+    static int Lancer(string racine, string url)
+    {
         if (!Repond(url))
         {
             string pythonw = Path.Combine(racine, "python", "pythonw.exe");
@@ -78,7 +414,7 @@ static class Launcher
     {
         string data = Directory.Exists(Path.Combine(racine, "data"))
             ? Path.Combine(racine, "data")
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".Aria-Studio", "data");
+            : Path.Combine(Maison(), "data");
         return Path.Combine(data, "logs", "aria.log");
     }
 
@@ -101,6 +437,11 @@ static class Launcher
 
     static void Erreur(string message)
     {
+        if (essai)
+        {
+            Console.Error.WriteLine(message);
+            return;
+        }
         MessageBox.Show(message, "Aria - Studio", MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 }
