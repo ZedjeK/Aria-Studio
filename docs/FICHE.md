@@ -19,7 +19,7 @@ colonne « Preuve » renvoie au fichier qui fait foi.
 | Écritures hors du dossier de données | Voir la liste ci-dessous. |
 | Connexions sortantes | Voir la liste ci-dessous. |
 | Composants tiers embarqués | Dans le zip : CPython (python-build-standalone), FastAPI, Uvicorn, PyYAML, httpx, websockets, nvidia-ml-py, psutil, Pillow et leurs dépendances, polices Space Grotesk et IBM Plex Mono (OFL, textes dans `web/polices/`). Téléchargés à la demande : ComfyUI et llama.cpp (épinglés dans `catalogue/moteurs.yaml`, avec leur SHA-256), le fork PrismML de llama.cpp, et les modèles, chacun sous sa licence. `LICENCES-TIERS.txt` : à venir (PR suivante). |
-| Réussite de la v0.1 | À renseigner par l'auteur : un critère mesurable. |
+| Réussite de la v0.1 | À partir du zip, sur une machine propre : lancer `Aria-Studio.exe`, installer ComfyUI et un LLM depuis l'assistant, puis produire une image depuis le Scénario, sans toucher à un fichier ni à une ligne de commande. Critère fixé par l'auteur le 2026-11-13 ; pas encore mesuré sur une machine propre. |
 
 ## Écritures hors du dossier de données
 
