@@ -305,6 +305,46 @@ class File(Base):
             Plateau(orchestrateur=None).commander_sequence("20260101-000000-abcdef")
 
 
+class Corbeille(Base):
+    """Une séquence supprimée part à la corbeille ; seul « Vider la corbeille » l'efface pour de bon."""
+
+    def test_supprimer_puis_restaurer_a_l_identique(self):
+        s = self.creer()
+        avant = sequences.lire(s["id"])
+        sequences.supprimer(s["id"])
+        self.assertEqual(sequences.liste(), [])
+        with self.assertRaisesRegex(ErreurSequence, "Séquence inconnue"):
+            sequences.lire(s["id"])
+        dans = sequences.corbeille()
+        self.assertEqual([(e["id"], e["titre"], e["plans"]) for e in dans], [(s["id"], "Décollage", 4)])
+        self.assertTrue(dans[0]["date"])
+        r = sequences.restaurer(s["id"])
+        self.assertEqual(r["id"], s["id"])
+        self.assertEqual(sequences.lire(s["id"]), avant)  # sans la date de corbeille
+        self.assertEqual(sequences.corbeille(), [])
+
+    def test_les_clips_restent_dans_les_bobines(self):
+        s = self.tout_a_jour(sequences.lire(self.creer()["id"]))
+        clips = [p["clip"] for p in s["plans"]]
+        sequences.supprimer(s["id"])
+        ids = {f["id"] for f in rushes.liste(genre="clips")}
+        self.assertTrue(set(clips) <= ids, "les clips de la séquence doivent rester")
+
+    def test_vider_efface_pour_de_bon(self):
+        a, b = self.creer(), self.creer(titre="Atterrissage")
+        sequences.supprimer(a["id"])
+        sequences.supprimer(b["id"])
+        self.assertEqual(sequences.vider_corbeille(), 2)
+        self.assertEqual(sequences.corbeille(), [])
+        with self.assertRaisesRegex(ErreurSequence, "inconnue dans la corbeille"):
+            sequences.restaurer(a["id"])
+
+    def test_identifiant_invalide_refuse(self):
+        for mauvais in ("../modeles", "", "20260101-000000-zzzzzz"):
+            with self.assertRaises(ErreurSequence):
+                sequences.restaurer(mauvais)
+
+
 if __name__ == "__main__":
     unittest.main()
 
