@@ -394,9 +394,66 @@ def modifier(id_sequence: str, donnees: dict) -> dict:
     return public(s)
 
 
+# Corbeille (data/sequences/corbeille, comme data/voix/corbeille) : une séquence supprimée y part avec la date de sa
+# mise à la corbeille ; seul vider_corbeille() l'efface pour de bon. Ses clips et son film restent dans les Bobines.
+
+
+def _corbeille():
+    return DOSSIER / "corbeille"
+
+
 def supprimer(id_sequence: str):
-    """La séquence seulement : ses clips et son film restent dans les Bobines."""
-    _chemin(id_sequence).unlink()
+    """À la corbeille : la séquence seulement, ses clips et son film restent dans les Bobines."""
+    chemin = _chemin(id_sequence)
+    cible = _corbeille() / chemin.name
+    if cible.exists():
+        raise ErreurSequence("Une séquence du même identifiant est déjà dans la corbeille : vide-la d'abord")
+    s = json.loads(chemin.read_text(encoding="utf-8"))
+    s["corbeille"] = datetime.now().isoformat(timespec="seconds")
+    _corbeille().mkdir(parents=True, exist_ok=True)
+    temporaire = _corbeille() / f"{id_sequence}.tmp"
+    temporaire.write_text(json.dumps(s, indent=4, ensure_ascii=False), encoding="utf-8")
+    temporaire.replace(cible)
+    chemin.unlink()
+
+
+def corbeille() -> list[dict]:
+    if not _corbeille().is_dir():
+        return []
+    elements = []
+    for f in _corbeille().glob("*.json"):
+        try:
+            s = json.loads(f.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        elements.append({"id": f.stem, "titre": s.get("titre") or "sans titre", "plans": len(s.get("plans", [])),
+                         "date": s.get("corbeille")})
+    return sorted(elements, key=lambda e: e["date"] or "", reverse=True)
+
+
+def restaurer(id_sequence: str) -> dict:
+    """Revient dans la liste des séquences, telle qu'elle était. Refusé si une séquence du même identifiant existe."""
+    if not _ID.match(id_sequence or "") or not (_corbeille() / f"{id_sequence}.json").is_file():
+        raise ErreurSequence(f"Séquence inconnue dans la corbeille : {id_sequence}")
+    if (DOSSIER / f"{id_sequence}.json").exists():
+        raise ErreurSequence("Une séquence du même identifiant existe déjà : rien n'est restauré")
+    source = _corbeille() / f"{id_sequence}.json"
+    s = json.loads(source.read_text(encoding="utf-8"))
+    s.pop("corbeille", None)
+    _ecrire(s)
+    source.unlink()
+    return public(lire(id_sequence))
+
+
+def vider_corbeille() -> int:
+    """La seule suppression définitive d'une séquence. Renvoie le nombre de séquences effacées."""
+    if not _corbeille().is_dir():
+        return 0
+    effacees = 0
+    for f in _corbeille().glob("*.json"):
+        f.unlink()
+        effacees += 1
+    return effacees
 
 
 def oublier_voix(valeur: str, nom: str) -> list[str]:

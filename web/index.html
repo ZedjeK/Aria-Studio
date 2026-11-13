@@ -444,6 +444,12 @@
                         <button id="vers-scenario-sequence" type="button" class="petit"
                                 title="La séquence ouverte part au Scénario pour être retravaillée ; sans séquence, une nouvelle s'y écrit">✍️ Retravailler au Scénario</button>
                     </div>
+                    <!-- Corbeille des séquences (app/sequences.py) : seul « Vider la corbeille » efface pour de bon -->
+                    <details id="corbeille-sequences" class="corbeille-sequences" hidden>
+                        <summary class="discret">Séquences à la corbeille (<span id="nombre-corbeille-sequences">0</span>)</summary>
+                        <ul id="liste-corbeille-sequences" class="liste"></ul>
+                        <button type="button" id="vider-corbeille-sequences" class="petit danger">Vider la corbeille</button>
+                    </details>
                     <p class="discret">Les prompts des plans s'écrivent au ✍️ Scénario (histoire, découpage) ; ici, on les
                         retouche si besoin et on tourne. Chaque plan tourne son prompt tel quel.</p>
                     <div class="ligne casting-sequence">
@@ -896,6 +902,16 @@
                     <p id="suivi-sources" class="discret" hidden></p>
                 </section>
                 <div id="groupes-collection"></div>
+                <!-- Corbeille des modèles (app/modeles.py) : seul « Vider la corbeille » efface pour de bon -->
+                <section class="carte" id="corbeille-modeles" hidden>
+                    <div class="ligne">
+                        <h2>Corbeille <span id="resume-corbeille-modeles" class="discret"></span></h2>
+                        <button type="button" id="vider-corbeille-modeles" class="petit danger">Vider la corbeille</button>
+                    </div>
+                    <p class="discret">Les modèles mis à la corbeille ne servent plus à Aria ni à ComfyUI, mais gardent leur place
+                        sur le disque jusqu'au vidage. « Restaurer » les remet en service, avec leur source et leur licence.</p>
+                    <ul id="liste-corbeille-modeles" class="liste"></ul>
+                </section>
             </div>
 
             <div class="panneau-modeles" data-panneau="texte_vers_image" hidden>

@@ -461,13 +461,37 @@ def valider_modele(demande: DemandeValidation):
         raise HTTPException(400, str(e))
 
 
-@app.delete("/api/modeles/{cle:path}")
-def supprimer_modele(cle: str):
+# Corbeille des modèles (app/modeles.py) : ses routes passent avant /api/modeles/{cle:path}, qui sinon les prendrait.
+@app.get("/api/modeles/corbeille")
+def corbeille_modeles():
+    return modeles.corbeille()
+
+
+class DemandeRestauration(BaseModel):
+    cle: str
+
+
+@app.post("/api/modeles/corbeille/restaurer")
+def restaurer_modele(d: DemandeRestauration):
     try:
-        modeles.supprimer(cle)
+        return modeles.restaurer(d.cle)
     except modeles.ErreurModele as e:
         raise HTTPException(400, str(e))
-    return {"supprime": cle}
+
+
+@app.delete("/api/modeles/corbeille")
+def vider_corbeille_modeles():
+    """La seule suppression définitive d'un modèle."""
+    return modeles.vider_corbeille()
+
+
+@app.delete("/api/modeles/{cle:path}")
+def supprimer_modele(cle: str):
+    """Met le modèle à la corbeille ; seul « Vider la corbeille » l'efface pour de bon."""
+    try:
+        return modeles.mettre_a_la_corbeille(cle)
+    except modeles.ErreurModele as e:
+        raise HTTPException(400, str(e))
 
 
 @app.get("/api/telechargements")

@@ -192,8 +192,10 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
   llama-server tournent sans clé d'accès : un programme local peut leur parler.
 - **Fermer l'onglet ne ferme pas Aria.** Son serveur, et parfois un moteur et la mémoire de la carte graphique, restent
   occupés tant que tu n'as pas cliqué sur **⏻ Quitter**.
-- **Certaines suppressions sont définitives.** Supprimer un modèle téléchargé ou une séquence efface le fichier, sans
-  copie ni corbeille. Les rushes, eux, passent par la corbeille d'Aria.
+- **La corbeille garde la place.** Un modèle, une séquence ou un rush supprimé part à la corbeille d'Aria et se
+  restaure ; la place sur le disque n'est libérée qu'avec « Vider la corbeille », qui, elle, est définitive. La
+  corbeille des modèles vit dans leur dossier (`.corbeille`) : si tu changes de dossier des modèles, celle de l'ancien
+  y reste, et elle ne se restaure qu'en reprenant ce dossier.
 - **Le journal grossit.** `data\logs\aria.log` n'est pas borné en taille : à vider à la main s'il devient lourd.
 - **Pas de sauvegarde automatique** de `aria.yaml` ni des réglages avant une modification.
 - **Testée sur une seule machine** (Windows 11, RTX 4080 SUPER 16 Go, 64 Go de RAM) et lanceur non signé : voir

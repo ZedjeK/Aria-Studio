@@ -58,7 +58,46 @@ async function chargerListeSequences() {
     const garde = sequenceCourante?.id ?? "";
     choix.innerHTML = '<option value="">＋ Nouvelle séquence</option>' + sequencesConnues.map((s) =>
         `<option value="${echapper(s.id)}" ${s.id === garde ? "selected" : ""}>${echapper(s.titre)}</option>`).join("");
+    await chargerCorbeilleSequences();
 }
+
+// Corbeille des séquences (app/sequences.py) : restaurer, ou vider pour de bon
+async function chargerCorbeilleSequences() {
+    const corbeille = await api("GET", "/api/sequences/corbeille");
+    document.getElementById("corbeille-sequences").hidden = !corbeille.length;
+    document.getElementById("nombre-corbeille-sequences").textContent = corbeille.length;
+    document.getElementById("liste-corbeille-sequences").innerHTML = corbeille.map((s) => `<li class="ligne">
+        <span>${echapper(s.titre)}</span>
+        <span class="discret">${s.plans} plan${s.plans > 1 ? "s" : ""}${
+            s.date ? ` · le ${new Date(s.date).toLocaleDateString("fr-FR")}` : ""}</span>
+        <button type="button" class="petit" data-restaurer-sequence="${echapper(s.id)}">Restaurer</button>
+    </li>`).join("");
+}
+
+document.getElementById("corbeille-sequences").addEventListener("click", async (e) => {
+    const cible = e.target.closest("[data-restaurer-sequence], #vider-corbeille-sequences");
+    if (!cible) return;
+    try {
+        if (cible.dataset.restaurerSequence) {
+            if (sequenceModifiee && !confirm("La séquence ouverte a des changements non enregistrés : les abandonner ?")) return;
+            cible.disabled = true;
+            const s = await api("POST", `/api/sequences/corbeille/${encodeURIComponent(cible.dataset.restaurerSequence)}/restaurer`);
+            sequenceCourante = null;
+            await chargerListeSequences();
+            afficherSequence(s);
+            document.getElementById("choix-sequence").value = s.id;
+        } else {
+            const n = document.getElementById("nombre-corbeille-sequences").textContent;
+            if (!confirm(`Vider la corbeille ? ${n} séquence(s) seront effacées définitivement. `
+                + "Leurs clips et leurs films restent dans les Bobines.")) return;
+            await api("DELETE", "/api/sequences/corbeille");
+            await chargerCorbeilleSequences();
+        }
+    } catch (err) {
+        cible.disabled = false;
+        alert(err.message);
+    }
+});
 
 async function ouvrirSequence(id) {  // depuis la fiche d'un plan ou d'un film des Bobines, ou depuis le Scénario
     if (sequenceModifiee && !confirm(`La séquence ouverte au Montage${sequenceCourante?.titre ? ` (« ${sequenceCourante.titre} »)` : ""} `
@@ -391,8 +430,8 @@ async function enregistrerSequence() {
 document.getElementById("enregistrer-sequence").addEventListener("click", enregistrerSequence);
 
 document.getElementById("supprimer-sequence").addEventListener("click", async () => {
-    if (!sequenceCourante.id || !confirm(`Supprimer la séquence « ${sequenceCourante.titre} » ? `
-        + "Ses plans et son film restent dans les Bobines.")) return;
+    if (!sequenceCourante.id || !confirm(`Mettre la séquence « ${sequenceCourante.titre} » à la corbeille ? `
+        + "Ses plans et son film restent dans les Bobines. Tu pourras la restaurer depuis « Séquences à la corbeille ».")) return;
     await api("DELETE", `/api/sequences/${encodeURIComponent(sequenceCourante.id)}`);
     sequenceCourante = null;
     await chargerListeSequences();
