@@ -1,0 +1,365 @@
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Habillage d'Aria Studio : le contrat visuel des applis Aria, posé par-dessus style.css (chargé avant celui-ci).
+
+   Ce fichier se charge en dernier et prime sur les anciennes règles. Il ne change ni les couleurs ni les polices :
+   seulement la forme.
+
+   · Menu latéral à gauche, deux familles : Création, Préparation.
+   · Panneaux à coins coupés (haut droit, bas gauche), liseré cyan fin, sans halo.
+   · Boutons en biais, tous de même forme : plein orange pour l'action principale, contour cyan pour les autres,
+     contour discret pour annuler et fermer.
+
+   Les panneaux dessinent leur forme avec deux pseudo-éléments : le contenu n'est jamais rogné, une liste ou une
+   info-bulle qui dépasse reste visible.
+   ───────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* ===== Menu latéral et zone des pages ===== */
+
+body.large main {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+.coque {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.menu-lateral {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 20px 0 16px;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+}
+
+.menu-lateral .marque {
+    padding: 0 20px 6px;
+}
+
+.menu-lateral h1 {
+    gap: 12px;
+    font-size: 1.35rem;
+    letter-spacing: 0.06em;
+}
+
+.menu-lateral h1 .logo {
+    width: 44px;
+    height: 44px;
+}
+
+.menu-lateral nav {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.menu-lateral .famille-onglets {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    border: 0;
+}
+
+.menu-lateral .famille-onglets + .famille-onglets {
+    padding-left: 0;
+    border-left: 0;
+}
+
+.menu-lateral .etiquette-famille {
+    align-self: auto;
+    margin: 0;
+    padding: 18px 20px 6px;
+    color: var(--muted);
+    font: 500 0.66rem/1 var(--font-body);
+    letter-spacing: 0.16em;
+}
+
+body.large .menu-lateral button.onglet {
+    width: 100%;
+    height: 42px;
+    padding: 0 20px;
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    clip-path: none;
+    color: var(--muted);
+    font: 600 0.78rem var(--font-display);
+    letter-spacing: 0.12em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+body.large .menu-lateral button.onglet:hover:not(:disabled) {
+    color: var(--text);
+}
+
+body.large .menu-lateral button.onglet.actif {
+    border-left-color: var(--accent);
+    background: rgba(125, 249, 255, 0.07);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.menu-lateral .bas-menu {
+    display: grid;
+    gap: 10px;
+    justify-items: start;
+    margin-top: auto;
+    padding: 16px 20px 0;
+}
+
+.menu-lateral .bas-menu .sous-titre {
+    margin: 0;
+    color: var(--muted);
+    font: 400 0.7rem/1.5 var(--font-body);
+}
+
+.zone {
+    position: relative;
+    min-width: 0;
+    padding: 22px 28px 48px;
+}
+
+.haut-zone {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.chemin {
+    color: var(--muted);
+    font: 500 0.7rem var(--font-body);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.chemin b {
+    color: var(--accent);
+    font-weight: 500;
+}
+
+/* ===== Panneaux à coins coupés ===== */
+
+.carte {
+    position: relative;
+    isolation: isolate;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+.carte::before,
+.carte::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+}
+
+.carte::before {
+    inset: 0;
+    background: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.carte::after {
+    inset: 1px;
+    background: var(--surface);
+}
+
+/* Le panneau sur lequel agit le bouton orange de la page : liseré épais, titre cyan. Un seul par page. */
+.carte.accent::before {
+    background: var(--accent);
+}
+
+.carte.accent::after {
+    inset: 2px;
+}
+
+.carte.accent > h2,
+.carte.accent > .entete-galerie h2 {
+    color: var(--accent);
+}
+
+/* ===== Boutons ===== */
+
+/* Action principale : plein orange, en biais, sans halo. Une seule par page. */
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) .options-creation button.principal {
+    filter: none;
+}
+
+/* Les autres : contour cyan. « petit principal » n'est plus orange : l'orange est réservé à l'action de la page. */
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) button.petit:not(.principal),
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) button.petit.principal,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) label.bouton.petit {
+    position: relative;
+    isolation: isolate;
+    min-height: 32px;
+    padding: 7px 20px;
+    border: 0;
+    border-radius: 0;
+    background: var(--accent);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    color: var(--accent);
+    font: 600 0.72rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) button.petit:not(.principal)::before,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) button.petit.principal::before,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) label.bouton.petit::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) button.petit:not(.principal):hover:not(:disabled),
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) button.petit.principal:hover:not(:disabled),
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) label.bouton.petit:hover {
+    border: 0;
+    color: var(--accent);
+    filter: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) button.petit:not(.principal):hover:not(:disabled)::before,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) button.petit.principal:hover:not(:disabled)::before,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) label.bouton.petit:hover::before {
+    background: var(--hover);
+}
+
+/* Discret : annuler, fermer, remettre à plus tard, tout réinitialiser. */
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) :is(.annuler-commande, #annuler-prompt, #annuler-ecriture-plateau, #effacer-prompt, #precedent-assistant),
+body.large .menu-lateral button.quitter-appli,
+body.large .bandeau-maj button.petit {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 7px 20px;
+    border: 0;
+    border-radius: 0;
+    background: var(--line-strong);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    color: var(--muted);
+    font: 600 0.72rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) :is(.annuler-commande, #annuler-prompt, #annuler-ecriture-plateau, #effacer-prompt, #precedent-assistant)::before,
+body.large .menu-lateral button.quitter-appli::before,
+body.large .bandeau-maj button.petit::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages) :is(.annuler-commande, #annuler-prompt, #annuler-ecriture-plateau, #effacer-prompt, #precedent-assistant):hover:not(:disabled),
+body.large .menu-lateral button.quitter-appli:hover:not(:disabled),
+body.large .bandeau-maj button.petit:hover:not(:disabled) {
+    border: 0;
+    color: var(--text);
+}
+
+/* ===== Bandeau de mise à jour : bleu, la couleur de l'information ===== */
+
+body.large .bandeau-maj {
+    margin: 0 0 18px;
+    border: 1px solid var(--accent-2);
+    border-radius: 0;
+    background: var(--surface);
+}
+
+body.large .bandeau-maj #lien-maj {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 7px 20px;
+    background: var(--accent);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    color: var(--bg);
+    font: 600 0.72rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+/* ===== Fenêtre étroite : le menu passe au-dessus des pages ===== */
+
+@media (max-width: 860px) {
+    .coque {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .menu-lateral {
+        position: static;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        height: auto;
+        padding: 10px 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .menu-lateral nav,
+    .menu-lateral .famille-onglets {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .menu-lateral .etiquette-famille {
+        display: none;
+    }
+
+    body.large .menu-lateral button.onglet {
+        width: auto;
+        height: 38px;
+        padding: 0 12px;
+        border-left: 0;
+        border-bottom: 3px solid transparent;
+    }
+
+    body.large .menu-lateral button.onglet.actif {
+        border-bottom-color: var(--accent);
+    }
+
+    .menu-lateral .bas-menu {
+        grid-auto-flow: column;
+        align-items: center;
+        margin: 0 0 0 auto;
+        padding: 0 16px;
+    }
+
+    .zone {
+        padding: 18px 16px 36px;
+    }
+}

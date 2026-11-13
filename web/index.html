@@ -6,26 +6,17 @@
     <title>Aria Studio</title>
     <link rel="icon" href="/static/favicon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/habillage.css">
 </head>
 <body class="large">
     <main>
-        <!-- Barre du studio, sur deux lignes : la marque et l'état des moteurs, puis les onglets. -->
-        <header class="entete-studio">
-            <div class="entete-haut">
-                <div class="marque">
-                    <h1><img class="logo" src="/static/logo.svg" alt="">Aria <span>Studio</span></h1>
-                    <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
-                </div>
-                <div class="entete-droite">
-                    <!-- État en direct des moteurs, visible depuis tous les onglets. -->
-                    <div id="etat-direct" class="etat-direct" title="État en direct"></div>
-                    <button id="quitter-appli" type="button" class="quitter-appli"
-                            title="Quitter Aria : arrête son serveur, ComfyUI et Llama">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                             stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quitter</button>
-                </div>
+        <div class="coque">
+        <!-- Menu latéral : la marque, les deux familles de pages, puis Quitter et la version. -->
+        <aside class="menu-lateral">
+            <div class="marque">
+                <h1><img class="logo" src="/static/logo.svg" alt="">Aria <span>Studio</span></h1>
             </div>
-            <nav>
+            <nav aria-label="Pages">
                 <!-- Création : on écrit, on tourne, on retouche, on monte. -->
                 <div class="famille-onglets" title="Création">
                     <span class="etiquette-famille">Création</span>
@@ -42,7 +33,20 @@
                     <button class="onglet" data-vue="reglages">Réglages</button>
                 </div>
             </nav>
-        </header>
+            <div class="bas-menu">
+                <button id="quitter-appli" type="button" class="quitter-appli"
+                        title="Quitter Aria : arrête son serveur, ComfyUI et Llama">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quitter</button>
+                <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
+            </div>
+        </aside>
+        <div class="zone">
+            <div class="haut-zone">
+                <span id="chemin" class="chemin"></span>
+                <!-- État en direct des moteurs, visible depuis tous les onglets. -->
+                <div id="etat-direct" class="etat-direct" title="État en direct"></div>
+            </div>
         <!-- Après ⏻ Quitter : le serveur est arrêté, l'onglet peut être fermé. -->
         <div id="voile-quitte" class="voile" hidden>
             <div class="fenetre">
@@ -1055,6 +1059,8 @@
                 <div id="banc"></div>
             </section>
         </div>
+        </div>
+        </div>
     </main>
     <script src="/static/commun.js"></script>
     <script src="/static/app.js"></script>
@@ -1075,5 +1081,6 @@
     <script src="/static/voix.js"></script>
     <script src="/static/decoupage.js"></script>
     <script src="/static/assistant.js"></script>
+    <script src="/static/habillage.js"></script>
 </body>
 </html>
