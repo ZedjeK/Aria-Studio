@@ -39,7 +39,8 @@ CSC = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Microsoft.NET" / "Framewo
 
 EXE = "Aria-Studio.exe"
 SANS_LIVRER = ("tests/", "tools/", "build.ps1", ".gitignore", ".gitattributes")  # suivis par Git, inutiles à l'utilisateur
-AFFAIRES = ("data", "modeles", "moteurs", "services", "aria.yaml")  # à l'utilisateur : jamais touchées
+AFFAIRES = ("data", "modeles", "moteurs", "services", "aria.yaml", "reglages.json", "sauvegardes", "cache",
+            "journal.json")  # à l'utilisateur : jamais touchées
 MANIFESTE = ".programme"  # liste des entrées posées à la racine par l'ancienne disposition
 PROGRAMME, PRECEDENT = "programme", "programme.precedent"
 
@@ -149,6 +150,7 @@ def compiler_lanceur(dest):
     ico = ICONE
     subprocess.run([str(CSC), "/nologo", "/target:winexe", "/optimize+", f"/out:{dest / EXE}", f"/win32icon:{ico}",
                     "/codepage:65001", "/reference:System.Windows.Forms.dll", "/reference:System.Drawing.dll",
+                    "/reference:System.Web.Extensions.dll",
                     str(ROOT / "tools" / "launcher" / "Launcher.cs")],
                    check=True)
 

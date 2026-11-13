@@ -6,6 +6,7 @@ Les options --essai-* du lanceur n'ouvrent aucune fenêtre et ne lancent pas Ari
 ces tests sont sautés.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -26,6 +27,7 @@ class Lanceur(unittest.TestCase):
         cls.exe = Path(cls.compile.name) / EXE
         r = subprocess.run([str(CSC), "/nologo", "/target:winexe", f"/out:{cls.exe}", "/codepage:65001",
                             "/reference:System.Windows.Forms.dll", "/reference:System.Drawing.dll",
+                            "/reference:System.Web.Extensions.dll",
                             str(ROOT / "tools" / "launcher" / "Launcher.cs")], capture_output=True)
         if r.returncode:
             raise AssertionError(r.stdout.decode("utf-8", "replace"))
@@ -65,18 +67,40 @@ class Lanceur(unittest.TestCase):
         (self.zip / "data").mkdir()
         self.assertFalse(self.proposerait(self.zip / EXE))
 
-    def test_ne_plus_me_proposer(self):
+    def reglages(self) -> dict:
+        return json.loads((self.maison / "reglages.json").read_text(encoding="utf-8"))
+
+    def test_ne_plus_me_proposer_garde_le_reste(self):
         self.maison.mkdir(parents=True)
-        (self.maison / "aria.yaml").write_text("# Choix\nfavoris: {}\ninstallation_proposee: true\n", encoding="utf-8")
+        (self.maison / "reglages.json").write_text(json.dumps(
+            {"migration": {"date": "2026-11-13"}, "fond": {"vitesse": "lente"}, "llm": {"a.gguf": {"contexte": 8192}},
+             "loras": {"image/K/loras/s.safetensors": {"force": 0.8, "declencheurs": "néon"}},
+             "installation": {"proposee": True}}, ensure_ascii=False), encoding="utf-8")
         self.assertTrue(self.proposerait(self.zip / EXE))
         self.assertEqual(self.lancer(self.zip / EXE, "--essai-ne-plus-proposer"), 0)
-        self.assertEqual((self.maison / "aria.yaml").read_text(encoding="utf-8"),
-                         "# Choix\nfavoris: {}\ninstallation_proposee: false\n")
+        self.assertEqual(self.reglages(), {
+            "migration": {"date": "2026-11-13"}, "fond": {"vitesse": "lente"}, "llm": {"a.gguf": {"contexte": 8192}},
+            "loras": {"image/K/loras/s.safetensors": {"force": 0.8, "declencheurs": "néon"}},
+            "installation": {"proposee": False}})
         self.assertFalse(self.proposerait(self.zip / EXE))
 
-    def test_ne_plus_me_proposer_sans_aria_yaml(self):
+    def test_ne_plus_me_proposer_sans_reglages_json(self):
         self.assertEqual(self.lancer(self.zip / EXE, "--essai-ne-plus-proposer"), 0)
-        self.assertEqual((self.maison / "aria.yaml").read_text(encoding="utf-8"), "installation_proposee: false\n")
+        self.assertEqual(self.reglages(), {"installation": {"proposee": False}})  # sans « migration » : Aria migrera
+
+    def test_ancien_aria_yaml_tant_qu_aria_n_a_pas_migre(self):
+        self.maison.mkdir(parents=True)
+        (self.maison / "aria.yaml").write_text("favoris: {}\ninstallation_proposee: false\n", encoding="utf-8")
+        self.assertFalse(self.proposerait(self.zip / EXE))
+        (self.maison / "reglages.json").write_text('{"migration": {"date": "x"}}', encoding="utf-8")
+        self.assertTrue(self.proposerait(self.zip / EXE))  # migré sans la clé : c'est reglages.json qui fait foi
+
+    def test_reglages_illisible_jamais_ecrase(self):
+        self.maison.mkdir(parents=True)
+        (self.maison / "reglages.json").write_text("{ cassé", encoding="utf-8")
+        self.assertTrue(self.proposerait(self.zip / EXE))
+        self.assertEqual(self.lancer(self.zip / EXE, "--essai-ne-plus-proposer"), 1)
+        self.assertEqual((self.maison / "reglages.json").read_text(encoding="utf-8"), "{ cassé")
 
     def test_installe_dans_programme_sans_la_marque_internet(self):
         with open(str(self.zip / "config.yaml") + ":Zone.Identifier", "w", encoding="utf-8") as marque:

@@ -6,16 +6,19 @@
 // Installer copie son dossier dans %USERPROFILE%\.Aria-Studio\programme (la version d'avant devient
 // programme.precedent), sans la marque « téléchargé depuis Internet », crée le raccourci du Bureau si la case est
 // cochée, puis relance depuis programme\. Pas de proposition si : Aria répond déjà, le lanceur est déjà dans
-// programme\, un dossier data\ est à côté de lui (mode portable), --portable, ou « installation_proposee: false »
-// dans aria.yaml (case « Ne plus me proposer », réactivable dans Réglages → Système).
+// programme\, un dossier data\ est à côté de lui (mode portable), --portable, ou « installation.proposee: false »
+// dans reglages.json (case « Ne plus me proposer », réactivable dans Réglages → Système).
 //
 // Réservés aux essais (tests/test_lanceur.py, sans fenêtre ni lancement) :
 //   --essai-proposer          code 0 si la fenêtre serait proposée, 2 sinon
 //   --essai-installer         installe sans fenêtre (code 0 si c'est fait) ; avec --raccourci, crée le raccourci
 //                             dans %USERPROFILE%\Desktop (jamais remplacé s'il existe)
-//   --essai-ne-plus-proposer  écrit « installation_proposee: false » dans aria.yaml
+//   --essai-ne-plus-proposer  écrit « installation.proposee: false » dans reglages.json
+//
+// Compilé avec System.Windows.Forms, System.Drawing et System.Web.Extensions (lecteur JSON de .NET).
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -25,6 +28,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 static class Launcher
@@ -109,35 +113,71 @@ static class Launcher
         return !NeProposePlus();
     }
 
-    static string FichierChoix() { return Path.Combine(Maison(), "aria.yaml"); }
+    // Réglages de l'utilisateur : reglages.json (app/fichier_reglages.py), section « installation », clé « proposee ».
+    static string FichierReglages() { return Path.Combine(Maison(), "reglages.json"); }
+    static string AncienFichierChoix() { return Path.Combine(Maison(), "aria.yaml"); }
 
-    static readonly Regex ClePropose = new Regex(@"^installation_proposee:.*$", RegexOptions.Multiline);
+    // Le contenu de reglages.json ; null s'il est absent ou illisible (on ne l'écrase jamais alors).
+    static Dictionary<string, object> LireReglages(out bool illisible)
+    {
+        illisible = false;
+        string fichier = FichierReglages();
+        if (!File.Exists(fichier)) return null;
+        try
+        {
+            var d = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(fichier)) as Dictionary<string, object>;
+            illisible = d == null;
+            return d;
+        }
+        catch (ArgumentException) { illisible = true; }
+        catch (InvalidOperationException) { illisible = true; }
+        catch (IOException) { illisible = true; }
+        catch (UnauthorizedAccessException) { illisible = true; }
+        return null;
+    }
 
     static bool NeProposePlus()
     {
+        bool illisible;
+        Dictionary<string, object> reglages = LireReglages(out illisible);
+        if (reglages != null)
+        {
+            object section, valeur;
+            var installation = reglages.TryGetValue("installation", out section) ? section as Dictionary<string, object> : null;
+            if (installation != null && installation.TryGetValue("proposee", out valeur) && valeur is bool)
+                return !(bool)valeur;
+            if (reglages.ContainsKey("migration")) return false;  // migré : l'ancien aria.yaml n'a plus cours
+        }
+        // Pas encore migré (Aria jamais lancée depuis) : la ligne qu'écrivait le lanceur dans l'ancien aria.yaml
         try
         {
-            return Regex.IsMatch(File.ReadAllText(FichierChoix()), @"^installation_proposee:\s*false\s*$",
+            return Regex.IsMatch(File.ReadAllText(AncienFichierChoix()), @"^installation_proposee:\s*false\s*$",
                                  RegexOptions.Multiline | RegexOptions.IgnoreCase);
         }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
     }
 
-    // Une ligne dans aria.yaml, le reste du fichier gardé tel quel (app/emplacements.py le relit avec PyYAML).
+    // « installation.proposee = false » dans reglages.json, le reste du fichier gardé ; Aria le récrit à sa façon à la
+    // prochaine écriture. Sans clé « migration », Aria y versera encore les anciens fichiers sans écraser ce choix.
     static bool NePlusProposer()
     {
-        const string ligne = "installation_proposee: false";
+        bool illisible;
+        Dictionary<string, object> reglages = LireReglages(out illisible);
+        if (illisible) return false;  // jamais écrasé : Aria le mettra de côté elle-même
+        if (reglages == null) reglages = new Dictionary<string, object>();
+        object section;
+        var installation = reglages.TryGetValue("installation", out section) ? section as Dictionary<string, object> : null;
+        if (installation == null) installation = new Dictionary<string, object>();
+        installation["proposee"] = false;
+        reglages["installation"] = installation;
+        string fichier = FichierReglages(), temporaire = fichier + ".tmp";
         try
         {
-            string fichier = FichierChoix();
             Directory.CreateDirectory(Path.GetDirectoryName(fichier));
-            string texte = File.Exists(fichier) ? File.ReadAllText(fichier) : "";
-            if (ClePropose.IsMatch(texte))
-                texte = ClePropose.Replace(texte, ligne, 1);
-            else
-                texte = (texte.Length == 0 || texte.EndsWith("\n") ? texte : texte + "\n") + ligne + "\n";
-            File.WriteAllText(fichier, texte, new UTF8Encoding(false));
+            File.WriteAllText(temporaire, new JavaScriptSerializer().Serialize(reglages), new UTF8Encoding(false));
+            if (File.Exists(fichier)) File.Replace(temporaire, fichier, null);
+            else File.Move(temporaire, fichier);
             return true;
         }
         catch (IOException) { return false; }
