@@ -82,6 +82,29 @@ def retenir_favori(section: str, cle: str, valeur: str):
     _ecrire_choix(choix)
 
 
+def programme() -> Path:
+    """Où le lanceur installe le programme quand on le lance depuis un zip (tools/launcher/Launcher.cs)."""
+    return DEFAUT / "programme"
+
+
+def installe() -> bool:
+    return _meme_dossier(ROOT, programme())
+
+
+def installation() -> dict:
+    """Réglages → Système : le programme est-il installé, et le lanceur propose-t-il de l'installer ?
+
+    Le lanceur lit la clé « installation_proposee » de %USERPROFILE%\\.Aria-Studio\\aria.yaml ; en mode portable,
+    il ne propose rien."""
+    return {"installe": installe(), "portable": portable(), "programme": str(programme()), "code": str(ROOT),
+            "proposee": _choix().get("installation_proposee", True) is not False}
+
+
+def proposer_installation(proposee: bool) -> dict:
+    retenir_choix("installation_proposee", bool(proposee))
+    return installation()
+
+
 def comfyui_externe() -> Path | None:
     """ComfyUI portable déjà installé par l'utilisateur, choisi à la place de celui d'Aria (aria.yaml)."""
     chemin = _choix().get("comfyui")

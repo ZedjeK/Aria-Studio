@@ -960,6 +960,11 @@
                     <label class="case"><input type="checkbox" id="active-maj"> Vérifier au démarrage (une fois par jour, sur GitHub)</label>
                     <button id="verifier-maj" type="button" class="petit">Vérifier maintenant</button>
                 </div>
+                <!-- Installation par l'exe (tools/launcher/Launcher.cs, app/emplacements.py) : clé installation_proposee d'aria.yaml -->
+                <p id="etat-installation" class="discret"></p>
+                <div class="ligne">
+                    <label class="case"><input type="checkbox" id="proposer-installation"> Proposer l'installation quand Aria est lancée depuis un zip décompressé</label>
+                </div>
             </section>
             <section class="carte" id="carte-notifications">
                 <h2>Notifications</h2>

@@ -572,4 +572,28 @@ document.getElementById("active-maj").addEventListener("change", async (ev) => {
     afficherMiseAJour(await api("PUT", "/api/mise-a-jour", { active: ev.target.checked }));
 });
 
+// Installation par l'exe : où tourne le programme, et la proposition du lanceur (case « Ne plus me proposer »)
+function afficherInstallation(i) {
+    document.getElementById("etat-installation").textContent = i.installe
+        ? `Installée dans ${i.programme}.`
+        : i.portable ? `Mode portable : le programme tourne depuis ${i.code}.`
+            : `Lancée sans installer, depuis ${i.code}.`;
+    const caseInstallation = document.getElementById("proposer-installation");
+    caseInstallation.checked = i.proposee;
+    caseInstallation.disabled = i.portable;  // en mode portable, le lanceur ne propose rien
+}
+
+async function chargerInstallation() {
+    try {
+        afficherInstallation(await api("GET", "/api/installation"));
+    } catch {
+        // pas de serveur : la barre d'état le dit déjà
+    }
+}
+
+document.getElementById("proposer-installation").addEventListener("change", async (ev) => {
+    afficherInstallation(await api("PUT", "/api/installation", { proposee: ev.target.checked }));
+});
+
 chargerMiseAJour();
+chargerInstallation();
