@@ -656,3 +656,58 @@ body.large .cartes-mode {
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     gap: 14px;
 }
+
+/* ===== Fond animé : une grille de points, et des gouttes en cercles qui en allument quelques-uns ===== */
+
+/* Le fond couvre la zone des pages, jamais le menu ; il reste derrière les panneaux, qui sont opaques. */
+.zone {
+    isolation: isolate;
+}
+
+.fond {
+    position: fixed;
+    inset: 0 0 0 232px;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.fond .points {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(rgba(125, 249, 255, 0.15) 1px, transparent 1.6px) 0 0 / 22px 22px;
+}
+
+/* Une goutte : la même grille, plus vive, que dévoile un cercle qui s'agrandit (web/fond.js anime le masque). */
+.goutte {
+    position: absolute;
+    width: 2002px;
+    height: 2002px;
+    pointer-events: none;
+    -webkit-mask: radial-gradient(circle, transparent 34%, #000 42%, transparent 50%) center / 0 0 no-repeat;
+    mask: radial-gradient(circle, transparent 34%, #000 42%, transparent 50%) center / 0 0 no-repeat;
+}
+
+.goutte.c1 {
+    background: radial-gradient(rgba(125, 249, 255, 0.9) 1.6px, transparent 2.3px) 0 0 / 22px 22px;
+}
+
+.goutte.c2 {
+    background: radial-gradient(rgba(255, 138, 31, 0.9) 1.6px, transparent 2.3px) 0 0 / 22px 22px;
+}
+
+.goutte.c3 {
+    background: radial-gradient(rgba(92, 139, 255, 0.9) 1.6px, transparent 2.3px) 0 0 / 22px 22px;
+}
+
+@media (max-width: 860px) {
+    .fond {
+        inset: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .goutte {
+        display: none;
+    }
+}

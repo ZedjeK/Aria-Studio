@@ -42,6 +42,8 @@
             </div>
         </aside>
         <div class="zone">
+            <!-- Fond animé (web/fond.js) : derrière les pages, jamais sous le menu. -->
+            <div id="fond" class="fond" aria-hidden="true"><div class="points"></div><div id="gouttes"></div></div>
             <div class="haut-zone">
                 <span id="chemin" class="chemin"></span>
                 <!-- État en direct des moteurs, visible depuis tous les onglets. -->
@@ -970,6 +972,27 @@
                 </div>
                 <p id="autorisation-notifications" class="discret"></p>
             </section>
+            <!-- Fond animé (web/fond.js, app/fond.py) : quatre réglages, gardés dans data/fond.json. -->
+            <section class="carte" id="carte-fond">
+                <h2>Fond animé</h2>
+                <p class="discret">Des gouttes allument une grille de points derrière les pages. Le fond se met en pause quand l'onglet
+                    est caché, et ses gouttes disparaissent si Windows demande moins d'animations.</p>
+                <div class="ligne">
+                    <span class="ligne">
+                        <label class="case"><input type="checkbox" id="fond-actif"> Afficher le fond animé</label>
+                        <label class="case">Vitesse
+                            <select id="fond-vitesse">
+                                <option value="lente">Lente</option>
+                                <option value="normale">Normale</option>
+                                <option value="rapide">Rapide</option>
+                            </select></label>
+                        <label class="case">Gouttes : de
+                            <input type="number" id="fond-minimum" min="1" max="12" inputmode="numeric">
+                            à <input type="number" id="fond-maximum" min="1" max="12" inputmode="numeric"></label>
+                    </span>
+                </div>
+                <p id="fond-note" class="ko" hidden></p>
+            </section>
             </details>
             <section id="carte-optimiser" class="carte" hidden>
                 <h2>Propositions</h2>
@@ -1089,5 +1112,6 @@
     <script src="/static/decoupage.js"></script>
     <script src="/static/assistant.js"></script>
     <script src="/static/habillage.js"></script>
+    <script src="/static/fond.js"></script>
 </body>
 </html>
