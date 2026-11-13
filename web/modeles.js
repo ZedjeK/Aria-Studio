@@ -53,7 +53,46 @@ async function chargerModeles() {
         + c.fiches_ecartees.map((e) => `<p class="ko">Fiche de workflow écartée : ${echapper(e)}</p>`).join("")
         + noteMigration(c.migration);
     filtrerLoras();
+    await chargerCorbeilleModeles();
 }
+
+// Corbeille des modèles (app/modeles.py) : restaurer, ou vider pour de bon
+async function chargerCorbeilleModeles() {
+    const c = await api("GET", "/api/modeles/corbeille");
+    const section = document.getElementById("corbeille-modeles");
+    section.hidden = !c.modeles.length;
+    document.getElementById("resume-corbeille-modeles").textContent =
+        `· ${c.modeles.length} modèle${c.modeles.length > 1 ? "s" : ""} · ${taille(c.taille)}`;
+    document.getElementById("vider-corbeille-modeles").textContent = `Vider la corbeille (${taille(c.taille)})`;
+    document.getElementById("liste-corbeille-modeles").innerHTML = c.modeles.map((m) => `<li class="ligne">
+        <code>${echapper(m.nom)}</code>
+        <span class="discret">${m.present ? taille(m.taille) : "fichier absent"}${
+            m.date ? ` · le ${new Date(m.date).toLocaleDateString("fr-FR")}` : ""}${
+            m.ailleurs ? ` · dans l'ancien dossier ${echapper(m.dossier_modeles)}` : ""}</span>
+        ${m.ailleurs || !m.present ? "" : `<button type="button" class="petit" data-restaurer-modele="${echapper(m.cle)}">Restaurer</button>`}
+    </li>`).join("");
+}
+
+document.getElementById("corbeille-modeles").addEventListener("click", async (e) => {
+    const cible = e.target.closest("[data-restaurer-modele], #vider-corbeille-modeles");
+    if (!cible) return;
+    try {
+        if (cible.dataset.restaurerModele) {
+            cible.disabled = true;
+            await api("POST", "/api/modeles/corbeille/restaurer", { cle: cible.dataset.restaurerModele });
+        } else {
+            const c = await api("GET", "/api/modeles/corbeille");
+            if (!confirm(`Vider la corbeille ? ${c.modeles.length} modèle${c.modeles.length > 1 ? "s" : ""} `
+                + `(${taille(c.taille)}) seront effacés définitivement : il faudra les retélécharger pour les retrouver.`)) return;
+            const r = await api("DELETE", "/api/modeles/corbeille");
+            if (r.restes) alert(`${r.restes} fichier(s) n'ont pas pu être effacés (ouverts ?) : ils restent dans la corbeille.`);
+        }
+        chargerModeles();
+    } catch (err) {
+        cible.disabled = false;
+        alert(err.message);
+    }
+});
 
 // Rangement des modèles côté image et côté vidéo (app/migration_modeles.py) : ce qui a coincé, ou ce qui reste à trier.
 function noteMigration(m) {
@@ -519,7 +558,9 @@ document.getElementById("vue-modeles").addEventListener("click", async (e) => {
             chargerModeles();
         } else if (cible.dataset.supprimer) {
             const cle = cible.dataset.supprimer;
-            if (!confirm(`Supprimer définitivement ${cle} (${taille(Number(cible.dataset.taille))}) ?`)) return;
+            if (!confirm(`Mettre ${cle} (${taille(Number(cible.dataset.taille))}) à la corbeille ?\n\nIl ne servira plus à Aria `
+                + "ni à ComfyUI. Tu pourras le restaurer depuis la corbeille, en bas de Ma collection. La place n'est "
+                + "libérée qu'en vidant la corbeille.")) return;
             await api("DELETE", `/api/modeles/${cle.split("/").map(encodeURIComponent).join("/")}`);
             chargerModeles();
         }

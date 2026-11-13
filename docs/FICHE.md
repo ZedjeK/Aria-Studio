@@ -26,7 +26,7 @@ colonne « Preuve » renvoie au fichier qui fait foi.
 
 - **Coffre Windows** : les deux clés d'accès (Gestionnaire d'identification, persistance sur la machine).
 - **Mode portable** : si `data\` existe à côté du code, aria.yaml, data, modèles et services y restent.
-- **Dossier des modèles choisi** par l'utilisateur dans l'onglet Modèles (`aria.yaml`, clé `modeles`).
+- **Dossier des modèles choisi** par l'utilisateur dans l'onglet Modèles (`aria.yaml`, clé `modeles`). Sa corbeille vit dedans, dans `.corbeille\` (`app/modeles.py`) : un modèle supprimé y est renommé, sans copie entre disques.
 - **ComfyUI externe** (« J'ai déjà ComfyUI ») : Aria y téléverse des fichiers dans `input` (`app/comfy.py`), et ComfyUI y écrit ses propres dossiers. Ces écritures sont décidées par l'utilisateur ; Aria ne les nettoie pas.
 - **Les moteurs eux-mêmes** (ComfyUI, llama-server, Python) peuvent écrire dans `%TEMP%` ou un cache : non vérifié.
 - **Raccourci du Bureau** : **prévu, pas encore codé**, avec l'installation par l'exe. Case décochée d'office, Bureau de l'utilisateur seulement (jamais le Bureau public), jamais remplacé en silence.
@@ -57,7 +57,6 @@ traité par une PR à part ou fera l'objet d'une dérogation écrite.
 - **Clés d'accès** : dans le coffre Windows, donc chiffrées au niveau du compte, mais hors du dossier de données.
 - **Réseau local** : contrôle de `Host` et d'`Origin`, aucun CORS, actions en POST/PUT/DELETE ; mais pas de jeton par lancement, et llama-server et ComfyUI n'ont pas de clé d'accès.
 - **Mises à jour** : l'appli signale la version et le lien ; elle ne télécharge ni n'installe rien.
-- **Suppressions** : un modèle téléchargé et une séquence s'effacent sans copie préalable.
 - **Icône de notification** : aucune ; le serveur reste actif en fond après l'ouverture du navigateur, et le bouton « Quitter » de la page l'arrête.
 - **Installation par l'exe** : le lanceur ne propose ni « Installer » ni « Lancer sans installer », ne range rien dans `%USERPROFILE%\.Aria-Studio\programme`, ne crée pas de raccourci et ne vérifie pas les droits du dossier de données.
 - **Releases** : le workflow atteste la provenance du zip, mais l'attestation n'a pas encore été éprouvée sur un tag (l'essai à blanc a validé la construction seule) ; les releases immuables sont désactivées sur le dépôt.

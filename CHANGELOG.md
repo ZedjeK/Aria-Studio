@@ -10,6 +10,7 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 
 ### Ajouté
 
+- Une corbeille pour les modèles téléchargés et les séquences : supprimer les met de côté (les modèles dans `.corbeille` de leur dossier, les séquences dans `data/sequences/corbeille`), « Restaurer » les remet en service, et seul « Vider la corbeille » efface pour de bon.
 - Habillage selon le contrat visuel des applis Aria : menu latéral, panneaux à coins coupés, sous-onglets en encoche avec leur encadré « À savoir », cartes de départ à onglet, boutons en biais, liseré accentué sur le panneau que touche le bouton principal (#63).
 - Fond animé en gouttes, avec ses réglages (activé, vitesse, nombre de gouttes) dans Réglages → Système, gardés dans `data/fond.json` (#63).
 - Le format se choisit pour « Redessiner une image » (#58) et au Scénario pour la séquence, et le LLM connaît le cadre (#60, #61).
