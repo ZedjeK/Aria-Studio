@@ -19,10 +19,10 @@ from dataclasses import dataclass
 import yaml
 
 from app.config import CONFIG
-from app.emplacements import DATA
+from app.emplacements import CACHE, DATA
 
 FICHIER = DATA / "reglages.yaml"
-FICHIER_SAMPLERS = DATA / "comfyui_samplers.json"
+FICHIER_SAMPLERS = CACHE / "comfyui_samplers.json"  # la liste annoncée par ComfyUI
 LONGUEUR_CONSIGNE = 4000
 CONSIGNES = ("reecriture", "retouche", "precisions", "references", "video", "decoupage")
 

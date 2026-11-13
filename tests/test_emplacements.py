@@ -158,5 +158,47 @@ class Ouvrir(Base):
             self.assertEqual(startfile.call_count, 2)
 
 
+class Cache(unittest.TestCase):
+    """Les fichiers qui se recalculent quittent data\ pour cache\ au démarrage (app/main.py, cycle_de_vie)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        base = Path(self.tmp.name)
+        self.data, self.cache = base / "data", base / "cache"
+        self.data.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_les_anciens_fichiers_sont_deplaces(self):
+        for nom in emplacements.ANCIENS_CACHE:
+            (self.data / nom).write_text(nom, encoding="utf-8")
+        (self.data / "modeles.json").write_text("{}", encoding="utf-8")  # une donnée : reste
+        self.assertEqual(emplacements.ranger_cache(self.data, self.cache), list(emplacements.ANCIENS_CACHE))
+        for nom in emplacements.ANCIENS_CACHE:
+            self.assertFalse((self.data / nom).exists())
+            self.assertEqual((self.cache / nom).read_text(encoding="utf-8"), nom)
+        self.assertTrue((self.data / "modeles.json").is_file())
+
+    def test_rien_a_ranger(self):
+        self.assertEqual(emplacements.ranger_cache(self.data, self.cache), [])
+        self.assertFalse(self.cache.exists())
+
+    def test_un_fichier_deja_dans_cache_n_est_pas_ecrase(self):
+        self.cache.mkdir()
+        (self.cache / "empreintes.json").write_text("récent", encoding="utf-8")
+        (self.data / "empreintes.json").write_text("ancien", encoding="utf-8")
+        self.assertEqual(emplacements.ranger_cache(self.data, self.cache), [])
+        self.assertEqual((self.cache / "empreintes.json").read_text(encoding="utf-8"), "récent")
+        self.assertTrue((self.data / "empreintes.json").is_file())
+
+    def test_les_modules_ecrivent_dans_cache(self):
+        from app import modeles, reglages
+        self.assertEqual(modeles.EMPREINTES.parent, emplacements.CACHE)
+        self.assertEqual(modeles.CHEMINS_COMFYUI.parent, emplacements.CACHE)
+        self.assertEqual(reglages.FICHIER_SAMPLERS.parent, emplacements.CACHE)
+        self.assertEqual(emplacements.CACHE, emplacements.RACINE / "cache")
+
+
 if __name__ == "__main__":
     unittest.main()

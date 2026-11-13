@@ -15,7 +15,7 @@ colonne « Preuve » renvoie au fichier qui fait foi.
 | Démarrage automatique | Aucun : rien n'est installé, ni clé `Run`, ni tâche planifiée, ni service. |
 | Installation par l'exe | Oui. Lancé depuis un zip décompressé, le lanceur propose « Installer » ou « Lancer sans installer » : installer copie tout le dossier du zip (lanceur, `python\`, `app\`, `web\`, licences ; environ 185 Mo) dans `%USERPROFILE%\.Aria-Studio\programme`, sans la marque « téléchargé depuis Internet », garde la version d'avant dans `programme.precedent\`, puis relance depuis là (`tools/launcher/Launcher.cs`). Pas de proposition depuis `programme\`, en mode portable, avec `--portable` ou après « Ne plus me proposer » (clé `installation_proposee` d'`aria.yaml`, réactivable dans Réglages → Système). `tools/build_portable.py` installe au même endroit. |
 | Port local (interface web) | 8075 sur `127.0.0.1` (`config.yaml`). ComfyUI 8195 et llama-server 8095, aussi sur `127.0.0.1`. Conflit avec `docs/PORTS.md` du dépôt modèle : non vérifié. |
-| Données de l'utilisateur | `%USERPROFILE%\.Aria-Studio` : `aria.yaml` (choix, favoris, licences acceptées), `data\` (rushes, clips, séquences, voix, réglages, journaux), `modeles\`, `moteurs\`, et le programme installé dans `programme\` (version d'avant dans `programme.precedent\`). Mode portable : si `data\` existe à côté du code, tout vit à côté du code (`app/emplacements.py`). |
+| Données de l'utilisateur | `%USERPROFILE%\.Aria-Studio` : `aria.yaml` (choix, favoris, licences acceptées), `data\` (rushes, clips, séquences, voix, réglages, journaux), `cache\` (ce qui se recalcule : empreintes SHA-256, samplers et chemins de ComfyUI), `modeles\`, `moteurs\`, et le programme installé dans `programme\` (version d'avant dans `programme.precedent\`). Mode portable : si `data\` existe à côté du code, tout vit à côté du code (`app/emplacements.py`). |
 | Données secrètes | Les clés Civitai et Hugging Face, saisies dans Réglages. Rangées dans le Gestionnaire d'identification Windows (cibles `Aria-Studio/civitai` et `Aria-Studio/huggingface`), jamais dans un fichier d'Aria, jamais renvoyées à l'interface (`app/cles.py`). Repli : variables `CIVITAI_TOKEN` et `HF_TOKEN`. |
 | Écritures hors du dossier de données | Voir la liste ci-dessous. |
 | Connexions sortantes | Voir la liste ci-dessous. |
@@ -52,7 +52,7 @@ Aucune télémétrie, rien n'est envoyé à l'auteur. Les appels éventuels de C
 Ils sont décrits ici pour que personne ne les découvre par accident ; chacun est
 traité par une PR à part ou fera l'objet d'une dérogation écrite.
 
-- **Fichiers du dossier de données** : réglages en `data/reglages.yaml`, choix en `aria.yaml` à la racine ; pas de `journal.json`, de `sauvegardes\` ni de `cache\`. Le fond animé est dans `data/fond.json`, sur le modèle de `data/notifications.json`.
+- **Fichiers du dossier de données** : réglages en `data/reglages.yaml`, choix en `aria.yaml` à la racine ; pas de `journal.json` ni de `sauvegardes\`. Le fond animé est dans `data/fond.json`, sur le modèle de `data/notifications.json`.
 - **Sauvegarde avant modification** : seule la migration des modèles garde des `.bak`. `data/logs/aria.log` n'est pas borné.
 - **Clés d'accès** : dans le coffre Windows, donc chiffrées au niveau du compte, mais hors du dossier de données.
 - **Réseau local** : contrôle de `Host` et d'`Origin`, aucun CORS, actions en POST/PUT/DELETE ; mais pas de jeton par lancement, et llama-server et ComfyUI n'ont pas de clé d'accès.

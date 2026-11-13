@@ -2,7 +2,7 @@
 des onglets Texte → image, Image → image et Vidéo, avec leurs favoris) et « Retrouver les sources ».
 
 Retrouver les sources : un fichier déposé à la main n'a ni page, ni déclencheurs, ni licence. Son SHA-256 (calculé
-une fois, gardé dans data/empreintes.json) est d'abord comparé aux fiches d'Aria, puis demandé à Civitai
+une fois, gardé dans cache/empreintes.json) est d'abord comparé aux fiches d'Aria, puis demandé à Civitai
 (/model-versions/by-hash). Seulement sur un clic : envoyer une empreinte, c'est dire à Civitai qu'on a ce fichier.
 Ce qui est retrouvé entre au registre avec « retrouve » ; le reste est dit introuvable.
 """
