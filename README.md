@@ -152,6 +152,27 @@ d'accès**. Elle est rangée dans le Gestionnaire d'identification Windows, chif
 dans un fichier d'Aria, et l'interface ne la réaffiche jamais. Un bouton la teste auprès de sa source. Les
 variables d'environnement `CIVITAI_TOKEN` et `HF_TOKEN` servent si aucune clé n'est enregistrée dans Aria.
 
+## Limites à connaître
+
+Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par accident :
+
+- **Tes clés d'accès.** Le coffre de Windows les protège contre quelqu'un qui copierait tes fichiers. Il ne les protège
+  pas d'un programme lancé sous ton compte Windows : celui-là peut les lire comme Aria le fait.
+- **Les mises à jour sont manuelles.** Aria signale une nouvelle version et donne le lien ; elle ne la télécharge ni ne
+  l'installe. L'empreinte SHA-256 prouve que le zip n'a pas été abîmé en route, pas d'où il vient : le zip et son
+  `.sha256` sortent du même endroit, et la provenance repose sur le compte GitHub de l'auteur.
+- **Les moteurs sont joignables par tout programme de ta machine.** Aria n'écoute que sur `127.0.0.1`, et elle refuse
+  une requête dont l'adresse ou l'origine n'est pas la sienne. Mais elle n'exige pas de jeton, et ComfyUI et
+  llama-server tournent sans clé d'accès : un programme local peut leur parler.
+- **Fermer l'onglet ne ferme pas Aria.** Son serveur, et parfois un moteur et la mémoire de la carte graphique, restent
+  occupés tant que tu n'as pas cliqué sur **⏻ Quitter**.
+- **Certaines suppressions sont définitives.** Supprimer un modèle téléchargé ou une séquence efface le fichier, sans
+  copie ni corbeille. Les rushes, eux, passent par la corbeille d'Aria.
+- **Le journal grossit.** `data\logs\aria.log` n'est pas borné en taille : à vider à la main s'il devient lourd.
+- **Pas de sauvegarde automatique** de `aria.yaml` ni des réglages avant une modification.
+- **Testée sur une seule machine** (Windows 11, RTX 4080 SUPER 16 Go, 64 Go de RAM) et lanceur non signé : voir
+  Installation.
+
 ## Pour les développeurs
 
 Il faut Python 3.11. `run.ps1` prépare le `.venv`, installe `requirements.txt` et lance le serveur sur
