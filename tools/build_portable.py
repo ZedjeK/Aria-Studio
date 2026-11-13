@@ -1,17 +1,19 @@
-"""Construit la version portable d'Aria - Studio et l'installe dans %USERPROFILE%\\.Aria-Studio
+"""Construit la version portable d'Aria - Studio et l'installe dans %USERPROFILE%\\.Aria-Studio\\programme
 
     .venv\\Scripts\\python.exe tools\\build_portable.py [--dans DOSSIER]
 
-Le programme se pose à côté des affaires de l'utilisateur (app/emplacements.py), comme Aria-Pilote dans son
-.Aria-Pilote ; une mise à jour ne touche jamais à data\\, modeles\\, moteurs\\, services\\ ni aria.yaml :
+Le programme se pose dans le sous-dossier programme\\ du dossier d'Aria, là où le lanceur l'installe lui-même
+depuis un zip (tools/launcher/Launcher.cs) ; une mise à jour ne touche jamais à data\\, modeles\\, moteurs\\,
+services\\ ni aria.yaml :
 - python\\           CPython 3.11 portable (python-build-standalone), vérifié par SHA-256, avec les dépendances
                      exactes du .venv (celles qu'on a testées), sans rien télécharger d'autre ;
 - app\\, web\\, …     le code suivi par Git (ni tests, ni outils, ni fichiers non suivis) ;
 - Aria-Studio.exe    le lanceur (tools/launcher/Launcher.cs, compilé avec le csc.exe fourni par Windows).
 
-Mise en place : la version est construite dans .build_cache\\staging. Le fichier .programme du dossier liste ce
-que la version précédente y avait posé : seules ces entrées sont remplacées. Une entrée inconnue qui porte le
-nom d'un fichier du programme arrête tout (rien n'est supprimé qu'Aria n'ait elle-même installé).
+Mise en place : la version est construite dans .build_cache\\staging, puis devient programme\\ ; la version d'avant
+devient programme.precedent\\ (celle qui l'était déjà est remplacée). Ancienne disposition : les versions d'avant
+posaient le programme à la racine du dossier d'Aria, avec un fichier .programme qui listait ses entrées. Ces
+entrées, et elles seules, sont rangées dans programme.precedent\\ avant la mise en place (rien n'est supprimé).
 Le zip de la release se fait à partir de .build_cache\\staging (--sans-installer).
 """
 
@@ -38,7 +40,8 @@ CSC = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Microsoft.NET" / "Framewo
 EXE = "Aria-Studio.exe"
 SANS_LIVRER = ("tests/", "tools/", "build.ps1", ".gitignore", ".gitattributes")  # suivis par Git, inutiles à l'utilisateur
 AFFAIRES = ("data", "modeles", "moteurs", "services", "aria.yaml")  # à l'utilisateur : jamais touchées
-MANIFESTE = ".programme"
+MANIFESTE = ".programme"  # liste des entrées posées à la racine par l'ancienne disposition
+PROGRAMME, PRECEDENT = "programme", "programme.precedent"
 
 sys.path.insert(0, str(ROOT))
 from app import VERSION  # noqa: E402
@@ -145,45 +148,70 @@ def compiler_lanceur(dest):
         sys.exit(f"Compilateur C# introuvable : {CSC}")
     ico = ICONE
     subprocess.run([str(CSC), "/nologo", "/target:winexe", "/optimize+", f"/out:{dest / EXE}", f"/win32icon:{ico}",
-                    "/codepage:65001", "/reference:System.Windows.Forms.dll", str(ROOT / "tools" / "launcher" / "Launcher.cs")],
+                    "/codepage:65001", "/reference:System.Windows.Forms.dll", "/reference:System.Drawing.dll",
+                    str(ROOT / "tools" / "launcher" / "Launcher.cs")],
                    check=True)
 
 
 # --- mise en place -----------------------------------------------------------------
 
-def mettre_en_place(staging, dossier):
-    """Remplace le programme posé dans `dossier` par celui de `staging`, sans toucher aux affaires de l'utilisateur."""
-    etape(f"Mise en place dans {dossier}")
-    nouvelles = sorted(p.name for p in staging.iterdir())
-    if conflit := [n for n in nouvelles if n in AFFAIRES or n == MANIFESTE]:
-        sys.exit(f"Arrêt : le programme contient {', '.join(conflit)}, réservé à l'utilisateur.")
-    manifeste = dossier / MANIFESTE
+class ArretMiseEnPlace(SystemExit):
+    """Rien n'a été touché : le message dit pourquoi."""
+
+
+def _libre(dossier):
+    """Un dossier dont un fichier est ouvert (Aria lancée depuis là) ne se renomme pas."""
+    essai = dossier.with_name(dossier.name + ".verif")
     try:
-        anciennes = json.loads(manifeste.read_text(encoding="utf-8"))["entrees"]
-    except FileNotFoundError:
-        anciennes = []
-    if inconnues := [n for n in nouvelles if (dossier / n).exists() and n not in anciennes]:
-        sys.exit(f"Arrêt : {', '.join(inconnues)} existe déjà dans {dossier} sans venir d'Aria, rien n'est touché.")
-    python = dossier / "python"
-    if python.exists():
-        essai = python.with_name("python.verif")  # un dossier dont un fichier est ouvert ne se renomme pas
-        try:
-            python.rename(essai)
-            essai.rename(python)
-        except OSError:
-            sys.exit("Arrêt : Aria - Studio tourne encore. Quitte-la puis relance.")
-    dossier.mkdir(parents=True, exist_ok=True)
-    for nom in anciennes:
-        chemin = dossier / nom
-        if nom in AFFAIRES or not chemin.exists():
-            continue
-        shutil.rmtree(chemin) if chemin.is_dir() else chemin.unlink()
-    for nom in nouvelles:
-        shutil.move(str(staging / nom), str(dossier / nom))
-    manifeste.write_text(json.dumps({"version": VERSION, "entrees": nouvelles}, indent=4), encoding="utf-8")
-    staging.rmdir()
-    print(f"  {len(nouvelles)} entrées posées, {len(anciennes)} remplacées ; data, modeles, moteurs, aria.yaml intacts")
-    return dossier
+        dossier.rename(essai)
+        essai.rename(dossier)
+    except OSError:
+        raise ArretMiseEnPlace(f"Arrêt : Aria - Studio tourne encore depuis {dossier}. Quitte-la puis relance.")
+
+
+def ranger_ancienne_disposition(maison):
+    """Programme posé à la racine du dossier d'Aria par les versions d'avant : ses entrées (et seulement elles, d'après
+    .programme) partent dans programme.precedent\\. Rend la liste des entrées déplacées."""
+    manifeste = maison / MANIFESTE
+    if not manifeste.is_file():
+        return []
+    entrees = [n for n in json.loads(manifeste.read_text(encoding="utf-8")).get("entrees", [])
+               if n not in AFFAIRES and n not in (PROGRAMME, PRECEDENT, MANIFESTE) and "/" not in n and "\\" not in n]
+    precedent = maison / PRECEDENT
+    if (maison / PROGRAMME).exists() or precedent.exists():
+        raise ArretMiseEnPlace(f"Arrêt : {maison} contient à la fois l'ancienne disposition ({MANIFESTE}) et "
+                               f"{PROGRAMME}\\ ou {PRECEDENT}\\ ; rien n'est touché.")
+    if (maison / "python").exists():
+        _libre(maison / "python")
+    precedent.mkdir()
+    deplaces = []
+    for nom in entrees:
+        if (maison / nom).exists():
+            shutil.move(str(maison / nom), str(precedent / nom))
+            deplaces.append(nom)
+    shutil.move(str(manifeste), str(precedent / MANIFESTE))
+    print(f"  Ancienne disposition rangée dans {precedent} : {', '.join(deplaces) or 'aucune entrée'}")
+    return deplaces
+
+
+def mettre_en_place(staging, maison):
+    """`staging` devient maison\\programme ; la version d'avant devient programme.precedent\\. Les affaires de
+    l'utilisateur (data, modeles, moteurs, services, aria.yaml) ne sont jamais touchées."""
+    programme, precedent = maison / PROGRAMME, maison / PRECEDENT
+    etape(f"Mise en place dans {programme}")
+    if programme.is_dir() and any(programme.iterdir()) and not (programme / EXE).is_file():
+        raise ArretMiseEnPlace(f"Arrêt : {programme} existe et ne contient pas {EXE} ; rien n'est touché.")
+    maison.mkdir(parents=True, exist_ok=True)
+    ranger_ancienne_disposition(maison)
+    if programme.exists():
+        _libre(programme)
+        if precedent.exists():
+            shutil.rmtree(precedent)
+        programme.rename(precedent)
+    shutil.move(str(staging), str(programme))
+    print(f"  Programme posé dans {programme}" + (f", version d'avant dans {precedent}" if precedent.exists() else "")
+          + " ; data, modeles, moteurs, aria.yaml intacts")
+    return programme
 
 
 def taille(dossier):
@@ -192,7 +220,8 @@ def taille(dossier):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dans", default=str(DEFAUT), help="où installer le programme (défaut : %%USERPROFILE%%\\.Aria-Studio)")
+    parser.add_argument("--dans", default=str(DEFAUT),
+                        help="dossier d'Aria, le programme va dans son programme\\ (défaut : %%USERPROFILE%%\\.Aria-Studio)")
     parser.add_argument("--sans-installer", action="store_true", help="construire seulement (.build_cache\\staging, pour le zip)")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")

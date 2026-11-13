@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from app.config import CONFIG, ROOT
-from app.emplacements import DEFAUT
+from app.emplacements import DEFAUT, _meme_dossier
 
 # (à côté du code, dans le dossier de l'utilisateur) ; data en dernier, c'est lui qui décide du mode portable
 CORRESPONDANCES = (("aria.yaml", "aria.yaml"), ("services", "moteurs"), ("modeles", "modeles"), ("data", "data"))
@@ -57,6 +57,9 @@ def plan(retour: bool = False, code: Path = ROOT, maison: Path = DEFAUT) -> dict
         blocages.append("Rien à déménager" + (f" dans {maison}" if retour else " à côté du code"))
     elif _volume(code) != _volume(maison):
         blocages.append(f"{code} et {maison} ne sont pas sur le même disque : il faudrait tout copier")
+    if retour and _meme_dossier(code, maison / "programme"):
+        blocages.append(f"Aria est installée dans {code} : le retour à côté du code y mettrait tes données. "
+                        "Pour un mode portable, décompresse le zip ailleurs et crée un dossier data à côté")
     occupes = _ports_occupes()
     if occupes:
         blocages.append("Arrête d'abord : " + ", ".join(occupes))

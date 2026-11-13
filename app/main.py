@@ -186,6 +186,21 @@ def regler_mise_a_jour(d: DemandeMiseAJour):
     return mises_a_jour.activer(d.active)
 
 
+class DemandeInstallation(BaseModel):
+    proposee: bool
+
+
+@app.get("/api/installation")
+def lire_installation():
+    """Installation par l'exe : installé dans %USERPROFILE%\\.Aria-Studio\\programme ou non, et la proposition du lanceur."""
+    return emplacements.installation()
+
+
+@app.put("/api/installation")
+def regler_installation(d: DemandeInstallation):
+    return emplacements.proposer_installation(d.proposee)
+
+
 class DemandeNotifications(BaseModel):
     active: bool | None = None
     son: bool | None = None

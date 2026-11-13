@@ -13,9 +13,9 @@ colonne « Preuve » renvoie au fichier qui fait foi.
 | Stack | Python 3.11, FastAPI et Uvicorn, interface en HTML/CSS/JS sans framework, ComfyUI portable (images, vidéos), llama.cpp (LLM, GGUF), lanceur C# (`tools/launcher/Launcher.cs`). |
 | Droits administrateur | Non. Aucune élévation dans le code, le lanceur ni le build. |
 | Démarrage automatique | Aucun : rien n'est installé, ni clé `Run`, ni tâche planifiée, ni service. |
-| Installation par l'exe | Oui, **prévue, pas encore codée** (décision de l'auteur, 2026-11-13). Aujourd'hui le zip se décompresse et se lance sur place ; `tools/build_portable.py` sait poser le programme dans `%USERPROFILE%\.Aria-Studio`, mais le lanceur ne le propose pas. Cas à part : Studio est un lanceur avec `python\`, `app\` et `web\` à côté, pas un exe seul. |
+| Installation par l'exe | Oui. Lancé depuis un zip décompressé, le lanceur propose « Installer » ou « Lancer sans installer » : installer copie tout le dossier du zip (lanceur, `python\`, `app\`, `web\`, licences ; environ 185 Mo) dans `%USERPROFILE%\.Aria-Studio\programme`, sans la marque « téléchargé depuis Internet », garde la version d'avant dans `programme.precedent\`, puis relance depuis là (`tools/launcher/Launcher.cs`). Pas de proposition depuis `programme\`, en mode portable, avec `--portable` ou après « Ne plus me proposer » (clé `installation_proposee` d'`aria.yaml`, réactivable dans Réglages → Système). `tools/build_portable.py` installe au même endroit. |
 | Port local (interface web) | 8075 sur `127.0.0.1` (`config.yaml`). ComfyUI 8195 et llama-server 8095, aussi sur `127.0.0.1`. Conflit avec `docs/PORTS.md` du dépôt modèle : non vérifié. |
-| Données de l'utilisateur | `%USERPROFILE%\.Aria-Studio` : `aria.yaml` (choix, favoris, licences acceptées), `data\` (rushes, clips, séquences, voix, réglages, journaux), `modeles\`, `moteurs\`. Mode portable : si `data\` existe à côté du code, tout vit à côté du code (`app/emplacements.py`). |
+| Données de l'utilisateur | `%USERPROFILE%\.Aria-Studio` : `aria.yaml` (choix, favoris, licences acceptées), `data\` (rushes, clips, séquences, voix, réglages, journaux), `modeles\`, `moteurs\`, et le programme installé dans `programme\` (version d'avant dans `programme.precedent\`). Mode portable : si `data\` existe à côté du code, tout vit à côté du code (`app/emplacements.py`). |
 | Données secrètes | Les clés Civitai et Hugging Face, saisies dans Réglages. Rangées dans le Gestionnaire d'identification Windows (cibles `Aria-Studio/civitai` et `Aria-Studio/huggingface`), jamais dans un fichier d'Aria, jamais renvoyées à l'interface (`app/cles.py`). Repli : variables `CIVITAI_TOKEN` et `HF_TOKEN`. |
 | Écritures hors du dossier de données | Voir la liste ci-dessous. |
 | Connexions sortantes | Voir la liste ci-dessous. |
@@ -29,7 +29,7 @@ colonne « Preuve » renvoie au fichier qui fait foi.
 - **Dossier des modèles choisi** par l'utilisateur dans l'onglet Modèles (`aria.yaml`, clé `modeles`).
 - **ComfyUI externe** (« J'ai déjà ComfyUI ») : Aria y téléverse des fichiers dans `input` (`app/comfy.py`), et ComfyUI y écrit ses propres dossiers. Ces écritures sont décidées par l'utilisateur ; Aria ne les nettoie pas.
 - **Les moteurs eux-mêmes** (ComfyUI, llama-server, Python) peuvent écrire dans `%TEMP%` ou un cache : non vérifié.
-- **Raccourci du Bureau** : **prévu, pas encore codé**, avec l'installation par l'exe. Case décochée d'office, Bureau de l'utilisateur seulement (jamais le Bureau public), jamais remplacé en silence.
+- **Raccourci du Bureau** : « Aria Studio.lnk », seulement si la case est cochée à l'installation (décochée d'office). Bureau de l'utilisateur seulement (jamais le Bureau public), vers `programme\Aria-Studio.exe` ; un raccourci déjà là n'est mis à jour qu'après une question.
 
 Rien dans `%APPDATA%`, `%LOCALAPPDATA%`, le registre, une tâche planifiée ou un service, dans le code d'`app/`.
 
@@ -59,5 +59,5 @@ traité par une PR à part ou fera l'objet d'une dérogation écrite.
 - **Mises à jour** : l'appli signale la version et le lien ; elle ne télécharge ni n'installe rien.
 - **Suppressions** : un modèle téléchargé et une séquence s'effacent sans copie préalable.
 - **Icône de notification** : aucune ; le serveur reste actif en fond après l'ouverture du navigateur, et le bouton « Quitter » de la page l'arrête.
-- **Installation par l'exe** : le lanceur ne propose ni « Installer » ni « Lancer sans installer », ne range rien dans `%USERPROFILE%\.Aria-Studio\programme`, ne crée pas de raccourci et ne vérifie pas les droits du dossier de données.
+- **Installation par l'exe, vérification des droits** (dérogation, décision de l'auteur, 2026-11-13) : le contrat demande de refuser l'installation si le dossier de données est modifiable par un programme sans droits. Cette règle protège un exe lancé en administrateur ; Studio n'en demande jamais, et son dossier doit rester modifiable par l'utilisateur pour que modèles et créations s'y écrivent. La vérification n'est donc pas faite.
 - **Releases** : le workflow atteste la provenance du zip, mais l'attestation n'a pas encore été éprouvée sur un tag (l'essai à blanc a validé la construction seule) ; les releases immuables sont désactivées sur le dépôt.

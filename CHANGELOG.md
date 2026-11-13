@@ -14,9 +14,10 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 - Fond animé en gouttes, avec ses réglages (activé, vitesse, nombre de gouttes) dans Réglages → Système, gardés dans `data/fond.json` (#63).
 - Le format se choisit pour « Redessiner une image » (#58) et au Scénario pour la séquence, et le LLM connaît le cadre (#60, #61).
 - `docs/FICHE.md`, la fiche projet (#64), et les scripts `build.ps1`, `tools/tester.ps1` et `tools/version.ps1` (#65).
-
+- L'installation par l'exe : lancé depuis un zip décompressé, `Aria-Studio.exe` propose « Installer » (dans `%USERPROFILE%\.Aria-Studio\programme`, version d'avant gardée, raccourci du Bureau facultatif) ou « Lancer sans installer ». La proposition se coupe, et se réactive dans Réglages → Système.
 ### Modifié
 
+- `tools/build_portable.py` installe dans `programme\` ; une installation de l'ancienne disposition (programme à la racine de `.Aria-Studio`) y est rangée dans `programme.precedent\`.
 - Bonsai 2 devient le LLM par défaut (#54).
 - Les modèles d'image et de vidéo sont rangés chacun de leur côté, avec une migration au démarrage (#57).
 - La réponse du LLM est assez longue pour les mots visés, et le clip H3 du chat se remplit en trois champs (#53).

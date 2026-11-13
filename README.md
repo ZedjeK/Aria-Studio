@@ -97,9 +97,17 @@ garde libres.
    Elle prouve que le zip sort du workflow de ce dépôt, sur le tag de la version. Les versions publiées avant ce
    workflow n'en ont pas.
 
-2. Décompresse le zip où tu veux, puis double-clique sur `Aria-Studio.exe`. L'interface s'ouvre dans ton navigateur.
-   Pour fermer Aria, clique sur **⏻ Quitter**, au bout de la barre des onglets : son serveur, ComfyUI et Llama
-   s'arrêtent.
+2. Décompresse le zip où tu veux, puis double-clique sur `Aria-Studio.exe`. Une fenêtre te propose :
+   - **Installer** : le programme est rangé dans `%USERPROFILE%\.Aria-Studio\programme`, à côté de tes données, puis
+     Aria se lance depuis là. Une case crée un raccourci sur ton Bureau (décochée d'office). Le dossier du zip reste
+     tel quel : tu peux le supprimer ensuite ;
+   - **Lancer sans installer** : Aria tourne depuis le dossier du zip, rien n'est copié.
+
+   « Ne plus me proposer » coupe la question ; elle se réactive dans Réglages → Système, carte Mises à jour. Avec
+   `Aria-Studio.exe --portable`, ou un dossier `data` à côté de l'exe (mode portable), la fenêtre ne s'ouvre pas.
+
+   L'interface s'ouvre ensuite dans ton navigateur. Pour fermer Aria, clique sur **⏻ Quitter**, au bout de la barre
+   des onglets : son serveur, ComfyUI et Llama s'arrêtent.
 3. Le lanceur n'est pas signé : Windows SmartScreen peut afficher « Windows a protégé votre ordinateur ». Clique sur
    *Informations complémentaires*, puis sur *Exécuter quand même*.
 4. Au premier lancement, l'**assistant** te guide :
@@ -128,13 +136,21 @@ Tout ce qui t'appartient vit dans `%USERPROFILE%\.Aria-Studio`, qu'une mise à j
 | `data\` | Rushes, clips, séquences, voix, réglages, journaux |
 | `modeles\` | Les modèles (ailleurs si tu l'as changé dans l'onglet Modèles) |
 | `moteurs\` | ComfyUI portable et llama-server |
-| `aria.yaml` | Tes choix : dossier des modèles, favoris, licences acceptées |
+| `aria.yaml` | Tes choix : dossier des modèles, favoris, licences acceptées, proposition d'installer |
+| `programme\` | Le programme, si tu l'as installé (la version d'avant reste dans `programme.precedent\`) |
 
 **Mode portable** (clé USB, disque externe…) : crée un dossier `data` à côté de `Aria-Studio.exe`, et tout restera
 dans le dossier du programme (les moteurs vont alors dans `services`).
 
-**Mettre à jour** : décompresse la nouvelle version, et lance-la. En mode portable, recopie d'abord tes dossiers
-`data`, `modeles` et `services` et ton `aria.yaml` dans la nouvelle version.
+**Mettre à jour** : quitte Aria (⏻ Quitter), décompresse la nouvelle version et lance-la, puis choisis *Installer* :
+elle remplace `programme\`, et la version d'avant devient `programme.precedent\`. Pour y revenir, quitte Aria et
+lance `programme.precedent\Aria-Studio.exe` depuis l'Explorateur. Sans installer, lance simplement la nouvelle version
+depuis son dossier. En mode portable, recopie d'abord tes dossiers `data`, `modeles` et `services` et ton
+`aria.yaml` dans la nouvelle version.
+
+**Désinstaller** : quitte Aria, puis supprime le dossier `%USERPROFILE%\.Aria-Studio\programme` (et
+`programme.precedent`) et le raccourci du Bureau. Tes données restent dans `%USERPROFILE%\.Aria-Studio` ; supprime
+ce dossier entier pour tout effacer, modèles compris.
 
 ## Licences des modèles
 
