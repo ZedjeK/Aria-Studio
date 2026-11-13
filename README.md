@@ -137,7 +137,8 @@ Tout ce qui t'appartient vit dans `%USERPROFILE%\.Aria-Studio`, qu'une mise à j
 | `modeles\` | Les modèles (ailleurs si tu l'as changé dans l'onglet Modèles) |
 | `moteurs\` | ComfyUI portable et llama-server |
 | `cache\` | Ce qui se recalcule (empreintes des modèles, listes annoncées par ComfyUI) : l'effacer ne perd rien |
-| `aria.yaml` | Tes choix : dossier des modèles, favoris, licences acceptées, proposition d'installer |
+| `reglages.json` | Tous tes réglages et choix : dossier des modèles, favoris, licences acceptées, fond, notifications, réglages des LLM et des workflows… |
+| `sauvegardes\` | Les anciens fichiers de réglages, copiés quand une version les a réunis dans `reglages.json` |
 | `programme\` | Le programme, si tu l'as installé (la version d'avant reste dans `programme.precedent\`) |
 
 **Mode portable** (clé USB, disque externe…) : crée un dossier `data` à côté de `Aria-Studio.exe`, et tout restera
@@ -147,7 +148,7 @@ dans le dossier du programme (les moteurs vont alors dans `services`).
 elle remplace `programme\`, et la version d'avant devient `programme.precedent\`. Pour y revenir, quitte Aria et
 lance `programme.precedent\Aria-Studio.exe` depuis l'Explorateur. Sans installer, lance simplement la nouvelle version
 depuis son dossier. En mode portable, recopie d'abord tes dossiers `data`, `modeles` et `services` et ton
-`aria.yaml` dans la nouvelle version.
+`reglages.json` dans la nouvelle version.
 
 **Désinstaller** : quitte Aria, puis supprime le dossier `%USERPROFILE%\.Aria-Studio\programme` (et
 `programme.precedent`) et le raccourci du Bureau. Tes données restent dans `%USERPROFILE%\.Aria-Studio` ; supprime
@@ -198,7 +199,9 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
   corbeille des modèles vit dans leur dossier (`.corbeille`) : si tu changes de dossier des modèles, celle de l'ancien
   y reste, et elle ne se restaure qu'en reprenant ce dossier.
 - **Le journal grossit.** `data\logs\aria.log` n'est pas borné en taille : à vider à la main s'il devient lourd.
-- **Pas de sauvegarde automatique** de `aria.yaml` ni des réglages avant une modification.
+- **Pas encore de sauvegarde automatique** de `reglages.json` avant une modification (seule la migration copie les
+  anciens fichiers dans `sauvegardes\`). Revenir à une version d'avant retrouve ses anciens fichiers de réglages, mais
+  pas ce qui a changé depuis la migration.
 - **Testée sur une seule machine** (Windows 11, RTX 4080 SUPER 16 Go, 64 Go de RAM) et lanceur non signé : voir
   Installation.
 
