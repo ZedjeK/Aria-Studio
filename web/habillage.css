@@ -1,0 +1,713 @@
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Habillage d'Aria Studio : le contrat visuel des applis Aria, posé par-dessus style.css (chargé avant celui-ci).
+
+   Ce fichier se charge en dernier et prime sur les anciennes règles. Il ne change ni les couleurs ni les polices :
+   seulement la forme.
+
+   · Menu latéral à gauche, deux familles : Création, Préparation.
+   · Panneaux à coins coupés (haut droit, bas gauche), liseré cyan fin, sans halo.
+   · Boutons en biais, tous de même forme : plein orange pour l'action principale, contour cyan pour les autres,
+     contour discret pour annuler et fermer.
+
+   Les règles qui visent les vues (Plateau, Scénario, Réglages…) commencent par un préfixe qui pèse deux
+   identifiants (« :not(#_) » en compte un) : plusieurs anciennes règles de style.css nomment un identifiant dans
+   leurs listes, et sans ce poids elles l'emporteraient.
+
+   Les panneaux dessinent leur forme avec deux pseudo-éléments : le contenu n'est jamais rogné, une liste ou une
+   info-bulle qui dépasse reste visible.
+   ───────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* ===== Menu latéral et zone des pages ===== */
+
+body.large main {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+.coque {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.menu-lateral {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 20px 0 16px;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+}
+
+.menu-lateral .marque {
+    padding: 0 20px 6px;
+}
+
+.menu-lateral h1 {
+    gap: 12px;
+    font-size: 1.35rem;
+    letter-spacing: 0.06em;
+}
+
+.menu-lateral h1 .logo {
+    width: 44px;
+    height: 44px;
+}
+
+.menu-lateral nav {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.menu-lateral .famille-onglets {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    border: 0;
+}
+
+.menu-lateral .famille-onglets + .famille-onglets {
+    padding-left: 0;
+    border-left: 0;
+}
+
+.menu-lateral .etiquette-famille {
+    align-self: auto;
+    margin: 0;
+    padding: 18px 20px 6px;
+    color: var(--muted);
+    font: 500 0.66rem/1 var(--font-body);
+    letter-spacing: 0.16em;
+}
+
+body.large .menu-lateral button.onglet {
+    width: 100%;
+    height: 42px;
+    padding: 0 20px;
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    clip-path: none;
+    color: var(--muted);
+    font: 600 0.78rem var(--font-display);
+    letter-spacing: 0.12em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+body.large .menu-lateral button.onglet:hover:not(:disabled) {
+    color: var(--text);
+}
+
+body.large .menu-lateral button.onglet.actif {
+    border-left-color: var(--accent);
+    background: rgba(125, 249, 255, 0.07);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.menu-lateral .bas-menu {
+    display: grid;
+    gap: 10px;
+    justify-items: start;
+    margin-top: auto;
+    padding: 16px 20px 0;
+}
+
+.menu-lateral .bas-menu .sous-titre {
+    margin: 0;
+    color: var(--muted);
+    font: 400 0.7rem/1.5 var(--font-body);
+}
+
+.zone {
+    position: relative;
+    min-width: 0;
+    padding: 22px 28px 48px;
+}
+
+.haut-zone {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.chemin {
+    color: var(--muted);
+    font: 500 0.7rem var(--font-body);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.chemin b {
+    color: var(--accent);
+    font-weight: 500;
+}
+
+/* ===== Panneaux à coins coupés ===== */
+
+.carte {
+    position: relative;
+    isolation: isolate;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+.carte::before,
+.carte::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+}
+
+.carte::before {
+    inset: 0;
+    background: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.carte::after {
+    inset: 1px;
+    background: var(--surface);
+}
+
+/* Le panneau sur lequel agit le bouton orange de la page : liseré épais, titre cyan. Un seul par page. */
+.carte.accent::before {
+    background: var(--accent);
+}
+
+.carte.accent::after {
+    inset: 2px;
+}
+
+.carte.accent > h2,
+.carte.accent > .entete-galerie h2 {
+    color: var(--accent);
+}
+
+/* ===== Boutons ===== */
+
+/* Action principale : plein orange, en biais, sans halo. Une seule par page. */
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) .options-creation button.principal {
+    filter: none;
+}
+
+/* Les autres : contour cyan. « petit principal » n'est plus orange : l'orange est réservé à l'action de la page. */
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.petit:not(.principal),
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.petit.principal,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) label.bouton.petit {
+    position: relative;
+    isolation: isolate;
+    min-height: 32px;
+    padding: 7px 20px;
+    border: 0;
+    border-radius: 0;
+    background: var(--accent);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    color: var(--accent);
+    font: 600 0.72rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.petit:not(.principal)::before,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.petit.principal::before,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) label.bouton.petit::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.petit:not(.principal):hover:not(:disabled),
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.petit.principal:hover:not(:disabled),
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) label.bouton.petit:hover {
+    border: 0;
+    color: var(--accent);
+    filter: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.petit:not(.principal):hover:not(:disabled)::before,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.petit.principal:hover:not(:disabled)::before,
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) label.bouton.petit:hover::before {
+    background: var(--hover);
+}
+
+/* Discret : annuler, fermer, remettre à plus tard, tout réinitialiser. */
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(.annuler-commande, #annuler-prompt, #annuler-ecriture-plateau, #effacer-prompt, #precedent-assistant),
+body.large .menu-lateral button.quitter-appli,
+body.large .bandeau-maj button.petit {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 7px 20px;
+    border: 0;
+    border-radius: 0;
+    background: var(--line-strong);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    color: var(--muted);
+    font: 600 0.72rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(.annuler-commande, #annuler-prompt, #annuler-ecriture-plateau, #effacer-prompt, #precedent-assistant)::before,
+body.large .menu-lateral button.quitter-appli::before,
+body.large .bandeau-maj button.petit::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(.annuler-commande, #annuler-prompt, #annuler-ecriture-plateau, #effacer-prompt, #precedent-assistant):hover:not(:disabled),
+body.large .menu-lateral button.quitter-appli:hover:not(:disabled),
+body.large .bandeau-maj button.petit:hover:not(:disabled) {
+    border: 0;
+    color: var(--text);
+}
+
+/* ===== Bandeau de mise à jour : bleu, la couleur de l'information ===== */
+
+body.large .bandeau-maj {
+    margin: 0 0 18px;
+    border: 1px solid var(--accent-2);
+    border-radius: 0;
+    background: var(--surface);
+}
+
+body.large .bandeau-maj #lien-maj {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 7px 20px;
+    background: var(--accent);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    color: var(--bg);
+    font: 600 0.72rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+/* ===== Fenêtre étroite : le menu passe au-dessus des pages ===== */
+
+@media (max-width: 860px) {
+    .coque {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .menu-lateral {
+        position: static;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        height: auto;
+        padding: 10px 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .menu-lateral nav,
+    .menu-lateral .famille-onglets {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .menu-lateral .etiquette-famille {
+        display: none;
+    }
+
+    body.large .menu-lateral button.onglet {
+        width: auto;
+        height: 38px;
+        padding: 0 12px;
+        border-left: 0;
+        border-bottom: 3px solid transparent;
+    }
+
+    body.large .menu-lateral button.onglet.actif {
+        border-bottom-color: var(--accent);
+    }
+
+    .menu-lateral .bas-menu {
+        grid-auto-flow: column;
+        align-items: center;
+        margin: 0 0 0 auto;
+        padding: 0 16px;
+    }
+
+    .zone {
+        padding: 18px 16px 36px;
+    }
+}
+
+/* ===== Sous-onglets : encoche. Actif : contour cyan et barre épaisse dessous. ===== */
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-scenario, button.sous-onglet, .sous-onglets > button, .nav-reglages button) {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 40px;
+    padding: 10px 26px 10px 18px;
+    border: 0;
+    border-radius: 0;
+    background: var(--line);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+    color: var(--muted);
+    font: 600 0.78rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: none;
+    transform: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-scenario, button.sous-onglet, .sous-onglets > button, .nav-reglages button)::before {
+    content: "";
+    position: absolute;
+    inset: 1px 1px 0 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-scenario, button.sous-onglet, .sous-onglets > button, .nav-reglages button):hover:not(.actif) {
+    border: 0;
+    color: var(--text);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-scenario.actif, button.sous-onglet.actif, .nav-reglages button.actif) {
+    background: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-scenario.actif, button.sous-onglet.actif, .nav-reglages button.actif)::before {
+    inset: 1px 1px 4px 1px;
+    background: var(--hover);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) .nav-reglages .point-modifie {
+    margin-left: 4px;
+}
+
+/* Second niveau (Conversation / Me guider, Sujet / Décor / Mise en scène) : mêmes encoches, plus petites. */
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-idee, button.onglet-liste) {
+    position: relative;
+    isolation: isolate;
+    min-height: 34px;
+    padding: 7px 22px 7px 14px;
+    border: 0;
+    border-radius: 0;
+    background: var(--line);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+    color: var(--muted);
+    font: 600 0.72rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: none;
+    transform: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-idee, button.onglet-liste)::before {
+    content: "";
+    position: absolute;
+    inset: 1px 1px 0 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-idee, button.onglet-liste):hover:not(.actif) {
+    border: 0;
+    color: var(--text);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-idee.actif, button.onglet-liste.actif) {
+    background: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) :is(button.onglet-idee.actif, button.onglet-liste.actif)::before {
+    inset: 1px 1px 4px 1px;
+    background: var(--hover);
+}
+
+/* Rangées des sous-onglets : un filet dessous, les encoches posées dessus. */
+body.large .sous-onglets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 6px;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--line);
+}
+
+body.large .sous-onglets > button.badge-telechargements {
+    margin-left: auto;
+    background: var(--line-strong);
+}
+
+body.large .barre-scenario {
+    align-items: flex-end;
+    padding: 0;
+    margin-bottom: 0;
+    border-top: 0;
+    border-bottom: 1px solid var(--line);
+}
+
+body.large .onglets-scenario {
+    gap: 6px;
+    align-items: flex-end;
+}
+
+/* La barre du Scénario n'est plus un panneau : ses onglets posent directement sur le filet. */
+.carte.barre-scenario::before,
+.carte.barre-scenario::after {
+    display: none;
+}
+
+/* Réglages : les sections se choisissent en haut, comme les autres sous-onglets. */
+body.large .mise-reglages {
+    display: block;
+}
+
+body.large .nav-reglages {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+}
+
+/* ===== Commentaire de l'onglet actif : un encadré bleu, la couleur de l'information ===== */
+
+.savoir {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px;
+    margin: 12px 0 20px;
+    padding: 10px 14px;
+    border: 1px solid var(--accent-2);
+    background: var(--surface);
+    font-size: 0.9rem;
+}
+
+.savoir b {
+    color: var(--accent-2);
+    font: 500 0.68rem var(--font-body);
+    letter-spacing: 0.14em;
+}
+
+.savoir span {
+    flex: 1;
+    min-width: 220px;
+}
+
+/* ===== Cartes de départ du Scénario : le nom dans l'onglet, qui se remplit quand la carte est choisie ===== */
+
+body.large label.carte-mode {
+    --forme: polygon(0 0, calc(100% - 70px) 0, calc(100% - 38px) 32px, 100% 32px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%);
+    position: relative;
+    isolation: isolate;
+    display: block;
+    min-height: 118px;
+    padding: 46px 14px 16px;
+    border: 0;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--accent) 42%, transparent);
+    clip-path: var(--forme);
+    box-shadow: none;
+    transform: none;
+}
+
+body.large label.carte-mode::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: var(--forme);
+}
+
+body.large label.carte-mode strong {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    width: calc(100% - 38px);
+    height: 32px;
+    padding: 0 34px 0 14px;
+    clip-path: polygon(0 0, calc(100% - 32px) 0, 100% 100%, 0 100%);
+    color: var(--text);
+    font: 700 0.82rem var(--font-display);
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+body.large label.carte-mode small {
+    display: block;
+}
+
+body.large label.carte-mode:hover:not(:has(input:checked))::before {
+    background: var(--hover);
+}
+
+body.large label.carte-mode:has(input:checked) {
+    background: var(--accent);
+    box-shadow: none;
+}
+
+body.large label.carte-mode:has(input:checked)::before {
+    inset: 2px;
+    background: var(--hover);
+}
+
+body.large label.carte-mode:has(input:checked) strong {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+body.large label.carte-mode:has(input:focus-visible) {
+    outline: 0;
+}
+
+body.large label.carte-mode:has(input:focus-visible) strong {
+    text-decoration: underline;
+}
+
+/* ===== Une seule action orange par page : les autres « principales » prennent le contour cyan ===== */
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #enregistrer-llm, #enregistrer-workflow, #appliquer-optimiser) {
+    position: relative;
+    isolation: isolate;
+    min-height: 40px;
+    padding: 10px 26px;
+    border: 0;
+    border-radius: 0;
+    background: var(--accent);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    color: var(--accent);
+    font: 600 0.78rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    filter: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #enregistrer-llm, #enregistrer-workflow, #appliquer-optimiser)::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #enregistrer-llm, #enregistrer-workflow, #appliquer-optimiser):hover:not(:disabled) {
+    border: 0;
+    filter: none;
+}
+
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #enregistrer-llm, #enregistrer-workflow, #appliquer-optimiser):hover:not(:disabled)::before {
+    background: var(--hover);
+}
+
+body.large .cartes-mode {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px;
+}
+
+/* ===== Fond animé : une grille de points, et des gouttes en cercles qui en allument quelques-uns ===== */
+
+/* Le fond couvre la zone des pages, jamais le menu ; il reste derrière les panneaux, qui sont opaques. */
+.zone {
+    isolation: isolate;
+}
+
+.fond {
+    position: fixed;
+    inset: 0 0 0 232px;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.fond .points {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(rgba(125, 249, 255, 0.15) 1px, transparent 1.6px) 0 0 / 22px 22px;
+}
+
+/* Une goutte : la même grille, plus vive, que dévoile un cercle qui s'agrandit (web/fond.js anime le masque). */
+.goutte {
+    position: absolute;
+    width: 2002px;
+    height: 2002px;
+    pointer-events: none;
+    -webkit-mask: radial-gradient(circle, transparent 34%, #000 42%, transparent 50%) center / 0 0 no-repeat;
+    mask: radial-gradient(circle, transparent 34%, #000 42%, transparent 50%) center / 0 0 no-repeat;
+}
+
+.goutte.c1 {
+    background: radial-gradient(rgba(125, 249, 255, 0.9) 1.6px, transparent 2.3px) 0 0 / 22px 22px;
+}
+
+.goutte.c2 {
+    background: radial-gradient(rgba(255, 138, 31, 0.9) 1.6px, transparent 2.3px) 0 0 / 22px 22px;
+}
+
+.goutte.c3 {
+    background: radial-gradient(rgba(92, 139, 255, 0.9) 1.6px, transparent 2.3px) 0 0 / 22px 22px;
+}
+
+@media (max-width: 860px) {
+    .fond {
+        inset: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .goutte {
+        display: none;
+    }
+}

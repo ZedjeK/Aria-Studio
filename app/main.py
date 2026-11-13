@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, casting, cles, collection, decouvrir, emplacements, estimation, garde, mesures,
+from app import (assistant, casting, cles, collection, decouvrir, emplacements, estimation, fond, garde, mesures,
                  migration_modeles, mises_a_jour, modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages,
                  retouche, routes_montage, routes_scenario, rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
@@ -200,6 +200,27 @@ def lire_notifications():
 @app.put("/api/notifications")
 def regler_notifications(d: DemandeNotifications):
     return notifications.regler(d.active, d.son)
+
+
+class DemandeFond(BaseModel):
+    actif: bool | None = None
+    vitesse: str | None = None
+    minimum: int | None = None
+    maximum: int | None = None
+
+
+@app.get("/api/fond")
+def lire_fond():
+    """Fond animé de l'interface : les quatre réglages de Réglages → Système → Fond animé."""
+    return fond.etat()
+
+
+@app.put("/api/fond")
+def regler_fond(d: DemandeFond):
+    try:
+        return fond.regler(d.actif, d.vitesse, d.minimum, d.maximum)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 class DemandeOuverture(BaseModel):

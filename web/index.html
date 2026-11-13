@@ -6,26 +6,17 @@
     <title>Aria Studio</title>
     <link rel="icon" href="/static/favicon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/habillage.css">
 </head>
 <body class="large">
     <main>
-        <!-- Barre du studio, sur deux lignes : la marque et l'état des moteurs, puis les onglets. -->
-        <header class="entete-studio">
-            <div class="entete-haut">
-                <div class="marque">
-                    <h1><img class="logo" src="/static/logo.svg" alt="">Aria <span>Studio</span></h1>
-                    <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
-                </div>
-                <div class="entete-droite">
-                    <!-- État en direct des moteurs, visible depuis tous les onglets. -->
-                    <div id="etat-direct" class="etat-direct" title="État en direct"></div>
-                    <button id="quitter-appli" type="button" class="quitter-appli"
-                            title="Quitter Aria : arrête son serveur, ComfyUI et Llama">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                             stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quitter</button>
-                </div>
+        <div class="coque">
+        <!-- Menu latéral : la marque, les deux familles de pages, puis Quitter et la version. -->
+        <aside class="menu-lateral">
+            <div class="marque">
+                <h1><img class="logo" src="/static/logo.svg" alt="">Aria <span>Studio</span></h1>
             </div>
-            <nav>
+            <nav aria-label="Pages">
                 <!-- Création : on écrit, on tourne, on retouche, on monte. -->
                 <div class="famille-onglets" title="Création">
                     <span class="etiquette-famille">Création</span>
@@ -42,7 +33,22 @@
                     <button class="onglet" data-vue="reglages">Réglages</button>
                 </div>
             </nav>
-        </header>
+            <div class="bas-menu">
+                <button id="quitter-appli" type="button" class="quitter-appli"
+                        title="Quitter Aria : arrête son serveur, ComfyUI et Llama">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quitter</button>
+                <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
+            </div>
+        </aside>
+        <div class="zone">
+            <!-- Fond animé (web/fond.js) : derrière les pages, jamais sous le menu. -->
+            <div id="fond" class="fond" aria-hidden="true"><div class="points"></div><div id="gouttes"></div></div>
+            <div class="haut-zone">
+                <span id="chemin" class="chemin"></span>
+                <!-- État en direct des moteurs, visible depuis tous les onglets. -->
+                <div id="etat-direct" class="etat-direct" title="État en direct"></div>
+            </div>
         <!-- Après ⏻ Quitter : le serveur est arrêté, l'onglet peut être fermé. -->
         <div id="voile-quitte" class="voile" hidden>
             <div class="fenetre">
@@ -135,7 +141,7 @@
         </div>
 
         <div class="vue" id="vue-plateau">
-            <section class="carte">
+            <section class="carte accent">
                 <h2>Créer</h2>
                 <form id="form-creation">
                     <div class="ligne entete-prompt-plateau">
@@ -573,10 +579,14 @@
                  et à droite le prompt final, modifiable, qui part vers le Plateau ou le Montage. -->
             <section class="carte barre-scenario">
                 <div class="onglets-scenario" role="tablist">
-                    <button type="button" class="onglet-scenario actif" data-atelier="image">Image</button>
-                    <button type="button" class="onglet-scenario" data-atelier="retouche">Retouche</button>
-                    <button type="button" class="onglet-scenario" data-atelier="clip">Clip</button>
-                    <button type="button" class="onglet-scenario" data-atelier="sequence">Séquence</button>
+                    <button type="button" class="onglet-scenario actif" data-atelier="image"
+                            data-savoir="Une image : le LLM écrit le prompt d'après ton idée, tes compléments et tes images de départ. Il part ensuite vers le Plateau.">Image</button>
+                    <button type="button" class="onglet-scenario" data-atelier="retouche"
+                            data-savoir="Une retouche : même gabarit, avec l'image à retoucher comme départ.">Retouche</button>
+                    <button type="button" class="onglet-scenario" data-atelier="clip"
+                            data-savoir="Un clip : tu peux régler le format, la durée et un dialogue. Le prompt part vers le Montage.">Clip</button>
+                    <button type="button" class="onglet-scenario" data-atelier="sequence"
+                            data-savoir="Une séquence : plusieurs plans, chacun avec son prompt. « Tout écrire » les écrit d'après le fil de l'histoire.">Séquence</button>
                 </div>
                 <div class="ligne options-creation">
                     <span id="brouillon-scenario" class="discret" title="Chaque atelier garde son brouillon dans ce navigateur"></span>
@@ -584,6 +594,7 @@
                     <label>LLM <select id="llm-atelier" title="👁 : il voit tes images de référence"></select></label>
                 </div>
             </section>
+            <div class="savoir" data-pour="#vue-scenario .onglets-scenario"><b>À SAVOIR</b><span></span></div>
             <div class="prompt-guide">
                 <section class="carte atelier">
                     <!-- 1 · Départ -->
@@ -768,7 +779,7 @@
                     </div>
                 </section>
 
-                <aside class="carte apercu-prompt">
+                <aside class="carte accent apercu-prompt">
                     <h2 id="titre-final">Prompt final</h2>
                     <div data-atelier-sauf="sequence">
                         <textarea id="prompt-final" rows="12"
@@ -804,14 +815,15 @@
         <div class="vue" id="vue-modeles" hidden>
             <!-- Onglet Modèles (web/modeles.js, web/decouvrir.js) : chercher, ce que j'ai, et un onglet par usage -->
             <div class="sous-onglets">
-                <button class="sous-onglet" type="button" data-sous="rechercher">🔎 Rechercher</button>
-                <button class="sous-onglet actif" type="button" data-sous="collection">📦 Ma collection</button>
-                <button class="sous-onglet" type="button" data-sous="texte_vers_image">🖼️ Texte → image</button>
-                <button class="sous-onglet" type="button" data-sous="image_vers_image">🎨 Image → image</button>
-                <button class="sous-onglet" type="button" data-sous="video">🎬 Vidéo</button>
+                <button class="sous-onglet" type="button" data-sous="rechercher" data-savoir="Cherche des modèles sur Hugging Face et Civitai.">🔎 Rechercher</button>
+                <button class="sous-onglet actif" type="button" data-sous="collection" data-savoir="Les modèles que tu as téléchargés.">📦 Ma collection</button>
+                <button class="sous-onglet" type="button" data-sous="texte_vers_image" data-savoir="Les modèles qui créent une image à partir d'un texte.">🖼️ Texte → image</button>
+                <button class="sous-onglet" type="button" data-sous="image_vers_image" data-savoir="Les modèles qui refont une image à partir d'une autre.">🎨 Image → image</button>
+                <button class="sous-onglet" type="button" data-sous="video" data-savoir="Les modèles qui créent une vidéo.">🎬 Vidéo</button>
                 <button id="badge-telechargements" class="badge-telechargements" type="button"
                         title="Téléchargements : la file, pause et reprise">⬇ Téléchargements <span></span></button>
             </div>
+            <div class="savoir" data-pour="#vue-modeles .sous-onglets"><b>À SAVOIR</b><span></span></div>
 
             <section class="carte" id="panneau-telechargements" hidden>
                 <h2>Téléchargements</h2>
@@ -908,11 +920,12 @@
             </div>
             <div class="mise-reglages">
             <nav class="nav-reglages" aria-label="Sections des réglages">
-                <button type="button" class="actif" data-section="tout">Tout</button>
-                <button type="button" data-section="systeme">🖥️ Système</button>
-                <button type="button" data-section="llm">💬 LLM <i class="point-modifie" hidden></i></button>
-                <button type="button" data-section="workflows">🎨 Modèles image <i class="point-modifie" hidden></i></button>
+                <button type="button" class="actif" data-section="tout" data-savoir="Tout ce qui se règle : le système, le LLM et les modèles d'image. Seuls tes changements sont enregistrés.">Tout</button>
+                <button type="button" data-section="systeme" data-savoir="Moteurs, emplacements, clés d'accès, mises à jour : ce qu'on règle une fois.">🖥️ Système</button>
+                <button type="button" data-section="llm" data-savoir="Les réglages du LLM qui écrit tes prompts. ↺ ramène une valeur à celle d'origine.">💬 LLM <i class="point-modifie" hidden></i></button>
+                <button type="button" data-section="workflows" data-savoir="Les réglages de chaque modèle d'image. ↺ ramène une valeur à celle d'origine.">🎨 Modèles image <i class="point-modifie" hidden></i></button>
             </nav>
+            <div class="savoir" data-pour="#vue-reglages .nav-reglages"><b>À SAVOIR</b><span></span></div>
             <div class="contenu-reglages">
             <!-- Système : ce qu'on règle une fois (s'ouvre seul si un moteur manque) -->
             <details id="systeme-reglages" class="systeme-reglages" data-section="systeme">
@@ -958,6 +971,27 @@
                     <button id="essai-notifications" type="button" class="petit">Essayer</button>
                 </div>
                 <p id="autorisation-notifications" class="discret"></p>
+            </section>
+            <!-- Fond animé (web/fond.js, app/fond.py) : quatre réglages, gardés dans data/fond.json. -->
+            <section class="carte" id="carte-fond">
+                <h2>Fond animé</h2>
+                <p class="discret">Des gouttes allument une grille de points derrière les pages. Le fond se met en pause quand l'onglet
+                    est caché, et ses gouttes disparaissent si Windows demande moins d'animations.</p>
+                <div class="ligne">
+                    <span class="ligne">
+                        <label class="case"><input type="checkbox" id="fond-actif"> Afficher le fond animé</label>
+                        <label class="case">Vitesse
+                            <select id="fond-vitesse">
+                                <option value="lente">Lente</option>
+                                <option value="normale">Normale</option>
+                                <option value="rapide">Rapide</option>
+                            </select></label>
+                        <label class="case">Gouttes : de
+                            <input type="number" id="fond-minimum" min="1" max="12" inputmode="numeric">
+                            à <input type="number" id="fond-maximum" min="1" max="12" inputmode="numeric"></label>
+                    </span>
+                </div>
+                <p id="fond-note" class="ko" hidden></p>
             </section>
             </details>
             <section id="carte-optimiser" class="carte" hidden>
@@ -1055,6 +1089,8 @@
                 <div id="banc"></div>
             </section>
         </div>
+        </div>
+        </div>
     </main>
     <script src="/static/commun.js"></script>
     <script src="/static/app.js"></script>
@@ -1075,5 +1111,7 @@
     <script src="/static/voix.js"></script>
     <script src="/static/decoupage.js"></script>
     <script src="/static/assistant.js"></script>
+    <script src="/static/habillage.js"></script>
+    <script src="/static/fond.js"></script>
 </body>
 </html>
