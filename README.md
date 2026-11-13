@@ -87,6 +87,16 @@ garde libres.
    Get-FileHash .\Aria-Studio-X.Y.Z.zip -Algorithm SHA256
    ```
 
+   L'empreinte prouve que le zip est intact. Pour savoir d'où il vient, les zips construits par le workflow de
+   release actuel portent aussi une attestation de provenance de GitHub (`gh` connecté) :
+
+   ```powershell
+   gh attestation verify .\Aria-Studio-X.Y.Z.zip --repo ZedjeK/Aria-Studio
+   ```
+
+   Elle prouve que le zip sort du workflow de ce dépôt, sur le tag de la version. Les versions publiées avant ce
+   workflow n'en ont pas.
+
 2. Décompresse le zip où tu veux, puis double-clique sur `Aria-Studio.exe`. L'interface s'ouvre dans ton navigateur.
    Pour fermer Aria, clique sur **⏻ Quitter**, au bout de la barre des onglets : son serveur, ComfyUI et Llama
    s'arrêtent.
