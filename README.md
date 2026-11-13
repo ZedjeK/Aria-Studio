@@ -165,8 +165,11 @@ Les tests tournent dans un dossier utilisateur jetable : ils ne touchent jamais 
 (modèles installés, réglages, créations), et leur résultat ne dépend pas de ce qui est installé :
 
 ```powershell
-.venv\Scripts\python.exe tools\tester.py
+.\tools\tester.ps1
 ```
+
+(`.\tools\tester.ps1 tests.test_vision -v` passe ses arguments à `unittest` ; c'est une enveloppe de
+`tools\tester.py`, que la CI appelle directement.)
 
 Le banc de palier mesure la VRAM que chaque modèle demande vraiment, en simulant des cartes de 12 et 8 Go sur une
 carte de 16 Go (une bonne heure de GPU, serveur d'Aria arrêté). `--ecrire` reporte ensuite les mesures dans les
@@ -183,6 +186,9 @@ sont remplacés. Avec `--sans-installer`, elle reste dans `.build_cache\staging`
 ```powershell
 .venv\Scripts\python.exe tools\build_portable.py
 ```
+
+Pour seulement construire le zip et son `.sha256`, comme le fait la release, sans rien poser chez toi :
+`.\build.ps1` les écrit dans `.work\sortie\`. `.\tools\version.ps1` affiche la version en cours.
 
 Publier une version : passer `VERSION` de `app/__init__.py` au nouveau numéro, déposer les notes dans
 `docs/releases/vX.Y.Z.md`, fusionner, puis pousser le tag. `.github/workflows/release.yml` construit alors le zip

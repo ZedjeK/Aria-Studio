@@ -36,7 +36,7 @@ PYTHON_URL = f"https://github.com/astral-sh/python-build-standalone/releases/dow
 CSC = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
 
 EXE = "Aria-Studio.exe"
-SANS_LIVRER = ("tests/", "tools/", ".gitignore", ".gitattributes")  # suivis par Git, inutiles à l'utilisateur
+SANS_LIVRER = ("tests/", "tools/", "build.ps1", ".gitignore", ".gitattributes")  # suivis par Git, inutiles à l'utilisateur
 AFFAIRES = ("data", "modeles", "moteurs", "services", "aria.yaml")  # à l'utilisateur : jamais touchées
 MANIFESTE = ".programme"
 
