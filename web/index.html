@@ -139,7 +139,7 @@
         </div>
 
         <div class="vue" id="vue-plateau">
-            <section class="carte">
+            <section class="carte accent">
                 <h2>Créer</h2>
                 <form id="form-creation">
                     <div class="ligne entete-prompt-plateau">
@@ -577,10 +577,14 @@
                  et à droite le prompt final, modifiable, qui part vers le Plateau ou le Montage. -->
             <section class="carte barre-scenario">
                 <div class="onglets-scenario" role="tablist">
-                    <button type="button" class="onglet-scenario actif" data-atelier="image">Image</button>
-                    <button type="button" class="onglet-scenario" data-atelier="retouche">Retouche</button>
-                    <button type="button" class="onglet-scenario" data-atelier="clip">Clip</button>
-                    <button type="button" class="onglet-scenario" data-atelier="sequence">Séquence</button>
+                    <button type="button" class="onglet-scenario actif" data-atelier="image"
+                            data-savoir="Une image : le LLM écrit le prompt d'après ton idée, tes compléments et tes images de départ. Il part ensuite vers le Plateau.">Image</button>
+                    <button type="button" class="onglet-scenario" data-atelier="retouche"
+                            data-savoir="Une retouche : même gabarit, avec l'image à retoucher comme départ.">Retouche</button>
+                    <button type="button" class="onglet-scenario" data-atelier="clip"
+                            data-savoir="Un clip : tu peux régler le format, la durée et un dialogue. Le prompt part vers le Montage.">Clip</button>
+                    <button type="button" class="onglet-scenario" data-atelier="sequence"
+                            data-savoir="Une séquence : plusieurs plans, chacun avec son prompt. « Tout écrire » les écrit d'après le fil de l'histoire.">Séquence</button>
                 </div>
                 <div class="ligne options-creation">
                     <span id="brouillon-scenario" class="discret" title="Chaque atelier garde son brouillon dans ce navigateur"></span>
@@ -588,6 +592,7 @@
                     <label>LLM <select id="llm-atelier" title="👁 : il voit tes images de référence"></select></label>
                 </div>
             </section>
+            <div class="savoir" data-pour="#vue-scenario .onglets-scenario"><b>À SAVOIR</b><span></span></div>
             <div class="prompt-guide">
                 <section class="carte atelier">
                     <!-- 1 · Départ -->
@@ -772,7 +777,7 @@
                     </div>
                 </section>
 
-                <aside class="carte apercu-prompt">
+                <aside class="carte accent apercu-prompt">
                     <h2 id="titre-final">Prompt final</h2>
                     <div data-atelier-sauf="sequence">
                         <textarea id="prompt-final" rows="12"
@@ -808,14 +813,15 @@
         <div class="vue" id="vue-modeles" hidden>
             <!-- Onglet Modèles (web/modeles.js, web/decouvrir.js) : chercher, ce que j'ai, et un onglet par usage -->
             <div class="sous-onglets">
-                <button class="sous-onglet" type="button" data-sous="rechercher">🔎 Rechercher</button>
-                <button class="sous-onglet actif" type="button" data-sous="collection">📦 Ma collection</button>
-                <button class="sous-onglet" type="button" data-sous="texte_vers_image">🖼️ Texte → image</button>
-                <button class="sous-onglet" type="button" data-sous="image_vers_image">🎨 Image → image</button>
-                <button class="sous-onglet" type="button" data-sous="video">🎬 Vidéo</button>
+                <button class="sous-onglet" type="button" data-sous="rechercher" data-savoir="Cherche des modèles sur Hugging Face et Civitai.">🔎 Rechercher</button>
+                <button class="sous-onglet actif" type="button" data-sous="collection" data-savoir="Les modèles que tu as téléchargés.">📦 Ma collection</button>
+                <button class="sous-onglet" type="button" data-sous="texte_vers_image" data-savoir="Les modèles qui créent une image à partir d'un texte.">🖼️ Texte → image</button>
+                <button class="sous-onglet" type="button" data-sous="image_vers_image" data-savoir="Les modèles qui refont une image à partir d'une autre.">🎨 Image → image</button>
+                <button class="sous-onglet" type="button" data-sous="video" data-savoir="Les modèles qui créent une vidéo.">🎬 Vidéo</button>
                 <button id="badge-telechargements" class="badge-telechargements" type="button"
                         title="Téléchargements : la file, pause et reprise">⬇ Téléchargements <span></span></button>
             </div>
+            <div class="savoir" data-pour="#vue-modeles .sous-onglets"><b>À SAVOIR</b><span></span></div>
 
             <section class="carte" id="panneau-telechargements" hidden>
                 <h2>Téléchargements</h2>
@@ -912,11 +918,12 @@
             </div>
             <div class="mise-reglages">
             <nav class="nav-reglages" aria-label="Sections des réglages">
-                <button type="button" class="actif" data-section="tout">Tout</button>
-                <button type="button" data-section="systeme">🖥️ Système</button>
-                <button type="button" data-section="llm">💬 LLM <i class="point-modifie" hidden></i></button>
-                <button type="button" data-section="workflows">🎨 Modèles image <i class="point-modifie" hidden></i></button>
+                <button type="button" class="actif" data-section="tout" data-savoir="Tout ce qui se règle : le système, le LLM et les modèles d'image. Seuls tes changements sont enregistrés.">Tout</button>
+                <button type="button" data-section="systeme" data-savoir="Moteurs, emplacements, clés d'accès, mises à jour : ce qu'on règle une fois.">🖥️ Système</button>
+                <button type="button" data-section="llm" data-savoir="Les réglages du LLM qui écrit tes prompts. ↺ ramène une valeur à celle d'origine.">💬 LLM <i class="point-modifie" hidden></i></button>
+                <button type="button" data-section="workflows" data-savoir="Les réglages de chaque modèle d'image. ↺ ramène une valeur à celle d'origine.">🎨 Modèles image <i class="point-modifie" hidden></i></button>
             </nav>
+            <div class="savoir" data-pour="#vue-reglages .nav-reglages"><b>À SAVOIR</b><span></span></div>
             <div class="contenu-reglages">
             <!-- Système : ce qu'on règle une fois (s'ouvre seul si un moteur manque) -->
             <details id="systeme-reglages" class="systeme-reglages" data-section="systeme">
