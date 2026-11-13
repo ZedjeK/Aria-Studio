@@ -3,6 +3,10 @@
 # où les fichiers des workflows sont posés vides et modeles/llm reste vide ; NVML, ComfyUI et Llama sont simulés dans
 # les tests qui en parlent (sans carte NVIDIA, les tests passent aussi). Le coffre Windows de test_cles est celui du
 # runner, sous un nom d'essai effacé à la fin.
+#
+# Le job de test s'appelle « tests », comme dans tous les dépôts Aria. Le ruleset de main exigeait « unittest » : le
+# job « unittest » ci-dessous n'existe que le temps de la bascule (il ne lance rien, il reprend le résultat de
+# « tests »), puis il est retiré une fois le ruleset passé à « tests ».
 name: Tests
 
 on:
@@ -13,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  unittest:
+  tests:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -31,3 +35,11 @@ jobs:
 
       - name: Tests
         run: python tools/tester.py
+
+  # TRANSITOIRE : à retirer quand le ruleset de main exige « tests » à la place de « unittest ».
+  unittest:
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "Les tests ont réussi (job « tests »)."
