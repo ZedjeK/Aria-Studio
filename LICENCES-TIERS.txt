@@ -1,0 +1,76 @@
+Aria Studio : composants tiers
+=============================
+
+Le code d'Aria Studio est sous licence MIT (fichier LICENSE). Ce fichier liste ce
+que le zip embarque et ce qu'Aria télécharge à ta demande, avec la licence de
+chaque composant. Relevé le 2026-11-13 sur les versions de requirements.txt et
+de catalogue/moteurs.yaml ; à tenir à jour quand l'un des deux change.
+
+Les textes complets des licences des paquets Python sont livrés avec eux, dans
+python\Lib\site-packages\<paquet>-<version>.dist-info\licenses\. Celui de CPython
+est python\LICENSE.txt.
+
+1. Embarqué dans le zip
+-----------------------
+
+Interpréteur
+  CPython 3.11, build python-build-standalone (astral-sh) ..... PSF-2.0
+    Le fichier python\LICENSE.txt rassemble la licence de CPython et celles des
+    bibliothèques qu'il embarque (par exemple bzip2 et Tcl/Tk, qu'il cite).
+  pip (livré avec CPython, dépendances incluses) ............... MIT, avec les
+    licences de ses composants dans son dossier .dist-info
+
+Dépendances directes (requirements.txt)
+  fastapi 0.162.0 ............................................... MIT
+  uvicorn 0.54.0 ................................................ BSD-3-Clause
+  PyYAML 6.0.3 .................................................. MIT
+  httpx 0.28.1 .................................................. BSD-3-Clause
+  websockets 17.4 ............................................... BSD-3-Clause
+  nvidia-ml-py 13.615.71 ........................................ BSD (d'après
+    ses métadonnées ; le paquet ne livre pas de fichier de licence)
+  psutil 7.2.2 .................................................. BSD-3-Clause
+  Pillow 13.0.0 ................................................. MIT-CMU
+
+Dépendances de ces paquets (versions du .venv au 2026-11-13)
+  annotated-doc 0.0.5 ........................................... MIT
+  annotated-types 0.8.0 ......................................... MIT
+  anyio 4.15.1 .................................................. MIT
+  certifi 2026.10.18 ............................................ MPL-2.0
+  click 8.5.0 ................................................... BSD-3-Clause
+  h11 0.16.0 .................................................... MIT
+  httpcore 1.0.9 ................................................ BSD-3-Clause
+  idna 3.20 ..................................................... BSD-3-Clause
+  opentelemetry-api 1.45.1 ...................................... Apache-2.0
+  pydantic 2.14.1 ............................................... MIT
+  pydantic-core 2.50.1 .......................................... MIT
+  starlette 1.9.0 ............................................... BSD-3-Clause
+  typing-extensions 4.16.0 ...................................... PSF-2.0
+  typing-inspection 0.4.4 ....................................... MIT
+
+certifi est sous MPL-2.0 : son code source est public sur
+https://github.com/certifi/python-certifi, et Aria ne le modifie pas.
+
+Polices (web\polices\, avec leur texte de licence)
+  Space Grotesk ................................................. SIL OFL 1.1
+  IBM Plex Mono ................................................. SIL OFL 1.1
+
+Lanceur
+  Aria-Studio.exe est écrit pour Aria (tools\launcher\Launcher.cs, licence MIT)
+  et compilé avec le compilateur C# fourni par Windows ; aucun code tiers.
+
+2. Téléchargé à ta demande (jamais embarqué)
+--------------------------------------------
+
+Moteurs (versions épinglées dans catalogue\moteurs.yaml, SHA-256 vérifié)
+  ComfyUI portable v0.42.1 (comfyanonymous/ComfyUI) ............. GPL-3.0
+  llama.cpp b11734 (ggml-org/llama.cpp) ......................... MIT
+  llama.cpp PrismML prism-b10777-e3de715 (PrismML-Eng/llama.cpp)  MIT
+  Licences lues sur les dépôts de chaque projet (fichier LICENSE, 2026-11-13).
+  Le zip de ComfyUI portable contient lui-même d'autres composants, chacun sous
+  sa licence : ils sont ceux de ce projet, pas ceux d'Aria.
+
+Modèles et LLM
+  Chaque modèle a sa propre licence, affichée avant son téléchargement et
+  résumée dans le README (section « Licences des modèles »). Aria n'en fournit
+  aucun. Certaines licences sont non commerciales ou limitées selon le pays :
+  c'est à toi de vérifier que ton usage les respecte.
