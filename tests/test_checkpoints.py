@@ -16,6 +16,7 @@ from app.plateau import Commande, ErreurPlateau, Plateau
 from app.reglages import ErreurReglages
 from tests.test_sequences import png
 from tests import steps_connus
+from tests import reglages_jetables
 
 H3 = "minimax_h3_i2v"
 ORIGINE_H3 = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
@@ -44,7 +45,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.dossier = tempfile.TemporaryDirectory()
         d = Path(self.dossier.name)
-        self.patchs = [mock.patch.object(reglages, "FICHIER", d / "reglages.yaml"),
+        self.patchs = [reglages_jetables.patch(d),
                        mock.patch.object(reglages, "_cache", None),
                        mock.patch.object(modeles, "fichiers", side_effect=deposes),
                        mock.patch.object(plateau, "DOSSIER", d / "creations"),

@@ -1,18 +1,18 @@
-"""Tests des préférences de fin de job (app/notifications.py) : data/notifications.json temporaire."""
+"""Tests des préférences de fin de job (app/notifications.py) : section « notifications » d'un reglages.json temporaire."""
 
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
-from app import notifications
+from app import fichier_reglages, notifications
+from tests import reglages_jetables
 
 
 class TestNotifications(unittest.TestCase):
     def setUp(self):
         self.dossier = tempfile.TemporaryDirectory()
-        self.patch = mock.patch.object(notifications, "FICHIER", Path(self.dossier.name) / "notifications.json")
+        self.patch = reglages_jetables.patch(Path(self.dossier.name))
         self.patch.start()
 
     def tearDown(self):
@@ -29,10 +29,13 @@ class TestNotifications(unittest.TestCase):
         notifications.regler(active=True)
         self.assertEqual(notifications.etat(), {"active": True, "son": False})
 
+    def test_ecrit_dans_reglages_json(self):
+        notifications.regler(son=False)
+        ecrit = json.loads(fichier_reglages.fichier().read_text(encoding="utf-8"))
+        self.assertEqual(ecrit["notifications"], {"active": True, "son": False})
+
     def test_fichier_illisible(self):
-        notifications.FICHIER.write_text("pas du json", encoding="utf-8")
-        self.assertEqual(notifications.etat(), {"active": True, "son": True})
-        notifications.FICHIER.write_text(json.dumps([1, 2]), encoding="utf-8")
+        fichier_reglages.fichier().write_text("pas du json", encoding="utf-8")
         self.assertEqual(notifications.etat(), {"active": True, "son": True})
 
 

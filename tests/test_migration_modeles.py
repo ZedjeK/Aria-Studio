@@ -10,7 +10,8 @@ from unittest import mock
 
 import yaml
 
-from app import migration_modeles, modeles
+from app import fichier_reglages, migration_modeles, modeles
+from tests import reglages_jetables
 
 VAE_KREA = "qwen_image_vae.safetensors"  # cité par la fiche de Krea 2 : côté image
 VAE_H3 = "minimax_h3_video_vae_int8_convrot.safetensors"  # cité par les fiches de MiniMax H3 : côté vidéo
@@ -54,7 +55,7 @@ class AvecDossier(unittest.TestCase):
         self.patchs = [mock.patch.object(modeles, "DOSSIER", self.racine),
                        mock.patch.object(modeles, "REGISTRE", data / "modeles.json"),
                        mock.patch.object(modeles, "EMPREINTES", data / "empreintes.json"),
-                       mock.patch.object(modeles, "MEMOIRE_LORAS", data / "loras.json"),
+                       reglages_jetables.patch(data),
                        mock.patch.object(modeles, "CHEMINS_COMFYUI", data / "comfyui_chemins.yaml")]
         for p in self.patchs:
             p.start()
@@ -103,7 +104,7 @@ class Migration(AvecDossier):
         ecrire(modeles.REGISTRE, {"Krea2/loras/style.safetensors": {"source": "civitai"},
                                   f"_base/vae/{VAE_H3}": {"source": "aria"}, "llm/Bonsai.gguf": {"source": "hf"}})
         ecrire(modeles.EMPREINTES, {"MiniMax-H3/modeles/dasiwa.safetensors": {"sha256": "ab"}})
-        ecrire(modeles.MEMOIRE_LORAS, {"Krea2/loras/style.safetensors": {"declencheurs": "x", "force": 0.8}})
+        fichier_reglages.ecrire("loras", {"Krea2/loras/style.safetensors": {"declencheurs": "x", "force": 0.8}})
 
     def lire(self, fichier: Path) -> dict:
         return json.loads(fichier.read_text(encoding="utf-8"))

@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from app import gguf, modeles, reglages
+from tests import reglages_jetables
 
 
 def _chaine(texte: str) -> bytes:
@@ -70,7 +71,7 @@ class Moteur(unittest.TestCase):
         (d / "llm").mkdir()
         ecrire_gguf(d / "llm" / "standard.gguf", [0, 12])
         ecrire_gguf(d / "llm" / "bonsai-finetune.gguf", [0, 142])
-        self.patchs = [mock.patch.object(reglages, "FICHIER", d / "reglages.yaml"),
+        self.patchs = [reglages_jetables.patch(d),
                        mock.patch.object(reglages, "_cache", None),
                        mock.patch.object(modeles, "DOSSIER", d),
                        mock.patch.object(modeles, "llm_disponibles",

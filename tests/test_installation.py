@@ -12,8 +12,6 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import yaml
-
 from app import demenagement, emplacements
 from tools import build_portable as build
 
@@ -49,21 +47,31 @@ class Installation(unittest.TestCase):
         self.code(self.maison / "programme")
         self.assertTrue(emplacements.installation()["installe"])
 
-    def test_ne_plus_proposer_est_ecrit_dans_aria_yaml_sans_perdre_le_reste(self):
+    def test_ne_plus_proposer_est_ecrit_dans_reglages_json_sans_perdre_le_reste(self):
         self.code(Path(self.tmp.name) / "zip")
         self.maison.mkdir(parents=True)
-        (self.maison / "aria.yaml").write_text("modeles: D:\\IA\\modeles\n", encoding="utf-8")
+        (self.maison / "aria.yaml").write_text("modeles: D:\\IA\\modeles\n", encoding="utf-8")  # migré au passage
         self.assertFalse(emplacements.proposer_installation(False)["proposee"])
-        choix = yaml.safe_load((self.maison / "aria.yaml").read_text(encoding="utf-8"))
-        self.assertEqual(choix, {"modeles": "D:\\IA\\modeles", "installation_proposee": False})
+        ecrit = json.loads((self.maison / "reglages.json").read_text(encoding="utf-8"))
+        self.assertEqual((ecrit["emplacements"], ecrit["installation"]),
+                         ({"modeles": "D:\\IA\\modeles"}, {"proposee": False}))
         self.assertTrue(emplacements.proposer_installation(True)["proposee"])
 
-    def test_la_ligne_ecrite_par_le_lanceur_se_relit(self):
-        # Launcher.cs ajoute « installation_proposee: false » à la fin du fichier, sans passer par PyYAML
+    def test_la_ligne_d_un_ancien_aria_yaml_se_relit(self):
+        # Avant reglages.json, le lanceur écrivait « installation_proposee: false » dans aria.yaml : la migration la garde
         self.code(Path(self.tmp.name) / "zip")
         self.maison.mkdir(parents=True)
         (self.maison / "aria.yaml").write_text("# Choix\nfavoris: {}\ninstallation_proposee: false\n", encoding="utf-8")
         self.assertFalse(emplacements.installation()["proposee"])
+
+    def test_reglages_json_ecrit_par_le_lanceur_se_relit(self):
+        # Launcher.cs écrit du JSON compact, sans clé « migration » : la migration le complète sans l'écraser
+        self.code(Path(self.tmp.name) / "zip")
+        self.maison.mkdir(parents=True)
+        (self.maison / "aria.yaml").write_text("modeles: D:\\IA\\modeles\ninstallation_proposee: true\n", encoding="utf-8")
+        (self.maison / "reglages.json").write_text('{"installation":{"proposee":false}}', encoding="utf-8")
+        self.assertFalse(emplacements.installation()["proposee"])
+        self.assertEqual(emplacements.lire_choix("modeles"), "D:\\IA\\modeles")
 
 
 class MiseEnPlace(unittest.TestCase):

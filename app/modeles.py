@@ -10,6 +10,7 @@ fichier au bon endroit suffit. Avant le 2026-11-10, tout était à plat (modeles
 app/migration_modeles.py range l'ancienne organisation au démarrage.
 """
 
+import copy
 import hashlib
 import json
 import logging
@@ -19,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from app import fiches, memo
+from app import fiches, fichier_reglages, memo
 from app.config import CONFIG, ROOT
 from app.emplacements import CACHE, DATA, MODELES
 
@@ -128,13 +129,11 @@ def llm_defaut() -> str:
     return next((f for f in candidats if f in presents), llama["modele"])
 
 
-# LoRAs : mots déclencheurs et force retenus d'une utilisation à l'autre (data/loras.json),
-# à défaut ceux fournis par la source au téléchargement (registre).
-MEMOIRE_LORAS = DATA / "loras.json"
-
+# LoRAs : mots déclencheurs et force retenus d'une utilisation à l'autre (section « loras » de reglages.json,
+# app/fichier_reglages.py ; avant, data/loras.json), à défaut ceux fournis par la source au téléchargement (registre).
 
 def _memoire_loras() -> dict:
-    return json.loads(MEMOIRE_LORAS.read_text(encoding="utf-8")) if MEMOIRE_LORAS.is_file() else {}
+    return copy.deepcopy(fichier_reglages.section("loras"))
 
 
 USAGE_LORA = ("force_auteur", "images_force", "prompt_exemple")  # lus dans les images d'exemple (Civitai)
@@ -197,7 +196,7 @@ def oublier_reglage_lora(cle_lora: str) -> dict:
     _famille_lora(cle_lora)
     memoire = _memoire_loras()
     if memoire.pop(cle_lora, None) is not None:
-        MEMOIRE_LORAS.write_text(json.dumps(memoire, indent=4, ensure_ascii=False), encoding="utf-8")
+        fichier_reglages.ecrire("loras", memoire)
     return reglage_lora(cle_lora)
 
 
@@ -217,8 +216,7 @@ def memoriser_loras(famille: str, choix: list[dict]):
     memoire = _memoire_loras()
     for c in choix:
         memoire[f"{dossier_famille(famille, 'loras')}/{c['fichier']}"] = {"declencheurs": c["declencheurs"], "force": c["force"]}
-    MEMOIRE_LORAS.parent.mkdir(parents=True, exist_ok=True)
-    MEMOIRE_LORAS.write_text(json.dumps(memoire, indent=4, ensure_ascii=False), encoding="utf-8")
+    fichier_reglages.ecrire("loras", memoire)
 
 
 def ecrire_chemins_comfyui() -> Path:

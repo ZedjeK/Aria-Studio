@@ -4,6 +4,7 @@ Le fichier data/reglages.yaml est remplacé par un fichier temporaire : les vrai
 """
 
 import asyncio
+import json
 import os
 import tempfile
 import unittest
@@ -12,10 +13,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from app import listes, modeles, prompt, reglages, workflows
+from app import fichier_reglages, listes, modeles, prompt, reglages, workflows
 from app.llm import Llama
 from app.reglages import ErreurReglages
 from tests import steps_connus
+from tests import reglages_jetables
 
 LLM = "Autre-LLM-14B-Q4_K_M.gguf"  # un GGUF quelconque, hors catalogue
 
@@ -27,7 +29,7 @@ class AvecFichierTemporaire(unittest.TestCase):
     def setUp(self):
         self.dossier = tempfile.TemporaryDirectory()
         d = Path(self.dossier.name)
-        self.patchs = [mock.patch.object(reglages, "FICHIER", d / "reglages.yaml"),
+        self.patchs = [reglages_jetables.patch(d),
                        mock.patch.object(reglages, "FICHIER_SAMPLERS", d / "samplers.json"),
                        mock.patch.object(reglages, "_cache", None),
                        mock.patch.object(modeles, "llm_disponibles", return_value=[LLM])]
@@ -45,12 +47,12 @@ class Cache(AvecFichierTemporaire):
         """Sous Windows l'horloge des fichiers est grossière : deux écritures rapprochées portent la même date.
         Le cache ne doit pas resservir l'ancien contenu (une modification était perdue, au hasard)."""
         reglages.modifier_workflow("minimax_h3_t2v", {"megapixels": 0.5})
-        fige = reglages.FICHIER.stat()
+        fige = fichier_reglages.fichier().stat()
         vraie_stat = Path.stat
 
         def stat_figee(chemin, *a, **k):
             r = vraie_stat(chemin, *a, **k)
-            if chemin != reglages.FICHIER:
+            if chemin != fichier_reglages.fichier():
                 return r
             return os.stat_result((r.st_mode, r.st_ino, r.st_dev, r.st_nlink, r.st_uid, r.st_gid, r.st_size,
                                    r.st_atime, fige.st_mtime, fige.st_ctime, r.st_atime_ns, fige.st_mtime_ns,
@@ -134,7 +136,7 @@ class Workflows(AvecFichierTemporaire):
             reglages.modifier_workflow("krea2_turbo", {"shift": 3})  # pas de nœud de shift dans ce graphe
         with self.assertRaises(workflows.ErreurWorkflow):
             reglages.modifier_workflow("inexistant", {"steps": 3})
-        self.assertFalse(reglages.FICHIER.exists())
+        self.assertFalse(fichier_reglages.fichier().exists())
 
     def test_samplers_annonces_par_comfyui(self):
         reglages.memoriser_samplers(["euler", "res_multistep", "sa_solver"], ["simple", "beta57"])
@@ -198,9 +200,10 @@ class Llm(AvecFichierTemporaire):
         self.assertIsNone(reglages.consigne_llm(LLM, "video"))
         self.assertEqual(reglages.lire()["llm"], {})
 
-    def test_consigne_sur_plusieurs_lignes_lisible_dans_le_fichier(self):
+    def test_consigne_sur_plusieurs_lignes_gardee_dans_le_fichier(self):
         reglages.modifier_llm(LLM, consignes={"retouche": "Line one.\nLine two."})
-        self.assertIn("retouche: |", reglages.FICHIER.read_text(encoding="utf-8"))
+        ecrit = json.loads(fichier_reglages.fichier().read_text(encoding="utf-8"))
+        self.assertEqual(ecrit["llm"][LLM]["consignes"]["retouche"], "Line one.\nLine two.")
         self.assertEqual(reglages.consigne_llm(LLM, "retouche"), "Line one.\nLine two.")
 
     def test_valeurs_refusees(self):

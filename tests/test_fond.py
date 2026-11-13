@@ -1,18 +1,18 @@
-"""Tests des réglages du fond animé (app/fond.py) : data/fond.json temporaire."""
+"""Tests des réglages du fond animé (app/fond.py) : section « fond » d'un reglages.json temporaire."""
 
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
-from app import fond
+from app import fichier_reglages, fond
+from tests import reglages_jetables
 
 
 class TestFond(unittest.TestCase):
     def setUp(self):
         self.dossier = tempfile.TemporaryDirectory()
-        self.patch = mock.patch.object(fond, "FICHIER", Path(self.dossier.name) / "fond.json")
+        self.patch = reglages_jetables.patch(Path(self.dossier.name))
         self.patch.start()
 
     def tearDown(self):
@@ -24,8 +24,8 @@ class TestFond(unittest.TestCase):
 
     def test_le_fichier_porte_les_noms_du_contrat(self):
         fond.regler(actif=False, vitesse="rapide", minimum=3, maximum=8)
-        ecrit = json.loads(fond.FICHIER.read_text(encoding="utf-8"))
-        self.assertEqual(ecrit, {"actif": False, "vitesse": "rapide", "minimum": 3, "maximum": 8})
+        ecrit = json.loads(fichier_reglages.fichier().read_text(encoding="utf-8"))
+        self.assertEqual(ecrit["fond"], {"actif": False, "vitesse": "rapide", "minimum": 3, "maximum": 8})
 
     def test_regler_garde_les_autres_choix(self):
         fond.regler(vitesse="lente")
@@ -48,18 +48,15 @@ class TestFond(unittest.TestCase):
 
     def test_fichier_illisible(self):
         defauts = {"actif": True, "vitesse": "normale", "minimum": 2, "maximum": 5}
-        fond.FICHIER.write_text("pas du json", encoding="utf-8")
-        self.assertEqual(fond.etat(), defauts)
-        fond.FICHIER.write_text(json.dumps([1, 2]), encoding="utf-8")
+        fichier_reglages.fichier().write_text("pas du json", encoding="utf-8")
         self.assertEqual(fond.etat(), defauts)
 
-    def test_fichier_modifie_a_la_main(self):
-        fond.FICHIER.write_text(json.dumps(
-            {"actif": "oui", "vitesse": "turbo", "minimum": "3", "maximum": True}), encoding="utf-8")
+    def test_section_modifiee_a_la_main(self):
+        fichier_reglages.ecrire("fond", {"actif": "oui", "vitesse": "turbo", "minimum": "3", "maximum": True})
         self.assertEqual(fond.etat(), {"actif": True, "vitesse": "normale", "minimum": 2, "maximum": 5})
 
     def test_un_decimal_n_est_pas_un_nombre_de_gouttes(self):
-        fond.FICHIER.write_text(json.dumps({"minimum": 3.5, "maximum": 6}), encoding="utf-8")
+        fichier_reglages.ecrire("fond", {"minimum": 3.5, "maximum": 6})
         self.assertEqual(fond.etat()["minimum"], 2)
         self.assertEqual(fond.etat()["maximum"], 6)
 

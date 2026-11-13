@@ -1,27 +1,25 @@
-"""Réglages fins des LLM et des workflows (onglet Réglages), rangés dans data/reglages.yaml.
+"""Réglages fins des LLM et des workflows (onglet Réglages), rangés dans les sections « llm » et « workflows » de
+reglages.json (app/fichier_reglages.py ; avant, data/reglages.yaml).
 
-Le fichier ne contient que les changements de l'utilisateur : les valeurs d'origine restent dans config.yaml,
-les fiches et les api.json des workflows, qui ne sont jamais modifiés. Supprimer une clé (ou tout le
-fichier) revient aux valeurs d'origine. Chaque valeur est contrôlée avant d'être enregistrée.
+Elles ne contiennent que les changements de l'utilisateur : les valeurs d'origine restent dans config.yaml,
+les fiches et les api.json des workflows, qui ne sont jamais modifiés. Supprimer une clé (ou toute la
+section) revient aux valeurs d'origine. Chaque valeur est contrôlée avant d'être enregistrée.
 
-    llm:
-        <fichier.gguf>: {temperature_reecriture: 0.5, contexte: 8192, consignes: {reecriture: "…"}}
-    workflows:
-        <id>: {steps: 30, cfg: 1.0, sampler: euler, scheduler: simple, shift: 3.1, megapixels: 1, …,
-               modele: <checkpoint par défaut, dans modeles/<Famille>/modeles>,
-               variantes: {<checkpoint>: {lora_workflow: false, steps: 6}}}
+    "llm": {"<fichier.gguf>": {"temperature_reecriture": 0.5, "contexte": 8192, "consignes": {"reecriture": "…"}}}
+    "workflows": {"<id>": {"steps": 30, "cfg": 1.0, "sampler": "euler", "scheduler": "simple", "shift": 3.1, …,
+                           "modele": "<checkpoint par défaut, dans modeles/<Famille>/modeles>",
+                           "variantes": {"<checkpoint>": {"lora_workflow": false, "steps": 6}}}}
 """
 
+import copy
 import json
 import re
 from dataclasses import dataclass
 
-import yaml
-
+from app import fichier_reglages
 from app.config import CONFIG
-from app.emplacements import CACHE, DATA
+from app.emplacements import CACHE
 
-FICHIER = DATA / "reglages.yaml"
 FICHIER_SAMPLERS = CACHE / "comfyui_samplers.json"  # la liste annoncée par ComfyUI
 LONGUEUR_CONSIGNE = 4000
 CONSIGNES = ("reecriture", "retouche", "precisions", "references", "video", "decoupage")
@@ -77,43 +75,30 @@ class Param:
                 "pas": self.pas, "choix": list(self.choix), "aide": self.aide, "libelles": dict(self.libelles)}
 
 
-# Fichier
+# Fichier : les sections « llm » et « workflows » de reglages.json (app/fichier_reglages.py)
 
-class _Dumper(yaml.SafeDumper):
-    pass
-
-
-# Les consignes sur plusieurs lignes restent lisibles dans le fichier (bloc « | »).
-_Dumper.add_representer(str, lambda d, s: d.represent_scalar(
-    "tag:yaml.org,2002:str", s, style="|" if "\n" in s else None))
-
-_cache: tuple[tuple[int, int], dict] | None = None
+_cache: tuple[dict, dict] | None = None  # (contenu de reglages.json d'où elles viennent, copie des deux sections)
 
 
 def lire() -> dict:
+    """{"llm": {…}, "workflows": {…}} : une copie, relue quand reglages.json change ; la modifier puis l'écrire avec
+    _ecrire()."""
     global _cache
-    if not FICHIER.is_file():
-        return {"llm": {}, "workflows": {}}
-    # Date ET taille : sous Windows l'horloge des fichiers est grossière, deux écritures rapprochées peuvent
-    # porter la même date et un cache clé sur la date seule resservirait l'ancien contenu.
-    stat = FICHIER.stat()
-    empreinte = (stat.st_mtime_ns, stat.st_size)
-    if _cache is None or _cache[0] != empreinte:
-        donnees = yaml.safe_load(FICHIER.read_text(encoding="utf-8")) or {}
-        _cache = (empreinte, {"llm": donnees.get("llm") or {}, "workflows": donnees.get("workflows") or {}})
+    tout = fichier_reglages.tout()
+    if _cache is None or _cache[0] is not tout:
+        _cache = (tout, {"llm": copy.deepcopy(fichier_reglages.section("llm")),
+                         "workflows": copy.deepcopy(fichier_reglages.section("workflows"))})
     return _cache[1]
 
 
 def _ecrire(donnees: dict):
     propre = {k: {n: v for n, v in d.items() if v} for k, d in donnees.items()}  # pas de sections vides
-    FICHIER.parent.mkdir(parents=True, exist_ok=True)
-    temporaire = FICHIER.with_suffix(".tmp")
-    temporaire.write_text("# Réglages de l'onglet Réglages : seulement ce qui diffère des valeurs d'origine.\n"
-                          + yaml.dump(propre, Dumper=_Dumper, allow_unicode=True, sort_keys=False, width=120),
-                          encoding="utf-8")
-    temporaire.replace(FICHIER)
-    global _cache
-    _cache = None  # ce que nous venons d'écrire fait foi : la prochaine lecture relit le fichier
+    with fichier_reglages.transaction() as tout:
+        for nom in ("llm", "workflows"):
+            if propre.get(nom):
+                tout[nom] = propre[nom]
+            else:
+                tout.pop(nom, None)
 
 
 def _appliquer(section: dict, params: dict[str, Param], changements: dict):

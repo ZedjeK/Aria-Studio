@@ -17,7 +17,8 @@ from app.config import CONFIG, ROOT
 from app.emplacements import DEFAUT, _meme_dossier
 
 # (à côté du code, dans le dossier de l'utilisateur) ; data en dernier, c'est lui qui décide du mode portable
-CORRESPONDANCES = (("aria.yaml", "aria.yaml"), ("services", "moteurs"), ("modeles", "modeles"), ("data", "data"))
+CORRESPONDANCES = (("reglages.json", "reglages.json"), ("sauvegardes", "sauvegardes"), ("cache", "cache"),
+                   ("aria.yaml", "aria.yaml"), ("services", "moteurs"), ("modeles", "modeles"), ("data", "data"))
 
 
 class ErreurDemenagement(RuntimeError):

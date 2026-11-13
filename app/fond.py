@@ -1,30 +1,21 @@
 """Fond animé de l'interface (des gouttes en cercles qui allument une grille de points) : les réglages de l'utilisateur,
-gardés dans data/fond.json.
+gardés dans la section « fond » de reglages.json (app/fichier_reglages.py ; avant, data/fond.json).
 
 L'interface dessine le fond elle-même ; le serveur ne garde que les quatre réglages ci-dessous. Ils portent les noms
-du contrat des applis Aria (fond.actif, fond.vitesse, fond.minimum, fond.maximum), à un niveau de fichier près :
-ils vivent dans un petit fichier à part, comme data/notifications.json, et non dans reglages.yaml, que le module
-reglages contrôle clé par clé pour les LLM et les workflows.
+du contrat des applis Aria : fond.actif, fond.vitesse, fond.minimum et fond.maximum dans reglages.json.
 
     {"actif": true, "vitesse": "normale", "minimum": 2, "maximum": 5}
 """
 
-import json
+from app import fichier_reglages
 
-from app.emplacements import DATA
-
-FICHIER = DATA / "fond.json"
 VITESSES = ("lente", "normale", "rapide")
 BORNE_BASSE, BORNE_HAUTE = 1, 12
 DEFAUTS = {"actif": True, "vitesse": "normale", "minimum": 2, "maximum": 5}
 
 
 def _lire() -> dict:
-    try:
-        d = json.loads(FICHIER.read_text(encoding="utf-8"))
-        return d if isinstance(d, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    return fichier_reglages.section("fond")
 
 
 def _nombre(valeur, defaut: int) -> int:
@@ -68,6 +59,5 @@ def regler(actif: bool | None = None, vitesse: str | None = None,
     if maximum is not None:
         d["maximum"] = _nombre(maximum, d["maximum"])
     d = _valide(d)
-    FICHIER.parent.mkdir(parents=True, exist_ok=True)
-    FICHIER.write_text(json.dumps(d, indent=4, ensure_ascii=False), encoding="utf-8")
+    fichier_reglages.ecrire("fond", d)
     return d
