@@ -23,6 +23,7 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 - Les modèles d'image et de vidéo sont rangés chacun de leur côté, avec une migration au démarrage (#57).
 - La réponse du LLM est assez longue pour les mots visés, et le clip H3 du chat se remplit en trois champs (#53).
 - La notification de fin de job a un tag unique par job et un bandeau si elle échoue (#55).
+- Ce qui se recalcule (empreintes SHA-256 des modèles, samplers et chemins de ComfyUI) quitte `data\` pour `cache\`, rangé au premier démarrage.
 - La molette fait défiler la page, plus un cadre interne (#59).
 
 ### Retiré

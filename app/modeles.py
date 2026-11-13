@@ -21,17 +21,17 @@ import yaml
 
 from app import fiches, memo
 from app.config import CONFIG, ROOT
-from app.emplacements import DATA, MODELES
+from app.emplacements import CACHE, DATA, MODELES
 
 DOSSIER = MODELES
 REGISTRE = DATA / "modeles.json"
-CHEMINS_COMFYUI = DATA / "comfyui_chemins.yaml"
+CHEMINS_COMFYUI = CACHE / "comfyui_chemins.yaml"  # réécrit à chaque démarrage de ComfyUI
 TYPES_BASE = ["checkpoints", "diffusion_models", "text_encoders", "vae", "loras",
               "clip_vision", "controlnet", "upscale_models", "model_patches", "audio_encoders",
               "latent_upscale_models"]
 EXTENSIONS_IMAGE = {".safetensors"}  # jamais de .ckpt/.pt : ils peuvent exécuter du code au chargement
 EXTENSIONS_MODELES = EXTENSIONS_IMAGE | {".gguf"}  # l'inventaire ignore le reste (recommandations.yaml…)
-EMPREINTES = DATA / "empreintes.json"  # SHA-256 déjà calculés : {clé: {taille, date, sha256}}
+EMPREINTES = CACHE / "empreintes.json"  # SHA-256 déjà calculés (recalculables) : {clé: {taille, date, sha256}}
 
 
 NATURES = ("image", "video")

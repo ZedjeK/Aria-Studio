@@ -37,6 +37,12 @@ _taches_fond: set[asyncio.Task] = set()
 
 @asynccontextmanager
 async def cycle_de_vie(_app: FastAPI):
+    try:  # avant la migration des modèles, qui réécrit les empreintes : les fichiers recalculables vont dans cache\
+        deplaces = emplacements.ranger_cache()
+        if deplaces:
+            logging.getLogger(__name__).info("Rangés dans cache : %s", ", ".join(deplaces))
+    except OSError:  # jamais un empêchement de démarrer : ils seront simplement recalculés
+        logging.getLogger(__name__).exception("Rangement du cache impossible")
     try:  # avant ComfyUI : l'ancienne organisation des modèles rangée côté image et vidéo (app/migration_modeles.py)
         migration_modeles.migrer()
     except Exception:  # noqa: BLE001 : la migration ne doit jamais empêcher Aria de démarrer

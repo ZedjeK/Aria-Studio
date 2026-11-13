@@ -126,8 +126,27 @@ def _modeles(choix: dict) -> Path:
 
 RACINE = _racine()
 DATA = RACINE / "data"
+CACHE = RACINE / "cache"  # ce qui se recalcule : l'effacer ne perd rien (contrat des applis Aria)
 MODELES = _modeles(_choix())
 MOTEURS = RACINE / ("services" if portable() else "moteurs")
+
+# Fichiers qui se recalculent, rangés dans data\ avant cache\ : empreintes SHA-256 déjà calculées, samplers annoncés
+# par ComfyUI, chemins des modèles déclarés à ComfyUI (réécrits à chaque démarrage).
+ANCIENS_CACHE = ("empreintes.json", "comfyui_samplers.json", "comfyui_chemins.yaml")
+
+
+def ranger_cache(data: Path | None = None, cache: Path | None = None) -> list[str]:
+    """Déplace dans cache\\ les fichiers de ANCIENS_CACHE encore dans data\\ (au démarrage, une fois). Si cache\\ en a
+    déjà un, l'ancien reste où il est. Rend les noms déplacés."""
+    data, cache = data or DATA, cache or CACHE
+    deplaces = []
+    for nom in ANCIENS_CACHE:
+        ancien, nouveau = data / nom, cache / nom
+        if ancien.is_file() and not nouveau.exists():
+            cache.mkdir(parents=True, exist_ok=True)
+            ancien.replace(nouveau)
+            deplaces.append(nom)
+    return deplaces
 
 
 def moteur(relatif: str) -> Path:

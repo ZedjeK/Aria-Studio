@@ -136,6 +136,7 @@ Tout ce qui t'appartient vit dans `%USERPROFILE%\.Aria-Studio`, qu'une mise à j
 | `data\` | Rushes, clips, séquences, voix, réglages, journaux |
 | `modeles\` | Les modèles (ailleurs si tu l'as changé dans l'onglet Modèles) |
 | `moteurs\` | ComfyUI portable et llama-server |
+| `cache\` | Ce qui se recalcule (empreintes des modèles, listes annoncées par ComfyUI) : l'effacer ne perd rien |
 | `aria.yaml` | Tes choix : dossier des modèles, favoris, licences acceptées, proposition d'installer |
 | `programme\` | Le programme, si tu l'as installé (la version d'avant reste dans `programme.precedent\`) |
 
