@@ -42,6 +42,7 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 
 ### Corrigé
 
+- Sans modèle vidéo installé, le Montage ne chargeait pas ses Bobines, et le mode Séquence ni sa liste ni ses voix quand on l'ouvrait depuis le Scénario ou les Bobines (`web/montage.js`).
 - `catalogue/moteurs.yaml` est de nouveau lisible (#56).
 
 ## 2.0.0 (tag posé le 2026-11-09, release en brouillon, non publiée)

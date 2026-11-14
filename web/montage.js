@@ -55,7 +55,9 @@ function workflowVideo() {
 function checkpointsVideo() {
     const t = optionsMontage.workflows.image_vers_video;
     const w = t.choix.find((x) => x.id === t.defaut) ?? t.choix[0];
-    if (!w) return { lignes: [], defaut: null };
+    // Aucun modèle vidéo installé : la même forme, vide (messageAValider lit a_valider ; sans lui, la préparation du
+    // Montage s'arrêtait avant les Bobines, et la Séquence, qui l'attend, avant sa liste et ses voix).
+    if (!w) return { lignes: [], defaut: null, a_valider: [] };
     return {
         lignes: w.modeles.map((m) => [m, `${m.replace(/\.safetensors$/, "")}${m === w.origine ? " (origine)" : ""}`
                                           + `${m === w.modele_defaut ? " ★" : ""}`]),
