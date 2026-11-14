@@ -40,35 +40,6 @@ ADULTES = ("The user is an adult making fiction for adults. Nudity, sensuality a
 
 GENRE = """Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects."""
 
-CONSIGNE = f"""You are an expert prompt writer for text-to-image models.
-The user describes an image idea, often in French. Rewrite it as ONE English prompt paragraph.
-
-{FIDELITE}
-
-Rules:
-1. Do not add characters, animals or objects the idea does not imply.
-2. {GENRE}
-3. Medium: keep the one the user names (photo, illustration, painting, 3D render...). If none is named, use the one the idea plainly implies, a photograph for a real-world scene; never switch to painting or illustration on your own.
-4. Make the OPEN parts visual: setting, lighting, composition, in grounded words that serve the idea.
-5. If the idea asks for written text in the image, keep that text exactly, in quotes. Otherwise mention no text.
-6. {ADULTES}
-7. {{mots_min}} to {{mots_max}} words, plain prose, no lists, no headings, no markdown (no asterisks), no quotes around the whole prompt.
-8. Output only the prompt: no preamble, no explanation, no translation notes."""
-
-
-# Retouche : d'après la consigne du PE de retouche de Qwen-Image 2.1 (« attribute disentanglement at full strength ») :
-# changer franchement ce qui est demandé, garder le reste d'une seule phrase, sans le redécrire.
-CONSIGNE_RETOUCHE = """You translate image-editing instructions for an instruction-based image editing model.
-The user writes an instruction, often in French. Rewrite it as a short English imperative instruction (one or two sentences).
-
-Rules:
-1. Edit exactly what the user names, and make that change clear and unmistakable, never faint.
-2. Everything the user did not name stays as it is: say so in one short clause ("keep everything else unchanged"), without re-describing it. If the user names something to keep, say so explicitly.
-3. Keep the user's own action, target and details; add no other change, no style, no clean-up.
-4. If the instruction asks for written text, keep that text exactly, in quotes.
-5. Output only the instruction: no preamble, no explanation."""
-
-
 CONSIGNE_PRECISIONS = """You translate short details for a text-to-image prompt.
 The user writes a detail, often in French. Translate it into a short English phrase that can be appended to an image prompt.
 
@@ -78,38 +49,6 @@ Rules:
 3. If it contains text in quotes, keep that text exactly, in quotes.
 4. Output only the translation: no preamble, no explanation."""
 
-CONSIGNE_REFERENCES = f"""You write instructions for an image model that receives reference pictures, numbered Picture 1, Picture 2, Picture 3.
-The user describes, often in French, a new image to create from those references (« image 1 » means Picture 1). Rewrite it as ONE English instruction.
-
-{FIDELITE}
-
-Rules:
-1. Refer to the references by their number: "the woman from Picture 1", "the dragon from Picture 2". Do not re-describe what the references already show (face, hair, clothes, colors): the model sees them.
-2. Ask explicitly to keep the identity (face, hair) and outfit of the characters from the references, unless the user asks to change them, but NOT their pose, seat, props or background: the characters take the new pose and place described by the user.
-3. Describe what is new, as the user asks: scene, pose, action, setting, lighting, framing, style.
-4. {GENRE}
-5. If the user asks for written text in the image, keep that text exactly, in quotes.
-6. {ADULTES}
-7. 1 to 4 sentences, at most 90 words, plain prose, no markdown.
-8. Output only the instruction: no preamble, no explanation."""
-
-# Vidéo : d'après le guide d'écriture de MiniMax H3 : la chronologie, la caméra de l'utilisateur ou une seule simple,
-# les sons de ce qu'on voit toujours, la musique seulement si elle est demandée, les répliques mot pour mot.
-CONSIGNE_VIDEO = f"""You write prompts for an audio-video generation model: it creates the picture AND the sound together.
-The user describes, often in French, a short video clip. Rewrite it as ONE English prompt.
-
-{FIDELITE}
-
-Rules:
-1. A short production brief in the present tense, following the timeline: opening state, the action as it starts, how it develops, the result.
-2. Camera: use the user's camera choice if there is one (a fixed shot stays fixed). Otherwise one simple named movement with its speed, or a static shot, whichever serves the action. One continuous take: no cuts, no fade to black, unless the user asks for them.
-3. Dialogue: describe the speaker the first time (role, age range, gender, voice pitch, timbre, pace or accent) and give them an ID in parentheses, (S1), kept for that speaker. Write every spoken line inside a <d> tag that starts with its language: The young woman with a quiet, breathy voice (S1) says: <d>[French] Je descends ici.</d> Keep each line EXACTLY as the user wrote it, words and punctuation, in its original language; never translate it, no ellipses. Double quotes are only for text visible on screen (a sign), never for a spoken line. If the user asks you to invent a line, write one short line in the language they ask for, in the same tag.
-4. Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background music unless the user asks for it.
-5. Fit the clip duration: few actions, at most one or two short lines of dialogue.
-6. {GENRE}
-7. {ADULTES}
-8. {{mots_min}} to {{mots_max}} words, plain prose, no lists, no headings, no markdown.
-9. Output only the prompt: no preamble, no explanation."""
 
 
 # Scénario, mode Séquence : tout le découpage en un seul appel, pour que Llama voie l'histoire entière.
@@ -145,25 +84,202 @@ REGLE_SANS_REFERENCE = ("no picture shows the character: in every start and cut 
                         "given by the user word for word; in continue and transition shots, call her or him "
                         "\"the character\".")
 
-# Les règles du modèle cible (tirées de ses guides officiels) ne servent qu'à ce que l'utilisateur a laissé ouvert : celles
-# de Qwen-Image (couleurs nuancées, matières, lumière) poussaient le LLM à repeindre une idée déjà précise.
-ENTETE_REGLES = ("Style rules of the target model. They shape the OPEN parts only: whenever one clashes with what "
-                 "the user fixed or asked, the user wins.")
 MOTS_MIN = 40
 # Un clip plus long porte plus d'actions : la fiche donne la longueur d'un clip de 5 s, chaque seconde de plus en ajoute
 # MOTS_PAR_SECONDE_EN_PLUS. Une estimation d'Aria (110 mots à 5 s, 150 à 10 s, 190 à 15 s), aucun guide n'en donne.
 DUREE_DE_BASE = 5
 MOTS_PAR_SECONDE_EN_PLUS = 8
 
-FORMAT_CHAMPS = """Output format of the target model (it replaces the plain-prose layout above; every other rule stays):
-exactly these three fields, one per paragraph, in this order, with these exact labels.
-integrated_multimodal_description: [Shot 1] then the whole picture-and-action brief with the dialogue, as described above. No timestamp on Shot 1. Add a second shot only if the user asks for a cut: "[Shot 2] At 00:03.500, the camera cuts to ...".
-overall_soundscape: one paragraph of 1 to 4 sentences: ambient sounds, sounds of the actions, non-verbal human sounds. Never put dialogue or music in it. Write N/A only if the user asks for silence.
-non_diegetic_music: the background score only if the user asks for it (1 to 3 sentences: instruments, tempo, rhythm, dynamics, no mood words); otherwise N/A.
-The word limit counts the three fields together."""
 ALIGNEMENT_I2V = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."
 MOTS_MAX_DEFAUT = {"reecriture": 120, "video": 110}  # sans modèle cible (avant : 40 à 120 mots même pour Qwen à 200)
 
+# Gabarit des consignes (2026-11-11). Avant, la consigne d'un usage était un texte d'un bloc, et les règles du modèle
+# cible (profil_prompt.regles de sa fiche) s'ajoutaient à la suite, en liste à plat : le dialogue de MiniMax H3 était
+# décrit deux fois, sa caméra de deux façons contraires, et « plain prose » précédait un bloc qui annonçait le
+# remplacer. Désormais chaque consigne a les mêmes sections, dans le même ordre, et la fiche du modèle cible range ses
+# règles dans ces sections (profil_prompt.consigne) : chaque règle est dite une fois, à sa place.
+#
+#     ROLE              ce que fait le LLM pour cet usage
+#     USER PRIORITY     ce que l'utilisateur fixe est intouchable : jamais dans une fiche
+#     PROMPT OUTLINE    les parties du prompt, dans l'ordre (« plan » de la fiche)
+#     CONTENT AND WORDING, DIALOGUE, VISIBLE TEXT, NEVER   (« contenu », « dialogue », « texte », « interdits »)
+#     OUTPUT FORMAT     écrit ici d'après la longueur et le format du modèle cible, jamais dans une fiche
+#
+# Une section de la fiche remplace celle du gabarit quand l'usage la dit remplaçable (« remplace » : un plan, la façon
+# d'écrire les répliques) et s'y ajoute sinon. Une section vide n'apparaît pas : Krea 2 n'a pas de plan, son guide
+# demande un seul paragraphe libre.
+SECTIONS = fiches.SECTIONS_CONSIGNE
+TITRES = {"plan": "PROMPT OUTLINE", "contenu": "CONTENT AND WORDING", "dialogue": "DIALOGUE",
+          "texte": "VISIBLE TEXT", "interdits": "NEVER"}
+
+# Les règles du modèle cible (tirées de ses guides officiels) ne servent qu'à ce que l'utilisateur a laissé ouvert : celles
+# de Qwen-Image (couleurs nuancées, matières, lumière) poussaient le LLM à repeindre une idée déjà précise.
+ENTETE_REGLES = ("Rules of the target model. They shape the OPEN parts only: whenever one clashes with what "
+                 "the user fixed or asked, the user wins.")
+PRIORITE = f"""{FIDELITE}
+{GENRE}
+{ADULTES}
+Every rule below shapes the OPEN parts only: whenever one clashes with what the user fixed or asked, the user wins."""
+
+CHAMPS = """integrated_multimodal_description: [Shot 1] then the whole picture-and-action brief with the dialogue, as described above. No timestamp on Shot 1. Add a second shot only if the user asks for a cut: "[Shot 2] At 00:03.500, the camera cuts to ...".
+overall_soundscape: one paragraph of 1 to 4 sentences: ambient sounds, sounds of the actions, non-verbal human sounds. Never put dialogue or music in it. Write N/A only if the user asks for silence.
+non_diegetic_music: the background score only if the user asks for it (1 to 3 sentences: instruments, tempo, rhythm, dynamics, no mood words); otherwise N/A."""
+# Ajouté tel quel à une consigne qui n'a pas de gabarit (découpage, chat Libre, consigne réécrite dans Réglages).
+FORMAT_CHAMPS = f"""Output format of the target model (it replaces the plain-prose layout above; every other rule stays):
+exactly these three fields, one per paragraph, in this order, with these exact labels.
+{CHAMPS}
+The word limit counts the three fields together."""
+
+# Réécriture d'une idée en prompt d'image.
+_REECRITURE = {
+    "role": "You are an expert prompt writer for text-to-image models.\n"
+            "The user describes an image idea, often in French. Rewrite it as ONE English prompt paragraph.",
+    "priorite": PRIORITE,
+    "remplace": {"plan", "texte"},
+    # « never a comma-separated list » : au banc du 2026-11-11, « One paragraph » seul donnait à Bonsai 2 une suite de
+    # mots-clés une fois sur deux pour Krea 2 (40 mots au lieu de 80), que son guide veut en langage naturel.
+    "plan": ["One flowing paragraph of full sentences in natural language, in the order that serves the idea; never "
+             "a comma-separated list of keywords."],
+    "contenu": [
+        "Medium: keep the one the user names (photo, illustration, painting, 3D render...). If none is named, use the "
+        "one the idea plainly implies, a photograph for a real-world scene; never switch to painting or illustration "
+        "on your own.",
+        "Make the OPEN parts visual: setting, lighting, composition, in grounded words that serve the idea."],
+    "texte": ["If the idea asks for written text in the image, keep that text exactly, in quotes. Otherwise mention "
+              "no text."],
+    "interdits": ["Add characters, animals or objects the idea does not imply."],
+    "format": ["{mots_min} to {mots_max} words, plain prose, no lists, no headings, no markdown (no asterisks), no "
+               "quotes around the whole prompt.",
+               "Output only the prompt: no preamble, no explanation, no translation notes."],
+}
+
+# Retouche : d'après la consigne du PE de retouche de Qwen-Image 2.1 (« attribute disentanglement at full strength ») :
+# changer franchement ce qui est demandé, garder le reste d'une seule phrase, sans le redécrire.
+_RETOUCHE = {
+    "role": "You translate image-editing instructions for an instruction-based image editing model.\n"
+            "The user writes an instruction, often in French. Rewrite it as a short English imperative instruction "
+            "(one or two sentences).",
+    "priorite": "Edit exactly what the user names. Keep the user's own action, target and details.",
+    "remplace": {"plan", "texte"},
+    "plan": ["Lead with the change the user names, and make it clear and unmistakable, never faint.",
+             "Then everything the user did not name stays as it is: say so in one short clause (\"keep everything "
+             "else unchanged\"), without re-describing it. If the user names something to keep, say so explicitly."],
+    "texte": ["If the instruction asks for written text, keep that text exactly, in quotes."],
+    "interdits": ["Add another change, a style or a clean-up the user did not ask for."],
+    "format": ["One or two sentences.", "Output only the instruction: no preamble, no explanation."],
+}
+
+# Images de référence (« Mélanger des images ») : une nouvelle scène, les références citées par leur numéro.
+_REFERENCES = {
+    "role": "You write instructions for an image model that receives reference pictures, numbered Picture 1, "
+            "Picture 2, Picture 3.\n"
+            "The user describes, often in French, a new image to create from those references (« image 1 » means "
+            "Picture 1). Rewrite it as ONE English instruction.",
+    "priorite": PRIORITE,
+    "remplace": {"texte"},  # le plan d'un modèle de retouche s'ajoute : ici on décrit d'abord ce qui est nouveau
+    "plan": ["Describe what is new, as the user asks: scene, pose, action, setting, lighting, framing, style."],
+    "contenu": [
+        "Refer to the references by their number: \"the woman from Picture 1\", \"the dragon from Picture 2\". Do not "
+        "re-describe what the references already show (face, hair, clothes, colors): the model sees them.",
+        "Ask explicitly to keep the identity (face, hair) and outfit of the characters from the references, unless "
+        "the user asks to change them, but NOT their pose, seat, props or background: the characters take the new "
+        "pose and place described by the user."],
+    "texte": ["If the user asks for written text in the image, keep that text exactly, in quotes."],
+    "format": ["1 to 4 sentences, at most 90 words, plain prose, no markdown.",
+               "Output only the instruction: no preamble, no explanation."],
+}
+
+# Vidéo : d'après le guide d'écriture de MiniMax H3 : la chronologie, la caméra de l'utilisateur ou une seule simple,
+# les sons de ce qu'on voit toujours, la musique seulement si elle est demandée, les répliques mot pour mot. La façon
+# d'écrire une réplique (ci-dessous : celle de H3) se remplace dans la fiche d'un modèle qui en a une autre.
+_VIDEO = {
+    "role": "You write prompts for an audio-video generation model: it creates the picture AND the sound together.\n"
+            "The user describes, often in French, a short video clip. Rewrite it as ONE English prompt.",
+    "priorite": PRIORITE,
+    "remplace": {"plan", "dialogue", "texte"},
+    "plan": ["A short production brief in the present tense, following the timeline: opening state, the action as it "
+             "starts, how it develops, the result."],
+    "contenu": [
+        "Camera: use the user's camera choice if there is one (a fixed shot stays fixed). Otherwise one simple named "
+        "movement, or a static shot, whichever serves the action.",
+        "One continuous take: no cuts, no fade to black, unless the user asks for them.",
+        "Fit the clip duration: few actions, at most one or two short lines of dialogue. If the user asks you to "
+        "invent a line, write one short line in the language they ask for, written like any other spoken line.",
+        "Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background "
+        "music unless the user asks for it."],
+    "dialogue": [
+        "Describe the speaker the first time (role, age range, gender, voice pitch, timbre, pace or accent) and give "
+        "them an ID in parentheses, (S1), kept for that speaker.",
+        "Write every spoken line inside a <d> tag that starts with its language: The young woman with a quiet, "
+        "breathy voice (S1) says: <d>[French] Je descends ici.</d> Keep each line EXACTLY as the user wrote it, words "
+        "and punctuation, in its original language; never translate it, no ellipses."],
+    "texte": ["Double quotes are only for text visible on screen (a sign), never for a spoken line."],
+    "format": ["{mots_min} to {mots_max} words, plain prose, no lists, no headings, no markdown.",
+               "Output only the prompt: no preamble, no explanation."],
+    "format_champs": ["{mots_min} to {mots_max} words for the three fields together, no lists, no headings, no "
+                      "markdown.",
+                      "Exactly these three fields, one per paragraph, in this order, with these exact labels:\n"
+                      + CHAMPS,
+                      "Output only the prompt: no preamble, no explanation."],
+}
+
+GABARITS = {"reecriture": _REECRITURE, "retouche": _RETOUCHE, "references": _REFERENCES, "video": _VIDEO}
+
+
+def sections_modele(regles: dict | list | None) -> dict[str, list[str]]:
+    """Les règles du modèle cible, par section (workflows.sections_prompt). Une liste à plat (fiche d'avant le
+    gabarit, ou règles données telles quelles) va sous la clé « regles »."""
+    if not regles:
+        return {}
+    if not isinstance(regles, dict):
+        return {"regles": [str(r) for r in regles]}
+    return {cle: [str(r) for r in lignes] for cle, lignes in regles.items() if lignes}
+
+
+def _puces(lignes: list[str]) -> str:
+    return "\n".join(f"- {ligne}" for ligne in lignes)
+
+
+def _section(cle: str, lignes: list[str]) -> str:
+    """Une section du gabarit. Le plan est numéroté dès qu'il a plusieurs parties : leur ordre compte."""
+    if cle == "plan":
+        if len(lignes) == 1:
+            return f"{TITRES[cle]}:\n{lignes[0]}"
+        return f"{TITRES[cle]}, in this order:\n" + "\n".join(f"{n}. {ligne}" for n, ligne in enumerate(lignes, 1))
+    return f"{TITRES.get(cle, cle)}:\n{_puces(lignes)}"
+
+
+def gabarit(nom: str, regles: dict | list | None = None, champs: bool = False) -> str:
+    """La consigne d'origine d'un usage, avec les règles du modèle cible rangées dans ses sections. Les longueurs
+    restent en repères ({mots_min}, {mots_max}) : consigne() les remplit."""
+    g, modele = GABARITS[nom], sections_modele(regles)
+    blocs = [f"ROLE:\n{g['role']}", f"USER PRIORITY:\n{g['priorite']}"]
+    for cle in SECTIONS:
+        du_modele = modele.get(cle, [])
+        lignes = du_modele if du_modele and cle in g["remplace"] else [*g.get(cle, []), *du_modele]
+        if lignes:
+            blocs.append(_section(cle, lignes))
+    if modele.get("regles"):
+        blocs.append(f"{ENTETE_REGLES}\n{_puces(modele['regles'])}")
+    blocs.append(f"OUTPUT FORMAT:\n{_puces(g['format_champs'] if champs and 'format_champs' in g else g['format'])}")
+    return "\n\n".join(blocs)
+
+
+def bloc_modele(regles: dict | list | None) -> str:
+    """Les règles du modèle cible en un bloc, pour une consigne sans gabarit (découpage, chat Libre, consigne réécrite
+    dans Réglages) : l'en-tête, puis les mêmes sections que le gabarit. Vide sans règle."""
+    modele = sections_modele(regles)
+    if not modele:
+        return ""
+    tete = f"{ENTETE_REGLES}\n{_puces(modele['regles'])}" if modele.get("regles") else ENTETE_REGLES
+    return "\n\n".join([tete, *(_section(cle, modele[cle]) for cle in SECTIONS if modele.get(cle))])
+
+
+# Les consignes d'origine, telles que l'onglet Réglages les montre (sans modèle cible).
+CONSIGNE = gabarit("reecriture")
+CONSIGNE_RETOUCHE = gabarit("retouche")
+CONSIGNE_REFERENCES = gabarit("references")
+CONSIGNE_VIDEO = gabarit("video")
 CONSIGNES_DEFAUT = {"reecriture": CONSIGNE, "retouche": CONSIGNE_RETOUCHE,
                     "precisions": CONSIGNE_PRECISIONS, "references": CONSIGNE_REFERENCES,
                     "video": CONSIGNE_VIDEO, "decoupage": CONSIGNE_DECOUPAGE}
@@ -359,19 +475,26 @@ def dans_la_description(texte: str, ajout: str, debut: bool = False) -> str | No
 
 
 def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
-             regles: list[str] | None = None, workflow: str | None = None, champs: bool = False) -> str:
-    """Consigne du GGUF (réglée ou d'origine), puis les règles propres au modèle cible (profil_prompt.regles de sa
-    fiche), toujours suivie de la clause verrouillée. `workflow` : le modèle cible, pour nommer ses images de
+             regles: dict | list | None = None, workflow: str | None = None, champs: bool = False) -> str:
+    """Consigne de cet usage pour le modèle cible, toujours suivie de la clause verrouillée. `regles` : les règles du
+    modèle cible (workflows.sections_prompt), rangées dans les sections du gabarit. Une consigne réécrite dans
+    Réglages pour ce GGUF, ou un usage sans gabarit (découpage, précisions), garde son texte d'un bloc : les règles
+    du modèle cible s'y ajoutent à la suite (bloc_modele). `workflow` : le modèle cible, pour nommer ses images de
     référence (avec_noms_images) ; une consigne réglée à la main y passe aussi."""
-    texte = reglages.consigne_llm(modele, nom) or CONSIGNES_DEFAUT[nom]
+    reecrite = reglages.consigne_llm(modele, nom)
+    en_champs = champs and nom in ("video", "decoupage")
+    if reecrite or nom not in GABARITS:
+        texte = (reecrite or CONSIGNES_DEFAUT[nom]).rstrip()
+        if bloc := bloc_modele(regles):
+            texte += f"\n\n{bloc}"
+        if en_champs:
+            texte += f"\n\n{FORMAT_CHAMPS}"
+    else:
+        texte = gabarit(nom, regles, en_champs)
     texte = (texte.replace("{mots_max}", str(mots_max or MOTS_MAX_DEFAUT.get(nom, 150)))
-             .replace("{mots_min}", str(MOTS_MIN))).rstrip()
+             .replace("{mots_min}", str(MOTS_MIN)))
     if nom == "references":
         texte = avec_noms_images(texte, workflow)
-    if regles:
-        texte += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
-    if champs and nom in ("video", "decoupage"):
-        texte += f"\n\n{FORMAT_CHAMPS}"
     return f"{texte}\n\n{CLAUSE_MINEURS}"
 
 
@@ -392,7 +515,7 @@ def mots_max_de(workflow: str | None) -> int | None:
 
 
 async def traduire_instruction(orchestrateur: Orchestrateur, instruction: str, modele: str | None = None,
-                               regles: list[str] | None = None, workflow: str | None = None,
+                               regles: dict | list | None = None, workflow: str | None = None,
                                vue: Vue | None = None) -> str:
     """`vue` : l'image à retoucher. Un LLM spécialisé dans la retouche de ce workflow la voit avec sa propre consigne ;
     un autre la voit s'il a sa vision, sinon il lit sa fiche."""
@@ -442,18 +565,18 @@ def nettoyer_markdown(texte: str) -> str:
     return " ".join(texte.split())
 
 
-def messages(idee: str, modele: str | None = None, regles: list[str] | None = None,
+def messages(idee: str, modele: str | None = None, regles: dict | list | None = None,
              mots_max: int | None = None) -> list[dict]:
     return [{"role": "system", "content": consigne("reecriture", modele, mots_max, regles)},
             {"role": "user", "content": idee}]
 
 
 async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None = None, references: int = 0,
-                   video: str | None = None, duree: int = 5, regles: list[str] | None = None,
+                   video: str | None = None, duree: int = 5, regles: dict | list | None = None,
                    workflow: str | None = None, vues: list[Vue] | None = None) -> dict:
     """`references` : nombre d'images de référence (S'inspirer) ; la consigne dédiée les fait citer par numéro.
     `video` : animer ou texte (Montage) ; consigne vidéo, répliques gardées mot pour mot.
-    `regles` : celles du modèle cible (workflows.regles_prompt).
+    `regles` : celles du modèle cible (workflows.sections_prompt).
     `workflow` : le modèle cible ; un LLM spécialisé pour lui réécrit avec sa propre consigne.
     `vues` : l'image à animer, les références ou l'image de départ d'une variation, montrées au LLM."""
     securite.verifier(idee)
@@ -747,8 +870,8 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
         systeme += f"\n\n{guide}"
     # Les règles du modèle cible écrivent ses prompts ; l'histoire d'une séquence n'en est pas un (le découpage
     # les applique ensuite plan par plan). À l'essai, elles en faisaient un brief anglais en plans.
-    if forme != "sequence" and (regles := workflows.regles_prompt(workflow)):
-        systeme += f"\n\n{ENTETE_REGLES}\n" + "\n".join(f"- {r}" for r in regles)
+    if forme != "sequence" and (bloc := bloc_modele(workflows.sections_prompt(workflow))):
+        systeme += f"\n\n{bloc}"
     # Un clip pour H3 s'écrit en trois champs, comme à la réécriture directe (reecrire) : même format, quel que soit l'onglet.
     en_champs = forme == "clip" and workflows.champs_video(workflow)
     if en_champs:

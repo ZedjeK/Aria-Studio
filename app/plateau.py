@@ -580,7 +580,7 @@ class Plateau:
         if c.prompt is None:
             c.etape = "Traduction de la consigne"
             traduction = await prompt.traduire_instruction(
-                self.orchestrateur, c.idee, c.llm, workflows.regles_prompt(c.workflow), c.workflow,
+                self.orchestrateur, c.idee, c.llm, workflows.sections_prompt(c.workflow), c.workflow,
                 await asyncio.to_thread(vue, c.parent) if c.type == "retouche" else None)  # il voit l'image
             c.prompt = traduction if c.type == "retouche" else f"{CONSIGNE_AGRANDISSEMENT} {traduction}"
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
@@ -711,7 +711,7 @@ class Plateau:
             c.etape = "Réécriture du prompt"
             nombre_refs = len(c.references) if c.mode_reference == "inspirer" else 0
             c.prompt = (await prompt.reecrire(self.orchestrateur, c.idee, c.llm, nombre_refs,
-                                              regles=workflows.regles_prompt(c.workflow), workflow=c.workflow,
+                                              regles=workflows.sections_prompt(c.workflow), workflow=c.workflow,
                                               vues=[vue(r) for r in c.references] or None))["prompt"]
         securite.verifier(c.idee, c.prompt, *c.textes_origine)
         duree_reecriture = time.perf_counter() - debut

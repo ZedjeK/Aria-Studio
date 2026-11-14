@@ -71,13 +71,19 @@ profil_prompt:
     style: prose
     langue: en
     mots_max: 150  # aucune longueur officielle : le guide Krea dit « long, detailed prompts » ; ses 20 exemples font 10 à 180 mots (médiane ~75). Valeur de départ, à affiner au banc (relevé le 2026-11-09).
-    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
-    # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
-    regles:
-    - 'Group each subject with its own attributes and action, with grounded phrasing for poses, interactions and spatial layout.'
-    - 'Do not invent highly specific clothing, colours, materials or details the idea does not support; if the idea is already detailed, polish it rather than expand it.'
-    - 'Keep the medium the user asks for (photo, illustration, painting, sketch, 3D render).'
-    - 'If the idea asks for no written words, end the prompt with: "No text, no letters, no logos, no watermark."'
+    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) et rangées dans les sections
+    # de la consigne d'un LLM généraliste (app/prompt.py, « Gabarit »). Un LLM spécialisé (catalogue/llm.yaml) garde
+    # sa propre consigne. Pas de « plan » : le guide de Krea demande un seul paragraphe, sans ordre imposé. Garder le
+    # médium demandé et polir une idée déjà détaillée sont déjà dans la consigne générale. « Do not invent… » reste
+    # dans le contenu : rangée sous les interdits, elle raccourcissait les prompts (banc du 2026-11-11 : 70 mots en
+    # moyenne au lieu de 85 sur une idée détaillée), alors que le guide de Krea dit que les prompts longs rendent mieux.
+    consigne:
+        contenu:
+        - 'Group each subject with its own attributes and action, with grounded phrasing for poses, interactions and spatial layout.'
+        - 'Do not invent highly specific clothing, colours, materials or details the idea does not support.'
+        texte:
+        - 'If the idea asks for written text in the image, keep that text exactly, in quotes.'
+        - 'If the idea asks for no written words, end the prompt with: "No text, no letters, no logos, no watermark."'
     regles_sources:
     - 'template ComfyUI image_krea2_turbo_t2i (consigne de son affineur de prompt)'
     - 'https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt (même consigne, officielle)'

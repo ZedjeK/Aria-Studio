@@ -10,8 +10,11 @@ Une fiche de workflow a en plus :
     reserve        facultatif : « retouche » réserve le workflow à la Retouche (S'inspirer ne le propose pas)
     profil_prompt  style (prose, instruction, brief_video), langue, mots_max (facultatif), negatif,
                    rubriques_ignorees (facultatif : rubriques de « Me guider » que ce modèle n'a pas à se faire demander),
-                   regles (ajoutées
-                   à la consigne de Llama quand ce modèle est la cible), conseils et sources (documentation),
+                   consigne (les règles de ce modèle, rangées dans les sections de la consigne du LLM quand il est
+                   la cible : plan = les parties du prompt dans l'ordre, contenu, dialogue, texte, interdits ; chaque
+                   section est une liste de phrases en anglais, toutes facultatives ; app/prompt.py, « Gabarit »),
+                   regles (ancienne forme : une liste à plat, ajoutée à la suite de la consigne ; toujours lue),
+                   conseils et sources (documentation),
                    balise_dialogue (facultatif : le modèle lit les répliques dans <d>[Langue] …</d>, app/repliques.py),
                    nom_image (facultatif : comment le modèle désigne ses images de référence dans un prompt, avec {n} ;
                    « Picture {n} » sans cette clé)
@@ -34,6 +37,7 @@ from app.config import ROOT
 
 FORMAT = 2
 STYLES = ("prose", "instruction", "brief_video")
+SECTIONS_CONSIGNE = ("plan", "contenu", "dialogue", "texte", "interdits")  # profil_prompt.consigne, dans l'ordre du gabarit
 CATALOGUE_LLM = ROOT / "catalogue" / "llm.yaml"
 SERVEURS_LLM = ("llama", "llama-prism")
 
@@ -91,6 +95,11 @@ def problemes_profil(profil) -> list[str]:
     for cle in ("regles", "conseils", "sources", "rubriques_ignorees"):
         if not isinstance(profil.get(cle, []), list):
             p.append(f"profil_prompt.{cle} : une liste")
+    consigne = profil.get("consigne", {})
+    if not isinstance(consigne, dict) or set(consigne) - set(SECTIONS_CONSIGNE) or any(
+            not (isinstance(lignes, list) and all(isinstance(r, str) and r.strip() for r in lignes))
+            for lignes in consigne.values()):
+        p.append(f"profil_prompt.consigne : des listes de phrases, sous {', '.join(SECTIONS_CONSIGNE)}")
     return p
 
 

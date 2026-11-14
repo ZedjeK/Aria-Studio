@@ -422,14 +422,26 @@ def erreurs() -> list[str]:
     return [erreur for _, _, erreur in _fiches_lues() if erreur]
 
 
-def regles_prompt(id_workflow: str | None) -> list[str]:
-    """Règles propres au modèle cible, ajoutées à la consigne de Llama (profil_prompt.regles de sa fiche)."""
+def sections_prompt(id_workflow: str | None) -> dict[str, list[str]]:
+    """Règles propres au modèle cible, par section de la consigne de Llama (profil_prompt.consigne de sa fiche :
+    plan, contenu, dialogue, texte, interdits ; app/prompt.py les range dans son gabarit). Les `regles` à plat d'une
+    fiche d'avant le gabarit viennent sous la clé « regles »."""
     if not id_workflow:
-        return []
+        return {}
     try:
-        return list(obtenir(id_workflow).profil.get("regles") or [])
+        profil = obtenir(id_workflow).profil
     except ErreurWorkflow:
-        return []
+        return {}
+    consigne = profil.get("consigne") or {}
+    sections = {cle: [str(r) for r in consigne[cle]] for cle in fiches.SECTIONS_CONSIGNE if consigne.get(cle)}
+    if profil.get("regles"):
+        sections["regles"] = [str(r) for r in profil["regles"]]
+    return sections
+
+
+def regles_prompt(id_workflow: str | None) -> list[str]:
+    """Toutes les règles du modèle cible, à plat (sections_prompt, dans l'ordre du gabarit)."""
+    return [regle for lignes in sections_prompt(id_workflow).values() for regle in lignes]
 
 
 def champs_video(id_workflow: str | None) -> bool:

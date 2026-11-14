@@ -63,15 +63,20 @@ profil_prompt:
     style: instruction
     langue: en
     nom_image: '<image{n}>'  # doc ComfyUI de Qwen-Image 2.1 et PE-I2I (« the rewritten instruction MUST use <image1> »)
-    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
-    # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
-    regles:
-    - 'Lead with the operation (what changes and where), then say explicitly what stays unchanged.'
-    - 'Keep identity unless the user targets it: the face and recognizable accessories of a person, the exact design of a product, and the rendering medium (photo, anime, illustration, painting).'
-    - 'Anchor every detail on what the image shows; never invent a detail you cannot see.'
-    - 'Written text: give the exact characters in double quotes and keep the typography and language already in the image.'
-    - 'If the canvas is extended outward, call it outpainting explicitly.'
-    - 'With several pictures, give each one its role: which <imageN> is the canvas whose composition survives, which ones only supply material, a garment or an identity; state what to keep in the positive ("keep X unchanged").'
+    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) et rangées dans les sections
+    # de la consigne d'un LLM généraliste (app/prompt.py, « Gabarit »). Un LLM spécialisé (catalogue/llm.yaml) garde
+    # sa propre consigne.
+    consigne:
+        plan:
+        - 'Lead with the operation: what changes and where, clear and unmistakable, never faint.'
+        - 'Then say explicitly what stays unchanged, in one short clause ("keep everything else unchanged"), without re-describing it; if the user names something to keep, say so explicitly.'
+        contenu:
+        - 'Keep identity unless the user targets it: the face and recognizable accessories of a person, the exact design of a product, and the rendering medium (photo, anime, illustration, painting).'
+        - 'Anchor every detail on what the image shows; never invent a detail you cannot see.'
+        - 'If the canvas is extended outward, call it outpainting explicitly.'
+        - 'With several pictures, give each one its role: which <imageN> is the canvas whose composition survives, which ones only supply material, a garment or an identity; state what to keep in the positive ("keep X unchanged").'
+        texte:
+        - 'Written text: give the exact characters in double quotes and keep the typography and language already in the image.'
     regles_sources:
     - 'https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I (system_prompt.txt)'
 # Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
