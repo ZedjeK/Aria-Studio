@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, fichier_reglages, casting, jeton, journal, cles, collection, decouvrir, emplacements, estimation,
+from app import (assistant, fichier_reglages, casting, installation_maj, jeton, journal, cles, collection, decouvrir, emplacements, estimation,
                  fond, garde, mesures,
                  migration_modeles, mises_a_jour, modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages,
                  retouche, routes_montage, routes_scenario, rushes, securite, services, workflows)
@@ -52,8 +52,11 @@ async def cycle_de_vie(_app: FastAPI):
     telechargeur.demarrer()
     plateau_.demarrer()
     verification = asyncio.create_task(mises_a_jour.verifier())  # au plus une fois par jour, sans bloquer le démarrage
+    installation_maj.bilan_au_demarrage()  # après une mise à jour intégrée : la version attendue tourne-t-elle ?
+    menage = asyncio.create_task(installation_maj.vider_plus_tard())
     yield
     verification.cancel()
+    menage.cancel()
     await plateau_.arreter()
     await telechargeur.arreter()
     await orchestrateur.arreter()
@@ -211,6 +214,33 @@ async def verifier_mise_a_jour():
 @app.put("/api/mise-a-jour")
 def regler_mise_a_jour(d: DemandeMiseAJour):
     return mises_a_jour.activer(d.active)
+
+
+# Mise à jour intégrée (app/installation_maj.py) : le clic, après la confirmation de l'interface, vaut accord.
+@app.get("/api/mise-a-jour/installation")
+def suivre_installation_maj():
+    return installation_maj.etat()
+
+
+@app.post("/api/mise-a-jour/installer")
+async def installer_maj():
+    """Télécharge, vérifie et installe la dernière release, puis Aria redémarre (en mode portable : décompressée à
+    côté, sans rien déplacer)."""
+    if not installation_maj.installable() or serveur is None:
+        raise HTTPException(409, "Aria a été lancée autrement que par son lanceur : télécharge la version à la main")
+    if installation_maj.en_cours():
+        raise HTTPException(409, "Une mise à jour est déjà en cours")
+    if commande_en_cours():
+        raise HTTPException(409, "Une génération est en cours : attends sa fin (ou annule-la) avant de mettre à jour")
+    if services.banc_en_cours():
+        raise HTTPException(409, "Un banc du Casting est en cours : attends sa fin avant de mettre à jour")
+    boucle = asyncio.get_running_loop()
+    installation_maj.commencer()  # l'état dit « recherche » dès la réponse : l'interface suit sans attendre la tâche
+    tache = asyncio.create_task(installation_maj.installer(
+        lambda: boucle.call_later(0.5, setattr, serveur, "should_exit", True)))
+    _taches_fond.add(tache)
+    tache.add_done_callback(_taches_fond.discard)
+    return installation_maj.etat()
 
 
 class DemandeInstallation(BaseModel):
