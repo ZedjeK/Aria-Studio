@@ -85,7 +85,7 @@ async def optimiser_prompt(d: DemandeOptimisation, requete: Request = None):
         securite.verifier(texte, *origines)
         vues = await asyncio.to_thread(lambda: [plateau.vue(i) for i in d.images]) or None
         llm = d.llm or (workflows.llm_de(d.workflow) if d.workflow else None)
-        regles = workflows.regles_prompt(d.workflow)
+        regles = workflows.sections_prompt(d.workflow)
         if d.atelier == "retouche":
             debut = asyncio.get_running_loop().time()
             consigne = await prompt.traduire_instruction(services.orchestrateur, texte, llm, regles, d.workflow, vues[0])

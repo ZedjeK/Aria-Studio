@@ -92,17 +92,24 @@ profil_prompt:
     rubriques_ignorees: [Style, Palette, Finition, Objectif]
     format_champs: true  # trois champs (integrated_multimodal_description, overall_soundscape, non_diegetic_music) : guide ComfyUI H3 ; app/prompt.py
     balise_dialogue: true  # les répliques vont dans <d>[Langue] …</d> (guide officiel §4.4) : app/repliques.py
-    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) : ajoutées à la
-    # consigne d'un LLM généraliste. Un LLM spécialisé (catalogue/llm.yaml) garde sa propre consigne.
-    regles:
-    - 'Begin with the visual style and the opening framing ("Live-action, cinematic, a medium-wide shot frames ..."), then follow the timeline: opening state, start of the action, development, result.'
-    - 'Name the camera movement by its type (push in, pull out, pan, truck, tilt, pedestal, arc, tracking, static, POV), adding amplitude (small or large) and speed (slow or fast) only when they matter, as a natural sentence.'
-    - 'Before a speaker''s first line, identify them by what is visible and audible: role, age range, gender, voice pitch, timbre, pace or accent, then an ID in parentheses, (S1), kept for that speaker in every shot.'
-    - 'Every spoken line goes in a <d> tag with its language, outside any quotation marks: "(S1) says: <d>[French] Je descends ici.</d>". The words and punctuation stay exactly as the user wrote them; no ellipses; never translate.'
-    - 'Off-screen narration: write "says in an off-screen voiceover" and add that the visible character''s lips stay closed.'
-    - 'Double quotes are only for text visible on screen (signs, labels, neon), verbatim, never for a spoken line.'
-    - 'Background music only if asked: describe instruments, tempo and dynamics, not mood words.'
-    - 'Animating a picture: start from what the first frame shows (style, subject, composition) and keep identity, clothing, colours and layout consistent while it moves.'
+    # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) et rangées dans les sections
+    # de la consigne d'un LLM généraliste (app/prompt.py, « Gabarit »). Un LLM spécialisé (catalogue/llm.yaml) garde
+    # sa propre consigne. « dialogue » et « texte » remplacent ceux de la consigne vidéo générale ; la caméra et la
+    # musique s'ajoutent aux siennes (qui disent déjà : la caméra de l'utilisateur d'abord, pas de musique non demandée).
+    consigne:
+        plan:
+        - 'Begin with the visual style and the opening framing ("Live-action, cinematic, a medium-wide shot frames ...").'
+        - 'Then follow the timeline in the present tense: opening state, start of the action, development, result.'
+        - 'Animating a picture: start from what the first frame shows (style, subject, composition) and keep identity, clothing, colours and layout consistent while it moves.'
+        contenu:
+        - 'Name the camera movement by its type (push in, pull out, pan, truck, tilt, pedestal, arc, tracking, static, POV), adding amplitude (small or large) and speed (slow or fast) only when they matter, as a natural sentence.'
+        - 'When the user asks for background music, describe instruments, tempo and dynamics, not mood words.'
+        dialogue:
+        - 'Before a speaker''s first line, identify them by what is visible and audible: role, age range, gender, voice pitch, timbre, pace or accent, then an ID in parentheses, (S1), kept for that speaker in every shot.'
+        - 'Every spoken line goes in a <d> tag with its language, outside any quotation marks: "(S1) says: <d>[French] Je descends ici.</d>". The words and punctuation stay exactly as the user wrote them; no ellipses; never translate.'
+        - 'Off-screen narration: write "says in an off-screen voiceover" and add that the visible character''s lips stay closed.'
+        texte:
+        - 'Double quotes are only for text visible on screen (signs, labels, neon), verbatim, never for a spoken line.'
     regles_sources:
     - 'https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA (VIDEO_PROMPT_WRITING_GUIDE_base_en.md)'
     conseils:

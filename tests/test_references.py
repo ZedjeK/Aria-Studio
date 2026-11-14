@@ -215,7 +215,7 @@ class Reecriture(unittest.TestCase):
         r = asyncio.run(prompt.reecrire(SimpleNamespace(llm=llm), "la femme de l'image 1 sur le dragon de l'image 2",
                                         None, references=2))
         systeme, utilisateur = appels[0]
-        self.assertTrue(systeme["content"].startswith("You write instructions for an image model that receives"))
+        self.assertTrue(systeme["content"].startswith("ROLE:\nYou write instructions for an image model that receives"))
         self.assertTrue(systeme["content"].endswith(prompt.CLAUSE_MINEURS))
         self.assertIn("(Reference pictures: 2)", utilisateur["content"])
         self.assertIn("Picture 2", r["prompt"])
