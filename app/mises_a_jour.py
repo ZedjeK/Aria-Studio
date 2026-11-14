@@ -2,8 +2,8 @@
 
 Une requête anonyme vers l'API GitHub, au plus une fois par jour (au démarrage, puis quand l'interface le demande),
 sauf « Vérifier maintenant ». Le choix de l'utilisateur (vérifier ou non) est dans la section « mises_a_jour » de
-reglages.json (app/fichier_reglages.py) ; le résultat de la dernière recherche, qui se refait, dans cache/mise_a_jour.json. Rien n'est jamais téléchargé ni installé : l'interface montre la version, ses notes et le lien de
-la release.
+reglages.json (app/fichier_reglages.py) ; le résultat de la dernière recherche, qui se refait, dans cache/mise_a_jour.json.
+Ce module ne télécharge ni n'installe rien : la mise à jour intégrée, sur un clic, est dans app/installation_maj.py.
 Sans réseau, sans release publiée ou avec un dépôt inaccessible, rien ne s'affiche en erreur : l'état le dit.
 """
 
@@ -97,7 +97,10 @@ async def verifier(force: bool = False) -> dict:
             else:
                 d["derniere"] = {"version": version, "nom": rel.get("name") or f"v{version}",
                                  "url": rel.get("html_url"), "notes": (rel.get("body") or "")[:4000],
-                                 "date": (rel.get("published_at") or "")[:10]}
+                                 "date": (rel.get("published_at") or "")[:10],
+                                 # taille du zip, pour la confirmation de la mise à jour intégrée (app/installation_maj.py)
+                                 "taille": next((a.get("size") for a in rel.get("assets") or []
+                                                 if a.get("name") == f"Aria-Studio-{version}.zip"), None)}
     except httpx.HTTPError as e:
         d["erreur"] = f"GitHub injoignable : {type(e).__name__}"
     _ecrire(d)

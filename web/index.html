@@ -57,9 +57,11 @@
                 <p class="discret">Pour la relancer : Aria-Studio.exe, ou son raccourci sur le Bureau.</p>
             </div>
         </div>
-        <!-- Mise à jour : une release plus récente existe sur GitHub (rien ne s'installe tout seul). -->
+        <!-- Mise à jour : une release plus récente existe sur GitHub ; elle ne s'installe que sur le clic
+             « Installer la mise à jour », après une confirmation (app/installation_maj.py). -->
         <div id="bandeau-maj" class="bandeau-maj" hidden>
             <span></span>
+            <button id="installer-maj" type="button" class="principal petit" hidden>Installer la mise à jour</button>
             <a id="lien-maj" target="_blank" rel="noopener" class="petit">Voir la version</a>
             <button id="plus-tard-maj" type="button" class="petit">Plus tard</button>
             <details id="notes-maj" hidden><summary class="discret">Nouveautés</summary><pre></pre></details>
@@ -975,7 +977,9 @@
                 <div class="ligne">
                     <label class="case"><input type="checkbox" id="active-maj"> Vérifier au démarrage (une fois par jour, sur GitHub)</label>
                     <button id="verifier-maj" type="button" class="petit">Vérifier maintenant</button>
+                    <button id="installer-maj-reglages" type="button" class="principal petit" hidden>Installer la mise à jour</button>
                 </div>
+                <p id="suivi-maj" class="discret" hidden></p>
                 <!-- Installation par l'exe (tools/launcher/Launcher.cs, app/emplacements.py) : clé installation_proposee d'aria.yaml -->
                 <p id="etat-installation" class="discret"></p>
                 <div class="ligne">

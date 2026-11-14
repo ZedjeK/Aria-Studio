@@ -15,6 +15,12 @@
 //                             dans %USERPROFILE%\Desktop (jamais remplacé s'il existe)
 //   --essai-ne-plus-proposer  écrit « installation.proposee: false » dans reglages.json
 //   --essai-adresse           écrit sur la sortie l'adresse qu'il ouvrirait (avec le jeton de cache\session.json)
+//   --essai-mise-a-jour <pid> fait la mise à jour ci-dessous sans fenêtre et sans relancer Aria
+//
+// Mise à jour intégrée (app/installation_maj.py) : Aria lance le NOUVEAU lanceur, décompressé dans
+// cache\mise-a-jour\Aria-Studio-X.Y.Z\, avec « --mise-a-jour <pid du serveur> <ancien lanceur> », puis s'arrête.
+// Ce lanceur attend la fin du serveur, installe comme « Installer » (programme.precedent gardé) et relance Aria depuis
+// programme\ ; si l'installation échoue, programme\ n'a pas changé et il relance l'ancien lanceur.
 //
 // Jeton par lancement (app/jeton.py) : le serveur écrit son jeton dans cache\session.json ; le lanceur ouvre
 // « /?jeton=… », que le serveur range dans un cookie avant de rediriger vers « / ».
@@ -49,12 +55,13 @@ static class Launcher
     {
         string racine = Dossier(AppDomain.CurrentDomain.BaseDirectory);
         essai = A(args, "--essai-proposer") || A(args, "--essai-installer") || A(args, "--essai-ne-plus-proposer")
-                || A(args, "--essai-adresse");
+                || A(args, "--essai-adresse") || A(args, "--essai-mise-a-jour");
         bool portable = A(args, "--portable");
 
         if (A(args, "--essai-proposer")) return DoitProposer(racine, portable) ? 0 : 2;
         if (A(args, "--essai-ne-plus-proposer")) return NePlusProposer() ? 0 : 1;
         if (A(args, "--essai-installer")) return Installer(racine, A(args, "--raccourci")) != null ? 0 : 1;
+        if (A(args, "--mise-a-jour") || A(args, "--essai-mise-a-jour")) return MettreAJour(racine, args);
 
         string url = "http://127.0.0.1:" + LirePort(racine) + "/";
         if (A(args, "--essai-adresse"))
@@ -241,6 +248,38 @@ static class Launcher
         raccourci = caseRaccourci.Checked;
         nePlus = caseNePlus.Checked;
         return r;
+    }
+
+    // --- la mise à jour intégrée ---
+
+    static int MettreAJour(string racine, string[] args)
+    {
+        int i = Math.Max(Array.IndexOf(args, "--mise-a-jour"), Array.IndexOf(args, "--essai-mise-a-jour"));
+        int pid;
+        if (i + 1 >= args.Length || !int.TryParse(args[i + 1], out pid))
+        {
+            Erreur("Mise à jour : il manque le numéro du serveur d'Aria à attendre.");
+            return 1;
+        }
+        string ancien = i + 2 < args.Length ? args[i + 2] : null;
+        try
+        {
+            using (Process serveur = Process.GetProcessById(pid))
+            {
+                if (!serveur.WaitForExit(120000))
+                {
+                    Erreur("Aria ne s'est pas arrêtée : la mise à jour n'est pas installée.");
+                    return 1;
+                }
+            }
+        }
+        catch (ArgumentException) { }  // déjà arrêté
+        string exe = Installer(racine, false);
+        if (essai) return exe != null ? 0 : 1;
+        string relance = exe ?? (ancien != null && File.Exists(ancien) ? ancien : null);
+        if (relance != null)
+            Process.Start(new ProcessStartInfo(relance) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(relance) });
+        return exe != null ? 0 : 1;
     }
 
     // --- l'installation ---
