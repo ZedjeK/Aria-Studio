@@ -52,7 +52,7 @@ Aucune télémétrie, rien n'est envoyé à l'auteur. Les appels éventuels de C
 Ils sont décrits ici pour que personne ne les découvre par accident ; chacun est
 traité par une PR à part ou fera l'objet d'une dérogation écrite.
 
-- **Fichiers du dossier de données** : `reglages.json` et `cache\` sont en place ; pas encore de `journal.json`, et `sauvegardes\` ne garde que les fichiers d'avant la migration (pas encore de copie avant chaque changement). Les anciens fichiers de réglages (`aria.yaml`, `data/reglages.yaml`, `data/fond.json`, `data/notifications.json`, `data/mise_a_jour.json`, `data/loras.json`) restent à leur place après la migration, sans être lus, pour qu'une version d'avant d'Aria tourne encore.
+- **Fichiers du dossier de données** : `reglages.json` et `cache\` sont en place ; `sauvegardes\` reçoit une copie de `reglages.json` avant chaque changement (les 20 dernières, restaurables dans Réglages → Système) ; pas encore de `journal.json`. Les anciens fichiers de réglages (`aria.yaml`, `data/reglages.yaml`, `data/fond.json`, `data/notifications.json`, `data/mise_a_jour.json`, `data/loras.json`) restent à leur place après la migration, sans être lus, pour qu'une version d'avant d'Aria tourne encore.
 - **Sauvegarde avant modification** : seule la migration des modèles garde des `.bak`. `data/logs/aria.log` n'est pas borné.
 - **Clés d'accès** : dans le coffre Windows, donc chiffrées au niveau du compte, mais hors du dossier de données.
 - **Réseau local** : contrôle de `Host` et d'`Origin`, aucun CORS, actions en POST/PUT/DELETE ; mais pas de jeton par lancement, et llama-server et ComfyUI n'ont pas de clé d'accès.

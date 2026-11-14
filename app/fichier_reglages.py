@@ -23,6 +23,10 @@ Les anciens fichiers sont copiés dans sauvegardes/avant-migration-AAAA-MM-JJ/ e
 modifiés : une version d'avant d'Aria les retrouve. Le résultat de la dernière recherche de mise à jour part dans
 cache/mise_a_jour.json.
 
+Sauvegardes : avant chaque écriture qui change quelque chose, l'ancien reglages.json est copié dans
+sauvegardes/reglages-AAAAMMJJ-HHMMSS-micro.json ; les SAUVEGARDES_GARDEES dernières sont gardées. restaurer() remet
+l'une d'elles, en sauvegardant d'abord l'état actuel (rien ne se perd).
+
 Un reglages.json illisible n'est jamais écrasé sans copie : il est mis de côté dans sauvegardes/ avant la première
 écriture, et Aria repart en attendant des valeurs d'origine.
 
@@ -33,6 +37,7 @@ qui importe ce module : RACINE_DE y est remplacée par emplacements._racine.
 import copy
 import json
 import logging
+import re
 import shutil
 import threading
 from contextlib import contextmanager
@@ -49,6 +54,14 @@ SECTIONS = ("emplacements", "favoris", "assistant", "installation", "fond", "not
 # Anciens fichiers (relatifs à la racine) : leur contenu, versé dans les sections de reglages.json.
 ANCIENS = ("aria.yaml", "data/reglages.yaml", "data/fond.json", "data/notifications.json", "data/mise_a_jour.json",
            "data/loras.json")
+
+
+SAUVEGARDES_GARDEES = 20
+_SAUVEGARDE = re.compile(r"^reglages-(\d{8})-(\d{6})-\d{6}\.json$")
+
+
+class ErreurSauvegarde(ValueError):
+    pass
 
 
 def RACINE_DE() -> Path:  # noqa: N802 : remplacée par app/emplacements.py à son import
@@ -123,6 +136,10 @@ def _ecrire(chemin: Path, d: dict):
         cote.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(chemin, cote)
         log.warning("%s illisible mis de côté dans %s avant d'être réécrit", chemin, cote)
+    elif chemin.is_file():
+        if _lire_disque(chemin) == {k: v for k, v in d.items() if v not in (None, {}, [])}:
+            return  # rien ne change : ni écriture ni sauvegarde
+        _sauvegarder(chemin)
     _illisible = None
     propre = {k: v for k, v in d.items() if v not in (None, {}, [])}  # pas de section vide
     temporaire = chemin.with_suffix(".tmp")
@@ -226,3 +243,62 @@ def _migrer(racine: Path, existant: dict) -> dict:
     if lus:
         log.info("Réglages réunis dans %s depuis %s", racine / NOM, ", ".join(lus))
     return d
+
+
+# --- sauvegardes ---------------------------------------------------------------------------------------------------
+
+def dossier_sauvegardes() -> Path:
+    return RACINE_DE() / "sauvegardes"
+
+
+def _fichiers_sauvegardes() -> list[Path]:
+    """Les sauvegardes de reglages.json, la plus récente en premier (le nom porte la date, à la microseconde)."""
+    dossier = dossier_sauvegardes()
+    if not dossier.is_dir():
+        return []
+    return sorted((f for f in dossier.iterdir() if f.is_file() and _SAUVEGARDE.match(f.name)),
+                  key=lambda f: f.name, reverse=True)
+
+
+def _sauvegarder(chemin: Path):
+    """Copie reglages.json avant de le réécrire, puis ne garde que les SAUVEGARDES_GARDEES dernières copies."""
+    dossier = dossier_sauvegardes()
+    dossier.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(chemin, dossier / f"reglages-{datetime.now():%Y%m%d-%H%M%S-%f}.json")
+    for ancienne in _fichiers_sauvegardes()[SAUVEGARDES_GARDEES:]:
+        try:
+            ancienne.unlink()
+        except OSError as e:
+            log.warning("Sauvegarde %s non effacée (%s)", ancienne.name, e)
+
+
+def sauvegardes() -> list[dict]:
+    """Ce que montre Réglages → Système : chaque sauvegarde, sa date et sa taille, la plus récente en premier."""
+    liste = []
+    for f in _fichiers_sauvegardes():
+        jour, heure = _SAUVEGARDE.match(f.name).groups()
+        liste.append({"nom": f.name, "taille": f.stat().st_size,
+                      "date": f"{jour[:4]}-{jour[4:6]}-{jour[6:]}T{heure[:2]}:{heure[2:4]}:{heure[4:]}"})
+    return liste
+
+
+def restaurer(nom: str) -> dict:
+    """Remet une sauvegarde à la place de reglages.json ; l'état actuel est sauvegardé d'abord."""
+    if not _SAUVEGARDE.match(nom or ""):
+        raise ErreurSauvegarde(f"Sauvegarde inconnue : {nom}")
+    source = dossier_sauvegardes() / nom
+    if not source.is_file():
+        raise ErreurSauvegarde(f"Sauvegarde introuvable : {nom}")
+    try:
+        d = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise ErreurSauvegarde(f"Sauvegarde illisible : {nom}") from e
+    if not isinstance(d, dict):
+        raise ErreurSauvegarde(f"Sauvegarde illisible : {nom}")
+    with _verrou:
+        actuel = tout()
+        d.setdefault("migration", actuel.get("migration") or {"date": datetime.now().isoformat(timespec="seconds"),
+                                                              "depuis": []})
+        _ecrire(fichier(), d)
+    log.info("Réglages restaurés depuis %s", nom)
+    return {"restaure": nom}

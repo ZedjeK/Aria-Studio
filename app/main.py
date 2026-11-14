@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, casting, cles, collection, decouvrir, emplacements, estimation, fond, garde, mesures,
+from app import (assistant, fichier_reglages, casting, cles, collection, decouvrir, emplacements, estimation, fond, garde, mesures,
                  migration_modeles, mises_a_jour, modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages,
                  retouche, routes_montage, routes_scenario, rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
@@ -205,6 +205,25 @@ def lire_installation():
 @app.put("/api/installation")
 def regler_installation(d: DemandeInstallation):
     return emplacements.proposer_installation(d.proposee)
+
+
+# Sauvegardes de reglages.json (app/fichier_reglages.py) : une avant chaque changement, les 20 dernières gardées.
+@app.get("/api/sauvegardes")
+def lister_sauvegardes():
+    return fichier_reglages.sauvegardes()
+
+
+class DemandeRestaurationReglages(BaseModel):
+    nom: str
+
+
+@app.post("/api/sauvegardes/restaurer")
+def restaurer_sauvegarde(d: DemandeRestaurationReglages):
+    """Les réglages actuels sont sauvegardés d'abord ; certains (dossier des modèles) ne valent qu'au redémarrage."""
+    try:
+        return fichier_reglages.restaurer(d.nom)
+    except fichier_reglages.ErreurSauvegarde as e:
+        raise HTTPException(400, str(e))
 
 
 class DemandeNotifications(BaseModel):
