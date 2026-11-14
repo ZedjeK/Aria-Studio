@@ -125,7 +125,8 @@ garde libres.
 
 Dans Réglages, carte Moteurs, *Utiliser mon ComfyUI…* accepte un **ComfyUI portable** (avec `python_embeded`) d'une
 version au moins égale à celle d'Aria. Aria le lance une fois pour vérifier qu'il connaît tous les nœuds dont elle
-a besoin, et n'y installe rien.
+a besoin, et n'y installe rien. Elle le lance avec ses propres dossiers de travail (dans `cache\comfyui\`) : ses
+images et vidéos de départ et ses résultats ne passent pas par les dossiers `input` et `output` de ton ComfyUI.
 
 ## Où vont tes affaires
 
@@ -136,7 +137,7 @@ Tout ce qui t'appartient vit dans `%USERPROFILE%\.Aria-Studio`, qu'une mise à j
 | `data\` | Rushes, clips, séquences, voix, réglages, journaux |
 | `modeles\` | Les modèles (ailleurs si tu l'as changé dans l'onglet Modèles) |
 | `moteurs\` | ComfyUI portable et llama-server |
-| `cache\` | Ce qui se recalcule (empreintes des modèles, listes annoncées par ComfyUI) : l'effacer ne perd rien |
+| `cache\` | Ce qui se recalcule (empreintes des modèles, listes annoncées par ComfyUI) et les dossiers de travail de ComfyUI (`cache\comfyui\`, vidés au fil des générations) : l'effacer ne perd rien |
 | `reglages.json` | Tous tes réglages et choix : dossier des modèles, favoris, licences acceptées, fond, notifications, réglages des LLM et des workflows… |
 | `sauvegardes\` | Une copie de `reglages.json` avant chaque changement (les 20 dernières, à restaurer dans Réglages → Système), et les anciens fichiers de réglages copiés quand une version les a réunis dans `reglages.json` |
 | `journal.json` | Les 500 dernières opérations d'Aria sur tes affaires (téléchargements, moteurs, corbeilles, migrations, réglages), visibles dans Réglages → Système |
@@ -204,6 +205,10 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
 - **ComfyUI est joignable par tout programme de ta machine.** Il n'écoute que sur `127.0.0.1` et refuse les autres
   sites du navigateur, mais il n'a aucune option de clé d'accès : un programme local peut lui parler directement, sans
   passer par Aria. llama-server, lui, reçoit une clé neuve à chaque démarrage et refuse qui ne la présente pas.
+- **Les anciens fichiers de travail de ComfyUI restent.** Jusqu'à la 2.0.0, Aria laissait dans `ComfyUI\input` et
+  `ComfyUI\output` (dans `moteurs\comfyui\`, ou dans ton propre ComfyUI) une copie de chaque fichier envoyé et de
+  chaque résultat. Elle ne les efface pas pour toi : certains peuvent être la dernière copie d'une création que tu as
+  vidée de la corbeille. Supprime-les à la main si tu veux la place.
 - **Fermer l'onglet ne ferme pas Aria.** Son serveur, et parfois un moteur et la mémoire de la carte graphique, restent
   occupés tant que tu n'as pas cliqué sur **⏻ Quitter**.
 - **La corbeille garde la place.** Un modèle, une séquence ou un rush supprimé part à la corbeille d'Aria et se
