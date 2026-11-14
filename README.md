@@ -168,7 +168,7 @@ l'interface se rouvre dans un nouvel onglet. Une génération en cours empêche 
 d'avant, quitte Aria et lance `programme.precedent\Aria-Studio.exe` depuis l'Explorateur. Lancée sans installer,
 Aria s'installe ainsi dans `programme\`. En mode portable, la nouvelle version est seulement décompressée à côté du
 dossier actuel : recopie-y tes dossiers `data`, `modeles` et `services` et ton `reglages.json`. Les versions publiées
-jusqu'à la 2.0.0 n'ont pas ce bouton : on les met à jour à la main (décompresser le zip, lancer, *Installer*).
+jusqu'à la 1.3.0 n'ont pas ce bouton : on les met à jour à la main (décompresser le zip, lancer, *Installer*).
 
 **Désinstaller** : quitte Aria, puis supprime le dossier `%USERPROFILE%\.Aria-Studio\programme` (et
 `programme.precedent`) et le raccourci du Bureau. Tes données restent dans `%USERPROFILE%\.Aria-Studio` ; supprime
@@ -219,7 +219,7 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
 - **ComfyUI est joignable par tout programme de ta machine.** Il n'écoute que sur `127.0.0.1` et refuse les autres
   sites du navigateur, mais il n'a aucune option de clé d'accès : un programme local peut lui parler directement, sans
   passer par Aria. llama-server, lui, reçoit une clé neuve à chaque démarrage et refuse qui ne la présente pas.
-- **Les anciens fichiers de travail de ComfyUI restent.** Jusqu'à la 2.0.0, Aria laissait dans `ComfyUI\input` et
+- **Les anciens fichiers de travail de ComfyUI restent.** Jusqu'à la 1.3.0, Aria laissait dans `ComfyUI\input` et
   `ComfyUI\output` (dans `moteurs\comfyui\`, ou dans ton propre ComfyUI) une copie de chaque fichier envoyé et de
   chaque résultat. Elle ne les efface pas pour toi : certains peuvent être la dernière copie d'une création que tu as
   vidée de la corbeille. Supprime-les à la main si tu veux la place.
@@ -280,7 +280,7 @@ Publier une version : passer `VERSION` de `app/__init__.py` au nouveau numéro, 
 et son `.sha256` sur Windows et crée la release en brouillon, à relire et à publier :
 
 ```powershell
-git tag -a v2.0.0 -m "Version 2.0.0"; git push origin v2.0.0
+git tag -a v2.1.0 -m "Version 2.1.0"; git push origin v2.1.0
 ```
 
 | Dossier | Rôle |
