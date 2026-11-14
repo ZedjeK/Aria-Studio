@@ -173,7 +173,7 @@ personnage mineur est autorisé (scène de famille, manga…), mais un personnag
 (nudité, sexualité, suggestif) est toujours bloqué. Le filtre ne se désactive pas : `securite/termes.yaml` peut
 seulement ajouter des termes, jamais en retirer.
 
-Aria n'écoute que sur ta machine (`127.0.0.1`). Une fois par jour, elle demande à GitHub s'il existe une nouvelle
+Aria n'écoute que sur ta machine (`127.0.0.1`), et ne répond qu'à l'interface ouverte par son lanceur (un jeton tiré à chaque lancement). Une fois par jour, elle demande à GitHub s'il existe une nouvelle
 release (option à couper dans Réglages). Elle ne télécharge rien d'elle-même : chaque téléchargement part d'un clic.
 
 Certains modèles Civitai et Hugging Face demandent ta clé d'accès. Colle-la dans Réglages, carte **🔑 Clés
@@ -190,9 +190,14 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
 - **Les mises à jour sont manuelles.** Aria signale une nouvelle version et donne le lien ; elle ne la télécharge ni ne
   l'installe. L'empreinte SHA-256 prouve que le zip n'a pas été abîmé en route, pas d'où il vient : le zip et son
   `.sha256` sortent du même endroit, et la provenance repose sur le compte GitHub de l'auteur.
-- **Les moteurs sont joignables par tout programme de ta machine.** Aria n'écoute que sur `127.0.0.1`, et elle refuse
-  une requête dont l'adresse ou l'origine n'est pas la sienne. Mais elle n'exige pas de jeton, et ComfyUI et
-  llama-server tournent sans clé d'accès : un programme local peut leur parler.
+- **Le jeton ne protège pas d'un programme de ton compte.** Aria tire un jeton à chaque lancement et l'exige à chaque
+  requête : une autre page du navigateur ou un programme qui ne le connaît pas est refusé. Mais le jeton est écrit dans
+  `cache\session.json` (pour que le lanceur le retrouve) : un programme lancé sous ton compte Windows peut le lire.
+- **Un ancien onglet ou un favori ne rouvre pas Aria.** Le jeton change à chaque lancement : une page ouverte avant un
+  redémarrage, ou un favori vers `http://127.0.0.1:8075`, affiche « Aria Studio s'ouvre par son lanceur ». Relance
+  `Aria-Studio.exe`.
+- **Les moteurs sont joignables par tout programme de ta machine.** ComfyUI et llama-server n'écoutent que sur
+  `127.0.0.1`, mais tournent sans clé d'accès : un programme local peut leur parler directement, sans passer par Aria.
 - **Fermer l'onglet ne ferme pas Aria.** Son serveur, et parfois un moteur et la mémoire de la carte graphique, restent
   occupés tant que tu n'as pas cliqué sur **⏻ Quitter**.
 - **La corbeille garde la place.** Un modèle, une séquence ou un rush supprimé part à la corbeille d'Aria et se

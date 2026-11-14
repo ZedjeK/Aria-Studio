@@ -21,6 +21,7 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 
 ### Modifié
 
+- L'interface ne s'ouvre plus que par le lanceur : un jeton tiré à chaque lancement (écrit dans `cache\session.json`) est exigé à chaque requête, sauf `/api/sante`. Un ancien onglet ou un favori affiche « Aria Studio s'ouvre par son lanceur ». Aria refuse de démarrer si `config.yaml` demande d'écouter ailleurs que sur `127.0.0.1`, et `GET /api/mise-a-jour` n'interroge plus GitHub (le démarrage et « Vérifier maintenant » le font).
 - Tous les réglages et choix de l'utilisateur sont réunis dans `reglages.json`, à la racine du dossier d'Aria : `aria.yaml`, `data/reglages.yaml`, `data/fond.json`, `data/notifications.json`, `data/mise_a_jour.json` et `data/loras.json` y sont versés au premier démarrage, copiés dans `sauvegardes\` et laissés en place pour une version d'avant. Le lanceur y lit et y écrit la proposition d'installer.
 - `tools/build_portable.py` installe dans `programme\` ; une installation de l'ancienne disposition (programme à la racine de `.Aria-Studio`) y est rangée dans `programme.precedent\`.
 - Bonsai 2 devient le LLM par défaut (#54).
