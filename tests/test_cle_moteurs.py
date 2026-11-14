@@ -108,7 +108,7 @@ class ComfyUISansCors(unittest.TestCase):
     def test_jamais_enable_cors_header(self):
         lancements = []
         with tempfile.TemporaryDirectory() as d:
-            c = comfy.ComfyUI(Path(d), 8195, Path(d) / "chemins.yaml")
+            c = comfy.ComfyUI(Path(d), 8195, Path(d) / "chemins.yaml", travail=Path(d) / "travail")
             with mock.patch.object(comfy, "LOGS", Path(d) / "logs"), \
                     mock.patch.object(comfy.ComfyUI, "est_pret", return_value=False), \
                     mock.patch.object(comfy.ComfyUI, "vivant", return_value=False), \
