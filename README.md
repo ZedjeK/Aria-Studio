@@ -145,11 +145,15 @@ Tout ce qui t'appartient vit dans `%USERPROFILE%\.Aria-Studio`, qu'une mise à j
 **Mode portable** (clé USB, disque externe…) : crée un dossier `data` à côté de `Aria-Studio.exe`, et tout restera
 dans le dossier du programme (les moteurs vont alors dans `services`).
 
-**Mettre à jour** : quitte Aria (⏻ Quitter), décompresse la nouvelle version et lance-la, puis choisis *Installer* :
-elle remplace `programme\`, et la version d'avant devient `programme.precedent\`. Pour y revenir, quitte Aria et
-lance `programme.precedent\Aria-Studio.exe` depuis l'Explorateur. Sans installer, lance simplement la nouvelle version
-depuis son dossier. En mode portable, recopie d'abord tes dossiers `data`, `modeles` et `services` et ton
-`reglages.json` dans la nouvelle version.
+**Mettre à jour** : quand une nouvelle version est publiée, le bandeau « ✨ Aria Studio X.Y.Z est disponible » propose
+**Installer la mise à jour** (aussi dans Réglages → Système). Après ta confirmation, Aria la télécharge depuis la
+release sur GitHub, vérifie son empreinte SHA-256 deux fois (celle que calcule GitHub et le `.sha256` publié), puis
+redémarre : la nouvelle version remplace `programme\`, la version d'avant devient `programme.precedent\`, et
+l'interface se rouvre dans un nouvel onglet. Une génération en cours empêche la mise à jour. Pour revenir à la version
+d'avant, quitte Aria et lance `programme.precedent\Aria-Studio.exe` depuis l'Explorateur. Lancée sans installer,
+Aria s'installe ainsi dans `programme\`. En mode portable, la nouvelle version est seulement décompressée à côté du
+dossier actuel : recopie-y tes dossiers `data`, `modeles` et `services` et ton `reglages.json`. Les versions publiées
+jusqu'à la 2.0.0 n'ont pas ce bouton : on les met à jour à la main (décompresser le zip, lancer, *Installer*).
 
 **Désinstaller** : quitte Aria, puis supprime le dossier `%USERPROFILE%\.Aria-Studio\programme` (et
 `programme.precedent`) et le raccourci du Bureau. Tes données restent dans `%USERPROFILE%\.Aria-Studio` ; supprime
@@ -187,9 +191,10 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
 
 - **Tes clés d'accès.** Le coffre de Windows les protège contre quelqu'un qui copierait tes fichiers. Il ne les protège
   pas d'un programme lancé sous ton compte Windows : celui-là peut les lire comme Aria le fait.
-- **Les mises à jour sont manuelles.** Aria signale une nouvelle version et donne le lien ; elle ne la télécharge ni ne
-  l'installe. L'empreinte SHA-256 prouve que le zip n'a pas été abîmé en route, pas d'où il vient : le zip et son
-  `.sha256` sortent du même endroit, et la provenance repose sur le compte GitHub de l'auteur.
+- **Une mise à jour prouve son intégrité, pas sa provenance.** Les deux empreintes vérifiées avant l'installation
+  prouvent que le zip est bien celui de la release, pas que la release est légitime : si le compte GitHub de l'auteur
+  était compromis, une fausse release aurait de vraies empreintes. La provenance repose sur ce compte, sur les releases
+  immuables et sur l'attestation jointe à chaque release (`gh attestation verify`, voir Installation).
 - **Le jeton ne protège pas d'un programme de ton compte.** Aria tire un jeton à chaque lancement et l'exige à chaque
   requête : une autre page du navigateur ou un programme qui ne le connaît pas est refusé. Mais le jeton est écrit dans
   `cache\session.json` (pour que le lanceur le retrouve) : un programme lancé sous ton compte Windows peut le lire.

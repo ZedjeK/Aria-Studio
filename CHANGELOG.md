@@ -10,6 +10,7 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 
 ### Ajouté
 
+- La mise à jour intégrée : « Installer la mise à jour » (bandeau et Réglages → Système) télécharge la dernière release depuis GitHub, vérifie son empreinte SHA-256 deux fois (celle de GitHub et le `.sha256` publié), puis le nouveau lanceur installe la version dans `programme\` en gardant l'ancienne dans `programme.precedent\` et relance Aria. En mode portable, elle est décompressée à côté, sans rien déplacer.
 - `journal.json`, les 500 dernières opérations d'Aria sur tes affaires (téléchargements, moteurs, corbeilles, migrations, réglages), et une carte « Journal » dans Réglages → Système. `data\logs\aria.log` est borné à 5 Mo, le précédent gardé en `aria.log.1`.
 - Une sauvegarde de `reglages.json` avant chaque changement, dans `sauvegardes\` (les 20 dernières), et « Restaurer » dans Réglages → Système, qui sauvegarde d'abord les réglages actuels.
 - Une corbeille pour les modèles téléchargés et les séquences : supprimer les met de côté (les modèles dans `.corbeille` de leur dossier, les séquences dans `data/sequences/corbeille`), « Restaurer » les remet en service, et seul « Vider la corbeille » efface pour de bon.
