@@ -14,6 +14,10 @@
 //   --essai-installer         installe sans fenêtre (code 0 si c'est fait) ; avec --raccourci, crée le raccourci
 //                             dans %USERPROFILE%\Desktop (jamais remplacé s'il existe)
 //   --essai-ne-plus-proposer  écrit « installation.proposee: false » dans reglages.json
+//   --essai-adresse           écrit sur la sortie l'adresse qu'il ouvrirait (avec le jeton de cache\session.json)
+//
+// Jeton par lancement (app/jeton.py) : le serveur écrit son jeton dans cache\session.json ; le lanceur ouvre
+// « /?jeton=… », que le serveur range dans un cookie avant de rediriger vers « / ».
 //
 // Compilé avec System.Windows.Forms, System.Drawing et System.Web.Extensions (lecteur JSON de .NET).
 
@@ -44,7 +48,8 @@ static class Launcher
     static int Main(string[] args)
     {
         string racine = Dossier(AppDomain.CurrentDomain.BaseDirectory);
-        essai = A(args, "--essai-proposer") || A(args, "--essai-installer") || A(args, "--essai-ne-plus-proposer");
+        essai = A(args, "--essai-proposer") || A(args, "--essai-installer") || A(args, "--essai-ne-plus-proposer")
+                || A(args, "--essai-adresse");
         bool portable = A(args, "--portable");
 
         if (A(args, "--essai-proposer")) return DoitProposer(racine, portable) ? 0 : 2;
@@ -52,6 +57,11 @@ static class Launcher
         if (A(args, "--essai-installer")) return Installer(racine, A(args, "--raccourci")) != null ? 0 : 1;
 
         string url = "http://127.0.0.1:" + LirePort(racine) + "/";
+        if (A(args, "--essai-adresse"))
+        {
+            Console.Out.Write(Adresse(racine, url, 1));
+            return 0;
+        }
         if (!Repond(url) && DoitProposer(racine, portable))
         {
             Application.EnableVisualStyles();
@@ -431,8 +441,38 @@ static class Launcher
             }
         }
 
-        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(Adresse(racine, url, 20)) { UseShellExecute = true });
         return 0;
+    }
+
+    // cache\session.json du serveur qui tourne : à côté du programme en mode portable, sinon dans le dossier d'Aria
+    static string FichierSession(string racine)
+    {
+        string dossier = Directory.Exists(Path.Combine(racine, "data")) ? racine : Maison();
+        return Path.Combine(dossier, "cache", "session.json");
+    }
+
+    // L'adresse de l'interface avec le jeton de ce lancement ; sans jeton lisible (une version d'Aria d'avant le jeton),
+    // l'adresse nue : une version qui l'exige montre alors sa page « Rouvre Aria avec son lanceur ».
+    static string Adresse(string racine, string url, int essais)
+    {
+        for (int i = 0; i < essais; i++)
+        {
+            try
+            {
+                var session = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(FichierSession(racine)))
+                              as Dictionary<string, object>;
+                object valeur;
+                if (session != null && session.TryGetValue("jeton", out valeur) && valeur is string && ((string)valeur).Length > 0)
+                    return url + "?jeton=" + Uri.EscapeDataString((string)valeur);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (ArgumentException) { }
+            catch (InvalidOperationException) { }
+            if (i + 1 < essais) Thread.Sleep(250);
+        }
+        return url;
     }
 
     // Port de la section « app: » de config.yaml
