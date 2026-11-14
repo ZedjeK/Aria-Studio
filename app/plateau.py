@@ -125,7 +125,7 @@ def qualites_video() -> dict:
     return sortie
 
 
-DUREES_VIDEO = (5, 8, 10, 15)  # H3 est entraîné de 5 à 15 s
+DUREES_VIDEO = (5, 8, 10, 15)  # H3 accepte de 4 à 15 s (page ComfyUI et fiche Hugging Face, relevé le 2026-11-09)
 # Le temps d'un clip croît avec sa durée en (D / 5)^EXPOSANT. 1,57 : ajusté sur un clip de 15 s en Compromis avec le
 # checkpoint d'origine (15 min 57, relevé le 2026-11-09) contre 170 s pour 5 s ; l'ancien 1,25 donnait 11 min 11. Deux
 # autres clips de 15 s (20 min 17 et 23 min 00), d'un autre checkpoint non relevé, étaient plus lents : c'est au poids du
