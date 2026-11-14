@@ -15,7 +15,7 @@ import json
 import re
 from datetime import datetime
 
-from app import plateau
+from app import journal, plateau
 from app.emplacements import DATA
 
 FICHIER_DOSSIERS = DATA / "dossiers.json"
@@ -146,6 +146,7 @@ def vider_corbeille(genre: str = "images") -> int:
     a_supprimer = [f["id"] for f in _fiches() if f.get("corbeille") and _du_genre(f, _genre_valide(genre))]
     for id_rush in a_supprimer:
         plateau.supprimer(id_rush)
+    journal.noter("Corbeille vidée", "clips" if genre == "clips" else "rushes", detail=f"{len(a_supprimer)} effacé(s)")
     return len(a_supprimer)
 
 

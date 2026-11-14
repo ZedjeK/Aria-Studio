@@ -22,7 +22,7 @@ from pathlib import Path
 
 import yaml
 
-from app import fichier_reglages, modeles
+from app import fichier_reglages, journal, modeles
 from app.config import ROOT
 
 log = logging.getLogger(__name__)
@@ -172,6 +172,7 @@ def migrer(racine: Path | None = None) -> dict | None:
         rapport.update(statut="echec", erreur=f"{type(e).__name__} : {e}")
         log.error("Migration des modèles annulée, rien n'a bougé : %s", rapport["erreur"])
         _ecrire_journal(rapport)
+        journal.noter("Migration des modèles (image et vidéo)", "annulée", "erreur", rapport["erreur"])
         return rapport
     _reecrire_cles(dict(p["deplacements"]))
     for ancien in [modeles.BASE, *modeles.familles()]:
@@ -182,6 +183,8 @@ def migrer(racine: Path | None = None) -> dict | None:
         log.warning("Migration des modèles : déjà présents à l'arrivée, laissés en place : %s",
                     ", ".join(rapport["conflits"]))
     log.info("Migration des modèles : %d fichiers rangés côté image ou vidéo", len(faits))
+    journal.noter("Migration des modèles (image et vidéo)", f"{len(faits)} fichier(s) rangé(s)",
+                  "partiel" if rapport["conflits"] else "ok")
     precedent = etat()
     if precedent and precedent.get("statut") == "faite":  # une seconde vague : le retour arrière défait les deux
         rapport["deplacements"] = precedent["deplacements"] + rapport["deplacements"]

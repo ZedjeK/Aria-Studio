@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, fichier_reglages, casting, cles, collection, decouvrir, emplacements, estimation, fond, garde, mesures,
+from app import (assistant, fichier_reglages, journal, casting, cles, collection, decouvrir, emplacements, estimation, fond, garde, mesures,
                  migration_modeles, mises_a_jour, modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages,
                  retouche, routes_montage, routes_scenario, rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
@@ -205,6 +205,12 @@ def lire_installation():
 @app.put("/api/installation")
 def regler_installation(d: DemandeInstallation):
     return emplacements.proposer_installation(d.proposee)
+
+
+@app.get("/api/journal")
+def lire_journal():
+    """Les dernières opérations (journal.json, app/journal.py) : Réglages → Système."""
+    return journal.lire()
 
 
 # Sauvegardes de reglages.json (app/fichier_reglages.py) : une avant chaque changement, les 20 dernières gardées.

@@ -128,17 +128,28 @@ def section(nom: str) -> dict:
     return valeur if isinstance(valeur, dict) else {}
 
 
-def _ecrire(chemin: Path, d: dict):
+def _noter(action: str, objet: str):
+    try:
+        from app import journal  # journal importe ce module : pas d'import en tête
+        journal.noter(action, objet)
+    except Exception:  # noqa: BLE001 : le journal n'empêche jamais d'écrire les réglages
+        log.exception("Journal : « %s » non noté", action)
+
+
+def _ecrire(chemin: Path, d: dict, action: str = "Réglages modifiés", objet: str | None = None):
+    """Écrit reglages.json, et le note au journal (par défaut : les sections qui ont changé)."""
     global _cache, _illisible
     chemin.parent.mkdir(parents=True, exist_ok=True)
+    ancien: dict = {}
     if _illisible == chemin and chemin.is_file():
         cote = chemin.parent / "sauvegardes" / f"reglages-illisible-{datetime.now():%Y%m%d-%H%M%S}.json"
         cote.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(chemin, cote)
         log.warning("%s illisible mis de côté dans %s avant d'être réécrit", chemin, cote)
     elif chemin.is_file():
-        if _lire_disque(chemin) == {k: v for k, v in d.items() if v not in (None, {}, [])}:
-            return  # rien ne change : ni écriture ni sauvegarde
+        ancien = _lire_disque(chemin)
+        if ancien == {k: v for k, v in d.items() if v not in (None, {}, [])}:
+            return  # rien ne change : ni écriture, ni sauvegarde, ni journal
         _sauvegarder(chemin)
     _illisible = None
     propre = {k: v for k, v in d.items() if v not in (None, {}, [])}  # pas de section vide
@@ -146,6 +157,9 @@ def _ecrire(chemin: Path, d: dict):
     temporaire.write_text(json.dumps(propre, indent=4, ensure_ascii=False), encoding="utf-8")
     temporaire.replace(chemin)
     _cache = (chemin, _empreinte(chemin), propre)
+    if objet is None:
+        objet = ", ".join(sorted(k for k in set(ancien) | set(propre) if k != "migration" and ancien.get(k) != propre.get(k)))
+    _noter(action, objet)
 
 
 @contextmanager
@@ -234,7 +248,7 @@ def _migrer(racine: Path, existant: dict) -> dict:
                 cache.parent.mkdir(parents=True, exist_ok=True)
                 cache.write_text(json.dumps(cache_maj, indent=4, ensure_ascii=False), encoding="utf-8")
         if lus or existant:
-            _ecrire(racine / NOM, d)
+            _ecrire(racine / NOM, d, "Migration des réglages", ", ".join(lus) or "reglages.json du lanceur")
         # Sans ancien fichier ni reglages.json, rien n'est écrit : la clé « migration » partira avec la première
         # écriture, et il n'y avait rien à verser.
     except OSError as e:
@@ -299,6 +313,6 @@ def restaurer(nom: str) -> dict:
         actuel = tout()
         d.setdefault("migration", actuel.get("migration") or {"date": datetime.now().isoformat(timespec="seconds"),
                                                               "depuis": []})
-        _ecrire(fichier(), d)
+        _ecrire(fichier(), d, "Réglages restaurés", nom)
     log.info("Réglages restaurés depuis %s", nom)
     return {"restaure": nom}

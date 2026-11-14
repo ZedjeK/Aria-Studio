@@ -1022,6 +1022,15 @@
                 <ul id="liste-sauvegardes" class="liste"></ul>
                 <p id="aucune-sauvegarde" class="discret" hidden>Aucune sauvegarde pour l'instant : la première arrive avec le prochain changement.</p>
             </section>
+            <!-- Journal des opérations (app/journal.py) : journal.json garde les 500 dernières, ici les 50 dernières. -->
+            <section class="carte" id="carte-journal">
+                <h2>Journal</h2>
+                <p class="discret">Ce qu'Aria a fait sur tes affaires : téléchargements, moteurs, corbeilles, migrations et
+                    changements de réglages. Les 500 dernières opérations sont gardées dans <code>journal.json</code> ; voici les 50
+                    dernières.</p>
+                <ul id="liste-journal" class="liste journal"></ul>
+                <p id="journal-vide" class="discret" hidden>Rien encore.</p>
+            </section>
             </details>
             <section id="carte-optimiser" class="carte" hidden>
                 <h2>Propositions</h2>
