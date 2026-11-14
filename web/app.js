@@ -595,5 +595,38 @@ document.getElementById("proposer-installation").addEventListener("change", asyn
     afficherInstallation(await api("PUT", "/api/installation", { proposee: ev.target.checked }));
 });
 
+// Sauvegardes de reglages.json : restaurer recharge la page, chaque onglet relit ses réglages
+async function chargerSauvegardes() {
+    let liste = [];
+    try {
+        liste = await api("GET", "/api/sauvegardes");
+    } catch {
+        return;  // pas de serveur : la barre d'état le dit déjà
+    }
+    document.getElementById("aucune-sauvegarde").hidden = liste.length > 0;
+    document.getElementById("liste-sauvegardes").innerHTML = liste.map((s) => `<li class="ligne">
+        <span>${new Date(s.date).toLocaleString("fr-FR")}</span>
+        <span class="discret">${(s.taille / 1024).toFixed(1)} Ko</span>
+        <button type="button" class="petit" data-restaurer-reglages="${echapper(s.nom)}">Restaurer</button>
+    </li>`).join("");
+}
+
+document.getElementById("liste-sauvegardes").addEventListener("click", async (e) => {
+    const bouton = e.target.closest("[data-restaurer-reglages]");
+    if (!bouton) return;
+    const quand = bouton.closest("li").querySelector("span").textContent;
+    if (!confirm(`Remettre les réglages du ${quand} ?
+
+Tes réglages actuels sont d'abord sauvegardés. Le dossier des `
+        + "modèles, s'il change, ne vaut qu'au prochain démarrage d'Aria.")) return;
+    try {
+        await api("POST", "/api/sauvegardes/restaurer", { nom: bouton.dataset.restaurerReglages });
+        location.reload();
+    } catch (err) {
+        alert(err.message);
+    }
+});
+
 chargerMiseAJour();
 chargerInstallation();
+chargerSauvegardes();

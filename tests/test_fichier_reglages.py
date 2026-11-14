@@ -157,5 +157,55 @@ class Illisible(Base):
         self.assertEqual((self.racine / "reglages.json").read_text(encoding="utf-8"), "[1, 2]")
 
 
+class Sauvegardes(Base):
+    def test_une_copie_avant_chaque_changement(self):
+        fichier_reglages.ecrire("fond", {"vitesse": "lente"})
+        self.assertEqual(fichier_reglages.sauvegardes(), [])  # rien avant le premier fichier
+        fichier_reglages.ecrire("fond", {"vitesse": "rapide"})
+        s = fichier_reglages.sauvegardes()
+        self.assertEqual(len(s), 1)
+        copie = json.loads((fichier_reglages.dossier_sauvegardes() / s[0]["nom"]).read_text(encoding="utf-8"))
+        self.assertEqual(copie["fond"], {"vitesse": "lente"})
+
+    def test_rien_ne_change_rien_n_est_sauvegarde(self):
+        fichier_reglages.ecrire("fond", {"vitesse": "lente"})
+        fichier_reglages.ecrire("fond", {"vitesse": "lente"})
+        self.assertEqual(fichier_reglages.sauvegardes(), [])
+
+    def test_les_vingt_dernieres_seulement(self):
+        for i in range(fichier_reglages.SAUVEGARDES_GARDEES + 5):
+            fichier_reglages.ecrire("fond", {"minimum": i})
+        s = fichier_reglages.sauvegardes()
+        self.assertEqual(len(s), fichier_reglages.SAUVEGARDES_GARDEES)
+        plus_recente = json.loads((fichier_reglages.dossier_sauvegardes() / s[0]["nom"]).read_text(encoding="utf-8"))
+        self.assertEqual(plus_recente["fond"], {"minimum": fichier_reglages.SAUVEGARDES_GARDEES + 3})
+        self.assertEqual(s, sorted(s, key=lambda e: e["nom"], reverse=True))
+
+    def test_restaurer_sauvegarde_d_abord_l_etat_actuel(self):
+        fichier_reglages.ecrire("fond", {"vitesse": "lente"})
+        fichier_reglages.ecrire("fond", {"vitesse": "rapide"})
+        ancienne = fichier_reglages.sauvegardes()[0]["nom"]
+        fichier_reglages.restaurer(ancienne)
+        self.assertEqual(fichier_reglages.section("fond"), {"vitesse": "lente"})
+        noms = [s["nom"] for s in fichier_reglages.sauvegardes()]
+        self.assertEqual(len(noms), 2)
+        actuel_d_avant = json.loads((fichier_reglages.dossier_sauvegardes() / noms[0]).read_text(encoding="utf-8"))
+        self.assertEqual(actuel_d_avant["fond"], {"vitesse": "rapide"})  # rien ne se perd
+        self.assertIn("migration", self.sur_le_disque())
+
+    def test_nom_refuse(self):
+        for nom in ("../reglages.json", "reglages-illisible-20261114-101010.json", "", "autre.json"):
+            with self.assertRaises(fichier_reglages.ErreurSauvegarde):
+                fichier_reglages.restaurer(nom)
+
+    def test_sauvegarde_illisible_refusee(self):
+        fichier_reglages.ecrire("fond", {"vitesse": "lente"})
+        nom = "reglages-20261114-101010-000001.json"
+        self.ecrire(f"sauvegardes/{nom}", "{ cassé")
+        with self.assertRaisesRegex(fichier_reglages.ErreurSauvegarde, "illisible"):
+            fichier_reglages.restaurer(nom)
+        self.assertEqual(fichier_reglages.section("fond"), {"vitesse": "lente"})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -993,7 +993,7 @@
                 </div>
                 <p id="autorisation-notifications" class="discret"></p>
             </section>
-            <!-- Fond animé (web/fond.js, app/fond.py) : quatre réglages, gardés dans data/fond.json. -->
+            <!-- Fond animé (web/fond.js, app/fond.py) : quatre réglages, section « fond » de reglages.json. -->
             <section class="carte" id="carte-fond">
                 <h2>Fond animé</h2>
                 <p class="discret">Des gouttes allument une grille de points derrière les pages. Le fond se met en pause quand l'onglet
@@ -1013,6 +1013,14 @@
                     </span>
                 </div>
                 <p id="fond-note" class="ko" hidden></p>
+            </section>
+            <!-- Sauvegardes de reglages.json (app/fichier_reglages.py) : une avant chaque changement, 20 gardées. -->
+            <section class="carte" id="carte-sauvegardes">
+                <h2>Sauvegardes des réglages</h2>
+                <p class="discret">Avant chaque changement, Aria garde une copie de tes réglages (les 20 dernières).
+                    « Restaurer » remet l'une d'elles, après avoir sauvegardé les réglages actuels.</p>
+                <ul id="liste-sauvegardes" class="liste"></ul>
+                <p id="aucune-sauvegarde" class="discret" hidden>Aucune sauvegarde pour l'instant : la première arrive avec le prochain changement.</p>
             </section>
             </details>
             <section id="carte-optimiser" class="carte" hidden>
