@@ -1,12 +1,12 @@
 # Journal des versions
 
 Un bloc par version, le plus récent en haut. Les notes complètes d'une version
-sont dans `docs/releases/` (pour la 2.0.0) et dans la page de sa release sur
+sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
-## Non publié
+## 2.1.0
 
-Changements fusionnés dans `main` après le tag `v2.0.0`.
+Première version publiée depuis la 1.3.0 : elle contient aussi la 2.0.0, jamais publiée. Notes complètes : `docs/releases/v2.1.0.md`.
 
 ### Ajouté
 
@@ -47,7 +47,7 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 - Sans modèle vidéo installé, le Montage ne chargeait pas ses Bobines, et le mode Séquence ni sa liste ni ses voix quand on l'ouvrait depuis le Scénario ou les Bobines (`web/montage.js`).
 - `catalogue/moteurs.yaml` est de nouveau lisible (#56).
 
-## 2.0.0 (tag posé le 2026-11-09, release en brouillon, non publiée)
+## 2.0.0 (tag posé le 2026-11-09, jamais publiée : son contenu est livré avec la 2.1.0)
 
 ### Ajouté
 
