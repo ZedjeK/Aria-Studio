@@ -8,6 +8,7 @@ from unittest import mock
 
 from app import collection, modeles, reglages, workflows
 from app.sources import steps
+from tests import reglages_jetables
 
 H3 = "minimax_h3_i2v"
 NEUF = "10Eros_Max_h3_8stepTURBO_beta7.safetensors"
@@ -50,7 +51,7 @@ class Validation(unittest.TestCase):
         d = tempfile.TemporaryDirectory()
         self.addCleanup(d.cleanup)
         dossier = Path(d.name)
-        for p in (mock.patch.object(reglages, "FICHIER", dossier / "reglages.yaml"),
+        for p in (reglages_jetables.patch(dossier),
                   mock.patch.object(reglages, "_cache", None),
                   mock.patch.object(modeles, "fichiers", side_effect=deposes),
                   mock.patch.object(modeles, "REGISTRE", dossier / "registre.json")):

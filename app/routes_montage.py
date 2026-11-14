@@ -75,6 +75,23 @@ def creer_sequence(d: DemandeSequence):
     return _sequence(lambda: sequences.creer(d.model_dump()))
 
 
+# Corbeille des séquences (app/sequences.py) : ces routes passent avant /api/sequences/{id_sequence}.
+@routeur.get("/api/sequences/corbeille")
+def corbeille_sequences():
+    return sequences.corbeille()
+
+
+@routeur.post("/api/sequences/corbeille/{id_sequence}/restaurer")
+def restaurer_sequence(id_sequence: str):
+    return _sequence(lambda: sequences.restaurer(id_sequence))
+
+
+@routeur.delete("/api/sequences/corbeille")
+def vider_corbeille_sequences():
+    """La seule suppression définitive d'une séquence."""
+    return {"effacees": sequences.vider_corbeille()}
+
+
 @routeur.get("/api/sequences/{id_sequence}")
 def lire_sequence(id_sequence: str):
     return _sequence(lambda: sequences.public(sequences.lire(id_sequence)))
@@ -87,6 +104,7 @@ def modifier_sequence(id_sequence: str, d: DemandeSequence):
 
 @routeur.delete("/api/sequences/{id_sequence}")
 def supprimer_sequence(id_sequence: str):
+    """Met la séquence à la corbeille ; seul « Vider la corbeille » l'efface pour de bon."""
     _sequence(lambda: sequences.supprimer(id_sequence))
     return {"ok": True}
 

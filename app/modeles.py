@@ -10,6 +10,7 @@ fichier au bon endroit suffit. Avant le 2026-11-10, tout était à plat (modeles
 app/migration_modeles.py range l'ancienne organisation au démarrage.
 """
 
+import copy
 import hashlib
 import json
 import logging
@@ -19,19 +20,19 @@ from pathlib import Path
 
 import yaml
 
-from app import fiches, memo
+from app import fiches, fichier_reglages, journal, memo
 from app.config import CONFIG, ROOT
-from app.emplacements import DATA, MODELES
+from app.emplacements import CACHE, DATA, MODELES
 
 DOSSIER = MODELES
 REGISTRE = DATA / "modeles.json"
-CHEMINS_COMFYUI = DATA / "comfyui_chemins.yaml"
+CHEMINS_COMFYUI = CACHE / "comfyui_chemins.yaml"  # réécrit à chaque démarrage de ComfyUI
 TYPES_BASE = ["checkpoints", "diffusion_models", "text_encoders", "vae", "loras",
               "clip_vision", "controlnet", "upscale_models", "model_patches", "audio_encoders",
               "latent_upscale_models"]
 EXTENSIONS_IMAGE = {".safetensors"}  # jamais de .ckpt/.pt : ils peuvent exécuter du code au chargement
 EXTENSIONS_MODELES = EXTENSIONS_IMAGE | {".gguf"}  # l'inventaire ignore le reste (recommandations.yaml…)
-EMPREINTES = DATA / "empreintes.json"  # SHA-256 déjà calculés : {clé: {taille, date, sha256}}
+EMPREINTES = CACHE / "empreintes.json"  # SHA-256 déjà calculés (recalculables) : {clé: {taille, date, sha256}}
 
 
 NATURES = ("image", "video")
@@ -128,13 +129,11 @@ def llm_defaut() -> str:
     return next((f for f in candidats if f in presents), llama["modele"])
 
 
-# LoRAs : mots déclencheurs et force retenus d'une utilisation à l'autre (data/loras.json),
-# à défaut ceux fournis par la source au téléchargement (registre).
-MEMOIRE_LORAS = DATA / "loras.json"
-
+# LoRAs : mots déclencheurs et force retenus d'une utilisation à l'autre (section « loras » de reglages.json,
+# app/fichier_reglages.py ; avant, data/loras.json), à défaut ceux fournis par la source au téléchargement (registre).
 
 def _memoire_loras() -> dict:
-    return json.loads(MEMOIRE_LORAS.read_text(encoding="utf-8")) if MEMOIRE_LORAS.is_file() else {}
+    return copy.deepcopy(fichier_reglages.section("loras"))
 
 
 USAGE_LORA = ("force_auteur", "images_force", "prompt_exemple")  # lus dans les images d'exemple (Civitai)
@@ -197,7 +196,7 @@ def oublier_reglage_lora(cle_lora: str) -> dict:
     _famille_lora(cle_lora)
     memoire = _memoire_loras()
     if memoire.pop(cle_lora, None) is not None:
-        MEMOIRE_LORAS.write_text(json.dumps(memoire, indent=4, ensure_ascii=False), encoding="utf-8")
+        fichier_reglages.ecrire("loras", memoire)
     return reglage_lora(cle_lora)
 
 
@@ -217,8 +216,7 @@ def memoriser_loras(famille: str, choix: list[dict]):
     memoire = _memoire_loras()
     for c in choix:
         memoire[f"{dossier_famille(famille, 'loras')}/{c['fichier']}"] = {"declencheurs": c["declencheurs"], "force": c["force"]}
-    MEMOIRE_LORAS.parent.mkdir(parents=True, exist_ok=True)
-    MEMOIRE_LORAS.write_text(json.dumps(memoire, indent=4, ensure_ascii=False), encoding="utf-8")
+    fichier_reglages.ecrire("loras", memoire)
 
 
 def ecrire_chemins_comfyui() -> Path:
@@ -390,17 +388,166 @@ def inventaire() -> list[dict]:
 
 
 def espace_libre() -> int:
-    return shutil.disk_usage(DOSSIER).free
+    """Octets libres là où iront les modèles. Dans un profil neuf, le dossier n'existe pas encore : la place se lit sur
+    le premier dossier parent qui existe (le même disque), sans rien créer. Un disque absent ne laisse aucune place."""
+    for dossier in (DOSSIER, *DOSSIER.parents):
+        if dossier.exists():
+            try:
+                return shutil.disk_usage(dossier).free
+            except OSError:
+                return 0
+    return 0
 
 
-def supprimer(cle_modele: str):
-    """Suppression définitive, réservée aux modèles téléchargés par l'appli."""
+# --- corbeille ---------------------------------------------------------------------------------------------------
+# Un modèle supprimé n'est jamais effacé d'un coup : il part dans <dossier des modèles>\.corbeille\, au même chemin
+# relatif. C'est un renommage sur le même disque, instantané même pour 20 Go (dans data\, un dossier des modèles rangé
+# sur un autre disque obligerait à tout recopier). Ni ComfyUI ni l'inventaire ne voient .corbeille\ : ils ne lisent
+# que les sous-dossiers de dossiers(). Sa fiche quitte le registre pour CORBEILLE_REGISTRE, avec la date et le dossier
+# des modèles d'alors, et y revient à la restauration. Seul vider_corbeille() efface pour de bon.
+
+CORBEILLE = ".corbeille"
+CORBEILLE_REGISTRE = DATA / "corbeille_modeles.json"
+
+
+def _dans(base: Path, cle_modele: str) -> Path:
+    chemin = (base / cle_modele).resolve()
+    if not chemin.is_relative_to(base.resolve()) or chemin == base.resolve():
+        raise ErreurModele("Chemin hors du dossier des modèles")
+    return chemin
+
+
+def _charger_corbeille() -> dict[str, dict]:
+    try:
+        d = json.loads(CORBEILLE_REGISTRE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _sauver_corbeille(corbeille: dict[str, dict]):
+    CORBEILLE_REGISTRE.parent.mkdir(parents=True, exist_ok=True)
+    temporaire = CORBEILLE_REGISTRE.with_suffix(".tmp")
+    temporaire.write_text(json.dumps(corbeille, indent=2, ensure_ascii=False), encoding="utf-8")
+    temporaire.replace(CORBEILLE_REGISTRE)
+
+
+def _fichier_corbeille(cle_modele: str, entree: dict) -> Path:
+    base = Path(entree.get("dossier_modeles") or DOSSIER)
+    return _dans(base / CORBEILLE, cle_modele)
+
+
+def mettre_a_la_corbeille(cle_modele: str) -> dict:
+    """Réservé aux modèles téléchargés par l'appli (un fichier déposé à la main reste à l'utilisateur)."""
     registre = charger_registre()
     if cle_modele not in registre:
         raise ErreurModele("Seuls les modèles téléchargés par l'appli peuvent être supprimés")
-    fichier = (DOSSIER / cle_modele).resolve()
-    if not fichier.is_relative_to(DOSSIER.resolve()):
-        raise ErreurModele("Chemin hors du dossier modeles/")
-    fichier.unlink(missing_ok=True)
+    fichier = _dans(DOSSIER, cle_modele)
+    corbeille = _charger_corbeille()
+    if fichier.is_file():
+        cible = _dans(DOSSIER / CORBEILLE, cle_modele)
+        if cle_modele in corbeille or cible.exists():
+            raise ErreurModele(f"{fichier.name} est déjà dans la corbeille : restaure-le ou vide la corbeille d'abord")
+        cible.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fichier.rename(cible)
+        except OSError as e:
+            raise ErreurModele(f"{fichier.name} n'a pas pu aller à la corbeille ({e.strerror or e}) : il est peut-être "
+                               "ouvert par ComfyUI. Arrête-le, puis réessaie") from e
+        corbeille[cle_modele] = {**registre[cle_modele], "corbeille": datetime.now().isoformat(timespec="seconds"),
+                                 "dossier_modeles": str(DOSSIER)}
+        _sauver_corbeille(corbeille)
+    # Sans fichier (déjà effacé à la main), il n'y a rien à garder : seule sa fiche s'en va
     del registre[cle_modele]
     _sauver_registre(registre)
+    journal.noter("Modèle mis à la corbeille", cle_modele)
+    return {"corbeille": cle_modele}
+
+
+def corbeille() -> dict:
+    """Ce que montre Modèles → Ma collection : chaque modèle à la corbeille, sa taille, et la place qu'ils occupent."""
+    elements, total = [], 0
+    for cle_modele, entree in sorted(_charger_corbeille().items(), key=lambda e: e[1].get("corbeille", ""), reverse=True):
+        try:
+            chemin = _fichier_corbeille(cle_modele, entree)
+        except ErreurModele:
+            continue
+        present = chemin.is_file()
+        taille = chemin.stat().st_size if present else 0
+        total += taille
+        dossier_modeles = entree.get("dossier_modeles") or str(DOSSIER)
+        elements.append({"cle": cle_modele, "nom": Path(cle_modele).name, "taille": taille, "present": present,
+                         "date": entree.get("corbeille"), "dossier_modeles": dossier_modeles,
+                         "ailleurs": Path(dossier_modeles).resolve() != DOSSIER.resolve()})
+    return {"modeles": elements, "taille": total}
+
+
+def restaurer(cle_modele: str) -> dict:
+    """Le fichier revient à sa place et sa fiche au registre. Refusé si le même modèle a été retéléchargé entre-temps,
+    ou s'il est dans la corbeille d'un ancien dossier des modèles (Aria ne lirait pas le fichier restauré)."""
+    corbeille_ = _charger_corbeille()
+    entree = corbeille_.get(cle_modele)
+    if entree is None:
+        raise ErreurModele("Ce modèle n'est pas dans la corbeille")
+    base = Path(entree.get("dossier_modeles") or DOSSIER)
+    if base.resolve() != DOSSIER.resolve():
+        raise ErreurModele(f"Ce modèle est dans la corbeille de l'ancien dossier des modèles ({base}) : reprends ce "
+                           "dossier dans Modèles pour le restaurer, ou vide la corbeille")
+    source, cible = _fichier_corbeille(cle_modele, entree), _dans(DOSSIER, cle_modele)
+    registre = charger_registre()
+    if cible.exists() or cle_modele in registre:
+        raise ErreurModele(f"{cible.name} est déjà présent (retéléchargé ?) : la copie de la corbeille n'est pas "
+                           "restaurée, vide la corbeille pour libérer la place")
+    if not source.is_file():
+        del corbeille_[cle_modele]
+        _sauver_corbeille(corbeille_)
+        raise ErreurModele(f"{source.name} n'est plus dans la corbeille (effacé à la main ?) : rien à restaurer")
+    cible.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        source.rename(cible)
+    except OSError as e:
+        raise ErreurModele(f"{source.name} n'a pas pu être restauré ({e.strerror or e})") from e
+    registre[cle_modele] = {k: v for k, v in entree.items() if k not in ("corbeille", "dossier_modeles")}
+    _sauver_registre(registre)
+    del corbeille_[cle_modele]
+    _sauver_corbeille(corbeille_)
+    _supprimer_dossiers_vides(DOSSIER / CORBEILLE)  # les sous-dossiers vidés par la restauration
+    journal.noter("Modèle restauré", cle_modele)
+    return {"restaure": cle_modele}
+
+
+def vider_corbeille() -> dict:
+    """La seule suppression définitive : chaque fichier de la corbeille (anciens dossiers des modèles compris)."""
+    corbeille_ = _charger_corbeille()
+    effaces, liberes, restes = 0, 0, {}
+    for cle_modele, entree in corbeille_.items():
+        try:
+            chemin = _fichier_corbeille(cle_modele, entree)
+            if chemin.is_file():
+                taille = chemin.stat().st_size
+                chemin.unlink()
+                liberes += taille
+            effaces += 1
+        except (OSError, ErreurModele) as e:
+            log.warning("Corbeille : %s n'a pas pu être effacé (%s)", cle_modele, e)
+            restes[cle_modele] = entree
+    for base in {Path(e.get("dossier_modeles") or DOSSIER) for e in corbeille_.values()}:
+        _supprimer_dossiers_vides(base / CORBEILLE)
+    _sauver_corbeille(restes)
+    journal.noter("Corbeille des modèles vidée", f"{effaces} modèle(s)", "partiel" if restes else "ok",
+                  f"{liberes / 1024 ** 3:.1f} Go libérés" + (f", {len(restes)} fichier(s) non effacé(s)" if restes else ""))
+    return {"effaces": effaces, "liberes": liberes, "restes": len(restes)}
+
+
+def _supprimer_dossiers_vides(dossier: Path):
+    if not dossier.is_dir():
+        return
+    for d in sorted((p for p in dossier.rglob("*") if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
+        try:
+            d.rmdir()
+        except OSError:
+            pass  # pas vide : il reste un fichier, on n'y touche pas
+    try:
+        dossier.rmdir()
+    except OSError:
+        pass

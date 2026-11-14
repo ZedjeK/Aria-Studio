@@ -16,3 +16,6 @@ aria.yaml
 
 # Construction de la version portable (tools/build_portable.py)
 .build_cache/
+
+# Sortie de build.ps1 (zip et empreinte)
+.work/

@@ -537,6 +537,9 @@ function afficherMiseAJour(e) {
     document.getElementById("version-appli").textContent = `· v${e.version}`;
     const bandeau = document.getElementById("bandeau-maj");
     const d = e.derniere;
+    derniereConnue = e.disponible && d ? d : null;
+    afficherBoutonsMaj();
+    if (majEnCours) return;  // le bandeau montre le suivi de l'installation
     bandeau.hidden = !(e.disponible && d && majIgnoree() !== d.version);
     if (!bandeau.hidden) {
         bandeau.querySelector("span").textContent = `✨ Aria Studio ${d.version} est disponible (tu as la ${e.version})`
@@ -568,8 +571,216 @@ document.getElementById("plus-tard-maj").addEventListener("click", async () => {
     document.getElementById("bandeau-maj").hidden = true;
 });
 document.getElementById("verifier-maj").addEventListener("click", () => chargerMiseAJour(true));
+
+// Mise à jour intégrée (app/installation_maj.py) : le clic, après cette confirmation, vaut accord
+let derniereConnue = null;
+let installationMajPossible = false;
+let majEnCours = false;
+const ETAPES_FINALES = ["repos", "redemarrage", "portable", "erreur"];
+const mo = (octets) => `${Math.round((octets || 0) / 1024 / 1024)} Mo`;
+
+function afficherBoutonsMaj() {
+    for (const id of ["installer-maj", "installer-maj-reglages"]) {
+        const bouton = document.getElementById(id);
+        bouton.hidden = !(derniereConnue && installationMajPossible);
+        bouton.disabled = majEnCours;
+    }
+}
+
+function texteSuiviMaj(i) {
+    return {
+        recherche: "Mise à jour : lecture de la release sur GitHub…",
+        telechargement: `Mise à jour ${i.version} : téléchargement, ${mo(i.recu)} sur ${mo(i.total)}`,
+        verification: `Mise à jour ${i.version} : vérification de l'empreinte…`,
+        installation: `Mise à jour ${i.version} : préparation…`,
+        redemarrage: `Aria redémarre en ${i.version} : elle se rouvre dans un nouvel onglet. Tu peux fermer celui-ci.`,
+        portable: `Aria ${i.version} est décompressée dans ${i.chemin} : recopie-y tes dossiers data, modeles, services `
+            + "et ton reglages.json, puis lance son Aria-Studio.exe.",
+        erreur: `Mise à jour impossible : ${i.erreur}. Rien n'a été installé.`,
+    }[i.etape] ?? "";
+}
+
+async function suivreMaj() {
+    let i;
+    try {
+        i = await api("GET", "/api/mise-a-jour/installation");
+    } catch {
+        return;  // le serveur s'arrête pour redémarrer : le message est déjà affiché
+    }
+    installationMajPossible = i.possible;
+    majEnCours = !ETAPES_FINALES.includes(i.etape);
+    const texte = texteSuiviMaj(i);
+    if (texte) {
+        const bandeau = document.getElementById("bandeau-maj");
+        bandeau.hidden = false;
+        bandeau.querySelector("span").textContent = texte;
+        const suivi = document.getElementById("suivi-maj");
+        suivi.hidden = false;
+        suivi.textContent = texte;
+        suivi.className = i.etape === "erreur" ? "ko" : "discret";
+    }
+    afficherBoutonsMaj();
+    if (majEnCours) setTimeout(suivreMaj, 1000);
+}
+
+async function installerMaj() {
+    const d = derniereConnue;
+    if (!d) return;
+    const i = await api("GET", "/api/mise-a-jour/installation");
+    const suite = i.portable
+        ? "Mode portable : elle sera décompressée à côté de ce dossier, sans rien y déplacer ; tu y recopieras tes affaires."
+        : "Ta version actuelle est gardée dans programme.precedent. Aria redémarre à la fin et se rouvre dans un nouvel "
+            + "onglet ; une génération en cours empêche la mise à jour.";
+    if (!confirm(`Installer Aria Studio ${d.version}${d.taille ? ` (${mo(d.taille)})` : ""} ?
+
+Téléchargée depuis la `
+        + `release officielle sur GitHub, son empreinte SHA-256 vérifiée deux fois.
+
+${suite}`)) return;
+    try {
+        await api("POST", "/api/mise-a-jour/installer");
+        majEnCours = true;
+        suivreMaj();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+for (const id of ["installer-maj", "installer-maj-reglages"]) {
+    document.getElementById(id).addEventListener("click", installerMaj);
+}
 document.getElementById("active-maj").addEventListener("change", async (ev) => {
     afficherMiseAJour(await api("PUT", "/api/mise-a-jour", { active: ev.target.checked }));
 });
 
+// Installation par l'exe : où tourne le programme, et la proposition du lanceur (case « Ne plus me proposer »)
+function afficherInstallation(i) {
+    document.getElementById("etat-installation").textContent = i.installe
+        ? `Installée dans ${i.programme}.`
+        : i.portable ? `Mode portable : le programme tourne depuis ${i.code}.`
+            : `Lancée sans installer, depuis ${i.code}.`;
+    const caseInstallation = document.getElementById("proposer-installation");
+    caseInstallation.checked = i.proposee;
+    caseInstallation.disabled = i.portable;  // en mode portable, le lanceur ne propose rien
+}
+
+async function chargerInstallation() {
+    try {
+        afficherInstallation(await api("GET", "/api/installation"));
+    } catch {
+        // pas de serveur : la barre d'état le dit déjà
+    }
+}
+
+document.getElementById("proposer-installation").addEventListener("change", async (ev) => {
+    afficherInstallation(await api("PUT", "/api/installation", { proposee: ev.target.checked }));
+});
+
+// Sauvegardes de reglages.json : restaurer recharge la page, chaque onglet relit ses réglages
+async function chargerSauvegardes() {
+    let liste = [];
+    try {
+        liste = await api("GET", "/api/sauvegardes");
+    } catch {
+        return;  // pas de serveur : la barre d'état le dit déjà
+    }
+    document.getElementById("aucune-sauvegarde").hidden = liste.length > 0;
+    document.getElementById("liste-sauvegardes").innerHTML = liste.map((s) => `<li class="ligne">
+        <span>${new Date(s.date).toLocaleString("fr-FR")}</span>
+        <span class="discret">${(s.taille / 1024).toFixed(1)} Ko</span>
+        <button type="button" class="petit" data-restaurer-reglages="${echapper(s.nom)}">Restaurer</button>
+    </li>`).join("");
+}
+
+document.getElementById("liste-sauvegardes").addEventListener("click", async (e) => {
+    const bouton = e.target.closest("[data-restaurer-reglages]");
+    if (!bouton) return;
+    const quand = bouton.closest("li").querySelector("span").textContent;
+    if (!confirm(`Remettre les réglages du ${quand} ?
+
+Tes réglages actuels sont d'abord sauvegardés. Le dossier des `
+        + "modèles, s'il change, ne vaut qu'au prochain démarrage d'Aria.")) return;
+    try {
+        await api("POST", "/api/sauvegardes/restaurer", { nom: bouton.dataset.restaurerReglages });
+        location.reload();
+    } catch (err) {
+        alert(err.message);
+    }
+});
+
+// Journal des opérations (app/journal.py) : relu à l'ouverture de Réglages → Système
+const RESULTATS_JOURNAL = { ok: "", erreur: "ko", partiel: "avertissement", annule: "discret" };
+
+async function chargerJournal() {
+    let entrees = [];
+    try {
+        entrees = await api("GET", "/api/journal");
+    } catch {
+        return;
+    }
+    document.getElementById("journal-vide").hidden = entrees.length > 0;
+    document.getElementById("liste-journal").innerHTML = entrees.map((e) => `<li class="ligne ${RESULTATS_JOURNAL[e.resultat] ?? ""}">
+        <span class="discret">${new Date(e.date).toLocaleString("fr-FR")}</span>
+        <span>${echapper(e.action)}</span>
+        <code>${echapper(e.objet)}</code>
+        ${e.detail ? `<span class="discret">${echapper(e.detail)}</span>` : ""}
+    </li>`).join("");
+}
+
+document.getElementById("systeme-reglages").addEventListener("toggle", (e) => {
+    if (e.target.open) {
+        chargerJournal();
+        chargerSauvegardes();
+        chargerDemarrage();
+    }
+});
+
+// Démarrer avec Windows : l'état vient du registre (app/demarrage.py), jamais d'un réglage gardé par la page
+function afficherDemarrage(d) {
+    const caseDemarrage = document.getElementById("demarrage-windows");
+    caseDemarrage.checked = d.actif;
+    caseDemarrage.disabled = !d.possible && !d.actif;  // on peut toujours retirer une valeur, pas en créer une
+    document.getElementById("etat-demarrage").textContent = !d.possible
+        ? "Seulement pour Aria installée : lancée depuis un zip ou en portable, son chemin peut changer."
+        : d.ailleurs ? `La valeur de Windows lance un autre programme (${d.valeur}) : coche à nouveau pour la corriger.`
+            : d.actif ? "Activé : Windows lance Aria à l'ouverture de ta session." : "";
+}
+
+async function chargerDemarrage() {
+    try {
+        afficherDemarrage(await api("GET", "/api/demarrage"));
+    } catch {
+        // pas de serveur : la barre d'état le dit déjà
+    }
+}
+
+document.getElementById("demarrage-windows").addEventListener("change", async (ev) => {
+    try {
+        afficherDemarrage(await api("PUT", "/api/demarrage", { actif: ev.target.checked }));
+    } catch (e) {
+        alert(e.message);
+        chargerDemarrage();
+    }
+});
+
+// « Aller à » du menu de l'icône : le serveur redirige vers « /#modeles » ; l'ancre choisit la page, puis s'efface
+function ouvrirDepuisAncre() {
+    const vue = location.hash.slice(1);
+    if (!vue) return;
+    history.replaceState(null, "", location.pathname);
+    if (vue === "mise-a-jour") {
+        document.querySelector('.onglet[data-vue="reglages"]')?.click();
+        document.getElementById("systeme-reglages").open = true;
+        document.getElementById("carte-maj").scrollIntoView({ block: "start" });
+        return;
+    }
+    document.querySelector(`.onglet[data-vue="${CSS.escape(vue)}"]`)?.click();
+}
+window.addEventListener("load", ouvrirDepuisAncre);  // après tous les scripts : chaque onglet sait se charger
+chargerDemarrage();
+
 chargerMiseAJour();
+suivreMaj();  // une mise à jour déjà en cours (page rechargée) reprend son suivi ; sinon, dit si elle est possible
+chargerInstallation();
+chargerSauvegardes();
+chargerJournal();

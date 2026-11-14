@@ -54,6 +54,8 @@ class Base(unittest.TestCase):
         self.port = port_libre()
         self.patch = mock.patch.object(comfy, "LOGS", self.dossier / "logs")  # jamais le vrai comfyui.log
         self.patch.start()
+        self.patch_travail = mock.patch.object(comfy, "TRAVAIL", self.dossier / "travail")
+        self.patch_travail.start()
 
     def tearDown(self):
         for p in self.faux():  # rien ne doit survivre au test
@@ -63,6 +65,7 @@ class Base(unittest.TestCase):
             except psutil.Error:
                 pass
         self.patch.stop()
+        self.patch_travail.stop()
         garde.ADOPTES.clear()
         self.temp.cleanup()
 

@@ -1,5 +1,6 @@
 """Tests des emplacements (app/emplacements.py) : le code et le dossier de l'utilisateur sont simulés dans un dossier temporaire."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -75,7 +76,8 @@ class DossierModeles(Base):
         self.assertTrue(e["redemarrage"])
         self.assertEqual(e["modeles_prochain"], str(nouveau))
         self.assertEqual(e["dossiers"]["modeles"]["chemin"], str(self.maison / "modeles"))  # pas avant le redémarrage
-        self.assertEqual(yaml.safe_load((self.maison / "aria.yaml").read_text(encoding="utf-8")), {"modeles": str(nouveau)})
+        ecrit = json.loads((self.maison / "reglages.json").read_text(encoding="utf-8"))
+        self.assertEqual(ecrit["emplacements"], {"modeles": str(nouveau)})
         self.figer()  # redémarrage
         self.assertEqual(emplacements.MODELES, nouveau)
         self.assertFalse(emplacements.etat()["redemarrage"])
@@ -94,16 +96,16 @@ class DossierModeles(Base):
                                 (str(self.maison / "moteurs"), "ne peuvent pas aller")):
             with self.subTest(chemin=chemin), self.assertRaisesRegex(emplacements.ErreurEmplacement, attendu):
                 emplacements.choisir_modeles(chemin)
-        self.assertFalse((self.maison / "aria.yaml").exists())
+        self.assertFalse((self.maison / "reglages.json").exists())
 
-    def test_aria_yaml_illisible(self):
+    def test_ancien_aria_yaml_illisible(self):
         self.maison.mkdir(parents=True)
         (self.maison / "aria.yaml").write_text("modeles: [pas fermé", encoding="utf-8")
         self.assertEqual(emplacements._modeles(emplacements._choix()), self.maison / "modeles")
 
 
 class Favoris(Base):
-    def test_retenus_dans_aria_yaml_avec_le_dossier_des_modeles(self):
+    def test_retenus_avec_le_dossier_des_modeles(self):
         emplacements.choisir_modeles(str(Path(self.tmp.name) / "ailleurs"))
         emplacements.retenir_favori("generation", "texte_vers_image", "krea2")
         emplacements.retenir_favori("llama", "modele", "")
@@ -136,9 +138,9 @@ class Favoris(Base):
         emplacements.choisir_comfyui(None)
         self.assertIsNone(emplacements.comfyui_externe())
         self.assertEqual(config.charger()["comfyui"]["dossier"], config.dossier_comfyui_livre())
-        self.assertIn("modeles", emplacements._choix())  # le reste d'aria.yaml est gardé
+        self.assertIn("modeles", emplacements._choix())  # les autres choix sont gardés
 
-    def test_aria_yaml_bizarre_ignore(self):
+    def test_ancien_aria_yaml_bizarre_ignore(self):
         self.maison.mkdir(parents=True)
         (self.maison / "aria.yaml").write_text("favoris: [1, 2]", encoding="utf-8")
         self.assertEqual(emplacements.favoris(), {})
@@ -156,6 +158,48 @@ class Ouvrir(Base):
                 with self.subTest(cle=cle, sous=sous), self.assertRaises(emplacements.ErreurEmplacement):
                     emplacements.ouvrir(cle, sous)
             self.assertEqual(startfile.call_count, 2)
+
+
+class Cache(unittest.TestCase):
+    """Les fichiers qui se recalculent quittent data\ pour cache\ au démarrage (app/main.py, cycle_de_vie)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        base = Path(self.tmp.name)
+        self.data, self.cache = base / "data", base / "cache"
+        self.data.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_les_anciens_fichiers_sont_deplaces(self):
+        for nom in emplacements.ANCIENS_CACHE:
+            (self.data / nom).write_text(nom, encoding="utf-8")
+        (self.data / "modeles.json").write_text("{}", encoding="utf-8")  # une donnée : reste
+        self.assertEqual(emplacements.ranger_cache(self.data, self.cache), list(emplacements.ANCIENS_CACHE))
+        for nom in emplacements.ANCIENS_CACHE:
+            self.assertFalse((self.data / nom).exists())
+            self.assertEqual((self.cache / nom).read_text(encoding="utf-8"), nom)
+        self.assertTrue((self.data / "modeles.json").is_file())
+
+    def test_rien_a_ranger(self):
+        self.assertEqual(emplacements.ranger_cache(self.data, self.cache), [])
+        self.assertFalse(self.cache.exists())
+
+    def test_un_fichier_deja_dans_cache_n_est_pas_ecrase(self):
+        self.cache.mkdir()
+        (self.cache / "empreintes.json").write_text("récent", encoding="utf-8")
+        (self.data / "empreintes.json").write_text("ancien", encoding="utf-8")
+        self.assertEqual(emplacements.ranger_cache(self.data, self.cache), [])
+        self.assertEqual((self.cache / "empreintes.json").read_text(encoding="utf-8"), "récent")
+        self.assertTrue((self.data / "empreintes.json").is_file())
+
+    def test_les_modules_ecrivent_dans_cache(self):
+        from app import modeles, reglages
+        self.assertEqual(modeles.EMPREINTES.parent, emplacements.CACHE)
+        self.assertEqual(modeles.CHEMINS_COMFYUI.parent, emplacements.CACHE)
+        self.assertEqual(reglages.FICHIER_SAMPLERS.parent, emplacements.CACHE)
+        self.assertEqual(emplacements.CACHE, emplacements.RACINE / "cache")
 
 
 if __name__ == "__main__":

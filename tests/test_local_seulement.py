@@ -10,7 +10,7 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from app import main
+from app import jeton, main
 from app.config import CONFIG
 
 PORT = CONFIG["app"]["port"]
@@ -19,7 +19,7 @@ LOCAL = f"http://127.0.0.1:{PORT}"
 
 class LocalSeulement(unittest.TestCase):
     def setUp(self):
-        self.client = TestClient(main.app, base_url=LOCAL)
+        self.client = TestClient(main.app, base_url=LOCAL, headers={jeton.EN_TETE: jeton.JETON})
 
     def essai(self, **entetes):
         return self.client.put("/api/mise-a-jour", headers=entetes).status_code

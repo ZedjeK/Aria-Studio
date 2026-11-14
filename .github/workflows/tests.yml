@@ -3,6 +3,9 @@
 # où les fichiers des workflows sont posés vides et modeles/llm reste vide ; NVML, ComfyUI et Llama sont simulés dans
 # les tests qui en parlent (sans carte NVIDIA, les tests passent aussi). Le coffre Windows de test_cles est celui du
 # runner, sous un nom d'essai effacé à la fin.
+#
+# Le job de test s'appelle « tests », comme dans tous les dépôts Aria, et le ruleset de main l'exige sous ce nom :
+# ne jamais le renommer sans changer d'abord le contrôle exigé par le ruleset, sinon plus aucune PR ne se fusionne.
 name: Tests
 
 on:
@@ -13,7 +16,7 @@ permissions:
   contents: read
 
 jobs:
-  unittest:
+  tests:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:

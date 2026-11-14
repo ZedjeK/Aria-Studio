@@ -12,6 +12,7 @@ from app.plateau import ErreurPlateau, Plateau
 from app.securite import ErreurSecurite
 from tests.test_sequences import Base as BaseSequence
 from tests import steps_connus
+from tests import reglages_jetables
 
 STYLE = "style_h3.safetensors"
 LORA = {"fichier": STYLE, "force": 0.8, "declencheurs": "cinematic grain"}
@@ -33,7 +34,7 @@ class ModelesTemporaires:
         (d / "modeles" / "video" / "MiniMax-H3" / "modeles" / workflows.obtenir("minimax_h3_t2v").modele_origine).touch()
         self.patchs_modeles = [mock.patch.object(modeles, "DOSSIER", d / "modeles"),
                                mock.patch.object(modeles, "REGISTRE", d / "modeles.json"),
-                               mock.patch.object(modeles, "MEMOIRE_LORAS", d / "loras.json")]
+                               reglages_jetables.patch(d)]
         for p in self.patchs_modeles:
             p.start()
 

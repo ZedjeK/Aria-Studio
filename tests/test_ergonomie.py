@@ -15,11 +15,12 @@ class CommandeEnCours(unittest.TestCase):
     def test_rien_puis_la_commande_qui_tourne(self):
         with mock.patch.object(main.plateau_, "commandes", {}):
             self.assertIsNone(main.commande_en_cours())
-        commandes = {"a": SimpleNamespace(type="clip", etat="attente", etape="", progression=0.0),
-                     "b": SimpleNamespace(type="creation", etat="en_cours", etape="Génération", progression=0.456),
-                     "c": SimpleNamespace(type="creation", etat="fini", etape="", progression=1.0)}
+        commandes = {"a": SimpleNamespace(id="a", type="clip", etat="attente", etape="", progression=0.0),
+                     "b": SimpleNamespace(id="b", type="creation", etat="en_cours", etape="Génération", progression=0.456),
+                     "c": SimpleNamespace(id="c", type="creation", etat="fini", etape="", progression=1.0)}
         with mock.patch.object(main.plateau_, "commandes", commandes):
-            self.assertEqual(main.commande_en_cours(), {"type": "creation", "etat": "en_cours", "etape": "Génération",
+            # l'id : « Annuler la génération en cours » du menu de l'icône (tools/launcher/Icone.cs)
+            self.assertEqual(main.commande_en_cours(), {"id": "b", "type": "creation", "etat": "en_cours", "etape": "Génération",
                                                         "progression": 0.46, "file": 2})
 
 

@@ -1,29 +1,36 @@
 # Release automatique : pousser un tag « vX.Y.Z » construit la version portable sur Windows (build_portable.py :
-# Python embarqué, dépendances, lanceur compilé avec le csc.exe du runner), en fait le zip et son .sha256 et crée la
-# release en BROUILLON : tu relis les notes et tu publies. Les notes sont celles de docs/releases/<tag>.md si ce
-# fichier existe, sinon celles que GitHub génère.
+# Python embarqué, dépendances, lanceur compilé avec le csc.exe du runner), en fait le zip et son .sha256, atteste la
+# provenance du zip, puis crée la release en BROUILLON : tu relis les notes et tu publies. Les notes sont celles de
+# docs/releases/<tag>.md si ce fichier existe, sinon celles que GitHub génère.
 #
 #     git tag -a v2.0.0 -m "Version 2.0.0"; git push origin v2.0.0
 #
-# Le tag doit être celui de app/__init__.py (VERSION) : sinon le build s'arrête avant de rien publier. Le jeton
-# d'écriture n'est donné qu'à la dernière étape (celle qui crée la release), pas aux étapes qui installent et
-# construisent.
+# Le tag doit être celui de app/__init__.py (VERSION) : sinon le build s'arrête avant de rien publier.
+#
+# Deux jobs : « build » ne fait que lire (dépendances, build, zip, empreinte) ; « publication » est le seul dont le
+# jeton peut écrire (release et attestation), et il n'exécute aucun code du dépôt.
+#
+# Essai à blanc : Actions → Release → Run workflow lance le job « build » seul. Le zip est fabriqué et gardé 7 jours
+# comme artefact du run ; aucun tag, aucune release, aucune attestation.
+#
+# Vérifier un zip téléchargé (gh doit être connecté) :
+#
+#     gh attestation verify .\Aria-Studio-X.Y.Z.zip --repo ZedjeK/Aria-Studio
 name: Release
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  release:
+  build:
     runs-on: windows-latest
     timeout-minutes: 30
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -38,6 +45,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Le tag est celui de VERSION
+        if: github.ref_type == 'tag'
         run: |
           $version = python -c "from app import VERSION; print(VERSION)"
           if ("v$version" -ne $env:GITHUB_REF_NAME) {
@@ -50,12 +58,52 @@ jobs:
       - name: Zip et empreinte
         run: python tools/zip_release.py
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: release
+          path: |
+            .build_cache/release/*.zip
+            .build_cache/release/*.zip.sha256
+          include-hidden-files: true  # .build_cache commence par un point : sans cette ligne, l'action ignorerait les zips
+          if-no-files-found: error
+          retention-days: 7
+
+  publication:
+    needs: build
+    # Seulement sur un tag poussé : l'essai à blanc s'arrête après « build »
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      # Seulement pour lire les notes de version : aucun code du dépôt n'est exécuté dans ce job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: release
+          path: release
+
+      - name: Attestation de provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: release/*.zip
+
       - name: Release en brouillon
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = $env:GITHUB_REF_NAME.TrimStart("v")
-          $zip = ".build_cache/release/Aria-Studio-$version.zip"
+          $zip = "release/Aria-Studio-$version.zip"
+          foreach ($f in @($zip, "$zip.sha256")) {
+            if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "Fichier attendu absent : $f" }
+          }
           $notes = "docs/releases/$env:GITHUB_REF_NAME.md"
           if (Test-Path $notes) { $texte = @("--notes-file", $notes) } else { $texte = @("--generate-notes") }
           gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --draft --verify-tag --title "Aria - Studio $version" @texte
+          if ($LASTEXITCODE -ne 0) { throw "La release en brouillon n'a pas pu être créée." }

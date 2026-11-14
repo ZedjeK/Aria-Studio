@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import shutil
 import socket
 import subprocess
 import uuid
@@ -14,9 +15,13 @@ import psutil
 import websockets
 
 from app import garde
-from app.emplacements import DATA
+from app.emplacements import CACHE, DATA
 
 LOGS = DATA / "logs"
+# Dossiers de travail de ComfyUI (entrées téléversées, sorties, temporaires) : dans le cache d'Aria, jamais dans le
+# dossier de ComfyUI, qui peut être celui de l'utilisateur (« J'ai déjà ComfyUI »). Tout y est copie : l'effacer ne
+# perd rien.
+TRAVAIL = CACHE / "comfyui"
 # Fichiers téléversés dans input/ : images, vidéos (LoadVideo) et sons (LoadAudio, voix de référence).
 TYPES_MIME = {"mp4": "video/mp4", "flac": "audio/flac", "wav": "audio/wav", "mp3": "audio/mpeg", "ogg": "audio/ogg"}
 
@@ -45,10 +50,11 @@ class ComfyUI:
     laissé le vrai tourner après sa fermeture, 11,8 Go gardés. D'où : jamais de second lancement tant que le nôtre
     vit ou que le port est pris, et l'adoption des orphelins."""
 
-    def __init__(self, dossier: Path, port: int, chemins_modeles: Path):
+    def __init__(self, dossier: Path, port: int, chemins_modeles: Path, travail: Path | None = None):
         self.dossier = dossier
         self.port = port
         self.chemins_modeles = chemins_modeles
+        self.travail = travail or TRAVAIL
         self.url = f"http://127.0.0.1:{port}"
         self.python = dossier / "python_embeded" / "python.exe"
         self.process: subprocess.Popen | None = None
@@ -125,6 +131,7 @@ class ComfyUI:
             await self._attendre(timeout, lance=False)
             return
         LOGS.mkdir(parents=True, exist_ok=True)
+        self.preparer_travail()
         if self._log is not None:
             self._log.close()
         self._log = (LOGS / "comfyui.log").open("w", encoding="utf-8")
@@ -133,6 +140,10 @@ class ComfyUI:
                 str(self.python), "-s", "ComfyUI/main.py",
                 "--listen", "127.0.0.1", "--port", str(self.port), "--disable-auto-launch",
                 "--extra-model-paths-config", str(self.chemins_modeles),
+                # ComfyUI ajoute « temp » au dossier donné par --temp-directory.
+                "--input-directory", str(self.travail / "input"),
+                "--output-directory", str(self.travail / "output"),
+                "--temp-directory", str(self.travail),
             ],
             cwd=self.dossier,
             stdout=self._log,
@@ -140,6 +151,27 @@ class ComfyUI:
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
         await self._attendre(timeout, lance=True)
+
+    def preparer_travail(self):
+        """Avant de lancer ComfyUI (aucun ne tourne) : vide les entrées et les temporaires d'avant, qui ne sont que des
+        copies, et crée les trois dossiers. Les sorties restées là (Aria fermée en pleine génération) sont gardées."""
+        for nom in ("input", "temp"):
+            dossier = self.travail / nom
+            if dossier.is_dir():
+                shutil.rmtree(dossier, ignore_errors=True)
+        for nom in ("input", "output", "temp"):
+            (self.travail / nom).mkdir(parents=True, exist_ok=True)
+
+    def _effacer_sortie(self, f: dict):
+        """Efface du dossier des sorties un fichier qu'Aria vient de récupérer. Rien hors de ce dossier, et une erreur
+        ne bloque pas la génération (le fichier reste, comme avant)."""
+        sorties = (self.travail / "output").resolve()
+        chemin = (sorties / f.get("subfolder", "") / f["filename"]).resolve()
+        if chemin.is_relative_to(sorties) and chemin != sorties:
+            try:
+                chemin.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     async def _attendre(self, timeout: float, lance: bool):
         fin = asyncio.get_running_loop().time() + timeout
@@ -219,7 +251,7 @@ class ComfyUI:
         return lectures[-1]
 
     async def televerser(self, image: Path | tuple[str, bytes]) -> str:
-        """Copie une image, une vidéo ou un son (fichier, ou (nom, octets)) dans le dossier input de ComfyUI ;
+        """Copie une image, une vidéo ou un son (fichier, ou (nom, octets)) dans le dossier d'entrées de ComfyUI ;
         renvoie le nom à donner à LoadImage, LoadVideo ou LoadAudio."""
         nom, octets = (image.name, await asyncio.to_thread(image.read_bytes)) if isinstance(image, Path) else image
         type_mime = TYPES_MIME.get(nom.rsplit(".", 1)[-1].lower(), "image/png")
@@ -286,7 +318,7 @@ class ComfyUI:
 
         # Les images arrivent sous « images », les vidéos selon la version de ComfyUI (« images » + animated,
         # « videos », « gifs ») : on prend tout fichier de sortie, jamais les aperçus temporaires.
-        fichiers = []
+        fichiers, recuperes = [], []
         for sortie in sorties.values():
             for valeur in sortie.values():
                 for f in valeur if isinstance(valeur, list) else []:
@@ -294,4 +326,8 @@ class ComfyUI:
                         r = await client.get(f"{self.url}/view", params=f, timeout=300)
                         r.raise_for_status()
                         fichiers.append((f["filename"], r.content))
+                        recuperes.append(f)
+        # Tout est récupéré : output\ n'en garde pas de double (l'appelant enregistre ces octets).
+        for f in recuperes:
+            self._effacer_sortie(f)
         return fichiers

@@ -6,26 +6,17 @@
     <title>Aria Studio</title>
     <link rel="icon" href="/static/favicon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/habillage.css">
 </head>
 <body class="large">
     <main>
-        <!-- Barre du studio, sur deux lignes : la marque et l'état des moteurs, puis les onglets. -->
-        <header class="entete-studio">
-            <div class="entete-haut">
-                <div class="marque">
-                    <h1><img class="logo" src="/static/logo.svg" alt="">Aria <span>Studio</span></h1>
-                    <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
-                </div>
-                <div class="entete-droite">
-                    <!-- État en direct des moteurs, visible depuis tous les onglets. -->
-                    <div id="etat-direct" class="etat-direct" title="État en direct"></div>
-                    <button id="quitter-appli" type="button" class="quitter-appli"
-                            title="Quitter Aria : arrête son serveur, ComfyUI et Llama">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                             stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quitter</button>
-                </div>
+        <div class="coque">
+        <!-- Menu latéral : la marque, les deux familles de pages, puis Quitter et la version. -->
+        <aside class="menu-lateral">
+            <div class="marque">
+                <h1><img class="logo" src="/static/logo.svg" alt="">Aria <span>Studio</span></h1>
             </div>
-            <nav>
+            <nav aria-label="Pages">
                 <!-- Création : on écrit, on tourne, on retouche, on monte. -->
                 <div class="famille-onglets" title="Création">
                     <span class="etiquette-famille">Création</span>
@@ -42,7 +33,22 @@
                     <button class="onglet" data-vue="reglages">Réglages</button>
                 </div>
             </nav>
-        </header>
+            <div class="bas-menu">
+                <button id="quitter-appli" type="button" class="quitter-appli"
+                        title="Quitter Aria : arrête son serveur, ComfyUI et Llama">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quitter</button>
+                <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
+            </div>
+        </aside>
+        <div class="zone">
+            <!-- Fond animé (web/fond.js) : derrière les pages, jamais sous le menu. -->
+            <div id="fond" class="fond" aria-hidden="true"><div class="points"></div><div id="gouttes"></div></div>
+            <div class="haut-zone">
+                <span id="chemin" class="chemin"></span>
+                <!-- État en direct des moteurs, visible depuis tous les onglets. -->
+                <div id="etat-direct" class="etat-direct" title="État en direct"></div>
+            </div>
         <!-- Après ⏻ Quitter : le serveur est arrêté, l'onglet peut être fermé. -->
         <div id="voile-quitte" class="voile" hidden>
             <div class="fenetre">
@@ -51,9 +57,11 @@
                 <p class="discret">Pour la relancer : Aria-Studio.exe, ou son raccourci sur le Bureau.</p>
             </div>
         </div>
-        <!-- Mise à jour : une release plus récente existe sur GitHub (rien ne s'installe tout seul). -->
+        <!-- Mise à jour : une release plus récente existe sur GitHub ; elle ne s'installe que sur le clic
+             « Installer la mise à jour », après une confirmation (app/installation_maj.py). -->
         <div id="bandeau-maj" class="bandeau-maj" hidden>
             <span></span>
+            <button id="installer-maj" type="button" class="principal petit" hidden>Installer la mise à jour</button>
             <a id="lien-maj" target="_blank" rel="noopener" class="petit">Voir la version</a>
             <button id="plus-tard-maj" type="button" class="petit">Plus tard</button>
             <details id="notes-maj" hidden><summary class="discret">Nouveautés</summary><pre></pre></details>
@@ -72,53 +80,81 @@
 
         <!-- Assistant de premier lancement (web/assistant.js, app/assistant.py) -->
         <div id="assistant" class="voile" hidden>
+            <!-- Assistant de premier lancement (web/assistant.js), habillé comme les dialogues d'Aria-Modele : titre cyan,
+                 étapes en encoches non cliquables, encadré « À savoir », un panneau accentué par étape (celui où agit le
+                 bouton orange), puis la ligne d'état et les boutons à droite, l'orange en dernier. -->
             <div class="fenetre assistant">
-                <div class="ligne entete-assistant">
-                    <h2>Bienvenue dans Aria Studio</h2>
-                    <button id="plus-tard-assistant" type="button" class="petit" title="Les bandeaux te rappelleront ce qui manque">Plus tard</button>
-                </div>
+                <h2 class="titre-assistant">Bienvenue dans Aria Studio</h2>
                 <ol class="etapes-assistant">
-                    <li>Ta machine</li><li>Moteurs</li><li>Ce que tu veux faire</li><li>Licences</li><li>Téléchargement</li><li>C'est prêt</li>
+                    <li><span>1 · Ta machine</span></li><li><span>2 · Moteurs</span></li><li><span>3 · Ce que tu veux faire</span></li><li><span>4 · Licences</span></li><li><span>5 · Téléchargement</span></li><li><span>6 · C'est prêt</span></li>
                 </ol>
+                <div class="corps-assistant">
                 <section class="ecran-assistant">
-                    <p>Aria génère tes images et tes vidéos sur ta carte graphique : rien ne part dans le cloud. Voyons ta machine.</p>
-                    <dl id="machine-assistant" class="machine-assistant"></dl>
-                    <p id="alerte-machine" class="alerte" hidden></p>
-                    <div class="ligne">
-                        <span class="discret">Les modèles iront dans <code id="dossier-modeles-assistant"></code>
-                            (<span id="libre-assistant"></span> libres).</span>
-                        <button type="button" class="petit" id="changer-modeles-assistant">Changer…</button>
+                    <div class="savoir"><b>À SAVOIR</b><span>Aria génère tes images et tes vidéos sur ta carte graphique : rien ne
+                        part dans le cloud. Voyons ta machine.</span></div>
+                    <div class="panneau-assistant">
+                        <h3>TA MACHINE</h3>
+                        <dl id="machine-assistant" class="machine-assistant"></dl>
+                        <p id="alerte-machine" class="alerte" hidden></p>
+                    </div>
+                    <div class="panneau-assistant accent">
+                        <h3>DOSSIER DES MODÈLES</h3>
+                        <div class="ligne">
+                            <span class="dossier-assistant"><code id="dossier-modeles-assistant"></code>
+                                <span class="discret">(<span id="libre-assistant"></span> libres)</span></span>
+                            <button type="button" class="petit" id="changer-modeles-assistant">Changer…</button>
+                        </div>
                     </div>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Deux moteurs font le travail : ComfyUI pour les images et les vidéos, llama.cpp pour écrire tes prompts
-                        avec toi au Scénario. Ce sont les versions testées avec Aria, téléchargées depuis leur release GitHub officielle.</p>
-                    <ul class="liste-moteurs"></ul>
+                    <div class="savoir"><b>À SAVOIR</b><span>Deux moteurs font le travail : ComfyUI pour les images et les vidéos,
+                        llama.cpp pour écrire tes prompts avec toi au Scénario. Ce sont les versions testées avec Aria, téléchargées
+                        depuis leur release GitHub officielle.</span></div>
+                    <div class="panneau-assistant accent">
+                        <h3>MOTEURS</h3>
+                        <ul class="liste-moteurs"></ul>
+                    </div>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Coche ce que tu veux faire. Tu pourras en ajouter plus tard en relançant l'assistant (onglet Réglages).</p>
+                    <div class="savoir"><b>À SAVOIR</b><span>Coche ce que tu veux faire. Tu pourras en ajouter plus tard en relançant
+                        l'assistant (onglet Réglages).</span></div>
                     <div id="packs-assistant" class="packs-assistant"></div>
-                    <p id="total-assistant" class="discret"></p>
+                    <div class="panneau-assistant accent">
+                        <h3>À TÉLÉCHARGER</h3>
+                        <p id="total-assistant"></p>
+                    </div>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Chaque modèle a sa licence : lis-la, et coche si tu l'acceptes. Rien n'est téléchargé avant.</p>
+                    <div class="savoir"><b>À SAVOIR</b><span>Chaque modèle a sa licence : lis-la, et coche si tu l'acceptes. Rien
+                        n'est téléchargé avant.</span></div>
                     <div id="licences-assistant" class="licences-assistant"></div>
+                    <div class="panneau-assistant accent">
+                        <h3>TÉLÉCHARGEMENT QUI VA DÉMARRER</h3>
+                        <p id="resume-licences-assistant"></p>
+                    </div>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p id="intro-telechargement-assistant"></p>
-                    <ul id="telechargements-assistant" class="telechargements-assistant"></ul>
+                    <div class="savoir"><b>À SAVOIR</b><span id="intro-telechargement-assistant"></span></div>
+                    <div class="panneau-assistant accent">
+                        <h3>TÉLÉCHARGEMENTS</h3>
+                        <ul id="telechargements-assistant" class="telechargements-assistant"></ul>
+                    </div>
                     <p class="discret">Tu peux fermer cette fenêtre : le téléchargement continue (onglet Modèles, Téléchargements).</p>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Voilà ce qu'Aria utilisera par défaut. Tu pourras changer les workflows et leurs checkpoints dans Modèles,
-                        leurs réglages fins dans Réglages.</p>
-                    <dl id="recap-assistant" class="machine-assistant"></dl>
-                    <p id="manquants-assistant" class="alerte" hidden></p>
-                    <div id="bloc-essai-assistant" class="essai-assistant" hidden>
+                    <div class="savoir"><b>À SAVOIR</b><span>Voilà ce qu'Aria utilisera par défaut. Tu pourras changer les workflows
+                        et leurs checkpoints dans Modèles, leurs réglages fins dans Réglages.</span></div>
+                    <div class="panneau-assistant accent">
+                        <h3>PAR DÉFAUT</h3>
+                        <dl id="recap-assistant" class="machine-assistant"></dl>
+                        <p id="manquants-assistant" class="alerte" hidden></p>
+                    </div>
+                    <div id="bloc-essai-assistant" class="panneau-assistant essai-assistant" hidden>
+                        <h3>IMAGE D'ESSAI</h3>
                         <p class="discret">Pour vérifier que tout tourne, une image rapide (10 steps, petite taille). La première fois,
                             le chargement des modèles prend une ou deux minutes.</p>
                         <div class="ligne">
-                            <button id="essai-assistant" type="button">🎨 Essayer une image</button>
+                            <button id="essai-assistant" type="button" class="petit">Essayer une image</button>
                             <span id="suivi-essai-assistant" class="discret"></span>
                         </div>
                         <div id="barre-essai-assistant" class="barre" hidden><div></div></div>
@@ -126,16 +162,18 @@
                         <img id="image-essai-assistant" alt="Image d'essai" hidden>
                     </div>
                 </section>
-                <div class="ligne pied-assistant">
+                </div>
+                <p id="etat-assistant" class="statut-assistant"></p>
+                <div class="pied-assistant">
+                    <button id="plus-tard-assistant" type="button" title="Les bandeaux te rappelleront ce qui manque">Plus tard</button>
                     <button id="precedent-assistant" type="button">← Précédent</button>
-                    <span id="etat-assistant" class="discret"></span>
                     <button id="suivant-assistant" type="button" class="principal">Suivant →</button>
                 </div>
             </div>
         </div>
 
         <div class="vue" id="vue-plateau">
-            <section class="carte">
+            <section class="carte accent">
                 <h2>Créer</h2>
                 <form id="form-creation">
                     <div class="ligne entete-prompt-plateau">
@@ -438,6 +476,12 @@
                         <button id="vers-scenario-sequence" type="button" class="petit"
                                 title="La séquence ouverte part au Scénario pour être retravaillée ; sans séquence, une nouvelle s'y écrit">✍️ Retravailler au Scénario</button>
                     </div>
+                    <!-- Corbeille des séquences (app/sequences.py) : seul « Vider la corbeille » efface pour de bon -->
+                    <details id="corbeille-sequences" class="corbeille-sequences" hidden>
+                        <summary class="discret">Séquences à la corbeille (<span id="nombre-corbeille-sequences">0</span>)</summary>
+                        <ul id="liste-corbeille-sequences" class="liste"></ul>
+                        <button type="button" id="vider-corbeille-sequences" class="petit danger">Vider la corbeille</button>
+                    </details>
                     <p class="discret">Les prompts des plans s'écrivent au ✍️ Scénario (histoire, découpage) ; ici, on les
                         retouche si besoin et on tourne. Chaque plan tourne son prompt tel quel.</p>
                     <div class="ligne casting-sequence">
@@ -573,10 +617,14 @@
                  et à droite le prompt final, modifiable, qui part vers le Plateau ou le Montage. -->
             <section class="carte barre-scenario">
                 <div class="onglets-scenario" role="tablist">
-                    <button type="button" class="onglet-scenario actif" data-atelier="image">Image</button>
-                    <button type="button" class="onglet-scenario" data-atelier="retouche">Retouche</button>
-                    <button type="button" class="onglet-scenario" data-atelier="clip">Clip</button>
-                    <button type="button" class="onglet-scenario" data-atelier="sequence">Séquence</button>
+                    <button type="button" class="onglet-scenario actif" data-atelier="image"
+                            data-savoir="Une image : le LLM écrit le prompt d'après ton idée, tes compléments et tes images de départ. Il part ensuite vers le Plateau.">Image</button>
+                    <button type="button" class="onglet-scenario" data-atelier="retouche"
+                            data-savoir="Une retouche : même gabarit, avec l'image à retoucher comme départ.">Retouche</button>
+                    <button type="button" class="onglet-scenario" data-atelier="clip"
+                            data-savoir="Un clip : tu peux régler le format, la durée et un dialogue. Le prompt part vers le Montage.">Clip</button>
+                    <button type="button" class="onglet-scenario" data-atelier="sequence"
+                            data-savoir="Une séquence : plusieurs plans, chacun avec son prompt. « Tout écrire » les écrit d'après le fil de l'histoire.">Séquence</button>
                 </div>
                 <div class="ligne options-creation">
                     <span id="brouillon-scenario" class="discret" title="Chaque atelier garde son brouillon dans ce navigateur"></span>
@@ -584,6 +632,7 @@
                     <label>LLM <select id="llm-atelier" title="👁 : il voit tes images de référence"></select></label>
                 </div>
             </section>
+            <div class="savoir" data-pour="#vue-scenario .onglets-scenario"><b>À SAVOIR</b><span></span></div>
             <div class="prompt-guide">
                 <section class="carte atelier">
                     <!-- 1 · Départ -->
@@ -768,7 +817,7 @@
                     </div>
                 </section>
 
-                <aside class="carte apercu-prompt">
+                <aside class="carte accent apercu-prompt">
                     <h2 id="titre-final">Prompt final</h2>
                     <div data-atelier-sauf="sequence">
                         <textarea id="prompt-final" rows="12"
@@ -804,14 +853,15 @@
         <div class="vue" id="vue-modeles" hidden>
             <!-- Onglet Modèles (web/modeles.js, web/decouvrir.js) : chercher, ce que j'ai, et un onglet par usage -->
             <div class="sous-onglets">
-                <button class="sous-onglet" type="button" data-sous="rechercher">🔎 Rechercher</button>
-                <button class="sous-onglet actif" type="button" data-sous="collection">📦 Ma collection</button>
-                <button class="sous-onglet" type="button" data-sous="texte_vers_image">🖼️ Texte → image</button>
-                <button class="sous-onglet" type="button" data-sous="image_vers_image">🎨 Image → image</button>
-                <button class="sous-onglet" type="button" data-sous="video">🎬 Vidéo</button>
+                <button class="sous-onglet" type="button" data-sous="rechercher" data-savoir="Cherche des modèles sur Hugging Face et Civitai.">🔎 Rechercher</button>
+                <button class="sous-onglet actif" type="button" data-sous="collection" data-savoir="Les modèles que tu as téléchargés.">📦 Ma collection</button>
+                <button class="sous-onglet" type="button" data-sous="texte_vers_image" data-savoir="Les modèles qui créent une image à partir d'un texte.">🖼️ Texte → image</button>
+                <button class="sous-onglet" type="button" data-sous="image_vers_image" data-savoir="Les modèles qui refont une image à partir d'une autre.">🎨 Image → image</button>
+                <button class="sous-onglet" type="button" data-sous="video" data-savoir="Les modèles qui créent une vidéo.">🎬 Vidéo</button>
                 <button id="badge-telechargements" class="badge-telechargements" type="button"
                         title="Téléchargements : la file, pause et reprise">⬇ Téléchargements <span></span></button>
             </div>
+            <div class="savoir" data-pour="#vue-modeles .sous-onglets"><b>À SAVOIR</b><span></span></div>
 
             <section class="carte" id="panneau-telechargements" hidden>
                 <h2>Téléchargements</h2>
@@ -884,6 +934,16 @@
                     <p id="suivi-sources" class="discret" hidden></p>
                 </section>
                 <div id="groupes-collection"></div>
+                <!-- Corbeille des modèles (app/modeles.py) : seul « Vider la corbeille » efface pour de bon -->
+                <section class="carte" id="corbeille-modeles" hidden>
+                    <div class="ligne">
+                        <h2>Corbeille <span id="resume-corbeille-modeles" class="discret"></span></h2>
+                        <button type="button" id="vider-corbeille-modeles" class="petit danger">Vider la corbeille</button>
+                    </div>
+                    <p class="discret">Les modèles mis à la corbeille ne servent plus à Aria ni à ComfyUI, mais gardent leur place
+                        sur le disque jusqu'au vidage. « Restaurer » les remet en service, avec leur source et leur licence.</p>
+                    <ul id="liste-corbeille-modeles" class="liste"></ul>
+                </section>
             </div>
 
             <div class="panneau-modeles" data-panneau="texte_vers_image" hidden>
@@ -908,11 +968,12 @@
             </div>
             <div class="mise-reglages">
             <nav class="nav-reglages" aria-label="Sections des réglages">
-                <button type="button" class="actif" data-section="tout">Tout</button>
-                <button type="button" data-section="systeme">🖥️ Système</button>
-                <button type="button" data-section="llm">💬 LLM <i class="point-modifie" hidden></i></button>
-                <button type="button" data-section="workflows">🎨 Modèles image <i class="point-modifie" hidden></i></button>
+                <button type="button" class="actif" data-section="tout" data-savoir="Tout ce qui se règle : le système, le LLM et les modèles d'image. Seuls tes changements sont enregistrés.">Tout</button>
+                <button type="button" data-section="systeme" data-savoir="Moteurs, emplacements, clés d'accès, mises à jour : ce qu'on règle une fois.">🖥️ Système</button>
+                <button type="button" data-section="llm" data-savoir="Les réglages du LLM qui écrit tes prompts. ↺ ramène une valeur à celle d'origine.">💬 LLM <i class="point-modifie" hidden></i></button>
+                <button type="button" data-section="workflows" data-savoir="Les réglages de chaque modèle d'image. ↺ ramène une valeur à celle d'origine.">🎨 Modèles image <i class="point-modifie" hidden></i></button>
             </nav>
+            <div class="savoir" data-pour="#vue-reglages .nav-reglages"><b>À SAVOIR</b><span></span></div>
             <div class="contenu-reglages">
             <!-- Système : ce qu'on règle une fois (s'ouvre seul si un moteur manque) -->
             <details id="systeme-reglages" class="systeme-reglages" data-section="systeme">
@@ -946,7 +1007,25 @@
                 <div class="ligne">
                     <label class="case"><input type="checkbox" id="active-maj"> Vérifier au démarrage (une fois par jour, sur GitHub)</label>
                     <button id="verifier-maj" type="button" class="petit">Vérifier maintenant</button>
+                    <button id="installer-maj-reglages" type="button" class="principal petit" hidden>Installer la mise à jour</button>
                 </div>
+                <p id="suivi-maj" class="discret" hidden></p>
+                <!-- Installation par l'exe (tools/launcher/Launcher.cs, app/emplacements.py) : clé installation_proposee d'aria.yaml -->
+                <p id="etat-installation" class="discret"></p>
+                <div class="ligne">
+                    <label class="case"><input type="checkbox" id="proposer-installation"> Proposer l'installation quand Aria est lancée depuis un zip décompressé</label>
+                </div>
+            </section>
+            <!-- Démarrer avec Windows (app/demarrage.py) : la valeur « Aria Studio » de la clé Run de ton compte, relue à
+                 chaque affichage ; la même case est dans le menu de l'icône (tools/launcher/Launcher.cs). -->
+            <section class="carte" id="carte-demarrage">
+                <h2>Démarrer avec Windows</h2>
+                <p class="discret">Aria se lance à l'ouverture de ta session, sans ouvrir le navigateur : seule son icône apparaît
+                    près de l'horloge. Désactivé tant que tu ne coches pas.</p>
+                <div class="ligne">
+                    <label class="case"><input type="checkbox" id="demarrage-windows"> Démarrer Aria Studio avec Windows</label>
+                </div>
+                <p id="etat-demarrage" class="discret"></p>
             </section>
             <section class="carte" id="carte-notifications">
                 <h2>Notifications</h2>
@@ -958,6 +1037,44 @@
                     <button id="essai-notifications" type="button" class="petit">Essayer</button>
                 </div>
                 <p id="autorisation-notifications" class="discret"></p>
+            </section>
+            <!-- Fond animé (web/fond.js, app/fond.py) : quatre réglages, section « fond » de reglages.json. -->
+            <section class="carte" id="carte-fond">
+                <h2>Fond animé</h2>
+                <p class="discret">Des gouttes allument une grille de points derrière les pages. Le fond se met en pause quand l'onglet
+                    est caché, et ses gouttes disparaissent si Windows demande moins d'animations.</p>
+                <div class="ligne">
+                    <span class="ligne">
+                        <label class="case"><input type="checkbox" id="fond-actif"> Afficher le fond animé</label>
+                        <label class="case">Vitesse
+                            <select id="fond-vitesse">
+                                <option value="lente">Lente</option>
+                                <option value="normale">Normale</option>
+                                <option value="rapide">Rapide</option>
+                            </select></label>
+                        <label class="case">Gouttes : de
+                            <input type="number" id="fond-minimum" min="1" max="12" inputmode="numeric">
+                            à <input type="number" id="fond-maximum" min="1" max="12" inputmode="numeric"></label>
+                    </span>
+                </div>
+                <p id="fond-note" class="ko" hidden></p>
+            </section>
+            <!-- Sauvegardes de reglages.json (app/fichier_reglages.py) : une avant chaque changement, 20 gardées. -->
+            <section class="carte" id="carte-sauvegardes">
+                <h2>Sauvegardes des réglages</h2>
+                <p class="discret">Avant chaque changement, Aria garde une copie de tes réglages (les 20 dernières).
+                    « Restaurer » remet l'une d'elles, après avoir sauvegardé les réglages actuels.</p>
+                <ul id="liste-sauvegardes" class="liste"></ul>
+                <p id="aucune-sauvegarde" class="discret" hidden>Aucune sauvegarde pour l'instant : la première arrive avec le prochain changement.</p>
+            </section>
+            <!-- Journal des opérations (app/journal.py) : journal.json garde les 500 dernières, ici les 50 dernières. -->
+            <section class="carte" id="carte-journal">
+                <h2>Journal</h2>
+                <p class="discret">Ce qu'Aria a fait sur tes affaires : téléchargements, moteurs, corbeilles, migrations et
+                    changements de réglages. Les 500 dernières opérations sont gardées dans <code>journal.json</code> ; voici les 50
+                    dernières.</p>
+                <ul id="liste-journal" class="liste journal"></ul>
+                <p id="journal-vide" class="discret" hidden>Rien encore.</p>
             </section>
             </details>
             <section id="carte-optimiser" class="carte" hidden>
@@ -1055,6 +1172,8 @@
                 <div id="banc"></div>
             </section>
         </div>
+        </div>
+        </div>
     </main>
     <script src="/static/commun.js"></script>
     <script src="/static/app.js"></script>
@@ -1075,5 +1194,7 @@
     <script src="/static/voix.js"></script>
     <script src="/static/decoupage.js"></script>
     <script src="/static/assistant.js"></script>
+    <script src="/static/habillage.js"></script>
+    <script src="/static/fond.js"></script>
 </body>
 </html>

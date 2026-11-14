@@ -10,6 +10,7 @@ from unittest import mock
 
 from app import modeles
 from app.sources import civitai
+from tests import reglages_jetables
 
 FICHIER = "pubes_krea2_loraholic.safetensors"
 CLE = f"image/Krea2/loras/{FICHIER}"
@@ -54,7 +55,7 @@ class Reglage(unittest.TestCase):
             encoding="utf-8")
         self.patchs = [mock.patch.object(modeles, "DOSSIER", d / "modeles"),
                        mock.patch.object(modeles, "REGISTRE", d / "modeles.json"),
-                       mock.patch.object(modeles, "MEMOIRE_LORAS", d / "loras.json")]
+                       reglages_jetables.patch(d)]
         for p in self.patchs:
             p.start()
 

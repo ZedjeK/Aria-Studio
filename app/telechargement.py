@@ -9,7 +9,7 @@ from pathlib import Path
 
 import httpx
 
-from app import modeles
+from app import journal, modeles
 from app.sources import Fiche, entetes
 
 BLOC = 1 << 20
@@ -129,13 +129,17 @@ class Telechargeur:
             if tache.etat == "annule":
                 continue
             await self._autorise.wait()
+            objet = f"{tache.dossier}/{tache.fiche.nom}"
             try:
                 await self._telecharger(tache)
+                journal.noter("Modèle téléchargé", objet, detail=tache.fiche.source)
             except _Annule:
                 tache.etat = "annule"
+                journal.noter("Téléchargement annulé", objet, "annule")
             except Exception as e:
                 tache.etat = "erreur"
                 tache.erreur = str(e)
+                journal.noter("Téléchargement en échec", objet, "erreur", str(e))
             finally:
                 self._annulations.discard(tache.id)
                 tache.debit = 0.0

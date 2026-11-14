@@ -9,6 +9,7 @@ import yaml
 
 from app import assistant, emplacements
 from app.telechargement import ErreurTelechargement
+from tests import reglages_jetables
 
 GO = 1024 ** 3
 COMMUN = {"dossier": "image/_base/vae", "nom": "vae.safetensors", "url": "https://huggingface.co/org/depot/resolve/main/vae.safetensors",
@@ -63,7 +64,7 @@ class Base(unittest.TestCase):
             mock.patch.object(assistant.modeles, "destination", lambda d, n: self.modeles / d / n),
             mock.patch.object(assistant.modeles, "espace_libre", lambda: self.libre),
             mock.patch.object(assistant.moteurs, "etat", lambda: self.etat_moteurs),
-            mock.patch.object(emplacements, "_fichier_choix", lambda: base / "aria.yaml"),
+            reglages_jetables.patch(base),
             mock.patch.object(assistant, "CONFIG", self.config),
         ]
         for p in self.patchs:

@@ -1,8 +1,16 @@
-"""Pilote de llama-server (llama.cpp) : processus, santé, génération via l'API compatible OpenAI."""
+"""Pilote de llama-server (llama.cpp) : processus, santé, génération via l'API compatible OpenAI.
+
+Clé d'accès (contrat des applis Aria, « l'interface ne s'ouvre que par l'appli ») : à chaque démarrage, une clé neuve
+est tirée et passée au seul processus llama-server par la variable d'environnement LLAMA_API_KEY, jamais par la ligne
+de commande (que tout programme de la session peut lister). Elle n'est écrite nulle part ; chaque appel la présente
+(Authorization: Bearer). Un programme local qui ne la connaît pas est refusé par llama-server.
+"""
 
 import asyncio
 import json
+import os
 import re
+import secrets
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,11 +59,15 @@ class Llama:
         self.process: subprocess.Popen | None = None
         self._serveur_actif: Path | None = None
         self._log = None
+        self.cle: str | None = None  # celle du llama-server lancé par ce pilote ; jamais écrite
+
+    def _entetes(self) -> dict:
+        return {"Authorization": f"Bearer {self.cle}"} if self.cle else {}
 
     async def est_pret(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=2) as client:
-                r = await client.get(f"{self.url}/health")
+                r = await client.get(f"{self.url}/health", headers=self._entetes())
             return r.status_code == 200
         except httpx.HTTPError:
             return False
@@ -93,9 +105,11 @@ class Llama:
             if not vision.is_file():
                 raise ErreurLlama(f"Projecteur d'images introuvable : {vision}")
             arguments += ["--mmproj", str(vision)]
+        self.cle = secrets.token_urlsafe(32)
         self.process = subprocess.Popen(
             arguments,
             cwd=serveur.parent,
+            env={**os.environ, "LLAMA_API_KEY": self.cle},
             stdout=self._log,
             stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW,
@@ -130,6 +144,7 @@ class Llama:
                 await asyncio.to_thread(self.process.wait)
         self.process = None
         self.modele = None
+        self.cle = None
         self._serveur_actif = None
         self._log.close()
         self._log = None
@@ -156,7 +171,8 @@ class Llama:
         # requête non streamée, elle, va jusqu'au bout dans le vide (encore 90 s après la coupure, mesuré sur PrismML).
         morceaux, fin, donnees = [], None, {}
         async with httpx.AsyncClient(timeout=300) as client:
-            async with client.stream("POST", f"{self.url}/v1/chat/completions", json=corps) as r:
+            async with client.stream("POST", f"{self.url}/v1/chat/completions", json=corps,
+                                     headers=self._entetes()) as r:
                 if r.status_code != 200:
                     erreur = (await r.aread()).decode(errors="replace")
                     if r.status_code == 400 and re.search(r"exceed|too large|context", erreur, re.IGNORECASE):

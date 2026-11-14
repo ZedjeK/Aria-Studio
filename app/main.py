@@ -13,11 +13,12 @@ from pathlib import Path
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, casting, cles, collection, decouvrir, emplacements, estimation, garde, mesures,
+from app import (assistant, demarrage, fichier_reglages, casting, installation_maj, jeton, journal, cles, collection, decouvrir, emplacements, estimation,
+                 fond, garde, mesures,
                  migration_modeles, mises_a_jour, modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages,
                  retouche, routes_montage, routes_scenario, rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
@@ -37,6 +38,12 @@ _taches_fond: set[asyncio.Task] = set()
 
 @asynccontextmanager
 async def cycle_de_vie(_app: FastAPI):
+    try:  # avant la migration des modèles, qui réécrit les empreintes : les fichiers recalculables vont dans cache\
+        deplaces = emplacements.ranger_cache()
+        if deplaces:
+            logging.getLogger(__name__).info("Rangés dans cache : %s", ", ".join(deplaces))
+    except OSError:  # jamais un empêchement de démarrer : ils seront simplement recalculés
+        logging.getLogger(__name__).exception("Rangement du cache impossible")
     try:  # avant ComfyUI : l'ancienne organisation des modèles rangée côté image et vidéo (app/migration_modeles.py)
         migration_modeles.migrer()
     except Exception:  # noqa: BLE001 : la migration ne doit jamais empêcher Aria de démarrer
@@ -45,8 +52,11 @@ async def cycle_de_vie(_app: FastAPI):
     telechargeur.demarrer()
     plateau_.demarrer()
     verification = asyncio.create_task(mises_a_jour.verifier())  # au plus une fois par jour, sans bloquer le démarrage
+    installation_maj.bilan_au_demarrage()  # après une mise à jour intégrée : la version attendue tourne-t-elle ?
+    menage = asyncio.create_task(installation_maj.vider_plus_tard())
     yield
     verification.cancel()
+    menage.cancel()
     await plateau_.arreter()
     await telechargeur.arreter()
     await orchestrateur.arreter()
@@ -98,7 +108,31 @@ async def local_seulement(requete: Request, suite):
     origine = requete.headers.get("origin")
     if origine is not None and origine not in {f"http://{h}" for h in hotes}:
         return JSONResponse(status_code=403, content={"detail": "Origine refusée."})
-    return await suite(requete)
+    return await _avec_jeton(requete, suite)
+
+
+VUES = ("scenario", "plateau", "retouche", "montage", "modeles", "casting", "reglages", "mise-a-jour")
+
+
+async def _avec_jeton(requete: Request, suite):
+    """Le jeton de ce lancement (app/jeton.py), exigé partout sauf /api/sante. « /?jeton=… », l'adresse qu'ouvre le
+    lanceur, le range dans un cookie et redirige vers « / » : le jeton ne reste pas dans l'adresse."""
+    chemin = requete.url.path
+    if chemin in jeton.SANS_JETON:
+        return await suite(requete)
+    if chemin == "/" and jeton.PARAMETRE in requete.query_params:
+        if not jeton.valide(requete.query_params[jeton.PARAMETRE]):
+            return HTMLResponse(jeton.PAGE_SANS_JETON, status_code=403, headers=SANS_CACHE)
+        # « &vue=modeles » : le menu de l'icône (Aller à) ouvre l'interface sur une page ; l'ancre la choisit.
+        vue = requete.query_params.get("vue")
+        reponse = RedirectResponse("/" + (f"#{vue}" if vue in VUES else ""), status_code=303)
+        reponse.set_cookie(jeton.COOKIE, jeton.JETON, httponly=True, samesite="strict", path="/")
+        return reponse
+    if jeton.valide(requete.cookies.get(jeton.COOKIE)) or jeton.valide(requete.headers.get(jeton.EN_TETE)):
+        return await suite(requete)
+    if chemin == "/":
+        return HTMLResponse(jeton.PAGE_SANS_JETON, status_code=403, headers=SANS_CACHE)
+    return JSONResponse(status_code=403, content={"detail": "Jeton absent ou périmé : rouvre Aria avec son lanceur."})
 
 
 @app.exception_handler(garde.ErreurGarde)
@@ -130,7 +164,7 @@ def commande_en_cours() -> dict | None:
     if not actives:
         return None
     c = next((c for c in actives if c.etat == "en_cours"), actives[0])
-    return {"type": c.type, "etat": c.etat, "etape": c.etape, "progression": round(c.progression, 2),
+    return {"id": c.id, "type": c.type, "etat": c.etat, "etape": c.etape, "progression": round(c.progression, 2),
             "file": len(actives)}
 
 
@@ -171,9 +205,10 @@ class DemandeMiseAJour(BaseModel):
 
 
 @app.get("/api/mise-a-jour")
-async def mise_a_jour():
-    """Version installée et dernière release (GitHub n'est interrogé que si la réponse a plus d'un jour)."""
-    return await mises_a_jour.verifier()
+def mise_a_jour():
+    """Version installée et dernière release connue : une simple lecture. GitHub n'est interrogé qu'au démarrage
+    (une fois par jour au plus) et par « Vérifier maintenant » (POST)."""
+    return mises_a_jour.etat()
 
 
 @app.post("/api/mise-a-jour/verifier")
@@ -184,6 +219,93 @@ async def verifier_mise_a_jour():
 @app.put("/api/mise-a-jour")
 def regler_mise_a_jour(d: DemandeMiseAJour):
     return mises_a_jour.activer(d.active)
+
+
+# Mise à jour intégrée (app/installation_maj.py) : le clic, après la confirmation de l'interface, vaut accord.
+@app.get("/api/mise-a-jour/installation")
+def suivre_installation_maj():
+    return installation_maj.etat()
+
+
+@app.post("/api/mise-a-jour/installer")
+async def installer_maj():
+    """Télécharge, vérifie et installe la dernière release, puis Aria redémarre (en mode portable : décompressée à
+    côté, sans rien déplacer)."""
+    if not installation_maj.installable() or serveur is None:
+        raise HTTPException(409, "Aria a été lancée autrement que par son lanceur : télécharge la version à la main")
+    if installation_maj.en_cours():
+        raise HTTPException(409, "Une mise à jour est déjà en cours")
+    if commande_en_cours():
+        raise HTTPException(409, "Une génération est en cours : attends sa fin (ou annule-la) avant de mettre à jour")
+    if services.banc_en_cours():
+        raise HTTPException(409, "Un banc du Casting est en cours : attends sa fin avant de mettre à jour")
+    boucle = asyncio.get_running_loop()
+    installation_maj.commencer()  # l'état dit « recherche » dès la réponse : l'interface suit sans attendre la tâche
+    tache = asyncio.create_task(installation_maj.installer(
+        lambda: boucle.call_later(0.5, setattr, serveur, "should_exit", True)))
+    _taches_fond.add(tache)
+    tache.add_done_callback(_taches_fond.discard)
+    return installation_maj.etat()
+
+
+class DemandeDemarrage(BaseModel):
+    actif: bool
+
+
+@app.get("/api/demarrage")
+def lire_demarrage():
+    """Démarrer avec Windows : la valeur « Aria Studio » de la clé Run de l'utilisateur, relue à chaque fois."""
+    return demarrage.etat()
+
+
+@app.put("/api/demarrage")
+def regler_demarrage(d: DemandeDemarrage):
+    try:
+        return demarrage.regler(d.actif)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    except OSError as e:
+        raise HTTPException(500, f"Le registre a refusé : {e}")
+
+
+class DemandeInstallation(BaseModel):
+    proposee: bool
+
+
+@app.get("/api/installation")
+def lire_installation():
+    """Installation par l'exe : installé dans %USERPROFILE%\\.Aria-Studio\\programme ou non, et la proposition du lanceur."""
+    return emplacements.installation()
+
+
+@app.put("/api/installation")
+def regler_installation(d: DemandeInstallation):
+    return emplacements.proposer_installation(d.proposee)
+
+
+@app.get("/api/journal")
+def lire_journal():
+    """Les dernières opérations (journal.json, app/journal.py) : Réglages → Système."""
+    return journal.lire()
+
+
+# Sauvegardes de reglages.json (app/fichier_reglages.py) : une avant chaque changement, les 20 dernières gardées.
+@app.get("/api/sauvegardes")
+def lister_sauvegardes():
+    return fichier_reglages.sauvegardes()
+
+
+class DemandeRestaurationReglages(BaseModel):
+    nom: str
+
+
+@app.post("/api/sauvegardes/restaurer")
+def restaurer_sauvegarde(d: DemandeRestaurationReglages):
+    """Les réglages actuels sont sauvegardés d'abord ; certains (dossier des modèles) ne valent qu'au redémarrage."""
+    try:
+        return fichier_reglages.restaurer(d.nom)
+    except fichier_reglages.ErreurSauvegarde as e:
+        raise HTTPException(400, str(e))
 
 
 class DemandeNotifications(BaseModel):
@@ -200,6 +322,27 @@ def lire_notifications():
 @app.put("/api/notifications")
 def regler_notifications(d: DemandeNotifications):
     return notifications.regler(d.active, d.son)
+
+
+class DemandeFond(BaseModel):
+    actif: bool | None = None
+    vitesse: str | None = None
+    minimum: int | None = None
+    maximum: int | None = None
+
+
+@app.get("/api/fond")
+def lire_fond():
+    """Fond animé de l'interface : les quatre réglages de Réglages → Système → Fond animé."""
+    return fond.etat()
+
+
+@app.put("/api/fond")
+def regler_fond(d: DemandeFond):
+    try:
+        return fond.regler(d.actif, d.vitesse, d.minimum, d.maximum)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 class DemandeOuverture(BaseModel):
@@ -251,6 +394,19 @@ def choisir_dossier_modeles(d: DemandeDossierModeles):
 @app.get("/api/moteurs")
 def etat_moteurs():
     return {"carte": moteurs.carte(), "moteurs": moteurs.etat(), "tache": moteurs.tache()}
+
+
+@app.post("/api/moteurs/liberer")
+async def liberer_moteurs():
+    """Menu de l'icône, « Libérer la carte graphique » : arrête ComfyUI et le LLM sans quitter Aria. Refusé pendant une
+    génération ou un banc du Casting, qui en ont besoin ; le prochain travail les relancera."""
+    if commande_en_cours():
+        raise HTTPException(409, "Une génération est en cours : attends sa fin (ou annule-la)")
+    if services.banc_en_cours():
+        raise HTTPException(409, "Un banc du Casting est en cours : attends sa fin")
+    await orchestrateur.arreter()
+    journal.noter("moteurs", "carte graphique", detail="libérée depuis l'icône")
+    return {"libere": True}
 
 
 @app.post("/api/moteurs/annuler")
@@ -425,13 +581,37 @@ def valider_modele(demande: DemandeValidation):
         raise HTTPException(400, str(e))
 
 
-@app.delete("/api/modeles/{cle:path}")
-def supprimer_modele(cle: str):
+# Corbeille des modèles (app/modeles.py) : ses routes passent avant /api/modeles/{cle:path}, qui sinon les prendrait.
+@app.get("/api/modeles/corbeille")
+def corbeille_modeles():
+    return modeles.corbeille()
+
+
+class DemandeRestauration(BaseModel):
+    cle: str
+
+
+@app.post("/api/modeles/corbeille/restaurer")
+def restaurer_modele(d: DemandeRestauration):
     try:
-        modeles.supprimer(cle)
+        return modeles.restaurer(d.cle)
     except modeles.ErreurModele as e:
         raise HTTPException(400, str(e))
-    return {"supprime": cle}
+
+
+@app.delete("/api/modeles/corbeille")
+def vider_corbeille_modeles():
+    """La seule suppression définitive d'un modèle."""
+    return modeles.vider_corbeille()
+
+
+@app.delete("/api/modeles/{cle:path}")
+def supprimer_modele(cle: str):
+    """Met le modèle à la corbeille ; seul « Vider la corbeille » l'efface pour de bon."""
+    try:
+        return modeles.mettre_a_la_corbeille(cle)
+    except modeles.ErreurModele as e:
+        raise HTTPException(400, str(e))
 
 
 @app.get("/api/telechargements")
@@ -1056,15 +1236,33 @@ async def quitter():
 serveur: uvicorn.Server | None = None  # posé par lancer() : /api/quitter lui demande de s'arrêter
 
 
+HOTES_D_ECOUTE = ("127.0.0.1", "localhost")  # contrat des applis Aria : jamais 0.0.0.0 ni ::
+
+
+def hote_d_ecoute() -> str:
+    """L'hôte de config.yaml, s'il ne sort pas de la machine ; sinon Aria refuse de démarrer (le message part dans
+    aria.log, où renvoie le lanceur)."""
+    host = str(CONFIG["app"].get("host") or "").strip()
+    if host not in HOTES_D_ECOUTE:
+        raise SystemExit(f"config.yaml demande d'écouter sur « {host} » : Aria n'écoute que sur 127.0.0.1. "
+                         "Remets « host: 127.0.0.1 » dans la section app.")
+    return host
+
+
 def lancer():
     global serveur
-    host = CONFIG["app"]["host"]
+    host = hote_d_ecoute()
     port = CONFIG["app"]["port"]
+    # Le jeton de ce lancement (app/jeton.py), pour le lanceur ; effacé à l'arrêt.
+    jeton.ecrire_session(port)
     # Le lanceur Aria-Studio.exe ouvre lui-même le navigateur, une fois le serveur prêt.
     if CONFIG["app"].get("open_browser") and not os.environ.get("ARIA_SANS_NAVIGATEUR"):
-        threading.Timer(1.5, webbrowser.open, args=[f"http://{host}:{port}"]).start()
+        threading.Timer(1.5, webbrowser.open, args=[f"http://{host}:{port}/?{jeton.PARAMETRE}={jeton.JETON}"]).start()
     serveur = uvicorn.Server(uvicorn.Config(app, host=host, port=port))
-    serveur.run()
+    try:
+        serveur.run()
+    finally:
+        jeton.effacer_session()
 
 
 if __name__ == "__main__":

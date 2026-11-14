@@ -87,9 +87,28 @@ garde libres.
    Get-FileHash .\Aria-Studio-X.Y.Z.zip -Algorithm SHA256
    ```
 
-2. Décompresse le zip où tu veux, puis double-clique sur `Aria-Studio.exe`. L'interface s'ouvre dans ton navigateur.
-   Pour fermer Aria, clique sur **⏻ Quitter**, au bout de la barre des onglets : son serveur, ComfyUI et Llama
-   s'arrêtent.
+   L'empreinte prouve que le zip est intact. Pour savoir d'où il vient, les zips construits par le workflow de
+   release actuel portent aussi une attestation de provenance de GitHub (`gh` connecté) :
+
+   ```powershell
+   gh attestation verify .\Aria-Studio-X.Y.Z.zip --repo ZedjeK/Aria-Studio
+   ```
+
+   Elle prouve que le zip sort du workflow de ce dépôt, sur le tag de la version. Les versions publiées avant ce
+   workflow n'en ont pas.
+
+2. Décompresse le zip où tu veux, puis double-clique sur `Aria-Studio.exe`. Une fenêtre te propose :
+   - **Installer** : le programme est rangé dans `%USERPROFILE%\.Aria-Studio\programme`, à côté de tes données, puis
+     Aria se lance depuis là. Une case crée un raccourci sur ton Bureau (décochée d'office). Le dossier du zip reste
+     tel quel : tu peux le supprimer ensuite ;
+   - **Lancer sans installer** : Aria tourne depuis le dossier du zip, rien n'est copié.
+
+   « Ne plus me proposer » coupe la question ; elle se réactive dans Réglages → Système, carte Mises à jour. Avec
+   `Aria-Studio.exe --portable`, ou un dossier `data` à côté de l'exe (mode portable), la fenêtre ne s'ouvre pas.
+
+   L'interface s'ouvre ensuite dans ton navigateur, et l'**icône d'Aria** apparaît près de l'horloge (voir plus bas).
+   Pour fermer Aria, choisis **Quitter Aria Studio** dans son menu, ou clique sur **⏻ Quitter** au bout de la barre des
+   onglets : son serveur, ComfyUI et Llama s'arrêtent.
 3. Le lanceur n'est pas signé : Windows SmartScreen peut afficher « Windows a protégé votre ordinateur ». Clique sur
    *Informations complémentaires*, puis sur *Exécuter quand même*.
 4. Au premier lancement, l'**assistant** te guide :
@@ -107,7 +126,21 @@ garde libres.
 
 Dans Réglages, carte Moteurs, *Utiliser mon ComfyUI…* accepte un **ComfyUI portable** (avec `python_embeded`) d'une
 version au moins égale à celle d'Aria. Aria le lance une fois pour vérifier qu'il connaît tous les nœuds dont elle
-a besoin, et n'y installe rien.
+a besoin, et n'y installe rien. Elle le lance avec ses propres dossiers de travail (dans `cache\comfyui\`) : ses
+images et vidéos de départ et ses résultats ne passent pas par les dossiers `input` et `output` de ton ComfyUI.
+
+### L'icône près de l'horloge
+
+Tant qu'Aria tourne, son icône reste près de l'horloge, même onglet fermé. Délavée, rien n'est actif ; pleine, un
+moteur tient la carte graphique. Une pastille dit le reste : **orange**, une autre appli tient la carte et ta
+génération attend ; **cyan**, une génération ou un téléchargement est en cours ; **bleue**, une mise à jour est
+disponible. Un clic l'ouvre ; son menu donne l'état, et permet d'annuler la génération en cours, de libérer la carte
+graphique (ComfyUI et le LLM s'arrêtent, Aria reste ouverte), d'aller à une page, de démarrer avec Windows et de
+quitter.
+
+**Démarrer avec Windows** (dans ce menu, ou dans Réglages → Système) est décoché d'office. Coché, Aria se lance à
+l'ouverture de ta session, sans ouvrir le navigateur : seule l'icône apparaît. Il n'existe que pour Aria installée (dans
+`programme\`), et il écrit une valeur « Aria Studio » sous la clé `Run` de ton compte Windows, que décocher retire.
 
 ## Où vont tes affaires
 
@@ -118,13 +151,28 @@ Tout ce qui t'appartient vit dans `%USERPROFILE%\.Aria-Studio`, qu'une mise à j
 | `data\` | Rushes, clips, séquences, voix, réglages, journaux |
 | `modeles\` | Les modèles (ailleurs si tu l'as changé dans l'onglet Modèles) |
 | `moteurs\` | ComfyUI portable et llama-server |
-| `aria.yaml` | Tes choix : dossier des modèles, favoris, licences acceptées |
+| `cache\` | Ce qui se recalcule (empreintes des modèles, listes annoncées par ComfyUI) et les dossiers de travail de ComfyUI (`cache\comfyui\`, vidés au fil des générations) : l'effacer ne perd rien |
+| `reglages.json` | Tous tes réglages et choix : dossier des modèles, favoris, licences acceptées, fond, notifications, réglages des LLM et des workflows… |
+| `sauvegardes\` | Une copie de `reglages.json` avant chaque changement (les 20 dernières, à restaurer dans Réglages → Système), et les anciens fichiers de réglages copiés quand une version les a réunis dans `reglages.json` |
+| `journal.json` | Les 500 dernières opérations d'Aria sur tes affaires (téléchargements, moteurs, corbeilles, migrations, réglages), visibles dans Réglages → Système |
+| `programme\` | Le programme, si tu l'as installé (la version d'avant reste dans `programme.precedent\`) |
 
 **Mode portable** (clé USB, disque externe…) : crée un dossier `data` à côté de `Aria-Studio.exe`, et tout restera
 dans le dossier du programme (les moteurs vont alors dans `services`).
 
-**Mettre à jour** : décompresse la nouvelle version, et lance-la. En mode portable, recopie d'abord tes dossiers
-`data`, `modeles` et `services` et ton `aria.yaml` dans la nouvelle version.
+**Mettre à jour** : quand une nouvelle version est publiée, le bandeau « ✨ Aria Studio X.Y.Z est disponible » propose
+**Installer la mise à jour** (aussi dans Réglages → Système). Après ta confirmation, Aria la télécharge depuis la
+release sur GitHub, vérifie son empreinte SHA-256 deux fois (celle que calcule GitHub et le `.sha256` publié), puis
+redémarre : la nouvelle version remplace `programme\`, la version d'avant devient `programme.precedent\`, et
+l'interface se rouvre dans un nouvel onglet. Une génération en cours empêche la mise à jour. Pour revenir à la version
+d'avant, quitte Aria et lance `programme.precedent\Aria-Studio.exe` depuis l'Explorateur. Lancée sans installer,
+Aria s'installe ainsi dans `programme\`. En mode portable, la nouvelle version est seulement décompressée à côté du
+dossier actuel : recopie-y tes dossiers `data`, `modeles` et `services` et ton `reglages.json`. Les versions publiées
+jusqu'à la 1.3.0 n'ont pas ce bouton : on les met à jour à la main (décompresser le zip, lancer, *Installer*).
+
+**Désinstaller** : quitte Aria, puis supprime le dossier `%USERPROFILE%\.Aria-Studio\programme` (et
+`programme.precedent`) et le raccourci du Bureau. Tes données restent dans `%USERPROFILE%\.Aria-Studio` ; supprime
+ce dossier entier pour tout effacer, modèles compris.
 
 ## Licences des modèles
 
@@ -144,13 +192,50 @@ personnage mineur est autorisé (scène de famille, manga…), mais un personnag
 (nudité, sexualité, suggestif) est toujours bloqué. Le filtre ne se désactive pas : `securite/termes.yaml` peut
 seulement ajouter des termes, jamais en retirer.
 
-Aria n'écoute que sur ta machine (`127.0.0.1`). Une fois par jour, elle demande à GitHub s'il existe une nouvelle
+Aria n'écoute que sur ta machine (`127.0.0.1`), et ne répond qu'à l'interface ouverte par son lanceur (un jeton tiré à chaque lancement). Une fois par jour, elle demande à GitHub s'il existe une nouvelle
 release (option à couper dans Réglages). Elle ne télécharge rien d'elle-même : chaque téléchargement part d'un clic.
 
 Certains modèles Civitai et Hugging Face demandent ta clé d'accès. Colle-la dans Réglages, carte **🔑 Clés
 d'accès**. Elle est rangée dans le Gestionnaire d'identification Windows, chiffrée et propre à ton compte, jamais
 dans un fichier d'Aria, et l'interface ne la réaffiche jamais. Un bouton la teste auprès de sa source. Les
 variables d'environnement `CIVITAI_TOKEN` et `HF_TOKEN` servent si aucune clé n'est enregistrée dans Aria.
+
+## Limites à connaître
+
+Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par accident :
+
+- **Tes clés d'accès.** Le coffre de Windows les protège contre quelqu'un qui copierait tes fichiers. Il ne les protège
+  pas d'un programme lancé sous ton compte Windows : celui-là peut les lire comme Aria le fait.
+- **Une mise à jour prouve son intégrité, pas sa provenance.** Les deux empreintes vérifiées avant l'installation
+  prouvent que le zip est bien celui de la release, pas que la release est légitime : si le compte GitHub de l'auteur
+  était compromis, une fausse release aurait de vraies empreintes. La provenance repose sur ce compte, sur les releases
+  immuables et sur l'attestation jointe à chaque release (`gh attestation verify`, voir Installation).
+- **Le jeton ne protège pas d'un programme de ton compte.** Aria tire un jeton à chaque lancement et l'exige à chaque
+  requête : une autre page du navigateur ou un programme qui ne le connaît pas est refusé. Mais le jeton est écrit dans
+  `cache\session.json` (pour que le lanceur le retrouve) : un programme lancé sous ton compte Windows peut le lire.
+- **Un ancien onglet ou un favori ne rouvre pas Aria.** Le jeton change à chaque lancement : une page ouverte avant un
+  redémarrage, ou un favori vers `http://127.0.0.1:8075`, affiche « Aria Studio s'ouvre par son lanceur ». Relance
+  `Aria-Studio.exe`.
+- **ComfyUI est joignable par tout programme de ta machine.** Il n'écoute que sur `127.0.0.1` et refuse les autres
+  sites du navigateur, mais il n'a aucune option de clé d'accès : un programme local peut lui parler directement, sans
+  passer par Aria. llama-server, lui, reçoit une clé neuve à chaque démarrage et refuse qui ne la présente pas.
+- **Les anciens fichiers de travail de ComfyUI restent.** Jusqu'à la 1.3.0, Aria laissait dans `ComfyUI\input` et
+  `ComfyUI\output` (dans `moteurs\comfyui\`, ou dans ton propre ComfyUI) une copie de chaque fichier envoyé et de
+  chaque résultat. Elle ne les efface pas pour toi : certains peuvent être la dernière copie d'une création que tu as
+  vidée de la corbeille. Supprime-les à la main si tu veux la place.
+- **Fermer l'onglet ne ferme pas Aria.** Son serveur, et parfois un moteur et la mémoire de la carte graphique, restent
+  occupés tant que tu n'as pas choisi **Quitter** (menu de l'icône ou **⏻** de la page). L'icône te le rappelle.
+- **« Ouvrir » ouvre un nouvel onglet.** Un navigateur ne laisse pas un programme retrouver un onglet déjà ouvert : si
+  l'interface l'est déjà, tu en auras deux. Lancée sans son lanceur (`python -m app`), Aria n'a pas d'icône.
+- **La corbeille garde la place.** Un modèle, une séquence ou un rush supprimé part à la corbeille d'Aria et se
+  restaure ; la place sur le disque n'est libérée qu'avec « Vider la corbeille », qui, elle, est définitive. La
+  corbeille des modèles vit dans leur dossier (`.corbeille`) : si tu changes de dossier des modèles, celle de l'ancien
+  y reste, et elle ne se restaure qu'en reprenant ce dossier.
+- **Les sauvegardes des réglages sont limitées.** Aria garde les 20 dernières versions de `reglages.json` : au-delà,
+  les plus anciennes s'effacent. Revenir à une version d'avant d'Aria retrouve ses anciens fichiers de réglages, mais
+  pas ce qui a changé depuis qu'ils ont été réunis dans `reglages.json`.
+- **Testée sur une seule machine** (Windows 11, RTX 4080 SUPER 16 Go, 64 Go de RAM) et lanceur non signé : voir
+  Installation.
 
 ## Pour les développeurs
 
@@ -165,8 +250,11 @@ Les tests tournent dans un dossier utilisateur jetable : ils ne touchent jamais 
 (modèles installés, réglages, créations), et leur résultat ne dépend pas de ce qui est installé :
 
 ```powershell
-.venv\Scripts\python.exe tools\tester.py
+.\tools\tester.ps1
 ```
+
+(`.\tools\tester.ps1 tests.test_vision -v` passe ses arguments à `unittest` ; c'est une enveloppe de
+`tools\tester.py`, que la CI appelle directement.)
 
 Le banc de palier mesure la VRAM que chaque modèle demande vraiment, en simulant des cartes de 12 et 8 Go sur une
 carte de 16 Go (une bonne heure de GPU, serveur d'Aria arrêté). `--ecrire` reporte ensuite les mesures dans les
@@ -184,12 +272,15 @@ sont remplacés. Avec `--sans-installer`, elle reste dans `.build_cache\staging`
 .venv\Scripts\python.exe tools\build_portable.py
 ```
 
+Pour seulement construire le zip et son `.sha256`, comme le fait la release, sans rien poser chez toi :
+`.\build.ps1` les écrit dans `.work\sortie\`. `.\tools\version.ps1` affiche la version en cours.
+
 Publier une version : passer `VERSION` de `app/__init__.py` au nouveau numéro, déposer les notes dans
 `docs/releases/vX.Y.Z.md`, fusionner, puis pousser le tag. `.github/workflows/release.yml` construit alors le zip
 et son `.sha256` sur Windows et crée la release en brouillon, à relire et à publier :
 
 ```powershell
-git tag -a v2.0.0 -m "Version 2.0.0"; git push origin v2.0.0
+git tag -a v2.1.0 -m "Version 2.1.0"; git push origin v2.1.0
 ```
 
 | Dossier | Rôle |

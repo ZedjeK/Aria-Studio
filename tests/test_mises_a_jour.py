@@ -11,6 +11,7 @@ from unittest import mock
 import httpx
 
 from app import VERSION, mises_a_jour
+from tests import reglages_jetables
 
 RELEASE = {"tag_name": "v9.9.9", "name": "Aria - Studio 9.9.9", "html_url": "https://github.com/ZedjeK/Aria-Studio/releases/tag/v9.9.9",
            "body": "- Nouveautés", "published_at": "2026-11-02T10:00:00Z"}
@@ -41,11 +42,14 @@ class FauxGitHub:
 class Base(unittest.TestCase):
     def setUp(self):
         self.dossier = tempfile.TemporaryDirectory()
-        self.patch = mock.patch.object(mises_a_jour, "FICHIER", Path(self.dossier.name) / "mise_a_jour.json")
-        self.patch.start()
+        self.patchs = [mock.patch.object(mises_a_jour, "FICHIER", Path(self.dossier.name) / "cache" / "mise_a_jour.json"),
+                       reglages_jetables.patch(Path(self.dossier.name))]
+        for p in self.patchs:
+            p.start()
 
     def tearDown(self):
-        self.patch.stop()
+        for p in reversed(self.patchs):
+            p.stop()
         self.dossier.cleanup()
 
     def verifier(self, github, force=False):

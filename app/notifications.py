@@ -1,23 +1,17 @@
-"""Fin des jobs (Plateau, Montage, Casting) : préférences de l'utilisateur, gardées dans data/notifications.json.
+"""Fin des jobs (Plateau, Montage, Casting) : préférences de l'utilisateur, gardées dans la section
+« notifications » de reglages.json (app/fichier_reglages.py ; avant, data/notifications.json).
 
 L'interface prévient elle-même : un bandeau dans l'appli, un son, et une notification Windows (API Notifications du
 navigateur) quand la fenêtre d'Aria n'est pas au premier plan. Le serveur ne garde que les deux choix ci-dessous.
 """
 
-import json
+from app import fichier_reglages
 
-from app.emplacements import DATA
-
-FICHIER = DATA / "notifications.json"
 DEFAUTS = {"active": True, "son": True}
 
 
 def _lire() -> dict:
-    try:
-        d = json.loads(FICHIER.read_text(encoding="utf-8"))
-        return d if isinstance(d, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    return fichier_reglages.section("notifications")
 
 
 def etat() -> dict:
@@ -32,6 +26,5 @@ def regler(active: bool | None = None, son: bool | None = None) -> dict:
         d["active"] = bool(active)
     if son is not None:
         d["son"] = bool(son)
-    FICHIER.parent.mkdir(parents=True, exist_ok=True)
-    FICHIER.write_text(json.dumps(d, indent=4, ensure_ascii=False), encoding="utf-8")
+    fichier_reglages.ecrire("notifications", d)
     return d

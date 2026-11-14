@@ -16,6 +16,7 @@ import httpx
 
 from app import collection, config, decouvrir, fiches, modeles, workflows
 from app.sources import civitai
+from tests import reglages_jetables
 
 FAMILLES = {
     "Qwen-Image2.1": {"nature": "image", "bases": ["Qwen 2.1"], "nom_contient": None, "hf": ["Qwen/Qwen-Image-2.1"], "workflows": []},
@@ -256,7 +257,7 @@ class LlmParWorkflow(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.installes = ["defaut.gguf", "bonsai.gguf"]
-        self.patchs = [mock.patch.object(workflows.emplacements, "_fichier_choix", lambda: Path(self.tmp.name) / "aria.yaml"),
+        self.patchs = [reglages_jetables.patch(Path(self.tmp.name)),
                        mock.patch.object(workflows.modeles, "llm_disponibles", lambda: self.installes),
                        mock.patch.dict(config.CONFIG["llama"], {"modele": "defaut.gguf"})]
         for p in self.patchs:
