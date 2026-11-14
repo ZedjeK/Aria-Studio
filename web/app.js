@@ -537,6 +537,9 @@ function afficherMiseAJour(e) {
     document.getElementById("version-appli").textContent = `· v${e.version}`;
     const bandeau = document.getElementById("bandeau-maj");
     const d = e.derniere;
+    derniereConnue = e.disponible && d ? d : null;
+    afficherBoutonsMaj();
+    if (majEnCours) return;  // le bandeau montre le suivi de l'installation
     bandeau.hidden = !(e.disponible && d && majIgnoree() !== d.version);
     if (!bandeau.hidden) {
         bandeau.querySelector("span").textContent = `✨ Aria Studio ${d.version} est disponible (tu as la ${e.version})`
@@ -568,6 +571,84 @@ document.getElementById("plus-tard-maj").addEventListener("click", async () => {
     document.getElementById("bandeau-maj").hidden = true;
 });
 document.getElementById("verifier-maj").addEventListener("click", () => chargerMiseAJour(true));
+
+// Mise à jour intégrée (app/installation_maj.py) : le clic, après cette confirmation, vaut accord
+let derniereConnue = null;
+let installationMajPossible = false;
+let majEnCours = false;
+const ETAPES_FINALES = ["repos", "redemarrage", "portable", "erreur"];
+const mo = (octets) => `${Math.round((octets || 0) / 1024 / 1024)} Mo`;
+
+function afficherBoutonsMaj() {
+    for (const id of ["installer-maj", "installer-maj-reglages"]) {
+        const bouton = document.getElementById(id);
+        bouton.hidden = !(derniereConnue && installationMajPossible);
+        bouton.disabled = majEnCours;
+    }
+}
+
+function texteSuiviMaj(i) {
+    return {
+        recherche: "Mise à jour : lecture de la release sur GitHub…",
+        telechargement: `Mise à jour ${i.version} : téléchargement, ${mo(i.recu)} sur ${mo(i.total)}`,
+        verification: `Mise à jour ${i.version} : vérification de l'empreinte…`,
+        installation: `Mise à jour ${i.version} : préparation…`,
+        redemarrage: `Aria redémarre en ${i.version} : elle se rouvre dans un nouvel onglet. Tu peux fermer celui-ci.`,
+        portable: `Aria ${i.version} est décompressée dans ${i.chemin} : recopie-y tes dossiers data, modeles, services `
+            + "et ton reglages.json, puis lance son Aria-Studio.exe.",
+        erreur: `Mise à jour impossible : ${i.erreur}. Rien n'a été installé.`,
+    }[i.etape] ?? "";
+}
+
+async function suivreMaj() {
+    let i;
+    try {
+        i = await api("GET", "/api/mise-a-jour/installation");
+    } catch {
+        return;  // le serveur s'arrête pour redémarrer : le message est déjà affiché
+    }
+    installationMajPossible = i.possible;
+    majEnCours = !ETAPES_FINALES.includes(i.etape);
+    const texte = texteSuiviMaj(i);
+    if (texte) {
+        const bandeau = document.getElementById("bandeau-maj");
+        bandeau.hidden = false;
+        bandeau.querySelector("span").textContent = texte;
+        const suivi = document.getElementById("suivi-maj");
+        suivi.hidden = false;
+        suivi.textContent = texte;
+        suivi.className = i.etape === "erreur" ? "ko" : "discret";
+    }
+    afficherBoutonsMaj();
+    if (majEnCours) setTimeout(suivreMaj, 1000);
+}
+
+async function installerMaj() {
+    const d = derniereConnue;
+    if (!d) return;
+    const i = await api("GET", "/api/mise-a-jour/installation");
+    const suite = i.portable
+        ? "Mode portable : elle sera décompressée à côté de ce dossier, sans rien y déplacer ; tu y recopieras tes affaires."
+        : "Ta version actuelle est gardée dans programme.precedent. Aria redémarre à la fin et se rouvre dans un nouvel "
+            + "onglet ; une génération en cours empêche la mise à jour.";
+    if (!confirm(`Installer Aria Studio ${d.version}${d.taille ? ` (${mo(d.taille)})` : ""} ?
+
+Téléchargée depuis la `
+        + `release officielle sur GitHub, son empreinte SHA-256 vérifiée deux fois.
+
+${suite}`)) return;
+    try {
+        await api("POST", "/api/mise-a-jour/installer");
+        majEnCours = true;
+        suivreMaj();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+for (const id of ["installer-maj", "installer-maj-reglages"]) {
+    document.getElementById(id).addEventListener("click", installerMaj);
+}
 document.getElementById("active-maj").addEventListener("change", async (ev) => {
     afficherMiseAJour(await api("PUT", "/api/mise-a-jour", { active: ev.target.checked }));
 });
@@ -654,6 +735,7 @@ document.getElementById("systeme-reglages").addEventListener("toggle", (e) => {
 });
 
 chargerMiseAJour();
+suivreMaj();  // une mise à jour déjà en cours (page rechargée) reprend son suivi ; sinon, dit si elle est possible
 chargerInstallation();
 chargerSauvegardes();
 chargerJournal();
