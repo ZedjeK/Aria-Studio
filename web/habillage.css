@@ -712,6 +712,343 @@ body.large .cartes-mode {
     }
 }
 
+/* ===== Assistant de premier lancement : un dialogue d'Aria-Modele (web/assistant.js) =====
+   Comme Views/InstallPromptWindow.xaml et Views/UpdateWindow.xaml du squelette dotnet-wpf : titre cyan, encadré
+   « À savoir », un panneau accentué (celui où agit le bouton orange), la ligne d'état, puis les boutons à droite,
+   l'orange en dernier. La fenêtre a le fond de l'appli et un cadre au liseré fin ; elle n'est jamais accentuée.
+   Les étapes reprennent l'encoche des sous-onglets, sans être cliquables (StyleEtape d'Aria-Modele). */
+
+body.large #assistant:not(#_) .fenetre.assistant {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    width: min(760px, 100%);
+    max-height: 100%;
+    overflow: visible;
+    padding: 24px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+body.large #assistant:not(#_) .fenetre.assistant::before,
+body.large #assistant:not(#_) .fenetre.assistant::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+}
+
+body.large #assistant:not(#_) .fenetre.assistant::before {
+    inset: 0;
+    z-index: -2;
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+body.large #assistant:not(#_) .fenetre.assistant::after {
+    inset: 1px;
+    z-index: -1;
+    background: var(--bg);
+}
+
+body.large #assistant:not(#_) .titre-assistant {
+    margin: 0 0 14px;
+    color: var(--accent);
+    font: 600 1.25rem var(--font-display);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* Les étapes : l'encoche d'un sous-onglet ; en cours, contour cyan et barre dessous ; faite, texte clair et coche. */
+body.large #assistant:not(#_) .etapes-assistant {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+body.large #assistant:not(#_) .etapes-assistant li {
+    position: relative;
+    isolation: isolate;
+    padding: 8px 28px 8px 14px;
+    border: 0;
+    border-radius: 0;
+    color: var(--muted);
+    font: 600 0.7rem var(--font-display);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+body.large #assistant:not(#_) .etapes-assistant li::before,
+body.large #assistant:not(#_) .etapes-assistant li::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+
+body.large #assistant:not(#_) .etapes-assistant li::before {
+    inset: 0;
+    z-index: -2;
+    background: var(--line);
+}
+
+body.large #assistant:not(#_) .etapes-assistant li::after {
+    inset: 1px 1px 0 1px;
+    z-index: -1;
+    background: var(--surface);
+}
+
+body.large #assistant:not(#_) .etapes-assistant li.fait {
+    color: var(--text);
+}
+
+body.large #assistant:not(#_) .etapes-assistant li.fait span::after {
+    content: " ✓";
+    color: var(--accent);
+}
+
+body.large #assistant:not(#_) .etapes-assistant li.actif {
+    color: var(--accent);
+}
+
+body.large #assistant:not(#_) .etapes-assistant li.actif::before {
+    background: var(--accent);
+}
+
+body.large #assistant:not(#_) .etapes-assistant li.actif::after {
+    inset: 1px 1px 4px 1px;
+    background: var(--hover);
+}
+
+body.large #assistant:not(#_) .savoir {
+    margin: 14px 0 4px;
+}
+
+/* Le contenu de l'étape défile ; titre, étapes, ligne d'état et boutons restent en place. */
+body.large #assistant:not(#_) .corps-assistant {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-right: -8px;
+    padding-right: 8px;
+}
+
+/* Panneaux à coins coupés (StylePanneau) ; « accent » : celui où agit le bouton orange (StylePanneauAccentue). */
+body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant) {
+    position: relative;
+    isolation: isolate;
+    margin-top: 12px;
+    padding: 16px 20px;
+    border: 0;
+    border-radius: 0;
+}
+
+body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::before,
+body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+}
+
+body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::before {
+    inset: 0;
+    z-index: -2;
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::after {
+    inset: 1px;
+    z-index: -1;
+    background: var(--surface);
+}
+
+body.large #assistant:not(#_) .panneau-assistant.accent::before {
+    background: var(--accent);
+}
+
+body.large #assistant:not(#_) .panneau-assistant.accent::after {
+    inset: 2px;
+}
+
+body.large #assistant:not(#_) .panneau-assistant > h3 {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font: 500 0.68rem var(--font-body);
+    letter-spacing: 0.1em;
+}
+
+body.large #assistant:not(#_) .panneau-assistant.accent > h3 {
+    color: var(--accent);
+}
+
+body.large #assistant:not(#_) .panneau-assistant > p {
+    margin: 0;
+}
+
+body.large #assistant:not(#_) .machine-assistant {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 16px;
+    margin: 0;
+}
+
+body.large #assistant:not(#_) .machine-assistant dt {
+    color: var(--muted);
+}
+
+body.large #assistant:not(#_) .machine-assistant dd {
+    margin: 0;
+}
+
+body.large #assistant:not(#_) .dossier-assistant {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Packs et licences : un panneau au liseré fin par choix, avec sa case (un choix multiple, pas une carte à onglet). */
+body.large #assistant:not(#_) .pack-assistant {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 2px 12px;
+    align-items: start;
+    cursor: pointer;
+}
+
+body.large #assistant:not(#_) .licence-assistant {
+    display: grid;
+    gap: 4px;
+}
+
+body.large #assistant:not(#_) :is(.pack-assistant, .licence-assistant) input {
+    margin-top: 4px;
+    accent-color: var(--accent);
+}
+
+body.large #assistant:not(#_) .licence-assistant ul {
+    margin: 4px 0;
+    padding-left: 18px;
+}
+
+body.large #assistant:not(#_) .liste-moteurs li:first-child,
+body.large #assistant:not(#_) .telechargements-assistant li:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+body.large #assistant:not(#_) .telechargements-assistant {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+body.large #assistant:not(#_) .telechargements-assistant li {
+    padding: 6px 0;
+    border-top: 1px solid var(--line);
+}
+
+body.large #assistant:not(#_) .barre {
+    border-radius: 0;
+}
+
+body.large #assistant:not(#_) .barre div {
+    box-shadow: none;
+}
+
+body.large #assistant:not(#_) .essai-assistant img {
+    max-width: 100%;
+    max-height: 320px;
+    margin: 12px auto 0;
+    border-radius: 0;
+}
+
+/* Bas de la fenêtre : la ligne d'état (StatusText), puis les boutons à droite, l'orange en dernier. */
+body.large #assistant:not(#_) .statut-assistant {
+    min-height: 1.2em;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+body.large #assistant:not(#_) .pied-assistant {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+/* Boutons en biais : contour cyan par défaut, plein orange pour l'action à faire, contour discret pour fermer. */
+body.large #assistant:not(#_) button {
+    position: relative;
+    isolation: isolate;
+    min-height: 40px;
+    padding: 10px 24px;
+    border: 0;
+    border-radius: 0;
+    background: var(--accent);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    color: var(--accent);
+    font: 600 0.78rem var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: none;
+    filter: none;
+}
+
+body.large #assistant:not(#_) button::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    background: var(--surface);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+body.large #assistant:not(#_) button:hover:not(:disabled)::before {
+    background: var(--hover);
+}
+
+body.large #assistant:not(#_) button.petit {
+    min-height: 32px;
+    padding: 6px 18px;
+    font-size: 0.7rem;
+}
+
+body.large #assistant:not(#_) :is(#plus-tard-assistant, #precedent-assistant, [data-annuler-moteur]) {
+    background: var(--line-strong);
+    color: var(--muted);
+}
+
+body.large #assistant:not(#_) :is(#plus-tard-assistant, #precedent-assistant, [data-annuler-moteur]):hover:not(:disabled) {
+    color: var(--text);
+}
+
+/* Une seule action orange : Suivant, sauf quand l'étape attend une autre action (« Installer » d'un moteur manquant,
+   classe « a-faire ») ; Suivant prend alors le contour cyan (classe « attend »). */
+body.large #assistant:not(#_) :is(#suivant-assistant:not(.attend), button.a-faire) {
+    background: var(--action);
+    color: var(--on-action);
+}
+
+body.large #assistant:not(#_) :is(#suivant-assistant:not(.attend), button.a-faire)::before {
+    display: none;
+}
+
+body.large #assistant:not(#_) :is(#suivant-assistant:not(.attend), button.a-faire):hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+body.large #assistant:not(#_) button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 /* ===== Journal des opérations (Réglages → Système) ===== */
 .liste.journal li {
     flex-wrap: wrap;
