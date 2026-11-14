@@ -102,6 +102,22 @@ class Lanceur(unittest.TestCase):
         self.assertEqual(self.lancer(self.zip / EXE, "--essai-ne-plus-proposer"), 1)
         self.assertEqual((self.maison / "reglages.json").read_text(encoding="utf-8"), "{ cassé")
 
+    def adresse(self, exe: Path) -> str:
+        env = {**os.environ, "USERPROFILE": str(self.profil)}
+        return subprocess.run([str(exe), "--essai-adresse"], env=env, capture_output=True, timeout=60).stdout.decode()
+
+    def test_adresse_avec_le_jeton_de_la_session(self):
+        self.assertEqual(self.adresse(self.zip / EXE), "http://127.0.0.1:8075/")  # pas de session : l'adresse nue
+        (self.maison / "cache").mkdir(parents=True)
+        (self.maison / "cache" / "session.json").write_text('{"port": 8075, "jeton": "a+b/c=="}', encoding="utf-8")
+        self.assertEqual(self.adresse(self.zip / EXE), "http://127.0.0.1:8075/?jeton=a%2Bb%2Fc%3D%3D")
+
+    def test_adresse_en_mode_portable(self):
+        (self.zip / "data").mkdir()
+        (self.zip / "cache").mkdir()
+        (self.zip / "cache" / "session.json").write_text('{"jeton": "portable"}', encoding="utf-8")
+        self.assertEqual(self.adresse(self.zip / EXE), "http://127.0.0.1:8075/?jeton=portable")
+
     def test_installe_dans_programme_sans_la_marque_internet(self):
         with open(str(self.zip / "config.yaml") + ":Zone.Identifier", "w", encoding="utf-8") as marque:
             marque.write("[ZoneTransfer]\nZoneId=3\n")
