@@ -106,8 +106,9 @@ garde libres.
    « Ne plus me proposer » coupe la question ; elle se réactive dans Réglages → Système, carte Mises à jour. Avec
    `Aria-Studio.exe --portable`, ou un dossier `data` à côté de l'exe (mode portable), la fenêtre ne s'ouvre pas.
 
-   L'interface s'ouvre ensuite dans ton navigateur. Pour fermer Aria, clique sur **⏻ Quitter**, au bout de la barre
-   des onglets : son serveur, ComfyUI et Llama s'arrêtent.
+   L'interface s'ouvre ensuite dans ton navigateur, et l'**icône d'Aria** apparaît près de l'horloge (voir plus bas).
+   Pour fermer Aria, choisis **Quitter Aria Studio** dans son menu, ou clique sur **⏻ Quitter** au bout de la barre des
+   onglets : son serveur, ComfyUI et Llama s'arrêtent.
 3. Le lanceur n'est pas signé : Windows SmartScreen peut afficher « Windows a protégé votre ordinateur ». Clique sur
    *Informations complémentaires*, puis sur *Exécuter quand même*.
 4. Au premier lancement, l'**assistant** te guide :
@@ -127,6 +128,19 @@ Dans Réglages, carte Moteurs, *Utiliser mon ComfyUI…* accepte un **ComfyUI po
 version au moins égale à celle d'Aria. Aria le lance une fois pour vérifier qu'il connaît tous les nœuds dont elle
 a besoin, et n'y installe rien. Elle le lance avec ses propres dossiers de travail (dans `cache\comfyui\`) : ses
 images et vidéos de départ et ses résultats ne passent pas par les dossiers `input` et `output` de ton ComfyUI.
+
+### L'icône près de l'horloge
+
+Tant qu'Aria tourne, son icône reste près de l'horloge, même onglet fermé. Délavée, rien n'est actif ; pleine, un
+moteur tient la carte graphique. Une pastille dit le reste : **orange**, une autre appli tient la carte et ta
+génération attend ; **cyan**, une génération ou un téléchargement est en cours ; **bleue**, une mise à jour est
+disponible. Un clic l'ouvre ; son menu donne l'état, et permet d'annuler la génération en cours, de libérer la carte
+graphique (ComfyUI et le LLM s'arrêtent, Aria reste ouverte), d'aller à une page, de démarrer avec Windows et de
+quitter.
+
+**Démarrer avec Windows** (dans ce menu, ou dans Réglages → Système) est décoché d'office. Coché, Aria se lance à
+l'ouverture de ta session, sans ouvrir le navigateur : seule l'icône apparaît. Il n'existe que pour Aria installée (dans
+`programme\`), et il écrit une valeur « Aria Studio » sous la clé `Run` de ton compte Windows, que décocher retire.
 
 ## Où vont tes affaires
 
@@ -210,7 +224,9 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
   chaque résultat. Elle ne les efface pas pour toi : certains peuvent être la dernière copie d'une création que tu as
   vidée de la corbeille. Supprime-les à la main si tu veux la place.
 - **Fermer l'onglet ne ferme pas Aria.** Son serveur, et parfois un moteur et la mémoire de la carte graphique, restent
-  occupés tant que tu n'as pas cliqué sur **⏻ Quitter**.
+  occupés tant que tu n'as pas choisi **Quitter** (menu de l'icône ou **⏻** de la page). L'icône te le rappelle.
+- **« Ouvrir » ouvre un nouvel onglet.** Un navigateur ne laisse pas un programme retrouver un onglet déjà ouvert : si
+  l'interface l'est déjà, tu en auras deux. Lancée sans son lanceur (`python -m app`), Aria n'a pas d'icône.
 - **La corbeille garde la place.** Un modèle, une séquence ou un rush supprimé part à la corbeille d'Aria et se
   restaure ; la place sur le disque n'est libérée qu'avec « Vider la corbeille », qui, elle, est définitive. La
   corbeille des modèles vit dans leur dossier (`.corbeille`) : si tu changes de dossier des modèles, celle de l'ancien
