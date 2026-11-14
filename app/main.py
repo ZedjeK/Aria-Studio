@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, fichier_reglages, casting, installation_maj, jeton, journal, cles, collection, decouvrir, emplacements, estimation,
+from app import (assistant, demarrage, fichier_reglages, casting, installation_maj, jeton, journal, cles, collection, decouvrir, emplacements, estimation,
                  fond, garde, mesures,
                  migration_modeles, mises_a_jour, modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages,
                  retouche, routes_montage, routes_scenario, rushes, securite, services, workflows)
@@ -111,6 +111,9 @@ async def local_seulement(requete: Request, suite):
     return await _avec_jeton(requete, suite)
 
 
+VUES = ("scenario", "plateau", "retouche", "montage", "modeles", "casting", "reglages", "mise-a-jour")
+
+
 async def _avec_jeton(requete: Request, suite):
     """Le jeton de ce lancement (app/jeton.py), exigé partout sauf /api/sante. « /?jeton=… », l'adresse qu'ouvre le
     lanceur, le range dans un cookie et redirige vers « / » : le jeton ne reste pas dans l'adresse."""
@@ -120,7 +123,9 @@ async def _avec_jeton(requete: Request, suite):
     if chemin == "/" and jeton.PARAMETRE in requete.query_params:
         if not jeton.valide(requete.query_params[jeton.PARAMETRE]):
             return HTMLResponse(jeton.PAGE_SANS_JETON, status_code=403, headers=SANS_CACHE)
-        reponse = RedirectResponse("/", status_code=303)
+        # « &vue=modeles » : le menu de l'icône (Aller à) ouvre l'interface sur une page ; l'ancre la choisit.
+        vue = requete.query_params.get("vue")
+        reponse = RedirectResponse("/" + (f"#{vue}" if vue in VUES else ""), status_code=303)
         reponse.set_cookie(jeton.COOKIE, jeton.JETON, httponly=True, samesite="strict", path="/")
         return reponse
     if jeton.valide(requete.cookies.get(jeton.COOKIE)) or jeton.valide(requete.headers.get(jeton.EN_TETE)):
@@ -159,7 +164,7 @@ def commande_en_cours() -> dict | None:
     if not actives:
         return None
     c = next((c for c in actives if c.etat == "en_cours"), actives[0])
-    return {"type": c.type, "etat": c.etat, "etape": c.etape, "progression": round(c.progression, 2),
+    return {"id": c.id, "type": c.type, "etat": c.etat, "etape": c.etape, "progression": round(c.progression, 2),
             "file": len(actives)}
 
 
@@ -241,6 +246,26 @@ async def installer_maj():
     _taches_fond.add(tache)
     tache.add_done_callback(_taches_fond.discard)
     return installation_maj.etat()
+
+
+class DemandeDemarrage(BaseModel):
+    actif: bool
+
+
+@app.get("/api/demarrage")
+def lire_demarrage():
+    """Démarrer avec Windows : la valeur « Aria Studio » de la clé Run de l'utilisateur, relue à chaque fois."""
+    return demarrage.etat()
+
+
+@app.put("/api/demarrage")
+def regler_demarrage(d: DemandeDemarrage):
+    try:
+        return demarrage.regler(d.actif)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    except OSError as e:
+        raise HTTPException(500, f"Le registre a refusé : {e}")
 
 
 class DemandeInstallation(BaseModel):
@@ -369,6 +394,19 @@ def choisir_dossier_modeles(d: DemandeDossierModeles):
 @app.get("/api/moteurs")
 def etat_moteurs():
     return {"carte": moteurs.carte(), "moteurs": moteurs.etat(), "tache": moteurs.tache()}
+
+
+@app.post("/api/moteurs/liberer")
+async def liberer_moteurs():
+    """Menu de l'icône, « Libérer la carte graphique » : arrête ComfyUI et le LLM sans quitter Aria. Refusé pendant une
+    génération ou un banc du Casting, qui en ont besoin ; le prochain travail les relancera."""
+    if commande_en_cours():
+        raise HTTPException(409, "Une génération est en cours : attends sa fin (ou annule-la)")
+    if services.banc_en_cours():
+        raise HTTPException(409, "Un banc du Casting est en cours : attends sa fin")
+    await orchestrateur.arreter()
+    journal.noter("moteurs", "carte graphique", detail="libérée depuis l'icône")
+    return {"libere": True}
 
 
 @app.post("/api/moteurs/annuler")

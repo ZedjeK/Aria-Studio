@@ -10,6 +10,8 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 
 ### Ajouté
 
+- L'icône d'Aria près de l'horloge : délavée ou pleine selon que la carte graphique sert, avec une pastille (orange : une génération attend la carte ; cyan : génération ou téléchargement ; bleue : mise à jour). Son menu donne l'état, annule la génération, libère la carte graphique, ouvre une page, et quitte Aria. Le lanceur reste ouvert pour la tenir ; relancer l'exe ne crée pas de seconde icône.
+- « Démarrer avec Windows », décoché d'office, dans le menu de l'icône et dans Réglages → Système : une valeur sous la clé `Run` du compte, lancement avec `--silencieux` (sans navigateur), seulement pour Aria installée.
 - La mise à jour intégrée : « Installer la mise à jour » (bandeau et Réglages → Système) télécharge la dernière release depuis GitHub, vérifie son empreinte SHA-256 deux fois (celle de GitHub et le `.sha256` publié), puis le nouveau lanceur installe la version dans `programme\` en gardant l'ancienne dans `programme.precedent\` et relance Aria. En mode portable, elle est décompressée à côté, sans rien déplacer.
 - `journal.json`, les 500 dernières opérations d'Aria sur tes affaires (téléchargements, moteurs, corbeilles, migrations, réglages), et une carte « Journal » dans Réglages → Système. `data\logs\aria.log` est borné à 5 Mo, le précédent gardé en `aria.log.1`.
 - Une sauvegarde de `reglages.json` avant chaque changement, dans `sauvegardes\` (les 20 dernières), et « Restaurer » dans Réglages → Système, qui sauvegarde d'abord les réglages actuels.

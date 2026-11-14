@@ -141,6 +141,8 @@ def copier_code(dest):
 # Icône du lanceur : le logo de la famille Aria (web/logo.svg, clap orange), rendu avec Chromium aux tailles de
 # Windows. Le .ico est versionné : la construction n'a rien à dessiner.
 ICONE = ROOT / "tools" / "launcher" / "aria-studio.ico"
+# Le lanceur et son icône de notification (tools/launcher/Icone.cs), compilés ensemble.
+SOURCES_LANCEUR = (ROOT / "tools" / "launcher" / "Launcher.cs", ROOT / "tools" / "launcher" / "Icone.cs")
 
 
 def compiler_lanceur(dest):
@@ -150,8 +152,8 @@ def compiler_lanceur(dest):
     ico = ICONE
     subprocess.run([str(CSC), "/nologo", "/target:winexe", "/optimize+", f"/out:{dest / EXE}", f"/win32icon:{ico}",
                     "/codepage:65001", "/reference:System.Windows.Forms.dll", "/reference:System.Drawing.dll",
-                    "/reference:System.Web.Extensions.dll",
-                    str(ROOT / "tools" / "launcher" / "Launcher.cs")],
+                    "/reference:System.Web.Extensions.dll", f"/resource:{ico},aria-studio.ico",  # le logo de l'icône
+                    *(str(f) for f in SOURCES_LANCEUR)],
                    check=True)
 
 

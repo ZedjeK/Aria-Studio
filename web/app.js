@@ -731,8 +731,53 @@ document.getElementById("systeme-reglages").addEventListener("toggle", (e) => {
     if (e.target.open) {
         chargerJournal();
         chargerSauvegardes();
+        chargerDemarrage();
     }
 });
+
+// Démarrer avec Windows : l'état vient du registre (app/demarrage.py), jamais d'un réglage gardé par la page
+function afficherDemarrage(d) {
+    const caseDemarrage = document.getElementById("demarrage-windows");
+    caseDemarrage.checked = d.actif;
+    caseDemarrage.disabled = !d.possible && !d.actif;  // on peut toujours retirer une valeur, pas en créer une
+    document.getElementById("etat-demarrage").textContent = !d.possible
+        ? "Seulement pour Aria installée : lancée depuis un zip ou en portable, son chemin peut changer."
+        : d.ailleurs ? `La valeur de Windows lance un autre programme (${d.valeur}) : coche à nouveau pour la corriger.`
+            : d.actif ? "Activé : Windows lance Aria à l'ouverture de ta session." : "";
+}
+
+async function chargerDemarrage() {
+    try {
+        afficherDemarrage(await api("GET", "/api/demarrage"));
+    } catch {
+        // pas de serveur : la barre d'état le dit déjà
+    }
+}
+
+document.getElementById("demarrage-windows").addEventListener("change", async (ev) => {
+    try {
+        afficherDemarrage(await api("PUT", "/api/demarrage", { actif: ev.target.checked }));
+    } catch (e) {
+        alert(e.message);
+        chargerDemarrage();
+    }
+});
+
+// « Aller à » du menu de l'icône : le serveur redirige vers « /#modeles » ; l'ancre choisit la page, puis s'efface
+function ouvrirDepuisAncre() {
+    const vue = location.hash.slice(1);
+    if (!vue) return;
+    history.replaceState(null, "", location.pathname);
+    if (vue === "mise-a-jour") {
+        document.querySelector('.onglet[data-vue="reglages"]')?.click();
+        document.getElementById("systeme-reglages").open = true;
+        document.getElementById("carte-maj").scrollIntoView({ block: "start" });
+        return;
+    }
+    document.querySelector(`.onglet[data-vue="${CSS.escape(vue)}"]`)?.click();
+}
+window.addEventListener("load", ouvrirDepuisAncre);  // après tous les scripts : chaque onglet sait se charger
+chargerDemarrage();
 
 chargerMiseAJour();
 suivreMaj();  // une mise à jour déjà en cours (page rechargée) reprend son suivi ; sinon, dit si elle est possible

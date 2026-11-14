@@ -28,7 +28,9 @@ class Lanceur(unittest.TestCase):
         r = subprocess.run([str(CSC), "/nologo", "/target:winexe", f"/out:{cls.exe}", "/codepage:65001",
                             "/reference:System.Windows.Forms.dll", "/reference:System.Drawing.dll",
                             "/reference:System.Web.Extensions.dll",
-                            str(ROOT / "tools" / "launcher" / "Launcher.cs")], capture_output=True)
+                            f"/resource:{ROOT / 'tools' / 'launcher' / 'aria-studio.ico'},aria-studio.ico",
+                            str(ROOT / "tools" / "launcher" / "Launcher.cs"),
+                            str(ROOT / "tools" / "launcher" / "Icone.cs")], capture_output=True)
         if r.returncode:
             raise AssertionError(r.stdout.decode("utf-8", "replace"))
 
@@ -133,6 +135,40 @@ class Lanceur(unittest.TestCase):
         self.assertEqual((self.maison / "programme.precedent" / "app" / "__init__.py").read_text(encoding="utf-8"),
                          'VERSION = "2.1.0"')
 
+    def verrou_icone(self) -> str:
+        """Le nom du verrou de l'icône pour ce dossier d'Aria (NomVerrou de Icone.cs : FNV-1a du chemin en minuscules)."""
+        h = 2166136261
+        for c in str(self.maison).lower():
+            h = ((h ^ ord(c)) * 16777619) & 0xFFFFFFFF
+        return f"Local\Aria-Studio-icone-{h:08x}"
+
+    def test_mise_a_jour_attend_la_fermeture_de_l_icone(self):
+        import ctypes
+        import threading
+        import time
+        noyau = ctypes.WinDLL("kernel32", use_last_error=True)
+        noyau.CreateMutexW.restype = ctypes.c_void_p
+        self.assertEqual(self.lancer(self.zip / EXE, "--essai-installer"), 0)
+        nouvelle = self.maison / "cache" / "mise-a-jour" / "Aria-Studio-2.2.0"
+        shutil.copytree(self.zip, nouvelle)
+        pret = threading.Event()
+
+        def icone():  # l'icône d'une Aria qui s'arrête : elle tient son verrou encore 2 s
+            verrou = noyau.CreateMutexW(None, True, self.verrou_icone())
+            pret.set()
+            time.sleep(2)
+            noyau.ReleaseMutex(ctypes.c_void_p(verrou))
+            noyau.CloseHandle(ctypes.c_void_p(verrou))
+
+        fil = threading.Thread(target=icone)
+        fil.start()
+        pret.wait(5)
+        debut = time.time()
+        self.assertEqual(self.lancer(nouvelle / EXE, "--essai-mise-a-jour", "999999"), 0)  # serveur déjà arrêté
+        fil.join()
+        self.assertGreaterEqual(time.time() - debut, 1.5)  # il a attendu l'icône avant d'installer
+        self.assertTrue((self.maison / "programme.precedent").is_dir())
+
     def test_mise_a_jour_sans_numero_refusee(self):
         self.assertEqual(self.lancer(self.zip / EXE, "--essai-mise-a-jour"), 1)
         self.assertFalse(self.programme.exists())
@@ -188,6 +224,90 @@ class Lanceur(unittest.TestCase):
         lien.write_bytes(b"a moi")
         self.assertEqual(self.lancer(self.zip / EXE, "--essai-installer", "--raccourci"), 0)
         self.assertEqual(lien.read_bytes(), b"a moi")
+
+
+    # --- l'icône de notification (tools/launcher/Icone.cs) ---
+
+    def sortie(self, exe: Path, *options, env: dict | None = None) -> tuple[int, dict]:
+        env = {**os.environ, "USERPROFILE": str(self.profil), **(env or {})}
+        r = subprocess.run([str(exe), *options], env=env, capture_output=True, timeout=60)
+        lignes = r.stdout.decode("utf-8").splitlines()
+        valeurs = {}
+        for ligne in lignes:
+            cle, _, valeur = ligne.partition("=")
+            valeurs.setdefault(cle, []).append(valeur)
+        return r.returncode, {k: v[0] if len(v) == 1 else v for k, v in valeurs.items()}
+
+    def test_demarrer_avec_windows_seulement_installee_et_dans_la_cle_d_essai(self):
+        import uuid
+        import winreg
+        cle = r"Software\Aria-Studio-tests\lanceur-" + uuid.uuid4().hex
+        env = {"ARIA_ESSAI_CLE_RUN": cle, "ARIA_TESTS_ISOLES": "1"}
+        try:
+            code, e = self.sortie(self.zip / EXE, "--essai-demarrage", "etat", env=env)
+            self.assertEqual((code, e["possible"], e["actif"]), (0, "0", "0"))
+            code, _ = self.sortie(self.zip / EXE, "--essai-demarrage", "activer", env=env)
+            self.assertEqual(code, 2)  # pas installée : rien d'écrit
+            self.assertEqual(self.lancer(self.zip / EXE, "--essai-installer"), 0)
+            code, e = self.sortie(self.programme / EXE, "--essai-demarrage", "activer", env=env)
+            self.assertEqual((code, e["possible"], e["actif"]), (0, "1", "1"))
+            # la même commande que celle qu'écrit app/demarrage.py
+            self.assertEqual(e["valeur"], f'"{self.programme / EXE}" --silencieux')
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, cle) as k:
+                self.assertEqual(winreg.QueryValueEx(k, "Aria Studio")[0], e["valeur"])
+            code, e = self.sortie(self.programme / EXE, "--essai-demarrage", "desactiver", env=env)
+            self.assertEqual((code, e["actif"]), (0, "0"))
+        finally:
+            for chemin in (cle, r"Software\Aria-Studio-tests"):
+                try:
+                    winreg.DeleteKey(winreg.HKEY_CURRENT_USER, chemin)
+                except OSError:
+                    pass
+
+    def icone(self, etat: dict) -> dict:
+        fichier = Path(self.tmp.name) / "etat.json"
+        fichier.write_text(json.dumps({"telechargements": [], "maj": {"disponible": False}, **etat}), encoding="utf-8")
+        code, e = self.sortie(self.zip / EXE, "--essai-icone", str(fichier))
+        self.assertEqual(code, 0)
+        return e
+
+    REPOS = {"comfyui": {"etat": "veille"}, "llama": {"etat": "absent", "modele": None}, "vram_utilisee_go": 0.5,
+             "vram_totale_go": 16.0, "commande": None, "garde": {"attente": None, "alerte": None}}
+
+    def test_icone_delavee_sans_pastille_au_repos(self):
+        e = self.icone({"etat": self.REPOS})
+        self.assertEqual((e["pastille"], e["pleine"]), ("", "0"))
+        self.assertEqual(e["infobulle"], "Aria Studio · rien en cours")
+
+    def test_icone_pleine_quand_un_moteur_tient_la_carte(self):
+        e = self.icone({"etat": {**self.REPOS, "comfyui": {"etat": "actif"}}})
+        self.assertEqual((e["pastille"], e["pleine"]), ("", "1"))
+        self.assertIn("|ComfyUI chargé · 0,5 / 16 Go", e["ligne"])
+
+    def test_pastille_bleue_pour_une_mise_a_jour(self):
+        e = self.icone({"etat": self.REPOS, "maj": {"disponible": True, "derniere": {"version": "2.1.0"}}})
+        self.assertEqual((e["pastille"], e["pleine"]), ("bleu", "0"))
+
+    def test_pastille_cyan_pour_un_telechargement_avant_la_mise_a_jour(self):
+        e = self.icone({"etat": self.REPOS, "maj": {"disponible": True, "derniere": {"version": "2.1.0"}},
+                        "telechargements": [{"nom": "Krea", "etat": "termine", "recu": 1, "taille": 1},
+                                            {"nom": "Wan", "etat": "en_cours", "recu": 25, "taille": 100}]})
+        self.assertEqual(e["pastille"], "cyan")
+        self.assertIn("cyan|Téléchargement : Wan · 25 %", e["ligne"])
+
+    def test_pastille_orange_avant_tout_le_reste(self):
+        commande = {"id": "c1", "type": "creation", "etat": "en_cours", "etape": "Image 1/2", "progression": 0.5, "file": 2}
+        e = self.icone({"etat": {**self.REPOS, "commande": commande,
+                                 "garde": {"attente": {"moteur": "ComfyUI", "vram_go": 9.0}, "alerte": None}},
+                        "maj": {"disponible": True, "derniere": {"version": "2.1.0"}}})
+        self.assertEqual(e["pastille"], "orange")
+        self.assertEqual(e["ligne"][0], "orange|Carte graphique : une autre appli la tient · ta génération attend")
+        self.assertIn("cyan|Génère : image 1/2 · 50 % · 2 en file", e["ligne"])
+
+    def test_infobulle_tient_dans_la_limite_de_windows(self):
+        commande = {"id": "c1", "type": "creation", "etat": "en_cours", "etape": "", "progression": 0.123, "file": 12345678}
+        e = self.icone({"etat": {**self.REPOS, "commande": commande}})
+        self.assertLessEqual(len(e["infobulle"]), 63)
 
 
 if __name__ == "__main__":
