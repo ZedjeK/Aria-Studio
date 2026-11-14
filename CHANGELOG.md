@@ -43,6 +43,7 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 
 ### Corrigé
 
+- Dans un profil neuf, le dossier des modèles n'existe pas encore : l'assistant échouait à l'étape « Ce que tu veux faire » (erreur au calcul de la place libre). La place se lit maintenant sur le premier dossier parent qui existe (`app/modeles.py`).
 - Sans modèle vidéo installé, le Montage ne chargeait pas ses Bobines, et le mode Séquence ni sa liste ni ses voix quand on l'ouvrait depuis le Scénario ou les Bobines (`web/montage.js`).
 - `catalogue/moteurs.yaml` est de nouveau lisible (#56).
 

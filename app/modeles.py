@@ -388,7 +388,15 @@ def inventaire() -> list[dict]:
 
 
 def espace_libre() -> int:
-    return shutil.disk_usage(DOSSIER).free
+    """Octets libres là où iront les modèles. Dans un profil neuf, le dossier n'existe pas encore : la place se lit sur
+    le premier dossier parent qui existe (le même disque), sans rien créer. Un disque absent ne laisse aucune place."""
+    for dossier in (DOSSIER, *DOSSIER.parents):
+        if dossier.exists():
+            try:
+                return shutil.disk_usage(dossier).free
+            except OSError:
+                return 0
+    return 0
 
 
 # --- corbeille ---------------------------------------------------------------------------------------------------
