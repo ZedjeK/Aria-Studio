@@ -25,7 +25,11 @@
 // Jeton par lancement (app/jeton.py) : le serveur écrit son jeton dans cache\session.json ; le lanceur ouvre
 // « /?jeton=… », que le serveur range dans un cookie avant de rediriger vers « / ».
 //
-// Compilé avec System.Windows.Forms, System.Drawing et System.Web.Extensions (lecteur JSON de .NET).
+// Icône de notification (tools/launcher/Icone.cs) : après avoir ouvert l'interface, le lanceur reste ouvert et tient
+// l'icône tant que le serveur répond. --silencieux (démarrage avec Windows) lance le serveur et l'icône sans ouvrir le
+// navigateur.
+//
+// Compilé avec Icone.cs, System.Windows.Forms, System.Drawing et System.Web.Extensions (lecteur JSON de .NET).
 
 using System;
 using System.Collections.Generic;
@@ -41,7 +45,7 @@ using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-static class Launcher
+static partial class Launcher
 {
     const int PortParDefaut = 8075;
     const int DelaiDemarrageSecondes = 90;
@@ -55,13 +59,16 @@ static class Launcher
     {
         string racine = Dossier(AppDomain.CurrentDomain.BaseDirectory);
         essai = A(args, "--essai-proposer") || A(args, "--essai-installer") || A(args, "--essai-ne-plus-proposer")
-                || A(args, "--essai-adresse") || A(args, "--essai-mise-a-jour");
+                || A(args, "--essai-adresse") || A(args, "--essai-mise-a-jour") || A(args, "--essai-demarrage")
+                || A(args, "--essai-icone");
         bool portable = A(args, "--portable");
 
         if (A(args, "--essai-proposer")) return DoitProposer(racine, portable) ? 0 : 2;
         if (A(args, "--essai-ne-plus-proposer")) return NePlusProposer() ? 0 : 1;
         if (A(args, "--essai-installer")) return Installer(racine, A(args, "--raccourci")) != null ? 0 : 1;
         if (A(args, "--mise-a-jour") || A(args, "--essai-mise-a-jour")) return MettreAJour(racine, args);
+        if (A(args, "--essai-demarrage")) return EssaiDemarrage(racine, args);
+        if (A(args, "--essai-icone")) return EssaiIcone(racine, args);
 
         string url = "http://127.0.0.1:" + LirePort(racine) + "/";
         if (A(args, "--essai-adresse"))
@@ -84,7 +91,7 @@ static class Launcher
             }
             if (choix != DialogResult.No) return 0;  // fenêtre fermée : on ne lance rien
         }
-        return Lancer(racine, url);
+        return Lancer(racine, url, A(args, "--silencieux"));
     }
 
     static bool A(string[] args, string option)
@@ -274,6 +281,7 @@ static class Launcher
             }
         }
         catch (ArgumentException) { }  // déjà arrêté
+        AttendreIconeFermee(30000);  // l'icône verrouille programme\Aria-Studio.exe ; elle se ferme avec le serveur
         string exe = Installer(racine, false);
         if (essai) return exe != null ? 0 : 1;
         string relance = exe ?? (ancien != null && File.Exists(ancien) ? ancien : null);
@@ -442,10 +450,12 @@ static class Launcher
         }
     }
 
-    // --- le lancement (inchangé) ---
+    // --- le lancement ---
 
-    static int Lancer(string racine, string url)
+    // Démarre le serveur s'il ne répond pas, ouvre l'interface (sauf --silencieux), puis tient l'icône.
+    static int Lancer(string racine, string url, bool silencieux)
     {
+        Process serveur = null;
         if (!Repond(url))
         {
             string pythonw = Path.Combine(racine, "python", "pythonw.exe");
@@ -460,7 +470,7 @@ static class Launcher
             psi.CreateNoWindow = true;
             psi.EnvironmentVariables["PYTHONNOUSERSITE"] = "1";
             psi.EnvironmentVariables["ARIA_SANS_NAVIGATEUR"] = "1";  // c'est le lanceur qui l'ouvre, une fois prêt
-            Process serveur = Process.Start(psi);
+            serveur = Process.Start(psi);
 
             DateTime limite = DateTime.Now.AddSeconds(DelaiDemarrageSecondes);
             while (!Repond(url))
@@ -480,8 +490,8 @@ static class Launcher
             }
         }
 
-        Process.Start(new ProcessStartInfo(Adresse(racine, url, 20)) { UseShellExecute = true });
-        return 0;
+        if (!silencieux) Process.Start(new ProcessStartInfo(Adresse(racine, url, 20)) { UseShellExecute = true });
+        return TenirIcone(racine, url, serveur);
     }
 
     // cache\session.json du serveur qui tourne : à côté du programme en mode portable, sinon dans le dossier d'Aria
@@ -493,7 +503,7 @@ static class Launcher
 
     // L'adresse de l'interface avec le jeton de ce lancement ; sans jeton lisible (une version d'Aria d'avant le jeton),
     // l'adresse nue : une version qui l'exige montre alors sa page « Rouvre Aria avec son lanceur ».
-    static string Adresse(string racine, string url, int essais)
+    internal static string Adresse(string racine, string url, int essais)
     {
         for (int i = 0; i < essais; i++)
         {
@@ -529,7 +539,7 @@ static class Launcher
     }
 
     // Même règle qu'app/emplacements.py : data\ à côté du programme = mode portable, sinon le dossier de l'utilisateur
-    static string Journal(string racine)
+    internal static string Journal(string racine)
     {
         string data = Directory.Exists(Path.Combine(racine, "data"))
             ? Path.Combine(racine, "data")
@@ -554,7 +564,12 @@ static class Launcher
         }
     }
 
-    static void Erreur(string message)
+    internal static void Avertir(string message)
+    {
+        MessageBox.Show(message, Titre, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+
+    internal static void Erreur(string message)
     {
         if (essai)
         {
