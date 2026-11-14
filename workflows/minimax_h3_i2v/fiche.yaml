@@ -111,7 +111,8 @@ profil_prompt:
         texte:
         - 'Double quotes are only for text visible on screen (signs, labels, neon), verbatim, never for a spoken line.'
     regles_sources:
-    - 'https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA (VIDEO_PROMPT_WRITING_GUIDE_base_en.md)'
+    - 'https://huggingface.co/lightx2v/MiniMax-H3-Prompt-Rewriter-Qwen3.5-9B-FL2VA (VIDEO_PROMPT_WRITING_GUIDE_base_en.md, relu mot pour mot le 2026-11-12)'
+    - 'Même dépôt, VIDEO_PROMPT_WRITING_GUIDE_ref_en.md (mode référence, six champs ; relu mot pour mot le 2026-11-11) : pas encore dans la consigne'
     conseils:
     - 'Un court brief de production : sujet, action, décor, caméra, son.'
     - Un seul mouvement de caméra, nommé précisément, avec sa vitesse (slow push-in, slow pan…).
@@ -138,5 +139,5 @@ recommandations:
         source: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
         note: Scheduler du template officiel ComfyUI
     notes:
-    - Entraîné vers 1 MP (768 px de petit côté), 24 i/s, 5 à 15 s ; au-delà, qualité non garantie.
+    - Entraîné vers 1 MP (768 px de petit côté), 24 i/s ; durées de 4 à 15 s d'après la page ComfyUI et la fiche Hugging Face (relevé le 2026-11-09), l'appli en propose 5, 8, 10 et 15 ; au-delà, qualité non garantie.
     - 'Sur RTX 4080 (2026-10-20) : 0,4 MP / 8 steps ≈ 1 min 20 pour 5 s ; ~1 MP / 12 steps ≈ 7 min pour 5 s.'
