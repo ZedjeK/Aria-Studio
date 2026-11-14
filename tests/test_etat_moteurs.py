@@ -9,7 +9,7 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from app import main
+from app import jeton, main
 from app.config import CONFIG
 
 LOCAL = f"http://127.0.0.1:{CONFIG['app']['port']}"
@@ -23,7 +23,7 @@ def vivant():
 
 class EtatMoteurs(unittest.TestCase):
     def setUp(self):
-        self.client = TestClient(main.app, base_url=LOCAL)
+        self.client = TestClient(main.app, base_url=LOCAL, headers={jeton.EN_TETE: jeton.JETON})
 
     def etat(self, actif, comfy, llama, installe=True):
         sante = {"comfyui": {"installe": installe}, "llama": {"installe": installe}}

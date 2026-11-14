@@ -13,11 +13,12 @@ from pathlib import Path
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import (assistant, fichier_reglages, journal, casting, cles, collection, decouvrir, emplacements, estimation, fond, garde, mesures,
+from app import (assistant, fichier_reglages, casting, jeton, journal, cles, collection, decouvrir, emplacements, estimation,
+                 fond, garde, mesures,
                  migration_modeles, mises_a_jour, modeles, moteurs, notifications, optimiseur, plateau, prompt, reglages,
                  retouche, routes_montage, routes_scenario, rushes, securite, services, workflows)
 from app.securite import ErreurSecurite
@@ -104,7 +105,26 @@ async def local_seulement(requete: Request, suite):
     origine = requete.headers.get("origin")
     if origine is not None and origine not in {f"http://{h}" for h in hotes}:
         return JSONResponse(status_code=403, content={"detail": "Origine refusée."})
-    return await suite(requete)
+    return await _avec_jeton(requete, suite)
+
+
+async def _avec_jeton(requete: Request, suite):
+    """Le jeton de ce lancement (app/jeton.py), exigé partout sauf /api/sante. « /?jeton=… », l'adresse qu'ouvre le
+    lanceur, le range dans un cookie et redirige vers « / » : le jeton ne reste pas dans l'adresse."""
+    chemin = requete.url.path
+    if chemin in jeton.SANS_JETON:
+        return await suite(requete)
+    if chemin == "/" and jeton.PARAMETRE in requete.query_params:
+        if not jeton.valide(requete.query_params[jeton.PARAMETRE]):
+            return HTMLResponse(jeton.PAGE_SANS_JETON, status_code=403, headers=SANS_CACHE)
+        reponse = RedirectResponse("/", status_code=303)
+        reponse.set_cookie(jeton.COOKIE, jeton.JETON, httponly=True, samesite="strict", path="/")
+        return reponse
+    if jeton.valide(requete.cookies.get(jeton.COOKIE)) or jeton.valide(requete.headers.get(jeton.EN_TETE)):
+        return await suite(requete)
+    if chemin == "/":
+        return HTMLResponse(jeton.PAGE_SANS_JETON, status_code=403, headers=SANS_CACHE)
+    return JSONResponse(status_code=403, content={"detail": "Jeton absent ou périmé : rouvre Aria avec son lanceur."})
 
 
 @app.exception_handler(garde.ErreurGarde)
@@ -177,9 +197,10 @@ class DemandeMiseAJour(BaseModel):
 
 
 @app.get("/api/mise-a-jour")
-async def mise_a_jour():
-    """Version installée et dernière release (GitHub n'est interrogé que si la réponse a plus d'un jour)."""
-    return await mises_a_jour.verifier()
+def mise_a_jour():
+    """Version installée et dernière release connue : une simple lecture. GitHub n'est interrogé qu'au démarrage
+    (une fois par jour au plus) et par « Vérifier maintenant » (POST)."""
+    return mises_a_jour.etat()
 
 
 @app.post("/api/mise-a-jour/verifier")
@@ -1147,15 +1168,33 @@ async def quitter():
 serveur: uvicorn.Server | None = None  # posé par lancer() : /api/quitter lui demande de s'arrêter
 
 
+HOTES_D_ECOUTE = ("127.0.0.1", "localhost")  # contrat des applis Aria : jamais 0.0.0.0 ni ::
+
+
+def hote_d_ecoute() -> str:
+    """L'hôte de config.yaml, s'il ne sort pas de la machine ; sinon Aria refuse de démarrer (le message part dans
+    aria.log, où renvoie le lanceur)."""
+    host = str(CONFIG["app"].get("host") or "").strip()
+    if host not in HOTES_D_ECOUTE:
+        raise SystemExit(f"config.yaml demande d'écouter sur « {host} » : Aria n'écoute que sur 127.0.0.1. "
+                         "Remets « host: 127.0.0.1 » dans la section app.")
+    return host
+
+
 def lancer():
     global serveur
-    host = CONFIG["app"]["host"]
+    host = hote_d_ecoute()
     port = CONFIG["app"]["port"]
+    # Le jeton de ce lancement (app/jeton.py), pour le lanceur ; effacé à l'arrêt.
+    jeton.ecrire_session(port)
     # Le lanceur Aria-Studio.exe ouvre lui-même le navigateur, une fois le serveur prêt.
     if CONFIG["app"].get("open_browser") and not os.environ.get("ARIA_SANS_NAVIGATEUR"):
-        threading.Timer(1.5, webbrowser.open, args=[f"http://{host}:{port}"]).start()
+        threading.Timer(1.5, webbrowser.open, args=[f"http://{host}:{port}/?{jeton.PARAMETRE}={jeton.JETON}"]).start()
     serveur = uvicorn.Server(uvicorn.Config(app, host=host, port=port))
-    serveur.run()
+    try:
+        serveur.run()
+    finally:
+        jeton.effacer_session()
 
 
 if __name__ == "__main__":
