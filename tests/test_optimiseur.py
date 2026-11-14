@@ -12,6 +12,7 @@ import yaml
 
 from app import modeles, optimiseur, reglages, workflows
 from tests import steps_connus
+from tests import reglages_jetables
 
 GO = 2**30
 LLM = "Autre-LLM-14B-Q4_K_M.gguf"  # un GGUF quelconque, hors catalogue
@@ -25,7 +26,7 @@ class Optimiseur(unittest.TestCase):
     def setUp(self):
         self.dossier = tempfile.TemporaryDirectory()
         d = Path(self.dossier.name)
-        self.patchs = [mock.patch.object(reglages, "FICHIER", d / "reglages.yaml"),
+        self.patchs = [reglages_jetables.patch(d),
                        mock.patch.object(reglages, "FICHIER_SAMPLERS", d / "samplers.json"),
                        mock.patch.object(reglages, "_cache", None),
                        mock.patch.object(modeles, "llm_disponibles", return_value=[LLM, BONSAI]),

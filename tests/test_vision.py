@@ -17,6 +17,7 @@ from PIL import Image
 
 from app import fiches, modeles, plateau, prompt, reglages
 from app.llm import Reponse
+from tests import reglages_jetables
 
 BONSAI = "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
 HERETIC = "Ternary-Bonsai-2-27B-Uncensored-Heretic-PQ2_0.gguf"
@@ -36,7 +37,7 @@ class Projecteur(unittest.TestCase):
         for nom, taille in ((BONSAI, 10), (HERETIC, 10), ("Autre-LLM-14B.gguf", 10),
                             ("Ternary-Bonsai-2-27B-mmproj-BF16.gguf", 9), ("Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf", 6)):
             (d / "llm" / nom).write_bytes(b"x" * taille)
-        self.patchs = [mock.patch.object(reglages, "FICHIER", d / "reglages.yaml"),
+        self.patchs = [reglages_jetables.patch(d),
                        mock.patch.object(reglages, "_cache", None),
                        mock.patch.object(modeles, "DOSSIER", d)]
         for p in self.patchs:

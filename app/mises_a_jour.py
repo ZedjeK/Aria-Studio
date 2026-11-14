@@ -1,8 +1,8 @@
 """Recherche d'une nouvelle version : la dernière release du dépôt GitHub public, comparée à app.VERSION.
 
 Une requête anonyme vers l'API GitHub, au plus une fois par jour (au démarrage, puis quand l'interface le demande),
-sauf « Vérifier maintenant ». Le résultat est gardé dans data/mise_a_jour.json avec le choix de l'utilisateur
-(vérifier ou non). Rien n'est jamais téléchargé ni installé : l'interface montre la version, ses notes et le lien de
+sauf « Vérifier maintenant ». Le choix de l'utilisateur (vérifier ou non) est dans la section « mises_a_jour » de
+reglages.json (app/fichier_reglages.py) ; le résultat de la dernière recherche, qui se refait, dans cache/mise_a_jour.json. Rien n'est jamais téléchargé ni installé : l'interface montre la version, ses notes et le lien de
 la release.
 Sans réseau, sans release publiée ou avec un dépôt inaccessible, rien ne s'affiche en erreur : l'état le dit.
 """
@@ -14,10 +14,11 @@ from datetime import datetime, timedelta
 import httpx
 
 from app import VERSION
+from app import fichier_reglages
 from app.config import CONFIG
-from app.emplacements import DATA
+from app.emplacements import CACHE
 
-FICHIER = DATA / "mise_a_jour.json"
+FICHIER = CACHE / "mise_a_jour.json"  # le résultat de la dernière recherche
 DELAI = timedelta(days=1)
 API = "https://api.github.com"
 _VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
@@ -39,15 +40,22 @@ def plus_recente(derniere: str | None, installee: str = VERSION) -> bool:
 
 
 def _lire() -> dict:
+    """Le résultat de la dernière recherche (cache) et le choix « active » (reglages.json), réunis."""
     try:
-        return json.loads(FICHIER.read_text(encoding="utf-8"))
+        d = json.loads(FICHIER.read_text(encoding="utf-8"))
+        d = d if isinstance(d, dict) else {}
     except (OSError, ValueError):
-        return {}
+        d = {}
+    d.pop("active", None)
+    return {**d, "active": fichier_reglages.section("mises_a_jour").get("active", True)}
 
 
 def _ecrire(donnees: dict):
+    resultat = {k: v for k, v in donnees.items() if k != "active"}
     FICHIER.parent.mkdir(parents=True, exist_ok=True)
-    FICHIER.write_text(json.dumps(donnees, indent=4, ensure_ascii=False), encoding="utf-8")
+    FICHIER.write_text(json.dumps(resultat, indent=4, ensure_ascii=False), encoding="utf-8")
+    if bool(donnees.get("active", True)) != fichier_reglages.section("mises_a_jour").get("active", True):
+        fichier_reglages.ecrire("mises_a_jour", {"active": bool(donnees.get("active", True))})
 
 
 def etat() -> dict:

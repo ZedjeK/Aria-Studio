@@ -16,8 +16,10 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 - Le format se choisit pour « Redessiner une image » (#58) et au Scénario pour la séquence, et le LLM connaît le cadre (#60, #61).
 - `docs/FICHE.md`, la fiche projet (#64), et les scripts `build.ps1`, `tools/tester.ps1` et `tools/version.ps1` (#65).
 - L'installation par l'exe : lancé depuis un zip décompressé, `Aria-Studio.exe` propose « Installer » (dans `%USERPROFILE%\.Aria-Studio\programme`, version d'avant gardée, raccourci du Bureau facultatif) ou « Lancer sans installer ». La proposition se coupe, et se réactive dans Réglages → Système.
+
 ### Modifié
 
+- Tous les réglages et choix de l'utilisateur sont réunis dans `reglages.json`, à la racine du dossier d'Aria : `aria.yaml`, `data/reglages.yaml`, `data/fond.json`, `data/notifications.json`, `data/mise_a_jour.json` et `data/loras.json` y sont versés au premier démarrage, copiés dans `sauvegardes\` et laissés en place pour une version d'avant. Le lanceur y lit et y écrit la proposition d'installer.
 - `tools/build_portable.py` installe dans `programme\` ; une installation de l'ancienne disposition (programme à la racine de `.Aria-Studio`) y est rangée dans `programme.precedent\`.
 - Bonsai 2 devient le LLM par défaut (#54).
 - Les modèles d'image et de vidéo sont rangés chacun de leur côté, avec une migration au démarrage (#57).

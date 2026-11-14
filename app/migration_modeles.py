@@ -7,8 +7,8 @@ modeles/video/…, chacun avec son _base et ses familles (app/modeles.py).
     python -m app.migration_modeles --go       migre (Aria le fait seule au démarrage)
     python -m app.migration_modeles --retour   remet l'ancienne organisation (essai à blanc, --go pour le faire)
 
-Chaque fichier est renommé, sans copie (même disque : instantané). Les clés des fichiers de data/ qui citent un chemin
-(registre, empreintes, réglages des LoRA) sont réécrites, une copie « .avant-migration » de chacun gardée. Si un
+Chaque fichier est renommé, sans copie (même disque : instantané). Les clés qui citent un chemin (registre, empreintes,
+section « loras » de reglages.json) sont réécrites, une copie « .avant-migration » de chacun gardée. Si un
 renommage échoue (fichier ouvert par un ComfyUI resté lancé…), ceux déjà faits sont défaits : l'ancienne organisation
 reste en place, Aria le dit, et réessaie au démarrage suivant. Un fichier de _base qu'aucune fiche ne cite (upscaler,
 controlnet déposés à la main…) va côté image et figure dans le rapport (data/migration_modeles.json).
@@ -22,7 +22,7 @@ from pathlib import Path
 
 import yaml
 
-from app import modeles
+from app import fichier_reglages, modeles
 from app.config import ROOT
 
 log = logging.getLogger(__name__)
@@ -34,8 +34,26 @@ def _journal() -> Path:
 
 
 def _fichiers_data() -> list[Path]:
-    """Les fichiers de data/ dont les clés sont des chemins sous modeles/."""
-    return [modeles.REGISTRE, modeles.EMPREINTES, modeles.MEMOIRE_LORAS]
+    """Les fichiers dont les clés sont des chemins sous modeles/ (les réglages des LoRA, eux, sont dans la section
+    « loras » de reglages.json : voir _reecrire_loras)."""
+    return [modeles.REGISTRE, modeles.EMPREINTES]
+
+
+def _sauvegarde_loras() -> Path:
+    return modeles.REGISTRE.parent / f"loras{SUFFIXE_SAUVEGARDE}.json"
+
+
+def _reecrire_loras(correspondance: dict[str, str]):
+    """La section « loras » de reglages.json (app/fichier_reglages.py) : mêmes clés réécrites, l'ancienne copiée à côté
+    du registre pour le retour arrière."""
+    loras = fichier_reglages.section("loras")
+    if not any(c in correspondance for c in loras):
+        return
+    sauvegarde = _sauvegarde_loras()
+    if not sauvegarde.exists():
+        sauvegarde.parent.mkdir(parents=True, exist_ok=True)
+        sauvegarde.write_text(json.dumps(loras, indent=4, ensure_ascii=False), encoding="utf-8")
+    fichier_reglages.ecrire("loras", {correspondance.get(c, c): v for c, v in loras.items()})
 
 
 def _natures_des_fiches() -> dict[tuple[str, str], str]:
@@ -122,6 +140,7 @@ def _reecrire_cles(correspondance: dict[str, str]):
         temporaire = fichier.with_suffix(fichier.suffix + ".tmp")
         temporaire.write_text(json.dumps(nouvelles, indent=4, ensure_ascii=False), encoding="utf-8")
         temporaire.replace(fichier)
+    _reecrire_loras(correspondance)
 
 
 def _ecrire_journal(rapport: dict):
@@ -185,6 +204,9 @@ def retour(racine: Path | None = None, essai: bool = True) -> list[tuple[str, st
         sauvegarde = fichier.with_name(fichier.name + SUFFIXE_SAUVEGARDE)
         if sauvegarde.is_file():
             sauvegarde.replace(fichier)
+    if _sauvegarde_loras().is_file():
+        fichier_reglages.ecrire("loras", json.loads(_sauvegarde_loras().read_text(encoding="utf-8")))
+        _sauvegarde_loras().unlink()
     rapport["statut"] = "defaite"
     _ecrire_journal(rapport)
     return paires

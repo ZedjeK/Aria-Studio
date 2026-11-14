@@ -1,24 +1,25 @@
 """Emplacements des affaires d'Aria : données, modèles et moteurs, décidés une fois au démarrage.
 
 Par défaut, tout vit dans le dossier de l'utilisateur, comme ~/.ollama ou ~/.claude :
-    %USERPROFILE%\\.Aria-Studio\\aria.yaml   choix de l'utilisateur (dossier des modèles, favoris du Casting)
-    %USERPROFILE%\\.Aria-Studio\\data\\      séquences, rushes, réglages, voix, journaux
-    %USERPROFILE%\\.Aria-Studio\\modeles\\   modèles (ailleurs si l'utilisateur l'a choisi dans aria.yaml)
+    %USERPROFILE%\\.Aria-Studio\\reglages.json  réglages et choix de l'utilisateur (app/fichier_reglages.py)
+    %USERPROFILE%\\.Aria-Studio\\data\\      séquences, rushes, voix, journaux
+    %USERPROFILE%\\.Aria-Studio\\modeles\\   modèles (ailleurs si l'utilisateur l'a choisi)
     %USERPROFILE%\\.Aria-Studio\\moteurs\\   ComfyUI portable, llama-server
-Mode portable : si un dossier data\\ se trouve à côté du code (clé USB…), tout reste à côté du code : aria.yaml,
+Mode portable : si un dossier data\\ se trouve à côté du code (clé USB…), tout reste à côté du code : reglages.json,
 data\\, modeles\\ et services\\. Sauf quand le code est installé dans %USERPROFILE%\\.Aria-Studio lui-même
 (tools/build_portable.py) : son data\\ est alors celui du dossier de l'utilisateur.
 
 Les modules lisent ces chemins à l'import : un changement de dossier des modèles vaut au prochain démarrage.
 Ce module ne dépend pas d'app.config : c'est config qui lui emprunte les favoris (une mise à jour remplace le code,
-config.yaml compris, sans toucher à aria.yaml).
+config.yaml compris, sans toucher à reglages.json).
 """
 
+import copy
 import os
 import shutil
 from pathlib import Path
 
-import yaml
+from app import fichier_reglages
 
 ROOT = Path(__file__).resolve().parent.parent  # dossier du code (celui de app\)
 DEFAUT = Path.home() / ".Aria-Studio"  # Windows ignore la casse : .aria-studio désigne le même dossier
@@ -41,22 +42,46 @@ def _racine() -> Path:
     return ROOT if portable() else DEFAUT
 
 
-def _fichier_choix() -> Path:
-    return _racine() / "aria.yaml"
+fichier_reglages.RACINE_DE = _racine  # reglages.json vit à la racine : dossier de l'utilisateur, ou portable
+
+# Les choix de l'utilisateur (autrefois aria.yaml) : leur place dans les sections de reglages.json.
+_PLACES = {"modeles": ("emplacements", "modeles"), "comfyui": ("emplacements", "comfyui"),
+           "favoris": ("favoris", None), "assistant": ("assistant", None),
+           "installation_proposee": ("installation", "proposee")}
 
 
 def _choix() -> dict:
-    try:
-        return yaml.safe_load(_fichier_choix().read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError):
-        return {}
+    """Les choix de l'utilisateur, à plat ({"modeles": …, "favoris": {…}, …}), lus dans reglages.json."""
+    tout = fichier_reglages.tout()
+    choix = {}
+    for cle, (nom, sous) in _PLACES.items():
+        section = tout.get(nom)
+        if not isinstance(section, dict):
+            continue
+        if sous is None:
+            choix[cle] = copy.deepcopy(section)
+        elif sous in section:
+            choix[cle] = section[sous]
+    choix.update(copy.deepcopy(fichier_reglages.section("divers")))
+    return choix
 
 
 def _ecrire_choix(choix: dict):
-    _fichier_choix().parent.mkdir(parents=True, exist_ok=True)
-    _fichier_choix().write_text(
-        "# Choix de l'utilisateur pour Aria - Studio (onglet Modèles, favoris du Casting) : lu au démarrage.\n"
-        + yaml.safe_dump(choix, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    """Réécrit les sections des choix d'après `choix` (complet) ; les autres clés de ces sections sont gardées."""
+    with fichier_reglages.transaction() as tout:
+        for nom in ("favoris", "assistant", "divers"):
+            tout.pop(nom, None)
+        for nom, sous in (("emplacements", "modeles"), ("emplacements", "comfyui"), ("installation", "proposee")):
+            if isinstance(tout.get(nom), dict):
+                tout[nom].pop(sous, None)
+        for cle, valeur in choix.items():
+            nom, sous = _PLACES.get(cle, ("divers", cle))
+            if sous is None:
+                tout[nom] = valeur
+            else:
+                if not isinstance(tout.get(nom), dict):
+                    tout[nom] = {}
+                tout[nom][sous] = valeur
 
 
 def lire_choix(cle: str, defaut=None):
@@ -64,7 +89,7 @@ def lire_choix(cle: str, defaut=None):
 
 
 def retenir_choix(cle: str, valeur):
-    """Une entrée d'aria.yaml (l'assistant y note ses licences acceptées et sa fin) ; le reste du fichier est gardé."""
+    """Un choix de l'utilisateur (l'assistant y note ses licences acceptées et sa fin) ; les autres sont gardés."""
     choix = _choix()
     choix[cle] = valeur
     _ecrire_choix(choix)
@@ -94,7 +119,7 @@ def installe() -> bool:
 def installation() -> dict:
     """Réglages → Système : le programme est-il installé, et le lanceur propose-t-il de l'installer ?
 
-    Le lanceur lit la clé « installation_proposee » de %USERPROFILE%\\.Aria-Studio\\aria.yaml ; en mode portable,
+    Le lanceur lit « installation.proposee » dans %USERPROFILE%\\.Aria-Studio\\reglages.json ; en mode portable,
     il ne propose rien."""
     return {"installe": installe(), "portable": portable(), "programme": str(programme()), "code": str(ROOT),
             "proposee": _choix().get("installation_proposee", True) is not False}
@@ -106,7 +131,7 @@ def proposer_installation(proposee: bool) -> dict:
 
 
 def comfyui_externe() -> Path | None:
-    """ComfyUI portable déjà installé par l'utilisateur, choisi à la place de celui d'Aria (aria.yaml)."""
+    """ComfyUI portable déjà installé par l'utilisateur, choisi à la place de celui d'Aria."""
     chemin = _choix().get("comfyui")
     return Path(chemin) if isinstance(chemin, str) and chemin else None
 
@@ -195,7 +220,7 @@ def ouvrir(cle: str, sous: str | None = None) -> Path:
 
 
 def choisir_modeles(chemin: str | None) -> dict:
-    """Enregistre le dossier des modèles dans aria.yaml (None : revenir au dossier par défaut).
+    """Enregistre le dossier des modèles dans reglages.json (None : revenir au dossier par défaut).
 
     Les fichiers ne sont pas déplacés ; le nouveau dossier vaut au prochain démarrage d'Aria."""
     choix = _choix()
