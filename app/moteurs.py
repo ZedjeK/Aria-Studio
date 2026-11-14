@@ -31,7 +31,7 @@ import httpx
 import psutil
 import yaml
 
-from app import emplacements, modeles
+from app import emplacements, journal, modeles
 from app.comfy import ComfyUI
 from app.config import CONFIG, ROOT
 from app.emplacements import MOTEURS
@@ -242,7 +242,17 @@ def place_necessaire(id_moteur: str, dossier_archives: Path) -> int:
 async def installer(id_moteur: str, dans: Path = MOTEURS, dossier_archives: Path | None = None, progression=None,
                     verrou=None) -> dict:
     """`verrou` : fabrique d'un contexte asynchrone qui arrête le moteur et le garde arrêté le temps de l'échange
-    (l'orchestrateur, depuis l'interface) ; sans lui, un moteur qui tourne est refusé d'emblée."""
+    (l'orchestrateur, depuis l'interface) ; sans lui, un moteur qui tourne est refusé d'emblée. Noté au journal."""
+    try:
+        fiche = await _installer(id_moteur, dans, dossier_archives, progression, verrou)
+    except Exception as e:
+        journal.noter("Installation d'un moteur en échec", id_moteur, "erreur", str(e))
+        raise
+    journal.noter("Moteur installé", f"{id_moteur} {fiche['version']}")
+    return fiche
+
+
+async def _installer(id_moteur: str, dans: Path, dossier_archives: Path | None, progression, verrou) -> dict:
     m = _moteur(id_moteur)
     dossier_archives = dossier_archives or dans / "_archives"
     if verrou is None and occupe(id_moteur):
@@ -307,7 +317,9 @@ def revenir(id_moteur: str, dans: Path = MOTEURS) -> dict | None:
     global _tache
     if _tache and _tache["fini"] and _tache["id"] == id_moteur:
         _tache = None  # « Installé ✓ » ne vaut plus pour la version qui revient
-    return _fiche(dossier)
+    fiche = _fiche(dossier)
+    journal.noter("Moteur : retour à la version précédente", f"{id_moteur} {(fiche or {}).get('version', 'posée à la main')}")
+    return fiche
 
 
 # --- « J'ai déjà ComfyUI » -------------------------------------------------------------

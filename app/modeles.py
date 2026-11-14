@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from app import fiches, fichier_reglages, memo
+from app import fiches, fichier_reglages, journal, memo
 from app.config import CONFIG, ROOT
 from app.emplacements import CACHE, DATA, MODELES
 
@@ -452,6 +452,7 @@ def mettre_a_la_corbeille(cle_modele: str) -> dict:
     # Sans fichier (déjà effacé à la main), il n'y a rien à garder : seule sa fiche s'en va
     del registre[cle_modele]
     _sauver_registre(registre)
+    journal.noter("Modèle mis à la corbeille", cle_modele)
     return {"corbeille": cle_modele}
 
 
@@ -503,6 +504,7 @@ def restaurer(cle_modele: str) -> dict:
     del corbeille_[cle_modele]
     _sauver_corbeille(corbeille_)
     _supprimer_dossiers_vides(DOSSIER / CORBEILLE)  # les sous-dossiers vidés par la restauration
+    journal.noter("Modèle restauré", cle_modele)
     return {"restaure": cle_modele}
 
 
@@ -524,6 +526,8 @@ def vider_corbeille() -> dict:
     for base in {Path(e.get("dossier_modeles") or DOSSIER) for e in corbeille_.values()}:
         _supprimer_dossiers_vides(base / CORBEILLE)
     _sauver_corbeille(restes)
+    journal.noter("Corbeille des modèles vidée", f"{effaces} modèle(s)", "partiel" if restes else "ok",
+                  f"{liberes / 1024 ** 3:.1f} Go libérés" + (f", {len(restes)} fichier(s) non effacé(s)" if restes else ""))
     return {"effaces": effaces, "liberes": liberes, "restes": len(restes)}
 
 

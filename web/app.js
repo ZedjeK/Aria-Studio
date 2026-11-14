@@ -627,6 +627,33 @@ Tes réglages actuels sont d'abord sauvegardés. Le dossier des `
     }
 });
 
+// Journal des opérations (app/journal.py) : relu à l'ouverture de Réglages → Système
+const RESULTATS_JOURNAL = { ok: "", erreur: "ko", partiel: "avertissement", annule: "discret" };
+
+async function chargerJournal() {
+    let entrees = [];
+    try {
+        entrees = await api("GET", "/api/journal");
+    } catch {
+        return;
+    }
+    document.getElementById("journal-vide").hidden = entrees.length > 0;
+    document.getElementById("liste-journal").innerHTML = entrees.map((e) => `<li class="ligne ${RESULTATS_JOURNAL[e.resultat] ?? ""}">
+        <span class="discret">${new Date(e.date).toLocaleString("fr-FR")}</span>
+        <span>${echapper(e.action)}</span>
+        <code>${echapper(e.objet)}</code>
+        ${e.detail ? `<span class="discret">${echapper(e.detail)}</span>` : ""}
+    </li>`).join("");
+}
+
+document.getElementById("systeme-reglages").addEventListener("toggle", (e) => {
+    if (e.target.open) {
+        chargerJournal();
+        chargerSauvegardes();
+    }
+});
+
 chargerMiseAJour();
 chargerInstallation();
 chargerSauvegardes();
+chargerJournal();

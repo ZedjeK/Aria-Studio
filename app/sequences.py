@@ -29,7 +29,7 @@ import time
 import uuid
 from datetime import datetime
 
-from app import modeles, plateau, prompt, reglages, rushes, securite, voix, workflows
+from app import journal, modeles, plateau, prompt, reglages, rushes, securite, voix, workflows
 from app import repliques as repliques_h3  # le nom « repliques » est celui de la fonction ci-dessous
 from app.comfy import video_et_affiche
 from app.config import CONFIG
@@ -415,6 +415,7 @@ def supprimer(id_sequence: str):
     temporaire.write_text(json.dumps(s, indent=4, ensure_ascii=False), encoding="utf-8")
     temporaire.replace(cible)
     chemin.unlink()
+    journal.noter("Séquence mise à la corbeille", f"{s.get('titre') or id_sequence} ({id_sequence})")
 
 
 def corbeille() -> list[dict]:
@@ -442,6 +443,7 @@ def restaurer(id_sequence: str) -> dict:
     s.pop("corbeille", None)
     _ecrire(s)
     source.unlink()
+    journal.noter("Séquence restaurée", f"{s.get('titre') or id_sequence} ({id_sequence})")
     return public(lire(id_sequence))
 
 
@@ -453,6 +455,7 @@ def vider_corbeille() -> int:
     for f in _corbeille().glob("*.json"):
         f.unlink()
         effacees += 1
+    journal.noter("Corbeille des séquences vidée", f"{effacees} séquence(s)")
     return effacees
 
 
