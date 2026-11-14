@@ -4,7 +4,7 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
-## 2.1.0
+## 2.1.0 (2026-11-14)
 
 Première version publiée depuis la 1.3.0 : elle contient aussi la 2.0.0, jamais publiée. Notes complètes : `docs/releases/v2.1.0.md`.
 
