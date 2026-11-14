@@ -27,7 +27,7 @@ colonne « Preuve » renvoie au fichier qui fait foi.
 - **Coffre Windows** : les deux clés d'accès (Gestionnaire d'identification, persistance sur la machine).
 - **Mode portable** : si `data\` existe à côté du code, reglages.json, data, modèles et services y restent.
 - **Dossier des modèles choisi** par l'utilisateur dans l'onglet Modèles (`reglages.json`, `emplacements.modeles`). Sa corbeille vit dedans, dans `.corbeille\` (`app/modeles.py`) : un modèle supprimé y est renommé, sans copie entre disques.
-- **ComfyUI externe** (« J'ai déjà ComfyUI ») : Aria y téléverse des fichiers dans `input` (`app/comfy.py`), et ComfyUI y écrit ses propres dossiers. Ces écritures sont décidées par l'utilisateur ; Aria ne les nettoie pas.
+- **ComfyUI externe** (« J'ai déjà ComfyUI ») : Aria n'écrit rien dans son dossier. Elle le lance avec ses dossiers d'entrées, de sorties et de temporaires dans `cache\comfyui\` (`app/comfy.py`) : les entrées et les temporaires y sont vidés avant chaque lancement, une sortie est effacée dès qu'Aria l'a récupérée. ComfyUI peut encore écrire lui-même dans son dossier `user\` (réglages, base des assets), et recréer `input\` s'il manque : non vérifié en détail.
 - **Les moteurs eux-mêmes** (ComfyUI, llama-server, Python) peuvent écrire dans `%TEMP%` ou un cache : non vérifié.
 - **Raccourci du Bureau** : « Aria Studio.lnk », seulement si la case est cochée à l'installation (décochée d'office). Bureau de l'utilisateur seulement (jamais le Bureau public), vers `programme\Aria-Studio.exe` ; un raccourci déjà là n'est mis à jour qu'après une question.
 
