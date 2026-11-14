@@ -196,8 +196,9 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
 - **Un ancien onglet ou un favori ne rouvre pas Aria.** Le jeton change à chaque lancement : une page ouverte avant un
   redémarrage, ou un favori vers `http://127.0.0.1:8075`, affiche « Aria Studio s'ouvre par son lanceur ». Relance
   `Aria-Studio.exe`.
-- **Les moteurs sont joignables par tout programme de ta machine.** ComfyUI et llama-server n'écoutent que sur
-  `127.0.0.1`, mais tournent sans clé d'accès : un programme local peut leur parler directement, sans passer par Aria.
+- **ComfyUI est joignable par tout programme de ta machine.** Il n'écoute que sur `127.0.0.1` et refuse les autres
+  sites du navigateur, mais il n'a aucune option de clé d'accès : un programme local peut lui parler directement, sans
+  passer par Aria. llama-server, lui, reçoit une clé neuve à chaque démarrage et refuse qui ne la présente pas.
 - **Fermer l'onglet ne ferme pas Aria.** Son serveur, et parfois un moteur et la mémoire de la carte graphique, restent
   occupés tant que tu n'as pas cliqué sur **⏻ Quitter**.
 - **La corbeille garde la place.** Un modèle, une séquence ou un rush supprimé part à la corbeille d'Aria et se
