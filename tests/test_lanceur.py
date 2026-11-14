@@ -118,6 +118,25 @@ class Lanceur(unittest.TestCase):
         (self.zip / "cache" / "session.json").write_text('{"jeton": "portable"}', encoding="utf-8")
         self.assertEqual(self.adresse(self.zip / EXE), "http://127.0.0.1:8075/?jeton=portable")
 
+    def test_mise_a_jour_attend_l_arret_d_aria_puis_installe(self):
+        import sys
+        import time
+        self.assertEqual(self.lancer(self.zip / EXE, "--essai-installer"), 0)  # la version d'avant
+        nouvelle = self.maison / "cache" / "mise-a-jour" / "Aria-Studio-2.2.0"
+        shutil.copytree(self.zip, nouvelle)
+        (nouvelle / "app" / "__init__.py").write_text('VERSION = "2.2.0"', encoding="utf-8")
+        serveur = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(2)"])  # « Aria » qui s'arrête
+        debut = time.time()
+        self.assertEqual(self.lancer(nouvelle / EXE, "--essai-mise-a-jour", str(serveur.pid)), 0)
+        self.assertGreaterEqual(time.time() - debut, 1.0)  # il a attendu la fin du serveur
+        self.assertEqual((self.programme / "app" / "__init__.py").read_text(encoding="utf-8"), 'VERSION = "2.2.0"')
+        self.assertEqual((self.maison / "programme.precedent" / "app" / "__init__.py").read_text(encoding="utf-8"),
+                         'VERSION = "2.1.0"')
+
+    def test_mise_a_jour_sans_numero_refusee(self):
+        self.assertEqual(self.lancer(self.zip / EXE, "--essai-mise-a-jour"), 1)
+        self.assertFalse(self.programme.exists())
+
     def test_installe_dans_programme_sans_la_marque_internet(self):
         with open(str(self.zip / "config.yaml") + ":Zone.Identifier", "w", encoding="utf-8") as marque:
             marque.write("[ZoneTransfer]\nZoneId=3\n")
