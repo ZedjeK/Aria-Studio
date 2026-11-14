@@ -986,6 +986,17 @@
                     <label class="case"><input type="checkbox" id="proposer-installation"> Proposer l'installation quand Aria est lancée depuis un zip décompressé</label>
                 </div>
             </section>
+            <!-- Démarrer avec Windows (app/demarrage.py) : la valeur « Aria Studio » de la clé Run de ton compte, relue à
+                 chaque affichage ; la même case est dans le menu de l'icône (tools/launcher/Launcher.cs). -->
+            <section class="carte" id="carte-demarrage">
+                <h2>Démarrer avec Windows</h2>
+                <p class="discret">Aria se lance à l'ouverture de ta session, sans ouvrir le navigateur : seule son icône apparaît
+                    près de l'horloge. Désactivé tant que tu ne coches pas.</p>
+                <div class="ligne">
+                    <label class="case"><input type="checkbox" id="demarrage-windows"> Démarrer Aria Studio avec Windows</label>
+                </div>
+                <p id="etat-demarrage" class="discret"></p>
+            </section>
             <section class="carte" id="carte-notifications">
                 <h2>Notifications</h2>
                 <p class="discret">À la fin d'une image, d'une retouche, d'un clip, d'une séquence ou d'un casting : une notification
