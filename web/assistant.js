@@ -50,6 +50,7 @@ async function afficherEtapeAssistant() {
     document.getElementById("precedent-assistant").disabled = n === 0 || n >= 4;
     document.getElementById("plus-tard-assistant").hidden = n === 5;
     etatAssistant.textContent = "";
+    boutonSuivant.classList.remove("attend");  // l'orange revient sur Suivant (il a pu passer sur « Installer »)
     boutonSuivant.textContent = n === 3 ? "J'accepte et je télécharge →" : n === 4 ? "Terminer" : n === 5 ? "C'est parti !" : "Suivant →";
     await [ecranMachine, ecranMoteurs, ecranPacks, ecranLicences, ecranTelechargement, ecranFin][n]();
 }
@@ -88,6 +89,13 @@ document.addEventListener("moteurs", (ev) => {
     const occupe = ev.detail.tache && !ev.detail.tache.fini;
     boutonSuivant.disabled = Boolean(absents.length || occupe);
     etatAssistant.textContent = absents.length ? `À installer : ${absents.map((m) => m.nom).join(", ")}` : "";
+    // Une seule action orange : tant qu'un moteur obligatoire manque, c'est son « Installer » (le premier), et Suivant
+    // passe en contour cyan ; une fois les moteurs là, l'orange revient sur Suivant.
+    const aFaire = absents.length && !occupe ? absents[0].id : null;
+    document.querySelectorAll("#assistant .liste-moteurs [data-installer]").forEach((b) => {
+        b.classList.toggle("a-faire", b.dataset.installer === aFaire);
+    });
+    boutonSuivant.classList.toggle("attend", Boolean(aFaire));
 });
 
 // 3. Ce que tu veux faire (rechargés : les moteurs ont pu s'installer depuis l'ouverture)
@@ -154,6 +162,12 @@ function ecranLicences() {
             <label class="case"><input type="checkbox" data-licence="${p.id}" ${p.licence_acceptee ? "checked" : ""}>
                 J'ai lu ${p.licences.length > 1 ? "ces licences" : "cette licence"} et je l'accepte</label>
         </div>`).join("") || '<p class="discret">Rien à télécharger : aucune licence à accepter.</p>';
+    const plan = ASSISTANT.plan;
+    const fichiers = plan ? plan.fichiers.length : 0;
+    document.getElementById("resume-licences-assistant").textContent = fichiers
+        ? `${choisis.map((p) => p.nom).join(", ")} : ${fichiers} fichier${fichiers > 1 ? "s" : ""}, ${go(plan.a_telecharger)}`
+          + " (fichiers communs comptés une fois), dès que tu acceptes."
+        : "Rien à télécharger : tout est déjà là.";
     majLicencesAssistant();
 }
 

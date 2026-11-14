@@ -80,53 +80,81 @@
 
         <!-- Assistant de premier lancement (web/assistant.js, app/assistant.py) -->
         <div id="assistant" class="voile" hidden>
+            <!-- Assistant de premier lancement (web/assistant.js), habillé comme les dialogues d'Aria-Modele : titre cyan,
+                 étapes en encoches non cliquables, encadré « À savoir », un panneau accentué par étape (celui où agit le
+                 bouton orange), puis la ligne d'état et les boutons à droite, l'orange en dernier. -->
             <div class="fenetre assistant">
-                <div class="ligne entete-assistant">
-                    <h2>Bienvenue dans Aria Studio</h2>
-                    <button id="plus-tard-assistant" type="button" class="petit" title="Les bandeaux te rappelleront ce qui manque">Plus tard</button>
-                </div>
+                <h2 class="titre-assistant">Bienvenue dans Aria Studio</h2>
                 <ol class="etapes-assistant">
-                    <li>Ta machine</li><li>Moteurs</li><li>Ce que tu veux faire</li><li>Licences</li><li>Téléchargement</li><li>C'est prêt</li>
+                    <li><span>1 · Ta machine</span></li><li><span>2 · Moteurs</span></li><li><span>3 · Ce que tu veux faire</span></li><li><span>4 · Licences</span></li><li><span>5 · Téléchargement</span></li><li><span>6 · C'est prêt</span></li>
                 </ol>
+                <div class="corps-assistant">
                 <section class="ecran-assistant">
-                    <p>Aria génère tes images et tes vidéos sur ta carte graphique : rien ne part dans le cloud. Voyons ta machine.</p>
-                    <dl id="machine-assistant" class="machine-assistant"></dl>
-                    <p id="alerte-machine" class="alerte" hidden></p>
-                    <div class="ligne">
-                        <span class="discret">Les modèles iront dans <code id="dossier-modeles-assistant"></code>
-                            (<span id="libre-assistant"></span> libres).</span>
-                        <button type="button" class="petit" id="changer-modeles-assistant">Changer…</button>
+                    <div class="savoir"><b>À SAVOIR</b><span>Aria génère tes images et tes vidéos sur ta carte graphique : rien ne
+                        part dans le cloud. Voyons ta machine.</span></div>
+                    <div class="panneau-assistant">
+                        <h3>TA MACHINE</h3>
+                        <dl id="machine-assistant" class="machine-assistant"></dl>
+                        <p id="alerte-machine" class="alerte" hidden></p>
+                    </div>
+                    <div class="panneau-assistant accent">
+                        <h3>DOSSIER DES MODÈLES</h3>
+                        <div class="ligne">
+                            <span class="dossier-assistant"><code id="dossier-modeles-assistant"></code>
+                                <span class="discret">(<span id="libre-assistant"></span> libres)</span></span>
+                            <button type="button" class="petit" id="changer-modeles-assistant">Changer…</button>
+                        </div>
                     </div>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Deux moteurs font le travail : ComfyUI pour les images et les vidéos, llama.cpp pour écrire tes prompts
-                        avec toi au Scénario. Ce sont les versions testées avec Aria, téléchargées depuis leur release GitHub officielle.</p>
-                    <ul class="liste-moteurs"></ul>
+                    <div class="savoir"><b>À SAVOIR</b><span>Deux moteurs font le travail : ComfyUI pour les images et les vidéos,
+                        llama.cpp pour écrire tes prompts avec toi au Scénario. Ce sont les versions testées avec Aria, téléchargées
+                        depuis leur release GitHub officielle.</span></div>
+                    <div class="panneau-assistant accent">
+                        <h3>MOTEURS</h3>
+                        <ul class="liste-moteurs"></ul>
+                    </div>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Coche ce que tu veux faire. Tu pourras en ajouter plus tard en relançant l'assistant (onglet Réglages).</p>
+                    <div class="savoir"><b>À SAVOIR</b><span>Coche ce que tu veux faire. Tu pourras en ajouter plus tard en relançant
+                        l'assistant (onglet Réglages).</span></div>
                     <div id="packs-assistant" class="packs-assistant"></div>
-                    <p id="total-assistant" class="discret"></p>
+                    <div class="panneau-assistant accent">
+                        <h3>À TÉLÉCHARGER</h3>
+                        <p id="total-assistant"></p>
+                    </div>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Chaque modèle a sa licence : lis-la, et coche si tu l'acceptes. Rien n'est téléchargé avant.</p>
+                    <div class="savoir"><b>À SAVOIR</b><span>Chaque modèle a sa licence : lis-la, et coche si tu l'acceptes. Rien
+                        n'est téléchargé avant.</span></div>
                     <div id="licences-assistant" class="licences-assistant"></div>
+                    <div class="panneau-assistant accent">
+                        <h3>TÉLÉCHARGEMENT QUI VA DÉMARRER</h3>
+                        <p id="resume-licences-assistant"></p>
+                    </div>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p id="intro-telechargement-assistant"></p>
-                    <ul id="telechargements-assistant" class="telechargements-assistant"></ul>
+                    <div class="savoir"><b>À SAVOIR</b><span id="intro-telechargement-assistant"></span></div>
+                    <div class="panneau-assistant accent">
+                        <h3>TÉLÉCHARGEMENTS</h3>
+                        <ul id="telechargements-assistant" class="telechargements-assistant"></ul>
+                    </div>
                     <p class="discret">Tu peux fermer cette fenêtre : le téléchargement continue (onglet Modèles, Téléchargements).</p>
                 </section>
                 <section class="ecran-assistant" hidden>
-                    <p>Voilà ce qu'Aria utilisera par défaut. Tu pourras changer les workflows et leurs checkpoints dans Modèles,
-                        leurs réglages fins dans Réglages.</p>
-                    <dl id="recap-assistant" class="machine-assistant"></dl>
-                    <p id="manquants-assistant" class="alerte" hidden></p>
-                    <div id="bloc-essai-assistant" class="essai-assistant" hidden>
+                    <div class="savoir"><b>À SAVOIR</b><span>Voilà ce qu'Aria utilisera par défaut. Tu pourras changer les workflows
+                        et leurs checkpoints dans Modèles, leurs réglages fins dans Réglages.</span></div>
+                    <div class="panneau-assistant accent">
+                        <h3>PAR DÉFAUT</h3>
+                        <dl id="recap-assistant" class="machine-assistant"></dl>
+                        <p id="manquants-assistant" class="alerte" hidden></p>
+                    </div>
+                    <div id="bloc-essai-assistant" class="panneau-assistant essai-assistant" hidden>
+                        <h3>IMAGE D'ESSAI</h3>
                         <p class="discret">Pour vérifier que tout tourne, une image rapide (10 steps, petite taille). La première fois,
                             le chargement des modèles prend une ou deux minutes.</p>
                         <div class="ligne">
-                            <button id="essai-assistant" type="button">🎨 Essayer une image</button>
+                            <button id="essai-assistant" type="button" class="petit">Essayer une image</button>
                             <span id="suivi-essai-assistant" class="discret"></span>
                         </div>
                         <div id="barre-essai-assistant" class="barre" hidden><div></div></div>
@@ -134,9 +162,11 @@
                         <img id="image-essai-assistant" alt="Image d'essai" hidden>
                     </div>
                 </section>
-                <div class="ligne pied-assistant">
+                </div>
+                <p id="etat-assistant" class="statut-assistant"></p>
+                <div class="pied-assistant">
+                    <button id="plus-tard-assistant" type="button" title="Les bandeaux te rappelleront ce qui manque">Plus tard</button>
                     <button id="precedent-assistant" type="button">← Précédent</button>
-                    <span id="etat-assistant" class="discret"></span>
                     <button id="suivant-assistant" type="button" class="principal">Suivant →</button>
                 </div>
             </div>

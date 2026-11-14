@@ -24,6 +24,7 @@ Changements fusionnés dans `main` après le tag `v2.0.0`.
 
 ### Modifié
 
+- L'assistant de premier lancement prend l'habillage des applis Aria, sur le modèle des dialogues d'Aria-Modele : cadre à coins coupés, étapes en encoches, encadré « À savoir », un panneau accentué par étape, boutons en biais à droite avec un seul orange (à l'étape Moteurs, sur le premier « Installer » tant qu'un moteur manque). « Plus tard » passe dans la rangée du bas.
 - ComfyUI (celui d'Aria comme « J'ai déjà ComfyUI ») travaille dans `cache\comfyui\` : les fichiers envoyés et les résultats ne s'accumulent plus dans ses dossiers `input` et `output`. Les entrées et les temporaires sont vidés avant chaque lancement, un résultat est effacé dès qu'Aria l'a récupéré. Les anciens fichiers restent en place.
 - llama-server reçoit une clé d'accès neuve à chaque démarrage (variable d'environnement `LLAMA_API_KEY`, jamais sur la ligne de commande ni dans un fichier) et refuse qui ne la présente pas. ComfyUI n'a pas d'option de clé : sa protection contre les autres sites du navigateur est gardée, et la limite est dite dans le README.
 - L'interface ne s'ouvre plus que par le lanceur : un jeton tiré à chaque lancement (écrit dans `cache\session.json`) est exigé à chaque requête, sauf `/api/sante`. Un ancien onglet ou un favori affiche « Aria Studio s'ouvre par son lanceur ». Aria refuse de démarrer si `config.yaml` demande d'écouter ailleurs que sur `127.0.0.1`, et `GET /api/mise-a-jour` n'interroge plus GitHub (le démarrage et « Vérifier maintenant » le font).
