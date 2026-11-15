@@ -202,7 +202,9 @@ _VIDEO = {
     "contenu": [
         "Camera: use the user's camera choice if there is one (a fixed shot stays fixed). Otherwise one simple named "
         "movement, or a static shot, whichever serves the action.",
-        "One continuous take: no cuts, no fade to black, unless the user asks for them.",
+        "One continuous take: no cuts, no fade to black, unless the user asks for them. A cut is only worth it when "
+        "it brings new information about the subject, the space, the state, the viewpoint or the time; if only the "
+        "distance or a slight angle changes, use a camera movement instead.",
         "Fit the clip duration: few actions, at most one or two short lines of dialogue. If the user asks you to "
         "invent a line, write one short line in the language they ask for, written like any other spoken line.",
         "Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background "
@@ -423,6 +425,44 @@ def mots_pour_duree(mots_max: int | None, duree: int | None) -> int | None:
     return mots_max + MOTS_PAR_SECONDE_EN_PLUS * (duree - DUREE_DE_BASE)
 
 
+# Heures de coupe d'un prompt H3 : « [Shot 2] At 00:03.500, the camera cuts to ... ». Le guide officiel : pas d'heure
+# sur le premier plan, puis une heure strictement croissante qui tombe dans la durée de la vidéo (guide de base §4.2,
+# relu mot pour mot le 2026-11-12). Le contrôle est celui d'Aria, côté serveur : le LLM peut se tromper.
+_PLAN_AVEC_HEURE = re.compile(r"\[Shot\s+(\d+)\]\s*(?:At\s+(\d+):(\d{2})(?:\.(\d{1,3}))?)?", re.I)
+
+
+def _heure(minutes: str, secondes: str, fraction: str | None) -> float:
+    return int(minutes) * 60 + int(secondes) + (float(f"0.{fraction}") if fraction else 0.0)
+
+
+def _afficher_heure(t: float) -> str:
+    return f"{int(t // 60):02d}:{t % 60:06.3f}"
+
+
+def controler_coupes(texte: str, duree: int | None) -> list[str]:
+    """Alertes sur les heures de coupe d'un prompt en plans : le premier plan sans heure, chaque plan suivant avec une
+    heure plus grande que celle d'avant et avant la fin du clip. Sans durée, ou sans [Shot N], rien à dire."""
+    alertes, precedente = [], None
+    for m in _PLAN_AVEC_HEURE.finditer(texte):
+        n = int(m.group(1))
+        a_heure = m.group(2) is not None
+        if n == 1:
+            if a_heure:
+                alertes.append("Plan 1 : le premier plan n'a pas d'heure de coupe (« [Shot 1] » seul).")
+            continue
+        if not a_heure:
+            alertes.append(f"Plan {n} : une coupe doit avoir son heure (« [Shot {n}] At 00:03.500, … »).")
+            continue
+        t = _heure(m.group(2), m.group(3), m.group(4))
+        if precedente is not None and t <= precedente:
+            alertes.append(f"Plan {n} : coupe à {_afficher_heure(t)}, pas après celle du plan précédent "
+                           f"({_afficher_heure(precedente)}).")
+        if duree and t >= duree:
+            alertes.append(f"Plan {n} : coupe à {_afficher_heure(t)}, après la fin du clip ({duree} s).")
+        precedente = t
+    return alertes
+
+
 CHAMP_DESCRIPTION = "integrated_multimodal_description"
 _CHAMPS = re.compile(r"(integrated_multimodal_description|overall_soundscape|non_diegetic_music)\s*:", re.I)
 
@@ -474,13 +514,26 @@ def dans_la_description(texte: str, ajout: str, debut: bool = False) -> str | No
     return texte[:repere.start()] + assembler_champs(description.strip(), ambiance, musique)
 
 
+def longueur_du_clip(duree: int, champs: bool) -> str:
+    """La durée du clip, dite au LLM de la réécriture vidéo. Avec les champs de H3, les heures de coupe doivent
+    tomber dedans (contrôle : controler_coupes). Aucun nombre d'actions ni de répliques par durée : aucune source n'en
+    donne (docs/details-prompts-modeles.md), le banc par modèle les mesurera."""
+    texte = f"Clip length: {duree} seconds."
+    if champs:
+        texte += (f" If you write cuts, their times (\"At 00:03.500\") strictly increase and all fall inside these "
+                  f"{duree} seconds; Shot 1 has no time.")
+    return texte
+
+
 def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
-             regles: dict | list | None = None, workflow: str | None = None, champs: bool = False) -> str:
+             regles: dict | list | None = None, workflow: str | None = None, champs: bool = False,
+             duree: int | None = None) -> str:
     """Consigne de cet usage pour le modèle cible, toujours suivie de la clause verrouillée. `regles` : les règles du
     modèle cible (workflows.sections_prompt), rangées dans les sections du gabarit. Une consigne réécrite dans
     Réglages pour ce GGUF, ou un usage sans gabarit (découpage, précisions), garde son texte d'un bloc : les règles
     du modèle cible s'y ajoutent à la suite (bloc_modele). `workflow` : le modèle cible, pour nommer ses images de
-    référence (avec_noms_images) ; une consigne réglée à la main y passe aussi."""
+    référence (avec_noms_images) ; une consigne réglée à la main y passe aussi. `duree` : la durée du clip de la
+    réécriture vidéo, dite au LLM (longueur_du_clip)."""
     reecrite = reglages.consigne_llm(modele, nom)
     en_champs = champs and nom in ("video", "decoupage")
     if reecrite or nom not in GABARITS:
@@ -495,6 +548,8 @@ def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,
              .replace("{mots_min}", str(MOTS_MIN)))
     if nom == "references":
         texte = avec_noms_images(texte, workflow)
+    if nom == "video" and duree:
+        texte += f"\n\n{longueur_du_clip(duree, en_champs)}"
     return f"{texte}\n\n{CLAUSE_MINEURS}"
 
 
@@ -589,12 +644,13 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
                 "ecriture_tps": reponse.ecriture_tps}
     modele = generaliste(modele)
     regle = reglages.valeurs_llm(modele)
+    duree_clip = duree  # `duree` sert plus bas à chronométrer l'écriture
     mots = None  # longueur visée du prompt : la réponse doit pouvoir la contenir
     if video:
         cadre = "animate the provided image" if video == "animer" else "from text only"
         champs = workflows.champs_video(workflow)
         mots = mots_pour_duree(mots_max_de(workflow), duree)
-        echanges = [{"role": "system", "content": consigne("video", modele, mots, regles, champs=champs)},
+        echanges = [{"role": "system", "content": consigne("video", modele, mots, regles, champs=champs, duree=duree)},
                     {"role": "user", "content": f"{idee}\n\n(Clip: {duree} s, {cadre})"}]
     elif references:
         echanges = [{"role": "system", "content": consigne("references", modele, regles=regles, workflow=workflow)},
@@ -617,7 +673,7 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
         texte = mettre_en_champs(texte, animer=video == "animer")
     # Idée et prompt ensemble : le LLM peut avoir ajouté un terme sensible à une idée avec un mineur.
     securite.verifier(idee, texte)
-    return {
+    resultat = {
         "idee": idee,
         "prompt": texte,
         "modele": llama.modele.name if llama.modele else modele,
@@ -625,6 +681,9 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
         "tokens_sortie": reponse.tokens_sortie,
         "ecriture_tps": reponse.ecriture_tps,
     }
+    if video and workflows.champs_video(workflow):
+        resultat["alertes"] = controler_coupes(texte, duree_clip)  # les heures de coupe de H3 tombent-elles dans le clip ?
+    return resultat
 
 
 # Scénario, onglet Libre : le prompt s'écrit en conversation. Le LLM pose les questions essentielles (avec des réponses
