@@ -128,8 +128,9 @@ garde libres.
 ### Tu as déjà ComfyUI ?
 
 Dans Réglages, carte Moteurs, *Utiliser mon ComfyUI…* accepte un **ComfyUI portable** (avec `python_embeded`) d'une
-version au moins égale à celle d'Aria. Aria le lance une fois pour vérifier qu'il connaît tous les nœuds dont elle
-a besoin, et n'y installe rien. Elle le lance avec ses propres dossiers de travail (dans `cache\comfyui\`) : ses
+version au moins égale à celle d'Aria, **sur un disque de ce PC** : un dossier sur le réseau (`\\serveur\partage`, ou
+un lecteur réseau) est refusé, car Aria lance le `python.exe` de ce dossier. Aria le lance une fois pour vérifier qu'il
+connaît tous les nœuds dont elle a besoin, et n'y installe rien. Elle le lance avec ses propres dossiers de travail (dans `cache\comfyui\`) : ses
 images et vidéos de départ et ses résultats ne passent pas par les dossiers `input` et `output` de ton ComfyUI.
 
 ### L'icône près de l'horloge
