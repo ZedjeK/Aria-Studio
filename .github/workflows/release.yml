@@ -52,6 +52,14 @@ jobs:
             throw "Le tag $env:GITHUB_REF_NAME ne correspond pas à VERSION ($version) dans app/__init__.py."
           }
 
+      # Notes de version, fiche projet et licences sans trou, avant de construire. Sur un tag, un trou arrête la
+      # release ; à l'essai à blanc, il est listé sans faire échouer le run.
+      - name: La version est prête (notes, fiche projet, licences)
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') { ./tools/verifier-release.ps1 -Tag $env:GITHUB_REF_NAME }
+          else { ./tools/verifier-release.ps1 -EssaiABlanc }
+          if ($LASTEXITCODE -ne 0) { throw "La version n'est pas prête : voir les points ci-dessus." }
+
       - name: Construire la version portable
         run: python tools/build_portable.py --sans-installer
 
