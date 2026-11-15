@@ -99,7 +99,7 @@ _PERSONNE = (r"(?:girl|boy|kid|child|daughter|son|student|pupil|teen|lad|lass|fe
 # « 12 ans », « douze ans », « 12 yo », « 12 yrs », « 12-year-old », « twelve years old », « 12 years of age »,
 # « aged 12 », « âge : 12 », « age of 12 », « a girl of 14 », « une fille de 14 ».
 _AGES = [
-    re.compile(rf"\b{_NOMBRE}\s*-?\s*(?:yo|y/o|y\.o\.?|yrs?(?:[\s-]*old)?|years?[\s-]*old|years?\s+of\s+age|ans?)\b"),
+    re.compile(rf"\b{_NOMBRE}\s*-?\s*(?:yos?|y/os?|y\.o\.?|yrs?(?:[\s-]*olds?)?|years?[\s-]*olds?|years?\s+of\s+age|ans?)\b"),
     re.compile(rf"\bage[ds]?\s*(?:of\s+)?:?\s*{_NOMBRE}\b"),
     re.compile(rf"\b{_PERSONNE}\s+(?:of|de)\s+{_NOMBRE}\b"),
 ]
@@ -128,9 +128,21 @@ class ErreurTemoins(ErreurListes):
         self.temoins = temoins
 
 
-def _normaliser(texte: str) -> str:
-    sans_accents = unicodedata.normalize("NFKD", texte).encode("ascii", "ignore").decode()
-    return sans_accents.lower()
+# Les tirets visibles : tout caractère que Unicode classe « ponctuation, tiret » (hors le trait d'union ASCII) et le signe
+# moins. tests/test_securite.py vérifie qu'aucun tiret Unicode n'est oublié. Le trait d'union conditionnel (U+00AD) n'en est
+# pas un : il est invisible, c'est un simple coupe-mot.
+_TIRETS_UNICODE = re.compile("[\u058a\u05be\u1400\u1806\u2010-\u2015\u2212\u2e17\u2e1a\u2e3a\u2e3b\u2e40\u2e5d"
+                             "\u301c\u3030\u30a0\ufe31\ufe32\ufe58\ufe63\uff0d\U00010ead]")
+
+
+def _normaliser(texte: str, tirets: bool = False) -> str:
+    """Minuscules et sans accents ; tout ce qui n'est pas ASCII est effacé, tirets compris (« n–ude » se lit « nude »).
+    Avec `tirets`, un tiret visible est lu comme le trait d'union : « dix‑sept » reste deux mots, « 10–12 ans » garde ses
+    deux nombres. Le filtre lit un texte sous les deux formes et bloque si l'une des deux bloque."""
+    decompose = unicodedata.normalize("NFKD", texte)
+    if tirets:
+        decompose = _TIRETS_UNICODE.sub("-", decompose)
+    return decompose.encode("ascii", "ignore").decode().lower()
 
 
 def _cle(terme: str) -> str:
@@ -238,13 +250,14 @@ def _mineur(texte: str, listes: _Listes) -> dict | None:
 
 def _analyser(textes, listes: _Listes) -> dict | None:
     """Ce qui bloque ces textes pris ensemble ({message, termes}), ou None s'ils passent."""
-    texte = _normaliser("\n".join(textes))
-    if interdit := listes.chercher("toujours_bloques", texte):
-        return {"message": f"terme interdit « {interdit['terme']} »", "termes": [interdit]}
-    mineur = _mineur(texte, listes)
-    if mineur and (sensible := listes.chercher("sensibles", texte)):
-        return {"message": f"personnage mineur (« {mineur['terme']} ») associé à un terme sensible "
-                           f"(« {sensible['terme']} »)", "termes": [mineur, sensible]}
+    brut = "\n".join(textes)
+    for texte in dict.fromkeys((_normaliser(brut), _normaliser(brut, tirets=True))):  # sous les deux lectures des tirets
+        if interdit := listes.chercher("toujours_bloques", texte):
+            return {"message": f"terme interdit « {interdit['terme']} »", "termes": [interdit]}
+        mineur = _mineur(texte, listes)
+        if mineur and (sensible := listes.chercher("sensibles", texte)):
+            return {"message": f"personnage mineur (« {mineur['terme']} ») associé à un terme sensible "
+                               f"(« {sensible['terme']} »)", "termes": [mineur, sensible]}
     return None
 
 
