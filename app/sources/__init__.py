@@ -25,6 +25,7 @@ class Fiche:
     images_force: int = 0  # nombre d'images d'exemple qui la donnent
     prompt_exemple: str | None = None  # LoRA : un prompt de ses images d'exemple
     steps_suggeres: dict | None = None  # checkpoint : steps lus dans le texte de la page (sources.steps), jamais appliqués seuls
+    cfg_suggere: dict | None = None  # checkpoint : CFG lu dans le même texte (sources.steps.suggerer_cfg), même réserve
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -18,6 +18,33 @@ def _nettoyer(texte: str) -> str:
     return re.sub(r"\s+", " ", _BALISES.sub(" ", texte or "")).strip()
 
 
+CFG_MIN, CFG_MAX = 0.0, 30.0  # bornes du réglage « CFG » (reglages.params_workflow)
+_CFG_N = re.compile(r"\bcfg(?:\s*scale)?\s*(?:[:=]|of|at|to|around)?\s*(\d{1,2}(?:[.,]\d{1,2})?)(?![\d.,]*\d)", re.I)  # « CFG 1.5 », « cfg: 1 », « CFG scale 4 »
+_N_CFG = re.compile(r"(?<![\d.,])(\d{1,2}(?:[.,]\d{1,2})?)\s*cfg\b", re.I)  # « 1.5 CFG »
+
+
+def suggerer_cfg(textes: dict[str, str]) -> dict:
+    """Comme `suggerer`, pour le CFG conseillé par l'auteur d'un checkpoint (« 12 steps, CFG 1.5 »). Même forme de
+    réponse, mêmes réserves : une SUGGESTION lue dans du texte libre, jamais appliquée seule ; plusieurs nombres
+    distincts (« CFG 1 ou 1.5 ») la rendent peu fiable."""
+    valeurs, extraits = [], []
+    for origine, brut in textes.items():
+        texte = _nettoyer(brut)
+        for motif in (_CFG_N, _N_CFG):
+            for m in motif.finditer(texte):
+                n = float(m.group(1).replace(",", "."))
+                if not CFG_MIN <= n <= CFG_MAX:
+                    continue
+                if n not in valeurs:
+                    valeurs.append(n)
+                debut, fin = max(0, m.start() - RAYON_EXTRAIT), min(len(texte), m.end() + RAYON_EXTRAIT)
+                extrait = {"origine": origine, "texte": ("…" if debut else "") + texte[debut:fin] + ("…" if fin < len(texte) else "")}
+                if extrait not in extraits:
+                    extraits.append(extrait)
+    statut = "aucun" if not valeurs else "unique" if len(valeurs) == 1 else "ambigu"
+    return {"statut": statut, "valeurs": sorted(valeurs), "extraits": extraits[:6]}
+
+
 def suggerer(textes: dict[str, str]) -> dict:
     """textes : {origine: texte}. Retourne {statut: unique|ambigu|aucun, valeurs: [int], extraits: [{origine, texte}]}.
     unique = un seul nombre distinct dans tous les textes ; ambigu = plusieurs (« 4 et 8 », « 10 ou 20 ») ;
