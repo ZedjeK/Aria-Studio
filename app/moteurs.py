@@ -350,11 +350,36 @@ def noeuds_utilises() -> set[str]:
     return noeuds
 
 
+_DRIVE_REMOTE = 4  # GetDriveType : un lecteur réseau
+
+
+def _lecteur_reseau(lecteur: str) -> bool:
+    """Ce lecteur (« Z: ») est-il un lecteur réseau ? Windows seulement."""
+    if sys.platform != "win32" or not lecteur:
+        return False
+    import ctypes
+    return ctypes.windll.kernel32.GetDriveTypeW(lecteur + "\\") == _DRIVE_REMOTE
+
+
+def _sur_le_reseau(dossier: Path) -> bool:
+    """Chemin UNC (« \\\\hôte\\partage »), lecteur réseau, ou raccourci (jonction) qui mène à l'un d'eux. Le texte du
+    chemin est lu avant tout accès au disque : refuser ne touche jamais au réseau."""
+    for chemin in (dossier, Path(os.path.realpath(dossier))):
+        brut = str(chemin)
+        if brut.startswith(("\\\\", "//")) or _lecteur_reseau(os.path.splitdrive(brut)[0]):
+            return True
+    return False
+
+
 def examiner_comfyui(chemin: str | Path) -> Path:
-    """Un ComfyUI portable (python_embeded + ComfyUI/main.py) au moins aussi récent que celui du catalogue."""
+    """Un ComfyUI portable (python_embeded + ComfyUI/main.py) au moins aussi récent que celui du catalogue, sur un
+    disque de ce PC : Aria lance le python.exe de ce dossier, jamais un programme posé sur le réseau."""
     dossier = Path(chemin).expanduser()
     if not dossier.is_absolute():
         raise ErreurMoteur("Donne le chemin complet du dossier de ComfyUI")
+    if _sur_le_reseau(dossier):
+        raise ErreurMoteur(f"{dossier} est sur le réseau : Aria lance le python.exe de ce dossier, il doit être "
+                           "sur un disque de ce PC")
     if dossier.name == "ComfyUI" and (dossier.parent / "python_embeded").is_dir():
         dossier = dossier.parent  # le sous-dossier ComfyUI a été choisi : on remonte au dossier portable
     if not (dossier / "python_embeded" / "python.exe").is_file() or not (dossier / "ComfyUI" / "main.py").is_file():

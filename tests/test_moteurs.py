@@ -327,6 +327,45 @@ class ComfyuiExterne(Base):
                 self.assertRaisesRegex(moteurs.ErreurMoteur, "déjà le ComfyUI d'Aria"):
             moteurs.examiner_comfyui(celui_d_aria)
 
+    def test_refus_chemin_reseau_sans_toucher_au_reseau(self):
+        """Un chemin UNC est refusé sur son texte : aucun accès au disque (donc au réseau) avant le refus."""
+        for chemin in (r"\\serveur\partage\ComfyUI_windows_portable", "//serveur/partage/ComfyUI",
+                       r"\\?\UNC\serveur\partage\ComfyUI"):
+            with self.subTest(chemin=chemin), \
+                    mock.patch.object(Path, "is_dir", side_effect=AssertionError("réseau touché")), \
+                    mock.patch.object(Path, "is_file", side_effect=AssertionError("réseau touché")), \
+                    self.assertRaisesRegex(moteurs.ErreurMoteur, "sur le réseau"):
+                moteurs.examiner_comfyui(chemin)
+
+    def test_refus_lecteur_reseau(self):
+        dossier = self.portable()
+        with mock.patch.object(moteurs, "_lecteur_reseau", return_value=True), \
+                self.assertRaisesRegex(moteurs.ErreurMoteur, "sur le réseau"):
+            moteurs.examiner_comfyui(dossier)
+        with mock.patch.object(moteurs, "_lecteur_reseau", return_value=False):
+            self.assertEqual(moteurs.examiner_comfyui(dossier), dossier)
+
+    def test_refus_jonction_vers_le_reseau(self):
+        """Un raccourci local qui mène à un partage est refusé comme le partage lui-même."""
+        dossier = self.portable()
+        with mock.patch.object(moteurs.os.path, "realpath", return_value=r"\\?\UNC\serveur\partage\ComfyUI"), \
+                self.assertRaisesRegex(moteurs.ErreurMoteur, "sur le réseau"):
+            moteurs.examiner_comfyui(dossier)
+
+    def test_route_refuse_un_chemin_reseau_et_ne_lance_rien(self):
+        from fastapi.testclient import TestClient
+
+        from app import jeton, main
+        from app.config import CONFIG
+
+        client = TestClient(main.app, base_url=f"http://127.0.0.1:{CONFIG['app']['port']}",
+                            headers={jeton.EN_TETE: jeton.JETON})
+        with mock.patch.object(moteurs, "verifier_comfyui", side_effect=AssertionError("lancé")) as lance:
+            r = client.put("/api/moteurs/comfyui/externe", json={"chemin": r"\\serveur\partage\ComfyUI_windows_portable"})
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("sur le réseau", r.json()["detail"])
+        lance.assert_not_called()
+
     def test_etat_externe(self):
         dossier = self.portable("0.43.0")
         with mock.patch.object(moteurs.emplacements, "comfyui_externe", return_value=dossier):
