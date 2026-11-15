@@ -75,7 +75,7 @@ class Ages(unittest.TestCase):
         sans « years » au pluriel, le nombre garde sa lecture d'avant (« two-year-old »), donc il bloque."""
         for texte in ("twenty one-year-old girls", "twenty two-year-old girls", "thirty five-year-old girls",
                       "twenty three year old girls", "a girl, twenty two year old", "twenty two yo girls",
-                      "forty one-year-old boys"):
+                      "forty one-year-old boys", "twenty one-years-old girls", "twenty two-years-old girls"):
             with self.assertRaises(ErreurSecurite, msg=texte):
                 securite.verifier(texte, "nude")
 

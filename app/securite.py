@@ -88,7 +88,7 @@ def _forme(cle: str) -> str:
     d'enfants s'écrit avec « de » (« vingt enfants de neuf ans »)."""
     mots = [re.escape(mot) for mot in cle.split()]
     if cle in _COMPOSES_EN:
-        return f"{mots[0]}(?:-{mots[1]}|\\s+{mots[1]}(?=\\s*(?:-\\s*)?years\\b))"
+        return f"{mots[0]}(?:-{mots[1]}|\\s+{mots[1]}(?=\\s+years\\b))"
     return r"[\s-]+".join(mots)
 
 
