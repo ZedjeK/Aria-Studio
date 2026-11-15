@@ -825,7 +825,9 @@ document.getElementById("optimiser-scenario").addEventListener("click", () => {
         const llm = llmAtelier();
         const r = await ecrirePrompt(atelier().idee.trim(), statut, signal);
         poserFinal(r.prompt, llm);
-        statut(`${nomLlm()} · ${r.duree_s} s · ${r.mots} mots`);
+        // Les heures de coupe d'un clip H3 qui tombent hors du clip ou dans le désordre (prompt.controler_coupes).
+        const coupes = r.alertes?.length ? ` · ⚠ ${r.alertes.join(" ")}` : "";
+        statut(`${nomLlm()} · ${r.duree_s} s · ${r.mots} mots${coupes}`);
     });
 });
 
