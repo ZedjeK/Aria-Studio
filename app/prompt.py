@@ -65,7 +65,7 @@ Rules for every shot:
 5. Shot types:
 - start: the first shot; it sets up the character and the place.
 - start from the picture: it animates the reference picture; describe only what moves (motion, camera, sounds).
-- continue: the same take goes on from the last image of the previous shot: same place, same light, same framing at first. Begin with "Continuous shot, same scene."
+- continue: the same take goes on from the last image of the previous shot: same place, same light, same framing at first. Begin with "Continuous shot, same scene." A continue shot only receives the last images of the shot before it, never the reference picture: when the next shot is a continue shot, keep the character's face in the frame until the end of this one.
 - cut: a new angle or a new moment of the story.
 - transition: ONE continuous camera movement travelling from the last image of the previous shot to the given arrival; the scene changes progressively over the whole clip, never all at once at the end.
 6. Character: {regle_personnage} Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.
@@ -523,6 +523,54 @@ def longueur_du_clip(duree: int, champs: bool) -> str:
         texte += (f" If you write cuts, their times (\"At 00:03.500\") strictly increase and all fall inside these "
                   f"{duree} seconds; Shot 1 has no time.")
     return texte
+
+
+# Mode référence de H3 (ReferenceToVideo) : six champs, d'après VIDEO_PROMPT_WRITING_GUIDE_ref_en.md (relu mot pour mot
+# le 2026-11-11). Le prompt d'un plan est écrit en trois champs, avant qu'on sache s'il recevra une référence (le
+# casting se règle après le Scénario) : la mise en six champs se fait donc au tournage, sans LLM, et n'invente rien.
+# Avant, le plan gardait ses trois champs et recevait une phrase (« The main character is the person from
+# <Picture 1>. »). Écart connu avec le guide : il pose le style avant [Shot 1], ici le style reste où le LLM l'a écrit,
+# après [Shot 1].
+SUJET = "<Subject 1>"
+_SIX_CHAMPS = re.compile(r"^\s*subject_definitions\s*:", re.I)
+_LE_PERSONNAGE = re.compile(r"\bthe (?:main )?character\b", re.I)
+_PLAN = re.compile(r"\[Shot (\d+)\]", re.I)
+
+
+def en_reference(texte: str, personnage: bool, voix: bool) -> str:
+    """Prompt d'un plan (trois champs ou prose) mis aux six champs du mode référence : le personnage de <Picture 1>
+    devient <Subject 1>, la voix de <Audio 1> est déclarée, et chaque « the character » de la description est
+    remplacé par le libellé. Sans référence, ou déjà en six champs (écrit à la main), le texte ne change pas."""
+    if not (personnage or voix) or _SIX_CHAMPS.match(texte):
+        return texte.rstrip()
+    description, ambiance, musique = separer_champs(texte.strip())
+    qui = SUJET if personnage else "the main speaker"
+    definitions, conservation, taches = [], [], []
+    if personnage:
+        if _LE_PERSONNAGE.search(description):
+            description = _LE_PERSONNAGE.sub(SUJET, description)
+        else:  # le libellé doit apparaître dans le plan : c'est lui qui relie le sujet à l'image
+            description = f"{SUJET} is the main character of this shot. {description}"
+        plans = sorted({1, *(int(n) for n in _PLAN.findall(description))})
+        definitions.append(f"{SUJET} is the main character shown in <Picture 1>.")
+        conservation.append(f"{SUJET} (appears in {', '.join(f'[Shot {n}]' for n in plans)}): fully_preserved - "
+                            "the character's identity, face, hair, body and outfit are retained.")
+        taches.append("reference generation")
+    if voix:
+        definitions.append(f"<Audio 1> is the voice-timbre reference for {qui} (S1).")
+        conservation.append(f"<Audio 1>: reference - its vocal timbre guides the dialogue delivery of {qui} without "
+                            "copying the original signal.")
+        taches.append("audio reference")
+    resume = f"The target video shows {qui} in the scene described below"
+    resume += f", speaking with the voice timbre of <Audio 1>." if voix else "."
+    champs = [("subject_definitions", "\n".join(definitions)),
+              ("summary", f"[{' + '.join(taches)}] {resume}"),
+              ("retention_analysis", "\n".join(conservation)),
+              ("detailed_description", f"[Shot 1] {description}".rstrip())]
+    if ambiance:  # un champ que le plan n'a pas reste omis
+        champs.append(("overall_soundscape", ambiance))
+    champs.append(("non_diegetic_music", musique or "N/A"))
+    return "\n\n".join(f"{nom}:\n{valeur}" for nom, valeur in champs)
 
 
 def consigne(nom: str, modele: str | None = None, mots_max: int | None = None,

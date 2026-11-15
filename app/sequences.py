@@ -645,15 +645,8 @@ def avec_contrainte(texte: str, contrainte_en: str | None) -> str:
 
 
 def _reference(texte: str, personnage_: bool, voix: bool) -> str:
-    ajouts = []
-    if personnage_:
-        ajouts.append("The main character is the person from <Picture 1>.")
-    if voix:
-        ajouts.append("The character speaks with the same voice as in <Audio 1>.")
-    if not ajouts:
-        return texte.rstrip()
-    ajout = " ".join(ajouts)
-    return prompt.dans_la_description(texte, ajout) or f"{texte.rstrip()} {ajout}"
+    """Le prompt d'un plan qui reçoit une référence, aux six champs du mode référence de H3 (prompt.en_reference)."""
+    return prompt.en_reference(texte, personnage_, voix)
 
 
 async def tourner(p_: "plateau.Plateau", c: "plateau.Commande"):
