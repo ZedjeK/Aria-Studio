@@ -76,4 +76,5 @@ async def fiche(url: str) -> Fiche:
         licence=licence,
         jeton_requis=bool(infos.get("gated")) and not cles.cle("huggingface"),
         steps_suggeres=steps.suggerer(textes),
+        cfg_suggere=steps.suggerer_cfg(textes),
     )

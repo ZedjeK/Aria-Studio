@@ -275,6 +275,17 @@ def suggestion_steps(cle_modele: str) -> dict | None:
     return ((charger_registre().get(cle_modele) or {}).get("a_valider") or {}).get("steps")
 
 
+def conseils_page(cle_modele: str) -> dict | None:
+    """Ce que la page source du checkpoint conseille (steps, CFG), lu à son téléchargement et gardé après la
+    validation : {"steps": {...}, "cfg": {...}}, chacun {statut, valeurs, extraits}. Un checkpoint téléchargé avant
+    que le CFG soit lu n'a que ses steps, et seulement tant qu'ils attendent d'être validés ; None sans rien."""
+    entree = charger_registre().get(cle_modele) or {}
+    conseils = dict(entree.get("conseils") or {})
+    if "steps" not in conseils and (steps := (entree.get("a_valider") or {}).get("steps")):
+        conseils["steps"] = steps
+    return conseils or None
+
+
 def oublier_attente(cle_modele: str):
     """Le checkpoint est validé : sa suggestion de steps n'a plus lieu d'être. Ce n'est pas elle qui le met en service
     (ce sont ses steps validés, workflows.Workflow.steps_de) ; sans entrée au registre, rien à faire."""

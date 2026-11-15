@@ -214,6 +214,32 @@ function blocValidation(e) {
     </div>`;
 }
 
+// Ce que la page du checkpoint conseille (steps, CFG), lu à son téléchargement et gardé après la validation : une
+// information à comparer à ton réglage, jamais appliquée seule. Les steps d'un checkpoint à valider sont déjà dans son
+// bloc de validation ; le CFG se règle par workflow (Réglages), pas par checkpoint.
+function conseilsPage(e) {
+    const c = e.conseils;
+    if (!c) return "";
+    const nombre = (v) => String(v).replace(".", ",");
+    const lus = [];
+    let ambigu = false;
+    for (const [cle, nom] of [["steps", "steps"], ["cfg", "CFG"]]) {
+        const s = c[cle];
+        if (!s || s.statut === "aucun" || (cle === "steps" && e.a_valider)) continue;
+        lus.push(`${nom} ${s.valeurs.map(nombre).join(" ou ")}`);
+        if (s.statut === "ambigu") ambigu = true;
+    }
+    if (!lus.length) return "";
+    const page = e.page ? `<a href="${echapper(e.page)}" target="_blank" rel="noopener">la page du modèle</a>` : "la page du modèle";
+    const avertissement = ambigu ? ` <span class="ko">Plusieurs valeurs : lis ${page}.</span>` : ` Vérifie-le sur ${page}.`;
+    const extraits = ["steps", "cfg"].flatMap((cle) => (c[cle]?.extraits ?? []))
+        .filter((x, i, tous) => tous.findIndex((y) => y.texte === x.texte) === i)
+        .map((x) => `<li>${echapper(x.origine)} : « ${echapper(x.texte)} »</li>`).join("");
+    return `<div class="discret conseil-page">Conseil lu sur la page : <strong>${lus.join(" · ")}</strong>.${avertissement}
+        Lu dans du texte libre, jamais appliqué seul.
+        ${extraits ? `<details><summary>Extraits</summary><ul>${extraits}</ul></details>` : ""}</div>`;
+}
+
 function elementCollection(e) {
     const [origine, classe] = ORIGINES[e.origine];
     const source = e.page
@@ -235,6 +261,7 @@ function elementCollection(e) {
             ${e.supprimable ? `<button type="button" class="petit" data-supprimer="${echapper(e.cle)}" data-taille="${e.taille}">Supprimer</button>` : ""}
         </div>
         ${details ? `<div class="discret">${details}</div>` : ""}
+        ${conseilsPage(e)}
         ${e.lora ? reglageLora(e.cle, e.lora)
             : e.declencheurs.length ? `<div class="discret">Déclencheurs : ${echapper(e.declencheurs.join(", "))}</div>` : ""}
         ${e.a_valider ? blocValidation(e) : ""}

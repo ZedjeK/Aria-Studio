@@ -62,6 +62,18 @@ class Tache:
         }
 
 
+def registre_du_checkpoint(fiche: Fiche, dossier: str) -> dict:
+    """Ce que le registre garde en plus d'un checkpoint de famille téléchargé (rien pour un autre fichier). Un checkpoint
+    neuf n'est proposé nulle part tant que ses steps ne sont pas validés (workflows.Workflow.a_valider) : la suggestion
+    lue sur sa page attend d'être montrée (Modèles → Ma collection). Le conseil de la page (steps et CFG) reste après la
+    validation, pour être relu à côté du réglage (modeles.conseils_page) : il n'est jamais appliqué seul."""
+    if not modeles.est_checkpoint(dossier):
+        return {}
+    vide = {"statut": "aucun", "valeurs": [], "extraits": []}
+    return {"a_valider": {"steps": fiche.steps_suggeres or vide},
+            "conseils": {"steps": fiche.steps_suggeres or vide, "cfg": fiche.cfg_suggere or vide}}
+
+
 def _hacher(fichier: Path):
     h = hashlib.sha256()
     with fichier.open("rb") as f:
@@ -189,9 +201,7 @@ class Telechargeur:
         part.replace(dest)
         # Un checkpoint neuf n'est proposé nulle part tant que ses steps ne sont pas validés (workflows.Workflow.a_valider) ;
         # la suggestion lue sur sa page attend ici d'être montrée (Modèles → Ma collection).
-        a_valider = {"a_valider": {"steps": fiche.steps_suggeres or {"statut": "aucun", "valeurs": [], "extraits": []}}} \
-            if modeles.est_checkpoint(tache.dossier) else {}
-        modeles.enregistrer(dest, fiche.to_dict(), sha256, **a_valider)
+        modeles.enregistrer(dest, fiche.to_dict(), sha256, **registre_du_checkpoint(fiche, tache.dossier))
         tache.etat = "termine"
 
     async def _recevoir(self, client: httpx.AsyncClient, tache: Tache, part: Path):

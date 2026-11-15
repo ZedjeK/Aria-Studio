@@ -126,6 +126,8 @@ def collection() -> dict:
             # avant : workflows.Workflow.a_valider).
             "steps": (steps.get(m["cle"]) or {}).get("valides"),
             "a_valider": (steps.get(m["cle"]) or {}).get("a_valider"),
+            # Ce que sa page conseille (steps, CFG), gardé après la validation : à lire à côté de son réglage.
+            "conseils": modeles.conseils_page(m["cle"]) if m["cle"] in steps else None,
             # LoRA d'une famille : mots déclencheurs et force, réglables ici (les LoRA de _base sont internes),
             # et ses usages (image, retouche, video), ceux des workflows de sa famille : les filtres du groupe LoRA.
             "lora": modeles.reglage_lora(m["cle"]) if est_lora(m["dossier"]) else None,

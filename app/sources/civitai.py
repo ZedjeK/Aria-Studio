@@ -121,6 +121,8 @@ async def fiche(url: str) -> Fiche:
 
     type_civitai = version.get("model", {}).get("type")
     base = version.get("baseModel")
+    textes_page = {"nom du fichier": f["name"], "nom de la version": version.get("name") or "",
+                   "description de la version": version.get("description") or ""}
     return Fiche(
         source="civitai",
         nom=f["name"],
@@ -134,9 +136,8 @@ async def fiche(url: str) -> Fiche:
         mots_declencheurs=[m.strip() for m in version.get("trainedWords") or [] if m.strip()],
         base=base,
         **(usage_auteur(version, f["name"]) if type_civitai in TYPES_LORA else {}),
-        steps_suggeres=None if type_civitai in TYPES_LORA else steps.suggerer(
-            {"nom du fichier": f["name"], "nom de la version": version.get("name") or "",
-             "description de la version": version.get("description") or ""}),
+        steps_suggeres=None if type_civitai in TYPES_LORA else steps.suggerer(textes_page),
+        cfg_suggere=None if type_civitai in TYPES_LORA else steps.suggerer_cfg(textes_page),
     )
 
 
