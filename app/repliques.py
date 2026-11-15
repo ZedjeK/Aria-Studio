@@ -11,8 +11,16 @@ Aucune dépendance interne : sequences, decoupage, listes, prompt et workflows l
 
 import re
 
+# Longueurs maximales : une réplique (une idée de plan fait 1 000 caractères au plus), la langue entre crochets et
+# les blancs autour. Bornées : un « <d> » ou un « « » sans fermeture relisait tout le reste du texte (quadratique :
+# 32 000 caractères de « <d>[ » coûtaient 1,8 s, des blancs derrière un « <d> » beaucoup plus encore) ; borné, chaque
+# ouverture ne relit qu'au plus cette longueur.
+MAX_REPLIQUE, MAX_LANGUE, MAX_BLANCS = 1000, 40, 20
+_BORNES = {"r": MAX_REPLIQUE, "l": MAX_LANGUE, "b": MAX_BLANCS}
 # Une réplique : la balise (le contenu, sans la langue), ou « », "", “” (ce que tu écris, les anciens prompts).
-REPLIQUES = re.compile(r"<d>\s*(?:\[[^\]]*\]\s*)?(.+?)\s*</d>|«\s*([^»]+?)\s*»|\"([^\"]+)\"|“([^”]+)”", re.S | re.I)
+REPLIQUES = re.compile(
+    r"<d>\s{0,%(b)d}(?:\[[^\]]{0,%(l)d}\]\s{0,%(b)d})?(.{1,%(r)d}?)\s{0,%(b)d}</d>"
+    r"|«\s{0,%(b)d}([^»]{1,%(r)d}?)\s{0,%(b)d}»|\"([^\"]{1,%(r)d})\"|“([^”]{1,%(r)d})”" % _BORNES, re.S | re.I)
 UNE_REPLIQUE = re.compile(r"<d>|[«\"“]", re.I)
 # Fin de phrase : le point peut être suivi de la balise fermante ou d'un guillemet fermant.
 FIN_PHRASE = re.compile(r"[.!?…](?:</d>|[\"”»])?(?:\s|$)", re.I)
@@ -20,7 +28,8 @@ FIN_PHRASE = re.compile(r"[.!?…](?:</d>|[\"”»])?(?:\s|$)", re.I)
 # Un guillemet qui suit un verbe de parole est une réplique ; derrière « a sign says », c'est un texte visible.
 _PAROLE = re.compile(
     r"(\b(?:says?|saying|said|speaks?|replies|asks?|whispers?|murmurs?|shouts?|exclaims?|answers?|calls out)\b"
-    r"(?P<entre>[^.!?\"«“<>]{0,80}?)[:,]?\s*)(?:«\s*([^»]+?)\s*»|\"([^\"]+)\"|“([^”]+)”)", re.I)
+    r"(?P<entre>[^.!?\"«“<>]{0,80}?)[:,]?\s*)"
+    r"(?:«\s{0,%(b)d}([^»]{1,%(r)d}?)\s{0,%(b)d}»|\"([^\"]{1,%(r)d})\"|“([^”]{1,%(r)d})”)" % _BORNES, re.I)
 _TEXTE_VISIBLE = re.compile(r"\b(sign|signs|text|label|banner|neon|screen|poster|board|written|caption|subtitles?)\b",
                             re.I)
 
