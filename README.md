@@ -97,7 +97,10 @@ garde libres.
    Elle prouve que le zip sort du workflow de ce dépôt, sur le tag de la version. Les versions publiées avant ce
    workflow n'en ont pas.
 
-2. Décompresse le zip où tu veux, puis double-clique sur `Aria-Studio.exe`. Une fenêtre te propose :
+2. Décompresse d'abord le zip en entier (clic droit, « Extraire tout »), dans un dossier de ton choix, puis
+   double-clique sur `Aria-Studio.exe`. Ne le lance pas depuis l'aperçu du zip dans l'Explorateur : l'exe y est seul,
+   sans `python\` ni `app\` à côté de lui, et le lanceur s'arrête sur « Python portable introuvable ». Une fenêtre te
+   propose :
    - **Installer** : le programme est rangé dans `%USERPROFILE%\.Aria-Studio\programme`, à côté de tes données, puis
      Aria se lance depuis là. Une case crée un raccourci sur ton Bureau (décochée d'office). Le dossier du zip reste
      tel quel : tu peux le supprimer ensuite ;
