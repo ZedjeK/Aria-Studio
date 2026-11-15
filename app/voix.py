@@ -32,7 +32,7 @@ from app.repliques import balise
 
 DOSSIER = DATA / "voix"
 PREFIXE = "voix:"  # valeur du casting d'une séquence : « voix:<id> »
-_ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
+_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")  # contrôlé par fullmatch : « $ » accepterait un retour à la ligne final
 
 PHRASE_DEFAUT = "Bonjour. Voici ma voix, calme et posée, pour que tu l'entendes bien."
 LONGUEUR_PHRASE = 200
@@ -61,7 +61,7 @@ class ErreurVoix(ValueError):
 # Bibliothèque
 
 def _chemin(id_voix: str):
-    if not _ID.match(id_voix or "") or not (DOSSIER / f"{id_voix}.json").is_file():
+    if not _ID.fullmatch(id_voix or "") or not (DOSSIER / f"{id_voix}.json").is_file():
         raise ErreurVoix(f"Voix inconnue : {id_voix}")
     return DOSSIER / f"{id_voix}.json"
 
