@@ -4,6 +4,28 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
+## 2.2.0 (2026-11-15)
+
+Notes complètes : `docs/releases/v2.2.0.md`.
+
+### Ajouté
+
+- Les listes du filtre de protection des mineurs se pilotent depuis Réglages → Système (« Sécurité · Protection des mineurs ») : ajouter et retirer tes termes, promouvoir un ajout dans le socle, essayer une phrase, phrases témoins revérifiées à chaque changement. Le socle vit dans `securite/socle.yaml` et il est complété ; sans socle lisible, Aria refuse de générer (#100).
+- Les clips MiniMax H3 : la consigne dit la durée du clip au LLM, les heures de coupe sont contrôlées, un plan avec référence passe aux six champs du guide et garde le visage dans le cadre jusqu'à la fin du plan qui le précède (#97, #99).
+- SECURITY.md (#92), `tools/proteger-depot.ps1` (#91), `.gitattributes` (#93), CodeQL sur Python, JavaScript, C# et les workflows (#94), `tools/verifier-release.ps1` lancé avant le build d'une release (#95).
+
+### Modifié
+
+- Les consignes envoyées au LLM suivent un gabarit par sections (réécriture, retouche, références, vidéo), avec les règles du modèle cible rangées dedans (#62).
+- Le conseil de la page d'un checkpoint (steps et CFG) reste lisible après la validation (#98).
+- « J'ai déjà ComfyUI » refuse un dossier sur le réseau ; l'estimation refuse un checkpoint qui n'est pas un fichier déposé ; un GGUF se désigne par un nom de fichier ; les identifiants sont contrôlés en entier ; le nettoyage des balises des pages de modèles et la lecture des répliques ne gèlent plus sur un texte piégé, une réplique de plus de 1 000 caractères n'étant plus reconnue comme telle (#101, #102, #103, #104, #106, #107).
+- Les fiches Krea 2 et Qwen-Image 2.1 gardent les résultats du banc du 2026-11-15 (#109). FastAPI passe de 0.162.0 à 0.162.5 (#105).
+- README : décompresse d'abord le zip, et pourquoi (#96).
+
+### Corrigé
+
+- Un âge adulte écrit en lettres n'est plus lu comme sa dernière unité : « vingt-neuf ans », « dix-huit ans », « vingt et un ans », « twenty-nine year old ». Les âges de 18 à 99 ans, en français et en anglais, sont lus à leur vraie valeur ; les mineurs restent bloqués et le plancher de 18 ans ne change pas (#108).
+
 ## 2.1.0 (2026-11-14)
 
 Première version publiée depuis la 1.3.0 : elle contient aussi la 2.0.0, jamais publiée. Notes complètes : `docs/releases/v2.1.0.md`.
