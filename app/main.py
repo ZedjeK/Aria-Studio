@@ -921,7 +921,10 @@ def estimation_tournage(mode: str, qualite: str, duree: int, nombre: int = 1, mo
     if (mode not in plateau.MODES_VIDEO or qualite not in plateau.QUALITES_VIDEO or duree not in plateau.DUREES_VIDEO
             or not 1 <= nombre <= plateau.CLIPS_MAX):
         raise HTTPException(status_code=400, detail="Mode, résolution, durée ou nombre de clips inconnus")
-    return estimation.estimer(mode, modele or None, qualite, duree, nombre)
+    try:
+        return estimation.estimer(mode, modele or None, qualite, duree, nombre)
+    except estimation.ErreurEstimation as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/creations")

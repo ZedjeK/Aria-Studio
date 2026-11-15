@@ -28,6 +28,10 @@ TRAVAIL_GO_PAR_MP = 6.0  # VRAM de travail (activations) d'un clip de 5 s, par m
 VRAM_COEF = 1.0  # ralentissement quand toute la charge est déchargée en RAM : une hypothèse
 
 
+class ErreurEstimation(ValueError):
+    """Une demande d'estimation que la route refuse (400) : checkpoint qui n'est pas dans le dossier de la famille."""
+
+
 def _decharge(besoin_go: float, libre_go: float) -> float:
     """Part de la charge qui ne tient pas en VRAM (0 : tout y tient)."""
     return max(0.0, besoin_go - libre_go) / besoin_go
@@ -67,6 +71,8 @@ def estimer(mode: str, modele: str | None, qualite: str, duree: int, nombre: int
         raise ValueError(f"Mode inconnu : {mode}")
     q = plateau.qualites_video()[qualite]
     wf = workflows.obtenir(CONFIG.get("generation", {}).get(plateau.MODES_VIDEO[mode]))
+    if modele is not None and modele not in wf.presents():  # le nom sert de chemin à _poids_go : un fichier déposé, rien d'autre
+        raise ErreurEstimation(f"Checkpoint absent de modeles/{wf.dossier_modeles} : {modele}")
     checkpoint = wf.choisi(modele)
     a_valider = wf.a_valider(checkpoint)
     steps = wf.steps_de(checkpoint) or q["steps"]  # à valider : le tableau tel quel (le tournage sera refusé)
