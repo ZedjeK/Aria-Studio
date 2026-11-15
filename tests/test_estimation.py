@@ -15,6 +15,12 @@ ORIGINE = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
 
 
 class Estimation(unittest.TestCase):
+    def setUp(self):
+        # Le checkpoint d'origine est déposé : sans cela, l'estimation refuse un nom qui n'est pas dans le dossier.
+        p = mock.patch.object(workflows.Workflow, "presents", lambda wf: [ORIGINE, "autre.safetensors"])
+        p.start()
+        self.addCleanup(p.stop)
+
     def estimer(self, qualite="compromis", duree=5, nombre=1, libre=estimation.LIBRE_REF_GO, mode="animer",
                 modele=ORIGINE, steps=None, poids=estimation.POIDS_REF_GO):
         with (mock.patch.object(estimation, "CONFIG", CONFIG),
@@ -77,6 +83,34 @@ class Estimation(unittest.TestCase):
             estimation.estimer("animer", None, "inconnue", 5)
         with self.assertRaises(ValueError):
             estimation.estimer("sequence", None, "rapide", 5)
+
+    def test_un_checkpoint_hors_du_dossier_est_refuse_sans_toucher_au_disque(self):
+        """Le nom du checkpoint sert de chemin pour lire son poids : seul un fichier déposé passe."""
+        for nom in (r"..\..\..\Windows\System32\kernel32.dll", "../../x.safetensors", "absent.safetensors", ""):
+            with self.subTest(nom=nom), \
+                    mock.patch.object(estimation, "CONFIG", CONFIG), \
+                    mock.patch.object(estimation, "_poids_go", side_effect=AssertionError("disque touché")), \
+                    self.assertRaises(estimation.ErreurEstimation):
+                estimation.estimer("animer", nom, "compromis", 5, libre_go=15.0)
+
+    def test_un_checkpoint_depose_passe(self):
+        self.assertEqual(self.estimer("compromis", modele="autre.safetensors")["checkpoint"], "autre.safetensors")
+
+
+class RouteEstimation(unittest.TestCase):
+    def test_la_route_refuse_un_chemin_avec_400(self):
+        from fastapi.testclient import TestClient
+
+        from app import jeton, main
+        from app.config import CONFIG as REEL
+
+        client = TestClient(main.app, base_url=f"http://127.0.0.1:{REEL['app']['port']}",
+                            headers={jeton.EN_TETE: jeton.JETON})
+        with mock.patch.object(estimation, "_poids_go", side_effect=AssertionError("disque touché")):
+            r = client.get("/api/plateau/estimation",
+                           params={"mode": "animer", "qualite": "compromis", "duree": 5, "modele": r"..\..\x.safetensors"})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Checkpoint absent", r.json()["detail"])
 
 
 if __name__ == "__main__":
