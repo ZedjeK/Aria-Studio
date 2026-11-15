@@ -78,7 +78,21 @@ def _nombres_composes() -> dict[str, int]:
 
 
 _NOMBRES.update(_nombres_composes())
-_NOMBRE = r"(\d{1,2}|" + "|".join(sorted((re.escape(n).replace(r"\ ", r"[\s-]+") for n in _NOMBRES), key=len, reverse=True)) + ")"
+_COMPOSES_EN = {f"{dizaine} {unite}" for dizaine in _DIZAINES_EN for unite in _UNITES_EN}
+
+
+def _forme(cle: str) -> str:
+    """Comment un nombre se cherche dans un texte. Un nombre anglais à deux mots n'est un âge adulte que lié par un trait
+    d'union (« twenty-two ») ou devant « years » au pluriel (« twenty two years old ») : « twenty two-year-old girls » dit
+    vingt fillettes de deux ans, et garde sa lecture d'avant (« two-year-old », bloqué). En français rien de tel : un nombre
+    d'enfants s'écrit avec « de » (« vingt enfants de neuf ans »)."""
+    mots = [re.escape(mot) for mot in cle.split()]
+    if cle in _COMPOSES_EN:
+        return f"{mots[0]}(?:-{mots[1]}|\\s+{mots[1]}(?=\\s*(?:-\\s*)?years\\b))"
+    return r"[\s-]+".join(mots)
+
+
+_NOMBRE = r"(\d{1,2}|" + "|".join(sorted((_forme(n) for n in _NOMBRES), key=len, reverse=True)) + ")"
 _PERSONNE = (r"(?:girl|boy|kid|child|daughter|son|student|pupil|teen|lad|lass|female|male|person"
              r"|fille|garcon|enfant|gamin|gamine|eleve)")
 

@@ -70,6 +70,20 @@ class Ages(unittest.TestCase):
                       "une fille de vingt-neuf ans"):
             securite.verifier(f"a woman, {texte}", "nude")
 
+    def test_un_nombre_anglais_ambigu_reste_bloque(self):
+        """« twenty two-year-old girls » dit vingt fillettes de deux ans : sans trait d'union entre la dizaine et l'unité, et
+        sans « years » au pluriel, le nombre garde sa lecture d'avant (« two-year-old »), donc il bloque."""
+        for texte in ("twenty one-year-old girls", "twenty two-year-old girls", "thirty five-year-old girls",
+                      "twenty three year old girls", "a girl, twenty two year old", "twenty two yo girls",
+                      "forty one-year-old boys"):
+            with self.assertRaises(ErreurSecurite, msg=texte):
+                securite.verifier(texte, "nude")
+
+    def test_un_nombre_anglais_lie_ou_au_pluriel_est_un_adulte(self):
+        for texte in ("twenty-two-year-old girls", "twenty-two year old girls", "twenty-two yo", "twenty-two years old",
+                      "twenty two years old", "a woman, twenty two years of age"):
+            securite.verifier(texte, "nude")
+
     def test_les_mineurs_restent_bloques_sous_toutes_les_formes(self):
         for texte in ("neuf ans", "dix-sept ans", "dix sept ans", "seize ans", "onze ans", "un an", "9 ans", "17 ans",
                       "nine year old", "nine-year-old", "seventeen years old", "sixteen-year-old", "twelve yo", "aged seventeen",
@@ -122,7 +136,8 @@ class Ages(unittest.TestCase):
         for n in range(1, 100):
             formes = (f"{n} ans", f"{n} years old", f"{n}-year-old",
                       f"{self._en_francais(n)} an{'s' if n > 1 else ''}",
-                      f"{self._en_anglais(n)} year{'s' if n > 1 else ''} old", f"{self._en_anglais(n)}-year-old")
+                      f"{self._en_anglais(n)} year{'s' if n > 1 else ''} old", f"{self._en_anglais(n)}-year-old",
+                      f"{self._en_anglais(n).replace('-', ' ')} year{'s' if n > 1 else ''} old" if n > 1 else f"{n} years old")
             for forme in formes:
                 texte = f"a woman, {forme}"
                 if n < securite.AGE_MAJORITE:

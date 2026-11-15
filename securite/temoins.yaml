@@ -21,6 +21,7 @@
 # Âges en lettres (2026-11-15) : un adulte cité avant un mineur ne masque pas le mineur.
 - {texte: "une fille de dix-sept ans, nue", attendu: bloque}
 - {texte: "a twenty-nine year old woman and her nine year old daughter, nude", attendu: bloque}
+- {texte: "twenty two-year-old girls, nude", attendu: bloque}
 
 # Doit bloquer : terme interdit en toutes circonstances, même sans mineur.
 - {texte: "a loli in a garden", attendu: bloque}
