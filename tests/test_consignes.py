@@ -97,9 +97,49 @@ class Consignes(unittest.TestCase):
         final = plateau.avec_declencheurs(sequences.avec_contrainte(p, "no rain"), [{"declencheurs": "lora_x"}])
         self.assertIn("[Shot 1] lora_x, She walks. Constraint for every shot: no rain.\n\noverall_soundscape: Steps.", final)
         self.assertTrue(final.endswith("non_diegetic_music: N/A"))
-        ref = sequences._reference(final, True, True)
-        self.assertIn("<Audio 1>.\n\noverall_soundscape", ref)
+        ref = sequences._reference(final, True, True)  # un plan avec référence passe aux six champs du mode référence
+        self.assertIn("Constraint for every shot: no rain.\n\noverall_soundscape:\nSteps.", ref)
         self.assertEqual(sequences.avec_contrainte("She walks.", "no rain"), "She walks. Constraint for every shot: no rain.")
+
+    def test_reference_en_six_champs(self):
+        """Guide du mode référence de H3 : six champs, le sujet défini par l'image, sa conservation déclarée."""
+        p = ("integrated_multimodal_description: [Shot 1] Live-action, a medium shot frames the character at a window. "
+             "The character (S1) says: <d>[French] Je descends ici.</d> [Shot 2] At 00:03.000, the camera cuts to "
+             "the character's hands.\n\noverall_soundscape: Rain.\n\nnon_diegetic_music: N/A")
+        ref = prompt.en_reference(p, True, False)
+        self.assertEqual([bloc.split(":")[0] for bloc in ref.split("\n\n")],
+                         ["subject_definitions", "summary", "retention_analysis", "detailed_description",
+                          "overall_soundscape", "non_diegetic_music"])
+        self.assertIn("subject_definitions:\n<Subject 1> is the main character shown in <Picture 1>.", ref)
+        self.assertIn("summary:\n[reference generation] ", ref)
+        self.assertIn("<Subject 1> (appears in [Shot 1], [Shot 2]): fully_preserved - ", ref)
+        self.assertIn("detailed_description:\n[Shot 1] Live-action, a medium shot frames <Subject 1> at a window. "
+                      "<Subject 1> (S1) says: <d>[French] Je descends ici.</d>", ref)
+        self.assertIn("<Subject 1>'s hands.", ref)
+        self.assertNotIn("the character", ref.split("detailed_description:")[1])
+        self.assertNotIn("integrated_multimodal_description", ref)
+
+    def test_reference_voix_et_cas_limites(self):
+        p = "integrated_multimodal_description: [Shot 1] A rainy street at night."
+        les_deux = prompt.en_reference(p, True, True)
+        self.assertIn("summary:\n[reference generation + audio reference] ", les_deux)
+        self.assertIn("<Audio 1> is the voice-timbre reference for <Subject 1> (S1).", les_deux)
+        self.assertIn("<Audio 1>: reference - ", les_deux)
+        # le libellé apparaît même si le plan ne nomme pas le personnage ; pas d'ambiance inventée, musique à N/A
+        self.assertIn("[Shot 1] <Subject 1> is the main character of this shot. A rainy street at night.", les_deux)
+        self.assertNotIn("overall_soundscape", les_deux)
+        self.assertTrue(les_deux.endswith("non_diegetic_music:\nN/A"))
+        voix = prompt.en_reference(p, False, True)
+        self.assertIn("summary:\n[audio reference] ", voix)
+        self.assertNotIn("<Subject 1>", voix)
+        self.assertNotIn("<Picture 1>", voix)
+        self.assertEqual(prompt.en_reference(p, False, False), p)  # sans référence : inchangé
+        self.assertEqual(prompt.en_reference(les_deux, True, True), les_deux)  # déjà en six champs : inchangé
+        self.assertIn("[Shot 1] <Subject 1> walks.", prompt.en_reference("The character walks.", True, False))  # prose
+
+    def test_plan_prolonge_garde_le_visage(self):
+        """Essai du 2026-11-11 : un plan prolongé dont le précédent finit sans le visage change de personnage."""
+        self.assertIn("keep the character's face in the frame until the end", prompt.consigne("decoupage"))
 
     def test_reponse_assez_longue_pour_les_mots_vises(self):
         """512 tokens (réglage d'origine) coupaient un prompt de 450 mots : la réponse suit la longueur de la fiche."""
