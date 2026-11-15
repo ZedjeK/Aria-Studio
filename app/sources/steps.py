@@ -10,7 +10,7 @@ import re
 STEPS_MIN, STEPS_MAX = 1, 150  # bornes du réglage « Steps imposés »
 _N_STEP = re.compile(r"(?<![\d.])(\d{1,3})\s*[-_ ]?steps?", re.I)  # « 8-step », « 8 steps », « 8stepTURBO »
 _STEPS_N = re.compile(r"\bsteps?\s*[:=]\s*(\d{1,3})(?!\d)", re.I)  # « steps: 8 » (« Step 1 » d'un tutoriel ne passe pas)
-_BALISES = re.compile(r"<[^>]+>")
+_BALISES = re.compile(r"<[^<>]+>")  # sans « < » dedans : un « < » sans « > » ne relit plus tout le texte (quadratique sur une page piégée)
 RAYON_EXTRAIT = 45
 
 
