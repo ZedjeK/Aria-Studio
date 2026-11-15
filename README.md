@@ -200,6 +200,8 @@ d'accès**. Elle est rangée dans le Gestionnaire d'identification Windows, chif
 dans un fichier d'Aria, et l'interface ne la réaffiche jamais. Un bouton la teste auprès de sa source. Les
 variables d'environnement `CIVITAI_TOKEN` et `HF_TOKEN` servent si aucune clé n'est enregistrée dans Aria.
 
+Pour signaler une faille : voir [SECURITY.md](SECURITY.md).
+
 ## Limites à connaître
 
 Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par accident :
