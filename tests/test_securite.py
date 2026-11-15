@@ -149,6 +149,81 @@ class Ages(unittest.TestCase):
                     except ErreurSecurite as e:
                         self.fail(f"{n} : « {forme} » ne devrait pas bloquer ({e})")
 
+    def test_un_age_au_pluriel_est_lu_comme_au_singulier(self):
+        """« 12-year-olds » et « 14 yos » disent des enfants de 12 et de 14 ans : le « s » final ne cache pas l'âge."""
+        for n in range(1, 100):
+            formes = [f"{n}-year-olds", f"{n} year olds", f"{n} years olds", f"{n}-years-olds", f"{n} yos", f"{n}yos",
+                      f"{n} y/os", f"{n} yrs olds", f"{n}-yr-olds"]
+            if n >= 10:  # l'anglais écrit « twenty-nine-year-olds » ; sous 10 le nombre est seul : « nine-year-olds »
+                formes.append(f"{self._en_anglais(n)}-year-olds")
+            for forme in formes:
+                texte = f"a group, {forme}"
+                if n < securite.AGE_MAJORITE:
+                    with self.assertRaises(ErreurSecurite, msg=f"{n} : « {forme} » devrait bloquer"):
+                        securite.verifier(texte, "nude")
+                else:
+                    try:
+                        securite.verifier(texte, "nude")
+                    except ErreurSecurite as e:
+                        self.fail(f"{n} : « {forme} » ne devrait pas bloquer ({e})")
+
+    def test_un_mot_qui_commence_par_old_n_est_pas_un_age(self):
+        for texte in ("12 years oldsmobile", "a 25 year oldschool dancer", "40 yosemite photos"):
+            securite.verifier(texte, "nude")
+
+    def test_les_tirets_typographiques_valent_le_trait_d_union(self):
+        """Un tiret insécable, demi-cadratin, cadratin, le signe moins... étaient effacés, ce qui collait les mots :
+        « dix\u2011sept ans » devenait « dixsept ans » et passait."""
+        tirets = ("\u2010", "\u2011", "\u2012", "\u2013", "\u2014", "\u2015", "\u2212", "﹘", "－")
+        for t in tirets:
+            for texte in (f"une fille de dix{t}sept ans", f"a girl, twelve{t}year{t}old", f"des filles de 10{t}12 ans",
+                          f"a girl, 12{t}year{t}old", f"seventeen{t}year{t}olds", f"a girl, ten{t}year{t}old"):
+                with self.assertRaises(ErreurSecurite, msg=f"U+{ord(t):04X} : « {texte} » devrait bloquer"):
+                    securite.verifier(texte, "nude")
+            for texte in (f"une femme de vingt{t}neuf ans", f"a twenty{t}nine{t}year{t}old woman", f"une femme de dix{t}huit ans",
+                          f"des femmes de 25{t}30 ans"):
+                try:
+                    securite.verifier(texte, "nude")
+                except ErreurSecurite as e:
+                    self.fail(f"U+{ord(t):04X} : « {texte} » ne devrait pas bloquer ({e})")
+
+    def test_aucun_tiret_unicode_n_est_oublie(self):
+        """Tout caractère que Unicode classe « ponctuation, tiret » est lu comme un trait d'union."""
+        import sys
+        import unicodedata
+        tirets = [chr(c) for c in range(sys.maxunicode + 1) if unicodedata.category(chr(c)) == "Pd"]
+        self.assertGreaterEqual(len(tirets), 26)
+        for t in tirets:
+            self.assertEqual(securite._normaliser(f"a{t}b", tirets=True), "a-b", f"U+{ord(t):04X}")
+
+    def test_un_tiret_dans_un_mot_du_filtre_ne_le_cache_pas(self):
+        """Lire un tiret comme un trait d'union ne doit rien faire perdre : « n\u2013ude », « ch\u00adild » (trait d'union
+        conditionnel, invisible), « lo\u2013li » se lisent aussi sans le tiret et bloquent, à chaque position de coupe."""
+        socle = securite._lire_socle()
+        coupes = ("\u00ad", "\u2013", "\u2011", "\u2212")
+        for liste, debut in (("sensibles", "a child, "), ("toujours_bloques", "")):
+            for terme in socle[liste]:
+                for i in range(1, len(terme)):
+                    if terme[i - 1] == " " or terme[i] == " ":
+                        continue  # une coupe contre une espace n'est pas une coupe dans le mot
+                    for c in coupes:
+                        texte = debut + terme[:i] + c + terme[i:]
+                        with self.assertRaises(ErreurSecurite, msg=f"{ascii(texte)} devrait bloquer"):
+                            securite.verifier(texte)
+
+    def test_un_tiret_dans_un_age_ou_son_mot_ne_le_cache_pas(self):
+        for texte in ("Age \u2013 12, nude", "Age \u2014 12, nude", "Age\u201112, nude", "aged\u00ad12, nude",
+                      "age\u2212twelve, nude", "12 years o\u00adld, nude", "twelve year o\u00adld nude", "12 ye\u00adars old, nude",
+                      "a 12 y\u00ado girl, nude", "6\u00ad\u00adans, nude", "6\u2013\u2013ans, nude", "6 \u2013 \u2013 ans, nude",
+                      "a person, u\u00adn ans, nude"):
+            with self.assertRaises(ErreurSecurite, msg=f"{ascii(texte)} devrait bloquer"):
+                securite.verifier(texte)
+
+    def test_un_trait_d_union_conditionnel_dans_un_age_adulte_ne_bloque_pas(self):
+        """U+00AD est invisible : « tren\u00adte deux ans » se lit « trente deux ans »."""
+        for texte in ("tren\u00adte deux ans", "d\u00adix-huit ans", "3\u00ad0 ans", "eigh\u00adteen years old"):
+            securite.verifier(f"a woman, {texte}", "nude")
+
     def test_les_nombres_ecrits_en_plusieurs_mots_valent_tous_18_ou_plus(self):
         """Garde-fou : un nombre composé ajouté plus tard ne peut pas ouvrir un trou sous le plancher de 18 ans."""
         composes = {cle: v for cle, v in securite._NOMBRES.items() if " " in cle and cle != "dix sept"}
