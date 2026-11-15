@@ -41,8 +41,10 @@ async function api(methode, url, corps, signal) {
     }
     if (!reponse.ok) {
         const detail = donnees?.detail;
-        throw new Error(Array.isArray(detail) ? detail.map((d) => d.msg ?? String(d)).join(" ; ")
+        const erreur = new Error(Array.isArray(detail) ? detail.map((d) => d.msg ?? String(d)).join(" ; ")
             : detail ?? (texte.trim().slice(0, 200) || `HTTP ${reponse.status}`));
+        erreur.status = reponse.status;  // 409 : une demande à confirmer (web/reglages.js, carte Sécurité)
+        throw erreur;
     }
     return donnees;
 }

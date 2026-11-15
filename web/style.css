@@ -4182,3 +4182,84 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 #formats-agrandir {
     flex-wrap: wrap;
 }
+
+/* Réglages : carte Sécurité (listes du filtre AS-18, web/reglages.js). */
+.liste-securite {
+    margin: 14px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--bord);
+}
+
+.liste-securite details summary {
+    cursor: pointer;
+    color: var(--discret);
+    font-size: 0.85rem;
+}
+
+.termes-socle {
+    color: var(--discret);
+    font-size: 0.8rem;
+    line-height: 1.7;
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 6px 0;
+}
+
+.terme-ajout {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px 2px 10px;
+    border: 1px solid var(--bord);
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.terme-ajout button {
+    border: 0;
+    background: none;
+    color: var(--discret);
+    cursor: pointer;
+    padding: 2px 5px;
+    min-height: 0;
+}
+
+.terme-ajout button:hover {
+    color: var(--action);
+}
+
+#carte-securite .ligne {
+    flex-wrap: wrap;
+}
+
+#carte-securite .ligne input {
+    flex: 1;
+    min-width: 240px;
+}
+
+#carte-securite summary {
+    cursor: pointer;
+}
+
+#carte-securite summary h3 {
+    display: inline;
+}
+
+.temoins-securite {
+    list-style: none;
+    margin: 8px 0;
+    padding: 0;
+    font-size: 0.85rem;
+}
+
+.temoins-securite li {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    padding: 3px 0;
+}
+
+.temoins-securite .texte {
+    flex: 1;
+    min-width: 0;
+}

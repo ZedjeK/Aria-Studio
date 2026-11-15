@@ -416,3 +416,155 @@ document.getElementById("essai-notifications").addEventListener("click", async (
     afficherNotifications();
 });
 api("GET", "/api/notifications").then((p) => { Object.assign(prefsNotifications, p); afficherNotifications(); }).catch(() => {});
+
+// Réglages → Système → Sécurité (app/securite.py) : les listes du filtre AS-18. Le socle se lit et grandit par
+// promotion ; seuls tes ajouts se retirent. Aucun bouton ne retire ni ne modifie un terme du socle.
+const NOMS_ETAGES = { socle: "socle", ajouts: "tes ajouts", age: "âge lu dans le texte" };
+const termesEnCause = (termes) => termes.map((t) => `« ${echapper(t.terme)} » (${NOMS_ETAGES[t.etage] ?? t.etage})`).join(", ");
+
+function afficherSecurite(e) {
+    const erreur = document.getElementById("erreur-securite");
+    erreur.hidden = !e.erreur;
+    erreur.textContent = e.erreur
+        ? `Filtre indisponible : ${e.erreur}. Tant que ce n'est pas réparé, Aria refuse de générer.` : "";
+    document.getElementById("fichier-socle-securite").textContent = e.fichier_socle;
+    const ouvertes = new Set([...document.querySelectorAll("#listes-securite details[open]")].map((d) => d.dataset.liste));
+    document.getElementById("listes-securite").innerHTML = e.listes.map((l) => `
+        <div class="liste-securite" data-liste="${l.cle}">
+            <h3 class="titre-bloc">${echapper(l.nom)}</h3>
+            <details data-liste="${l.cle}" ${ouvertes.has(l.cle) ? "open" : ""}>
+                <summary>Socle d'Aria : ${l.socle.length} termes, en lecture seule</summary>
+                <p class="termes-socle">${l.socle.map(echapper).join(" · ")}</p>
+            </details>
+            <div class="etiquettes">
+                <span class="discret">Mes ajouts (${l.ajouts.length})</span>
+                ${l.ajouts.map((t) => `<span class="terme-ajout" data-terme="${echapper(t)}">${echapper(t)}
+                    <button type="button" data-action="promouvoir" title="Promouvoir dans le socle (ne se défait pas d'ici)">⬆</button>
+                    <button type="button" data-action="retirer" title="Retirer de mes ajouts">✕</button></span>`).join("")}
+            </div>
+            <div class="ligne">
+                <input type="text" placeholder="Ajouter un terme" autocomplete="off" aria-label="Terme à ajouter : ${echapper(l.nom)}">
+                <button type="button" class="petit" data-action="ajouter">+ Ajouter</button>
+            </div>
+            <p class="etat-liste discret"></p>
+        </div>`).join("");
+    const ecarts = e.temoins.filter((t) => !t.ok).length;
+    const bilan = document.getElementById("bilan-temoins-securite");
+    bilan.textContent = e.temoins.length ? (ecarts ? `${ecarts} en écart sur ${e.temoins.length}` : `${e.temoins.length} conformes`) : "";
+    bilan.classList.toggle("ko", ecarts > 0);
+    if (ecarts) document.getElementById("bloc-temoins-securite").open = true;
+    document.getElementById("temoins-securite").innerHTML = e.temoins.map((t) => `
+        <li data-temoin="${echapper(t.texte)}">
+            <span class="${t.ok ? "ok" : "ko"}" title="${t.ok ? "Conforme" : "En écart"}">●</span>
+            <span class="discret">${t.attendu === "bloque" ? "doit bloquer" : "doit passer"}</span>
+            <span class="texte">${echapper(t.texte)}${t.ok ? "" : ` <span class="ko">: ${t.obtenu === "bloque"
+                ? `bloquée par ${termesEnCause(t.termes)}` : "elle passe"}</span>`}</span>
+            ${t.livre ? "" : '<button type="button" class="petit" data-action="retirer-temoin" title="Retirer cette phrase témoin">✕</button>'}
+        </li>`).join("");
+}
+
+async function chargerSecurite() {
+    afficherSecurite(await api("GET", "/api/securite"));
+}
+
+function direListeSecurite(liste, texte, ok) {  // la carte vient d'être redessinée : on reprend la liste affichée
+    const etat = document.querySelector(`#listes-securite [data-liste="${liste}"] .etat-liste`);
+    if (!etat) return;
+    etat.textContent = texte;
+    etat.className = `etat-liste ${ok ? "ok" : "ko"}`;
+}
+
+async function ajouterTermeSecurite(liste, terme) {
+    try {
+        afficherSecurite(await api("POST", "/api/securite/ajouts", { liste, terme }));
+        direListeSecurite(liste, `« ${terme} » ajouté ✓ (il compte dès la génération suivante)`, true);
+    } catch (err) {
+        if (err.status !== 409 || !confirm(`${err.message}\n\nL'ajouter quand même ?`)) {
+            direListeSecurite(liste, err.message, false);
+            return;
+        }
+        try {
+            afficherSecurite(await api("POST", "/api/securite/ajouts", { liste, terme, forcer: true }));
+            direListeSecurite(liste, `« ${terme} » ajouté ✓ : regarde les phrases témoins`, true);
+        } catch (err2) {
+            direListeSecurite(liste, err2.message, false);
+        }
+    }
+}
+
+document.getElementById("listes-securite").addEventListener("click", async (ev) => {
+    const bouton = ev.target.closest("[data-action]");
+    if (!bouton) return;
+    const bloc = bouton.closest(".liste-securite");
+    const liste = bloc.dataset.liste;
+    if (bouton.dataset.action === "ajouter") {
+        const terme = bloc.querySelector("input").value.trim();
+        if (terme) await ajouterTermeSecurite(liste, terme);
+        return;
+    }
+    const terme = bouton.closest("[data-terme]").dataset.terme;
+    const promouvoir = bouton.dataset.action === "promouvoir";
+    if (promouvoir && !confirm(`Promouvoir « ${terme} » dans le socle ?\n\nIl ne se retirera plus depuis Réglages : `
+        + "pour le corriger ensuite, il faudra modifier le fichier du socle à la main.")) return;
+    try {
+        afficherSecurite(await api("POST", `/api/securite/ajouts/${promouvoir ? "promouvoir" : "retirer"}`, { liste, terme }));
+        direListeSecurite(liste, promouvoir ? `« ${terme} » est maintenant dans le socle ✓` : `« ${terme} » retiré de tes ajouts`, true);
+    } catch (err) {
+        direListeSecurite(liste, err.message, false);
+    }
+});
+
+document.getElementById("listes-securite").addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" || ev.target.tagName !== "INPUT") return;
+    ev.preventDefault();
+    ev.target.closest(".liste-securite").querySelector('[data-action="ajouter"]').click();
+});
+
+async function essayerSecurite() {
+    const texte = document.getElementById("phrase-securite").value.trim();
+    const resultat = document.getElementById("resultat-securite");
+    if (!texte) return;
+    try {
+        const r = await api("POST", "/api/securite/essayer", { texte });
+        resultat.innerHTML = r.bloque ? `Bloquée : ${termesEnCause(r.termes)}.` : "Elle passe : aucun blocage.";
+        resultat.className = r.bloque ? "ko" : "ok";
+    } catch (err) {
+        resultat.textContent = err.message;
+        resultat.className = "ko";
+    }
+}
+
+document.getElementById("essayer-securite").addEventListener("click", essayerSecurite);
+document.getElementById("phrase-securite").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") essayerSecurite();
+});
+
+async function garderTemoinSecurite(attendu) {
+    const texte = document.getElementById("phrase-securite").value.trim();
+    const resultat = document.getElementById("resultat-securite");
+    if (!texte) return;
+    try {
+        afficherSecurite(await api("POST", "/api/securite/temoins", { texte, attendu }));
+        document.getElementById("bloc-temoins-securite").open = true;
+        resultat.textContent = "Phrase témoin gardée ✓";
+        resultat.className = "ok";
+    } catch (err) {
+        resultat.textContent = err.message;
+        resultat.className = "ko";
+    }
+}
+
+document.getElementById("temoin-bloque-securite").addEventListener("click", () => garderTemoinSecurite("bloque"));
+document.getElementById("temoin-passe-securite").addEventListener("click", () => garderTemoinSecurite("passe"));
+
+document.getElementById("temoins-securite").addEventListener("click", async (ev) => {
+    const bouton = ev.target.closest('[data-action="retirer-temoin"]');
+    if (!bouton) return;
+    try {
+        afficherSecurite(await api("POST", "/api/securite/temoins/retirer", { texte: bouton.closest("[data-temoin]").dataset.temoin }));
+    } catch (err) {
+        document.getElementById("resultat-securite").textContent = err.message;
+    }
+});
+
+chargerSecurite().catch(() => {});

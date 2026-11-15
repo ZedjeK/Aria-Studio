@@ -1191,6 +1191,68 @@ async def tester_cle(source: str):
         raise HTTPException(400, str(e))
 
 
+# Sécurité (app/securite.py) : les listes du filtre AS-18. D'ici, on lit le socle, on ajoute et on retire ses propres
+# termes, on en promeut un dans le socle. Aucune route ne retire ni ne modifie un terme du socle.
+
+class DemandeTerme(BaseModel):
+    liste: str
+    terme: str
+    forcer: bool = False  # ajouter quand même un terme qui fait bloquer une phrase témoin « doit passer »
+
+
+class DemandeEssai(BaseModel):
+    texte: str
+
+
+class DemandeTemoin(BaseModel):
+    texte: str
+    attendu: str = "bloque"
+
+
+def _securite(action, *args):
+    try:
+        return action(*args)
+    except securite.ErreurTemoins as e:
+        raise HTTPException(409, str(e))  # à confirmer : l'interface redemande avec forcer
+    except (securite.ErreurListes, ErreurSecurite) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/securite")
+def etat_securite():
+    return securite.etat()
+
+
+@app.post("/api/securite/essayer")
+def essayer_securite(d: DemandeEssai):
+    return _securite(securite.essayer, d.texte)
+
+
+@app.post("/api/securite/ajouts")
+def ajouter_terme_securite(d: DemandeTerme):
+    return _securite(securite.ajouter, d.liste, d.terme, d.forcer)
+
+
+@app.post("/api/securite/ajouts/retirer")
+def retirer_terme_securite(d: DemandeTerme):
+    return _securite(securite.retirer, d.liste, d.terme)
+
+
+@app.post("/api/securite/ajouts/promouvoir")
+def promouvoir_terme_securite(d: DemandeTerme):
+    return _securite(securite.promouvoir, d.liste, d.terme)
+
+
+@app.post("/api/securite/temoins")
+def ajouter_temoin_securite(d: DemandeTemoin):
+    return _securite(securite.ajouter_temoin, d.texte, d.attendu)
+
+
+@app.post("/api/securite/temoins/retirer")
+def retirer_temoin_securite(d: DemandeEssai):
+    return _securite(securite.retirer_temoin, d.texte)
+
+
 @app.get("/api/decouvrir/familles")
 def decouvrir_familles(type: str):
     try:
