@@ -70,7 +70,12 @@ materiel:
 profil_prompt:
     style: prose
     langue: en
-    mots_max: 150  # aucune longueur officielle : le guide Krea dit « Long detailed prompts yield best results » ; ses 20 exemples font 10 à 180 mots (médiane ~75). Valeur de départ, à affiner au banc (relevé le 2026-11-09).
+    mots_max: 150  # aucune longueur officielle : le guide Krea dit « Long detailed prompts yield best results » ; ses 20 exemples font 10 à 180 mots (médiane ~75). Valeur de départ, à affiner au banc (relevé le 2026-11-09 ; banc du 2026-11-15 ci-dessous)
+    # Banc du 2026-11-15 (une rue et un village de montagne, quatre graines, checkpoint affiné de l'utilisateur et non le
+    # fichier officiel de cette fiche) : des prompts de 386 à 460 mots écrits à la main ont placé plus d'éléments demandés
+    # (décor, objets, plan du fond) que des prompts de 109 à 125 mots, sans dégradation visible : la limite de 150 mots
+    # n'est pas un mur pour ce modèle. La consigne de l'appli ne donne qu'un plafond (« {mots_min} to {mots_max} words ») :
+    # pour Qwen-Image 2.1 le LLM par défaut ne l'atteint pas (voir sa fiche), non mesuré ici pour Krea 2. Valeur gardée..
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) et rangées dans les sections
     # de la consigne d'un LLM généraliste (app/prompt.py, « Gabarit »). Un LLM spécialisé (catalogue/llm.yaml) garde
     # sa propre consigne. Pas de « plan » : le guide de Krea demande un seul paragraphe, sans ordre imposé. Garder le
