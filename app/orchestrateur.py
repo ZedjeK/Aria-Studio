@@ -12,33 +12,44 @@ aient rendu la carte.
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from app import fiches, modeles, reglages
 from app.comfy import ComfyUI
 from app.garde import Garde
 from app.config import CONFIG
 from app.emplacements import moteur
-from app.llm import CONTEXTE_REFLEXION, Llama
+from app.llm import CONTEXTE_REFLEXION, ErreurLlama, Llama
 from app.modeles import DOSSIER as MODELES
 
+
+def nom_de_fichier(nom: str) -> str:
+    """Un GGUF de modeles/llm, ou son projecteur, se désigne par son nom de fichier, jamais par un chemin : ce nom
+    devient l'argument -m ou --mmproj de llama-server. Garde en profondeur : les routes valident déjà le nom contre
+    les fichiers présents, mais tout passe ici, et un oubli de route ne doit pas ouvrir un chemin."""
+    if not nom or nom in (".", "..") or nom != Path(nom).name:
+        raise ErreurLlama(f"Nom de GGUF invalide : {nom}")
+    return nom
 
 
 def lancement_llm(nom: str) -> dict:
     """Comment Aria lance ce GGUF : serveur (moteur), contexte, réflexion et vision, d'après ses réglages. Le banc de
     palier s'en sert aussi, pour mesurer le LLM tel qu'Aria le fait tourner."""
+    if nom:  # None : le LLM par défaut, que reglages.nom_llm retrouve
+        nom_de_fichier(nom)
     regle = reglages.valeurs_llm(nom)
     contexte, reflexion = regle["contexte"], regle["reflexion"]
     # Vision chargée d'office quand le LLM en a une : pas de redémarrage entre une réécriture avec image
     # (Montage, retouche, références) et une sans.
     projecteur = reglages.projecteur_llm(nom)[0]
-    vision = MODELES / "llm" / projecteur if projecteur else None
+    vision = MODELES / "llm" / nom_de_fichier(projecteur) if projecteur else None
     if reflexion or vision:  # consigne + images (≈ 600 tokens chacune) + réflexion + réponse
         contexte = max(contexte, CONTEXTE_REFLEXION)
     if specialiste := fiches.specialiste(nom):
         # Un LLM spécialisé a ses réglages d'entraînement : réflexion, contexte assez grand, vision.
         contexte, reflexion = max(contexte, specialiste["contexte"]), specialiste["reflexion"]
         if specialiste.get("vision"):
-            vision = MODELES / "llm" / specialiste["vision"]["nom"]
+            vision = MODELES / "llm" / nom_de_fichier(specialiste["vision"]["nom"])
     return {"serveur": moteur(reglages.serveur_llm(reglages.moteur_llm(nom)[0])), "contexte": contexte,
             "reflexion": reflexion, "vision": vision}
 
@@ -86,7 +97,7 @@ class Orchestrateur:
     @asynccontextmanager
     async def llm(self, modele: str | None = None):
         """`modele` : nom de fichier dans modeles/llm (par défaut celui de config.yaml)."""
-        nom = modele or modeles.llm_defaut()
+        nom = nom_de_fichier(modele or modeles.llm_defaut())
         async with self._verrou:
             if self.actif == "comfyui" and await self.comfy.est_pret():
                 await self.comfy.liberer_vram()
