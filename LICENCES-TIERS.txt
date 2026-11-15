@@ -3,7 +3,7 @@ Aria Studio : composants tiers
 
 Le code d'Aria Studio est sous licence MIT (fichier LICENSE). Ce fichier liste ce
 que le zip embarque et ce qu'Aria télécharge à ta demande, avec la licence de
-chaque composant. Relevé le 2026-11-13 sur les versions de requirements.txt et
+chaque composant. Relevé le 2026-11-15 sur les versions de requirements.txt et
 de catalogue/moteurs.yaml ; à tenir à jour quand l'un des deux change.
 
 Les textes complets des licences des paquets Python sont livrés avec eux, dans
@@ -21,7 +21,7 @@ Interpréteur
     licences de ses composants dans son dossier .dist-info
 
 Dépendances directes (requirements.txt)
-  fastapi 0.162.0 ............................................... MIT
+  fastapi 0.162.5 ............................................... MIT
   uvicorn 0.54.0 ................................................ BSD-3-Clause
   PyYAML 6.0.3 .................................................. MIT
   httpx 0.28.1 .................................................. BSD-3-Clause
