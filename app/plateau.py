@@ -24,7 +24,7 @@ FORMAT_IMAGE = workflows.FORMAT_IMAGE
 # Images d'une même commande : un champ à taper (Plateau), plafonné contre une faute de frappe (« 400 »). Une commande
 # trop longue s'arrête avec ✕ Annuler, et ce qui est déjà produit reste dans les Rushes.
 NOMBRE_MAX = 50
-_ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
+_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")  # contrôlé par fullmatch : « $ » accepterait un retour à la ligne final
 
 
 class ErreurPlateau(ValueError):
@@ -802,12 +802,12 @@ def textes_origine(ids: list[str], profondeur: int = 20) -> list[str]:
         f = fiche(id_rush)
         textes += [t for t in (f.get("idee"), f.get("prompt")) if t]
         a_voir += [r for r in [f.get("parent"), *(f.get("references") or [])]
-                   if r and _ID.match(r) and (DOSSIER / f"{r}.json").is_file()]
+                   if r and _ID.fullmatch(r) and (DOSSIER / f"{r}.json").is_file()]
     return textes
 
 
 def _verifier_id(id_creation: str):
-    if not _ID.match(id_creation) or not (DOSSIER / f"{id_creation}.json").is_file():
+    if not _ID.fullmatch(id_creation) or not (DOSSIER / f"{id_creation}.json").is_file():
         raise ErreurPlateau(f"Création inconnue : {id_creation}")
 
 

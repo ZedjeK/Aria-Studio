@@ -47,7 +47,7 @@ LONGUEUR_CONTRAINTE = 300
 LONGUEUR_MUSIQUE = 200
 # Ajouts au casting (2026-10-24) : une séquence plus ancienne les reçoit par défaut, sans être « à retourner ».
 CASTING_DEFAUT = {"contrainte": "", "reference_partout": True}
-_ID = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
+_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")  # contrôlé par fullmatch : « $ » accepterait un retour à la ligne final
 _REPLIQUE, _REPLIQUES = repliques_h3.UNE_REPLIQUE, repliques_h3.REPLIQUES  # balise <d> et guillemets (app/repliques.py)
 # Mesuré le 2026-10-21 (4 plans Rapide de 5 s : 8 min 14) : guides, références et premier chargement
 # coûtent environ 40 % de plus qu'un clip seul du Montage.
@@ -232,7 +232,7 @@ def _textes(s: dict) -> list[str]:
 # Stockage
 
 def _chemin(id_sequence: str):
-    if not _ID.match(id_sequence or "") or not (DOSSIER / f"{id_sequence}.json").is_file():
+    if not _ID.fullmatch(id_sequence or "") or not (DOSSIER / f"{id_sequence}.json").is_file():
         raise ErreurSequence(f"Séquence inconnue : {id_sequence}")
     return DOSSIER / f"{id_sequence}.json"
 
@@ -434,7 +434,7 @@ def corbeille() -> list[dict]:
 
 def restaurer(id_sequence: str) -> dict:
     """Revient dans la liste des séquences, telle qu'elle était. Refusé si une séquence du même identifiant existe."""
-    if not _ID.match(id_sequence or "") or not (_corbeille() / f"{id_sequence}.json").is_file():
+    if not _ID.fullmatch(id_sequence or "") or not (_corbeille() / f"{id_sequence}.json").is_file():
         raise ErreurSequence(f"Séquence inconnue dans la corbeille : {id_sequence}")
     if (DOSSIER / f"{id_sequence}.json").exists():
         raise ErreurSequence("Une séquence du même identifiant existe déjà : rien n'est restauré")
