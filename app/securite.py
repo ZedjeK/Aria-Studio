@@ -46,6 +46,38 @@ _NOMBRES = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
     "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
 }
+
+# Les âges adultes écrits en plusieurs mots (« vingt-neuf », « vingt et un », « soixante-dix-neuf », « twenty-nine »...),
+# lus à leur vraie valeur. Sans eux, le trait d'union laissait « neuf » (« un », « huit »...) seul devant « ans » et
+# « vingt-neuf ans » se lisait « neuf ans » : un adulte bloqué à tort. Tous valent 18 ou plus, ce que tests/test_securite.py
+# garde ; « dix sept » (17) reste le seul nombre à deux mots qui désigne un mineur.
+_UNITES_FR = ("un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf")
+_DIZAINES_FR = {"vingt": 20, "trente": 30, "quarante": 40, "cinquante": 50, "soixante": 60, "septante": 70,
+                "huitante": 80, "nonante": 90}  # septante, huitante, nonante : Belgique et Suisse
+_ADOS_FR = {"dix": 10, "onze": 11, "douze": 12, "treize": 13, "quatorze": 14, "quinze": 15, "seize": 16,
+            "dix sept": 17, "dix huit": 18, "dix neuf": 19}
+_UNITES_EN = ("one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+_DIZAINES_EN = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
+
+
+def _nombres_composes() -> dict[str, int]:
+    nombres = {"dix huit": 18, "dix neuf": 19, "quatre vingt": 80, "quatre vingts": 80, "soixante et onze": 71}
+    for dizaine, valeur in _DIZAINES_FR.items():
+        for i, unite in enumerate(_UNITES_FR, 1):
+            nombres[f"{dizaine} {unite}"] = valeur + i
+        nombres[f"{dizaine} et un"] = valeur + 1
+    for ado, valeur in _ADOS_FR.items():  # soixante-dix à soixante-dix-neuf, quatre-vingt-dix à quatre-vingt-dix-neuf
+        nombres[f"soixante {ado}"] = 60 + valeur
+        nombres[f"quatre vingt {ado}"] = 80 + valeur
+    for i, unite in enumerate(_UNITES_FR, 1):  # quatre-vingt-un à quatre-vingt-neuf
+        nombres[f"quatre vingt {unite}"] = 80 + i
+    for dizaine, valeur in _DIZAINES_EN.items():
+        for i, unite in enumerate(_UNITES_EN, 1):
+            nombres[f"{dizaine} {unite}"] = valeur + i
+    return nombres
+
+
+_NOMBRES.update(_nombres_composes())
 _NOMBRE = r"(\d{1,2}|" + "|".join(sorted((re.escape(n).replace(r"\ ", r"[\s-]+") for n in _NOMBRES), key=len, reverse=True)) + ")"
 _PERSONNE = (r"(?:girl|boy|kid|child|daughter|son|student|pupil|teen|lad|lass|female|male|person"
              r"|fille|garcon|enfant|gamin|gamine|eleve)")

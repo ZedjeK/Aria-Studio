@@ -59,6 +59,90 @@ class Ages(unittest.TestCase):
         for texte in ("a woman of 30", "a 25 year old woman", "one of 3 dancers", "a group of 5 people"):
             securite.verifier(texte, "nude")
 
+    def test_ages_adultes_en_lettres_passent(self):
+        """« vingt-neuf ans » ne se lit pas « neuf ans » : un âge écrit en plusieurs mots vaut sa vraie valeur."""
+        for texte in ("vingt-neuf ans", "vingt neuf ans", "dix-huit ans", "dix-neuf ans", "vingt et un ans", "vingt-et-un ans",
+                      "trente-deux ans", "quarante-cinq ans", "soixante-neuf ans", "soixante-dix ans", "soixante-dix-neuf ans",
+                      "soixante et onze ans", "quatre-vingt-neuf ans", "quatre-vingt-dix ans", "quatre-vingt-dix-neuf ans",
+                      "septante-neuf ans", "nonante-neuf ans",
+                      "twenty-nine year old", "twenty-nine-year-old", "twenty nine years old", "twenty-one yo",
+                      "thirty-two year old", "ninety-nine years old", "aged twenty-nine", "a girl of twenty-nine",
+                      "une fille de vingt-neuf ans"):
+            securite.verifier(f"a woman, {texte}", "nude")
+
+    def test_les_mineurs_restent_bloques_sous_toutes_les_formes(self):
+        for texte in ("neuf ans", "dix-sept ans", "dix sept ans", "seize ans", "onze ans", "un an", "9 ans", "17 ans",
+                      "nine year old", "nine-year-old", "seventeen years old", "sixteen-year-old", "twelve yo", "aged seventeen",
+                      "a girl of nine", "une fille de dix-sept ans"):
+            with self.assertRaises(ErreurSecurite, msg=texte):
+                securite.verifier(f"a woman, {texte}", "nude")
+
+    def test_un_mineur_cite_apres_un_adulte_bloque_toujours(self):
+        """Lire « vingt-neuf ans » en entier ne doit pas faire manquer le « neuf ans » d'une autre personne."""
+        for texte in ("his twenty-nine year old mother and her nine year old daughter",
+                      "elle a vingt-neuf ans et sa fille a neuf ans",
+                      "a woman, twenty-one years old, and a sixteen-year-old boy"):
+            with self.assertRaises(ErreurSecurite, msg=texte):
+                securite.verifier(texte, "nude")
+
+    @staticmethod
+    def _en_francais(n: int) -> str:
+        """Un entier de 1 à 99 en lettres (graphie standard, traits d'union), écrit ici sans rien reprendre de app/securite.py."""
+        unites = ("", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf")
+        ados = {10: "dix", 11: "onze", 12: "douze", 13: "treize", 14: "quatorze", 15: "quinze", 16: "seize",
+                17: "dix-sept", 18: "dix-huit", 19: "dix-neuf"}
+        dizaines = {2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante"}
+        if n < 10:
+            return unites[n]
+        if n < 20:
+            return ados[n]
+        if n < 70:
+            d, u = divmod(n, 10)
+            return dizaines[d] + ("" if u == 0 else "-et-un" if u == 1 else f"-{unites[u]}")
+        if n < 80:
+            return "soixante-et-onze" if n == 71 else f"soixante-{ados[n - 60]}"
+        if n == 80:
+            return "quatre-vingts"
+        return f"quatre-vingt-{unites[n - 80]}" if n < 90 else f"quatre-vingt-{ados[n - 80]}"
+
+    @staticmethod
+    def _en_anglais(n: int) -> str:
+        unites = ("", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+        ados = ("ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen")
+        dizaines = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+        if n < 10:
+            return unites[n]
+        if n < 20:
+            return ados[n - 10]
+        d, u = divmod(n, 10)
+        return dizaines[d] + (f"-{unites[u]}" if u else "")
+
+    def test_tous_les_ages_de_1_a_99_bloquent_si_et_seulement_si_moins_de_18(self):
+        """Le filtre lit chaque âge écrit en chiffres ou en lettres, français et anglais, et ne bloque que les mineurs."""
+        for n in range(1, 100):
+            formes = (f"{n} ans", f"{n} years old", f"{n}-year-old",
+                      f"{self._en_francais(n)} an{'s' if n > 1 else ''}",
+                      f"{self._en_anglais(n)} year{'s' if n > 1 else ''} old", f"{self._en_anglais(n)}-year-old")
+            for forme in formes:
+                texte = f"a woman, {forme}"
+                if n < securite.AGE_MAJORITE:
+                    with self.assertRaises(ErreurSecurite, msg=f"{n} : « {forme} » devrait bloquer"):
+                        securite.verifier(texte, "nude")
+                else:
+                    try:
+                        securite.verifier(texte, "nude")
+                    except ErreurSecurite as e:
+                        self.fail(f"{n} : « {forme} » ne devrait pas bloquer ({e})")
+
+    def test_les_nombres_ecrits_en_plusieurs_mots_valent_tous_18_ou_plus(self):
+        """Garde-fou : un nombre composé ajouté plus tard ne peut pas ouvrir un trou sous le plancher de 18 ans."""
+        composes = {cle: v for cle, v in securite._NOMBRES.items() if " " in cle and cle != "dix sept"}
+        self.assertGreater(len(composes), 100)
+        for cle, valeur in composes.items():
+            self.assertGreaterEqual(valeur, securite.AGE_MAJORITE, cle)
+        self.assertEqual(securite._NOMBRES["dix sept"], 17)  # le seul nombre à deux mots qui reste un mineur
+        self.assertEqual(securite.AGE_MAJORITE, 18)
+
 
 class Listes(unittest.TestCase):
     """Socle et ajouts sur des copies jetables : le vrai socle n'est jamais touché par ces tests."""
