@@ -4,6 +4,15 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
+## 2.2.1 (2026-11-15)
+
+Correctif du filtre de protection des mineurs. Notes complètes : `docs/releases/v2.2.1.md`.
+
+### Corrigé
+
+- Un âge écrit au pluriel est lu : « 12-year-olds », « 12 year olds », « 14 yos », « 15 y/os » passaient, le « s » final empêchant la reconnaissance (#111).
+- Un tiret typographique (insécable, demi-cadratin, cadratin, signe moins...) est lu comme un trait d'union : « dix‑sept ans » et « 10–12 ans » étaient collés en « dixsept » et « 1012 » et passaient. Le texte est lu sous l'ancienne et la nouvelle lecture des tirets et bloque si l'une des deux bloque, donc un tiret glissé dans un mot du filtre ne le cache pas (#111).
+
 ## 2.2.0 (2026-11-15)
 
 Notes complètes : `docs/releases/v2.2.0.md`.
