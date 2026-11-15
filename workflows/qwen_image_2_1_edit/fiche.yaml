@@ -67,6 +67,11 @@ profil_prompt:
     # <image1>, <image2> ») et l'écarte pour une seule (« For single-image input (N = 1), do NOT use tags »).
     # L'appli met la balise dans les deux cas : à trancher par essai.
     nom_image: '<image{n}>'
+    # Essai du 2026-11-15 contre FLUX.2 Klein 9B (une image de rue, deux retouches, graines 11 et 22, checkpoint affiné de
+    # l'utilisateur) : changer une jupe et retirer une veste réussissent des deux côtés, identité et décor conservés. Qwen
+    # garde mieux ce qu'on ne demande pas de toucher dans le premier cas (les bas), Klein 2 dans le second (le débardeur).
+    # Ce workflow n'a qu'une image en entrée (la seconde a été retirée) ; Klein 2 en accepte plusieurs, mais le report d'un
+    # visage d'une image à l'autre y est peu fiable : une graine n'a presque rien changé, l'autre a aussi changé les cheveux.
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) et rangées dans les sections
     # de la consigne d'un LLM généraliste (app/prompt.py, « Gabarit »). Un LLM spécialisé (catalogue/llm.yaml) garde
     # sa propre consigne.

@@ -67,7 +67,14 @@ materiel:
 profil_prompt:
     style: prose
     langue: en
-    mots_max: 450  # son réécrivain officiel (PE-T2I, system_prompt.txt) vise ~20 phrases, « four to five hundred words » ; relevé le 2026-11-09. L'ancien 200 venait du polisseur de Qwen-Image 1. À confirmer au banc.
+    mots_max: 450  # son réécrivain officiel (PE-T2I, system_prompt.txt) vise ~20 phrases, « four to five hundred words » ; relevé le 2026-11-09. L'ancien 200 venait du polisseur de Qwen-Image 1. Banc du 2026-11-15 ci-dessous.
+    # Banc du 2026-11-15 (dix idées, quatre graines, checkpoint affiné de l'utilisateur et non le fichier officiel de cette
+    # fiche) : la consigne de réécriture dit « {mots_min} to {mots_max} words », que le LLM par défaut lit comme un plafond.
+    # Il écrit 126 à 197 mots, jamais 450. En lui demandant 350 à 450 mots, il en écrit 332 à 447, mais sur des idées simples
+    # la fidélité n'augmente pas et le détail fin se perd (l'anneau d'iris demandé ressort net sur 4 images avec un prompt
+    # court écrit à la main, sur 0 avec le prompt de 363 mots du LLM). Des prompts de 386 à 460 mots écrits à la main ont en
+    # revanche placé plus d'éléments sur des scènes à nombreux éléments (décor d'une rue, d'un village). Valeur gardée :
+    # 450 reste un plafond, pas une cible.
     nom_image: '<image{n}>'  # doc ComfyUI de Qwen-Image 2.1 : les images se désignent par indice, « <image1> »
     # Règles du modèle cible, condensées depuis la source officielle (lue le 2026-11-02) et rangées dans les sections
     # de la consigne d'un LLM généraliste (app/prompt.py, « Gabarit »). Un LLM spécialisé (catalogue/llm.yaml) garde
