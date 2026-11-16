@@ -4,6 +4,26 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
+## 2.3.0 (2026-11-16)
+
+Retouches de l'interface. Notes complètes : `docs/releases/v2.3.0.md`.
+
+### Ajouté
+
+- Réglages : un onglet Modèles vidéo (Texte vers vidéo, Image vers vidéo), et un bouton « Recommander » pour chaque modèle d'image ou de vidéo, qui remplit ses réglages avec les valeurs de sa fiche, avec leur raison et leur source ; rien n'est enregistré avant « Enregistrer » (#119).
+- Galeries (Rushes, Bobines) : un volet à gauche des vignettes pour les vues et les dossiers, sans limite de nombre, avec des noms de dossier en majuscules partout (#118).
+- Montage : deux groupes de cartes, « Avec des images » et « Sans image » (#120).
+
+### Modifié
+
+- Réglages : le bouton « Tout » disparaît, un onglet par famille ; « Adapter à ma machine » passe dans l'onglet LLM et ne propose plus que des réglages de LLM ; la résolution des modèles d'image n'est plus jamais proposée, elle reste en note (#119).
+- Menu : titres Création et Préparation en cyan avec un filet ; Quitter remonté sous Réglages, en rouge (#120).
+- Scénario : chaque atelier a ses compléments, qui ne se partagent plus ; un brouillon d'avant est repris (#117).
+
+### Corrigé
+
+- Scénario : « Tout réinitialiser » ne vide plus les images de départ et les compléments des autres ateliers, et remet à zéro le personnage de référence d'une Séquence (#117).
+
 ## 2.2.3 (2026-11-16)
 
 Correctif de la mise à jour intégrée. Notes complètes : `docs/releases/v2.2.3.md`.
