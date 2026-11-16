@@ -43,8 +43,9 @@ function tacheCible() {
     if (n) return ["variation", { ...w.texte_vers_image, choix: w.texte_vers_image.choix.filter((x) => x.variation) }];
     return ["image", w.texte_vers_image];
 }
-// sujet -> { choix: {bloc: {sous-liste: valeur}}, age, texte, toutes: lève le filtre par origine,
-//            replique, dialogue, avecMusique, musique, traductionMusique : les cases 🗣 et 🎵 d'un clip }
+// atelier -> sujet -> { choix: {bloc: {sous-liste: valeur}}, age, texte, toutes: lève le filtre par origine,
+//                       replique, dialogue, avecMusique, musique, traductionMusique : les cases 🗣 et 🎵 d'un clip }
+// Chaque atelier a ses propres compléments : « Tout réinitialiser » ne touche que ceux de l'atelier affiché.
 const etatsPrompt = {};
 let definitionsPrompt = {};  // "bloc|sous-liste" -> sous-liste de la structure
 let incompatPrompt = new Map();  // "bloc|sous-liste|valeur" -> [[bloc, sous-liste, valeur], …]
@@ -57,9 +58,15 @@ let retraitsPrompt = [];
 let promptPret = false;
 let personnagesEnregistres = [];
 
-const etatPrompt = () => (etatsPrompt[sujetPrompt] ??=
+const etatPrompt = () => ((etatsPrompt[formeScenario] ??= {})[sujetPrompt] ??=
     { choix: {}, age: null, texte: "", replique: "",
       toutes: false, dialogue: false, avecMusique: false, musique: "", traductionMusique: null });
+// Un brouillon d'avant gardait les compléments par sujet seulement, communs à tous les ateliers : chaque atelier en
+// reçoit une copie, rien ne se perd.
+function etatsParAtelier(anciens) {
+    if (!anciens || !Object.keys(anciens).some((cle) => LIBELLES_SUJETS[cle])) return anciens ?? {};
+    return Object.fromEntries(["image", "clip", "sequence"].map((nom) => [nom, JSON.parse(JSON.stringify(anciens))]));
+}
 const cle = (...morceaux) => morceaux.join("|");
 // Un LLM par atelier ; par défaut celui du modèle cible (onglet Modèles), sinon le défaut. 👁 : il voit les images.
 const llmsChoisis = {};  // atelier → GGUF choisi à la main (gardé dans le brouillon)
@@ -399,7 +406,7 @@ function relireBrouillon() {
     if (ENVOIS[b.forme] || b.forme === "sequence") formeScenario = b.forme;
     if (b.sujet && LIBELLES_SUJETS[b.sujet]) sujetPrompt = b.sujet;
     Object.assign(ciblesParForme, b.cibles ?? {});
-    Object.assign(etatsPrompt, b.etats ?? {});
+    Object.assign(etatsPrompt, etatsParAtelier(b.etats));
     Object.assign(refsScenario, b.references ?? {});
     Object.assign(llmsChoisis, b.llms ?? {});
     Object.entries(b.ateliers ?? {}).forEach(([nom, a]) => { ateliers[nom] = { ...atelier(nom), ...a }; });
@@ -1015,13 +1022,26 @@ document.getElementById("prompt-final").addEventListener("input", (e) => {
     garderBrouillon();
 });
 
-// « Tout réinitialiser » (sous Générer) : l'atelier repart de zéro, comme à la première ouverture.
+// Les images de départ de chaque atelier : « Tout réinitialiser » ne vide que celles de l'atelier affiché.
+const RAZ_DEPART = {
+    image: () => Object.assign(refsScenario, { role: "texte", inspirer: [], variation: null }),
+    retouche: () => { refsScenario.retouche = null; },
+    clip: () => { refsScenario.animer = null; },
+    sequence: () => {  // le personnage de référence ; un premier plan « depuis le rush » repart du texte
+        decoupage.reference = null;
+        if (decoupage.plans[0]?.enchainement === "rush") decoupage.plans[0].enchainement = "texte";
+    },
+};
+
+// « Tout réinitialiser » (sous Générer) : l'atelier repart de zéro, comme à la première ouverture. Les trois autres
+// gardent leur idée, leur conversation, leur prompt final, leurs images de départ et leurs compléments.
 document.getElementById("effacer-prompt").addEventListener("click", async () => {
     if (!confirm(`Tout réinitialiser dans l'atelier ${document.querySelector(".onglet-scenario.actif").textContent.trim()} ? `
-        + "L'idée, la conversation, le prompt final, les images de départ et les compléments sont effacés.")) return;
+        + "L'idée, la conversation, le prompt final, les images de départ et les compléments de cet atelier sont effacés ; "
+        + "les autres ateliers ne changent pas.")) return;
     ateliers[formeScenario] = { idee: "", final: "", echanges: [], dernier: null };
-    Object.assign(refsScenario, { role: "texte", inspirer: [], variation: null, animer: null, retouche: null });
-    Object.keys(etatsPrompt).forEach((sujet) => delete etatsPrompt[sujet]);
+    RAZ_DEPART[formeScenario]();
+    delete etatsPrompt[formeScenario];
     majAtelier();
     await choisirSujet(sujetPrompt);  // relit les listes : plus aucun choix coché
     garderBrouillon();
