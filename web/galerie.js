@@ -1,12 +1,13 @@
 // Galeries rangées : les Rushes du Plateau (images) et les Bobines du Montage (clips).
-// Mêmes vues (Tous, Non rangés, dossiers, Archives, Corbeille), même sélection ; chaque genre a ses propres dossiers.
+// Mêmes vues (Tous, Non rangés, Archives, Corbeille, puis les dossiers dans un volet à gauche), même sélection ;
+// chaque genre a ses propres dossiers.
 // Ranger ne déplace aucun fichier : la fiche note son dossier, son archivage ou sa mise à la corbeille.
 //
 // Par défaut, rien n'est affiché : un rush ou un clip peut être sensible. On ouvre « Tous » ou un dossier quand on le veut
 // (🙈 Masquer referme). Tant que c'est masqué, seuls les compteurs sont lus : aucune vignette n'est demandée.
 //
 // Le balisage d'une galerie porte des data-role : compte, vues, selectionner, barre, compte-selection,
-// ranger-dans, vignettes (voir index.html). « Vider la corbeille » est dans la rangée des vues, vue Corbeille.
+// ranger-dans, vignettes (voir index.html). « Vider la corbeille » est dans le volet des vues, vue Corbeille.
 
 const ACTIONS_DEPOT = { non_ranges: ["ranger", null], archives: ["archiver"], corbeille: ["corbeille"] };
 const actionDepot = (cle) => (cle?.startsWith("dossier:") ? ["ranger", cle.slice(8)] : ACTIONS_DEPOT[cle]);
@@ -88,23 +89,27 @@ function creerGalerie({ genre, racine, mot, vides, vignette, ouvrir, actions = (
         const e = g.etat;
         rendreDestination();
         const actif = cleVue();
-        const pastille = (cle, libelle, nombre) => `<button type="button" class="vue-rush ${cle === actif ? "actif" : ""}"
-            data-vue-rush="${echapper(cle)}">${libelle} <span class="nombre">${nombre}</span></button>`;
-        $("vues").innerHTML = pastille("tous", "Tous", e.tous)
-            + pastille("non_ranges", "Non rangés", e.non_ranges)
-            + e.dossiers.map((d) => pastille(`dossier:${d.nom}`, `📁 ${echapper(d.nom)}`, d.nombre)).join("")
-            + '<button type="button" class="vue-rush nouveau" data-nouveau-dossier="1">＋ Dossier</button>'
-            + (g.vue.dossier
-                ? `<span class="outils-dossier"><button type="button" class="petit" data-renommer-dossier="1">✎ Renommer</button>
-                   <button type="button" class="petit" data-supprimer-dossier="1">✕ Supprimer le dossier</button></span>` : "")
-            + '<span class="separateur"></span>'
-            + pastille("archives", "📦 Archives", e.archives) + pastille("corbeille", "🗑 Corbeille", e.corbeille)
+        // Le volet à gauche des vignettes : les vues fixes, puis les dossiers (autant qu'on veut, la liste défile avec la page).
+        // Chaque ligne est une cible où glisser des vignettes. Les noms s'affichent en majuscules par la feuille de style
+        // (habillage.css) : le nom enregistré reste tel qu'il a été tapé.
+        const ligne = (cle, libelle, nombre) => `<button type="button" class="vue-volet ${cle === actif ? "actif" : ""}"
+            data-vue-rush="${echapper(cle)}"><span class="nom">${libelle}</span><span class="nombre">${nombre}</span></button>`;
+        $("vues").innerHTML = '<p class="titre-volet">Vues</p>'
+            + ligne("tous", "Tous", e.tous)
+            + ligne("non_ranges", "Non rangés", e.non_ranges)
+            + ligne("archives", "📦 Archives", e.archives) + ligne("corbeille", "🗑 Corbeille", e.corbeille)
             // Dans la corbeille, le bouton qui la vide est ici, avec les autres : plus besoin de tout dérouler.
             + (actif === "corbeille" && e.corbeille
                 ? `<button type="button" class="petit danger" data-vider-corbeille="1"
                     title="Ce qui est dans la corbeille reste restaurable jusqu'à ce que tu la vides">Vider la corbeille</button>` : "")
+            + '<p class="titre-volet">Dossiers</p>'
+            + e.dossiers.map((d) => ligne(`dossier:${d.nom}`, `📁 ${echapper(d.nom)}`, d.nombre)).join("")
+            + '<button type="button" class="vue-volet nouveau" data-nouveau-dossier="1">＋ Dossier</button>'
+            + (g.vue.dossier
+                ? `<span class="outils-dossier"><button type="button" class="petit" data-renommer-dossier="1">✎ Renommer</button>
+                   <button type="button" class="petit" data-supprimer-dossier="1">✕ Supprimer le dossier</button></span>` : "")
             + (actif !== "masque"
-                ? '<button type="button" class="vue-rush masquer" data-masquer="1" title="Ne plus afficher les vignettes">🙈 Masquer</button>' : "");
+                ? '<button type="button" class="vue-volet masquer" data-masquer="1" title="Ne plus afficher les vignettes">🙈 Masquer</button>' : "");
     }
 
     function rendre() {

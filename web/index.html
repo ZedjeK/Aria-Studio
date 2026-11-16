@@ -238,21 +238,25 @@
                         </label>
                     </div>
                 </div>
-                <!-- Tous · Non rangés · dossiers · ＋ │ Archives · Corbeille ; on y glisse des vignettes pour ranger. -->
-                <div data-role="vues" class="vues-rushes"></div>
-                <div data-role="barre" class="barre-selection" hidden>
-                    <span data-role="compte-selection"></span>
-                    <button type="button" class="petit" data-selection="tout">Tout</button>
-                    <button type="button" class="petit" data-selection="aucun">Aucun</button>
-                    <span class="separateur"></span>
-                    <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
-                    <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
-                    <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
-                    <button type="button" class="petit" data-action="restaurer">Restaurer</button>
-                    <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
-                    <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                <!-- Volet des vues (Tous, Non rangés, Archives, Corbeille) et des dossiers, à gauche des vignettes ; on y glisse des vignettes pour ranger. -->
+                <div class="galerie-volet">
+                    <div data-role="vues" class="vues-rushes volet-dossiers"></div>
+                    <div class="galerie-corps">
+                        <div data-role="barre" class="barre-selection" hidden>
+                            <span data-role="compte-selection"></span>
+                            <button type="button" class="petit" data-selection="tout">Tout</button>
+                            <button type="button" class="petit" data-selection="aucun">Aucun</button>
+                            <span class="separateur"></span>
+                            <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
+                            <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
+                            <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
+                            <button type="button" class="petit" data-action="restaurer">Restaurer</button>
+                            <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
+                            <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                        </div>
+                        <div data-role="vignettes" class="vignettes"></div>
+                    </div>
                 </div>
-                <div data-role="vignettes" class="vignettes"></div>
             </section>
         </div>
 
@@ -394,20 +398,24 @@
                         </label>
                     </div>
                 </div>
-                <div data-role="vues" class="vues-rushes"></div>
-                <div data-role="barre" class="barre-selection" hidden>
-                    <span data-role="compte-selection"></span>
-                    <button type="button" class="petit" data-selection="tout">Tout</button>
-                    <button type="button" class="petit" data-selection="aucun">Aucun</button>
-                    <span class="separateur"></span>
-                    <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
-                    <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
-                    <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
-                    <button type="button" class="petit" data-action="restaurer">Restaurer</button>
-                    <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
-                    <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                <div class="galerie-volet">
+                    <div data-role="vues" class="vues-rushes volet-dossiers"></div>
+                    <div class="galerie-corps">
+                        <div data-role="barre" class="barre-selection" hidden>
+                            <span data-role="compte-selection"></span>
+                            <button type="button" class="petit" data-selection="tout">Tout</button>
+                            <button type="button" class="petit" data-selection="aucun">Aucun</button>
+                            <span class="separateur"></span>
+                            <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
+                            <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
+                            <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
+                            <button type="button" class="petit" data-action="restaurer">Restaurer</button>
+                            <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
+                            <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                        </div>
+                        <div data-role="vignettes" class="vignettes"></div>
+                    </div>
                 </div>
-                <div data-role="vignettes" class="vignettes"></div>
             </section>
         </div>
 
@@ -571,20 +579,24 @@
                     <h2>Bobines <span data-role="compte" class="discret"></span></h2>
                     <button data-role="selectionner" type="button" class="petit">Sélectionner</button>
                 </div>
-                <div data-role="vues" class="vues-rushes"></div>
-                <div data-role="barre" class="barre-selection" hidden>
-                    <span data-role="compte-selection"></span>
-                    <button type="button" class="petit" data-selection="tout">Tout</button>
-                    <button type="button" class="petit" data-selection="aucun">Aucun</button>
-                    <span class="separateur"></span>
-                    <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
-                    <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
-                    <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
-                    <button type="button" class="petit" data-action="restaurer">Restaurer</button>
-                    <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
-                    <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                <div class="galerie-volet">
+                    <div data-role="vues" class="vues-rushes volet-dossiers"></div>
+                    <div class="galerie-corps">
+                        <div data-role="barre" class="barre-selection" hidden>
+                            <span data-role="compte-selection"></span>
+                            <button type="button" class="petit" data-selection="tout">Tout</button>
+                            <button type="button" class="petit" data-selection="aucun">Aucun</button>
+                            <span class="separateur"></span>
+                            <label class="discret">Ranger dans <select data-role="ranger-dans"></select></label>
+                            <button type="button" class="petit" data-action="archiver">📦 Archiver</button>
+                            <button type="button" class="petit" data-action="desarchiver">Sortir des archives</button>
+                            <button type="button" class="petit" data-action="restaurer">Restaurer</button>
+                            <button type="button" class="petit danger" data-action="corbeille">🗑 Corbeille</button>
+                            <button type="button" class="petit" data-selection="fermer">Terminer</button>
+                        </div>
+                        <div data-role="vignettes" class="vignettes clips"></div>
+                    </div>
                 </div>
-                <div data-role="vignettes" class="vignettes clips"></div>
             </section>
         </div>
 
