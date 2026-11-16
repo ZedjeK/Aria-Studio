@@ -4,6 +4,14 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
+## 2.2.2 (2026-11-16)
+
+Correctif de génération. Notes complètes : `docs/releases/v2.2.2.md`.
+
+### Corrigé
+
+- Rejouer une seed (même prompt, même modèle, même format) ne fait plus échouer la génération avec « 404 Not Found » : ComfyUI servait le workflow depuis son cache et annonçait des fichiers qu'Aria avait déjà effacés. Chaque envoi reçoit maintenant des noms de fichiers neufs, seul l'enregistrement est refait (#113).
+
 ## 2.2.1 (2026-11-15)
 
 Correctif du filtre de protection des mineurs. Notes complètes : `docs/releases/v2.2.1.md`.

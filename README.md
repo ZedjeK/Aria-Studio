@@ -292,7 +292,7 @@ Publier une version : passer `VERSION` de `app/__init__.py` au nouveau numéro, 
 et son `.sha256` sur Windows et crée la release en brouillon, à relire et à publier :
 
 ```powershell
-git tag -a v2.2.1 -m "Version 2.2.1"; git push origin v2.2.1
+git tag -a v2.2.2 -m "Version 2.2.2"; git push origin v2.2.2
 ```
 
 | Dossier | Rôle |
