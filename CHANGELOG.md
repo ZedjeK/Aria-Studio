@@ -4,6 +4,14 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
+## 2.2.3 (2026-11-16)
+
+Correctif de la mise à jour intégrée. Notes complètes : `docs/releases/v2.2.3.md`.
+
+### Corrigé
+
+- « Installer la mise à jour » installe maintenant la nouvelle version : le lanceur de mise à jour réessayait une seule fois si `programme\` était encore ouvert, alors que l'icône de la barre des tâches met une dizaine de secondes à se fermer après le serveur ; il abandonnait et relançait l'ancienne version. Il réessaie maintenant pendant 15 s avant de renoncer (#115).
+
 ## 2.2.2 (2026-11-16)
 
 Correctif de génération. Notes complètes : `docs/releases/v2.2.2.md`.
