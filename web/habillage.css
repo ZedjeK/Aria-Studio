@@ -34,7 +34,9 @@ body.large main {
 .menu-lateral {
     position: sticky;
     top: 0;
-    z-index: 2;
+    /* Pas au-dessus de la zone des pages : les fenêtres (.voile, fixes) vivent dans cette zone, et un menu à z-index 2
+       passait devant elles (leur bord gauche disparaissait dessous, le menu n'était pas assombri). */
+    z-index: 0;
     display: flex;
     flex-direction: column;
     height: 100vh;
