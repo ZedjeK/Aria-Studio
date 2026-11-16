@@ -19,8 +19,9 @@
 //
 // Mise à jour intégrée (app/installation_maj.py) : Aria lance le NOUVEAU lanceur, décompressé dans
 // cache\mise-a-jour\Aria-Studio-X.Y.Z\, avec « --mise-a-jour <pid du serveur> <ancien lanceur> », puis s'arrête.
-// Ce lanceur attend la fin du serveur, installe comme « Installer » (programme.precedent gardé) et relance Aria depuis
-// programme\ ; si l'installation échoue, programme\ n'a pas changé et il relance l'ancien lanceur.
+// Ce lanceur attend la fin du serveur, puis celle de l'icône, installe comme « Installer » (programme.precedent gardé)
+// et relance Aria depuis programme\ ; si programme\ est encore ouvert (l'icône finit de se fermer), il réessaie
+// pendant 15 s avant de renoncer. Si l'installation échoue, programme\ n'a pas changé et il relance l'ancien lanceur.
 //
 // Jeton par lancement (app/jeton.py) : le serveur écrit son jeton dans cache\session.json ; le lanceur ouvre
 // « /?jeton=… », que le serveur range dans un cookie avant de rediriger vers « / ».
@@ -282,7 +283,7 @@ static partial class Launcher
         }
         catch (ArgumentException) { }  // déjà arrêté
         AttendreIconeFermee(30000);  // l'icône verrouille programme\Aria-Studio.exe ; elle se ferme avec le serveur
-        string exe = Installer(racine, false);
+        string exe = Installer(racine, false, AttenteDossier());
         if (essai) return exe != null ? 0 : 1;
         string relance = exe ?? (ancien != null && File.Exists(ancien) ? ancien : null);
         if (relance != null)
@@ -293,7 +294,8 @@ static partial class Launcher
     // --- l'installation ---
 
     // Renvoie l'exe installé, ou null (message déjà donné) : dans ce cas programme\ n'a pas changé.
-    static string Installer(string racine, bool raccourci)
+    // `attente` : combien de millisecondes réessayer si programme\ est encore ouvert avant de renoncer (0 : un seul essai).
+    static string Installer(string racine, bool raccourci, int attente = 0)
     {
         string maison = Maison(), programme = Programme();
         string nouveau = programme + ".nouveau", precedent = programme + ".precedent";
@@ -307,7 +309,7 @@ static partial class Launcher
             Directory.CreateDirectory(maison);
             foreach (string dossier in new[] { programme, precedent })
             {
-                if (Directory.Exists(dossier) && !Libre(dossier))
+                if (Directory.Exists(dossier) && !LibreApresAttente(dossier, attente))
                 {
                     Erreur("Aria Studio tourne encore depuis " + dossier + ".\nQuitte-la (⏻ Quitter), puis relance.");
                     return null;
@@ -342,6 +344,30 @@ static partial class Launcher
         string exe = Path.Combine(programme, NomExe());
         if (raccourci) CreerRaccourci(exe);
         return exe;
+    }
+
+    // Mise à jour intégrée : combien de temps réessayer si programme\ est encore ouvert. L'icône relâche son verrou
+    // (AttendreIconeFermee) un instant avant que son processus ait fini de se fermer ; vu le 2026-11-16, programme\
+    // se libérait au même moment que l'icône disparaissait, après environ 12 s. Les essais peuvent le raccourcir
+    // (ARIA_ESSAI_ATTENTE_DOSSIER, en millisecondes) pour ne pas attendre le délai entier.
+    static int AttenteDossier()
+    {
+        int ms;
+        if (essai && int.TryParse(Environment.GetEnvironmentVariable("ARIA_ESSAI_ATTENTE_DOSSIER"), out ms) && ms >= 0)
+            return ms;
+        return 15000;
+    }
+
+    // Libre(), réessayé toutes les 250 ms pendant `attente` ms : le dernier essai est fait à l'échéance.
+    static bool LibreApresAttente(string dossier, int attente)
+    {
+        DateTime fin = DateTime.UtcNow.AddMilliseconds(attente);
+        while (!Libre(dossier))
+        {
+            if (DateTime.UtcNow >= fin) return false;
+            Thread.Sleep(250);
+        }
+        return true;
     }
 
     // Un dossier dont un fichier est ouvert (Aria lancée depuis là) ne se renomme pas.

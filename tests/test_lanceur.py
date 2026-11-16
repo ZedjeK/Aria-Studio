@@ -54,8 +54,8 @@ class Lanceur(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def lancer(self, exe: Path, *options) -> int:
-        env = {**os.environ, "USERPROFILE": str(self.profil)}
+    def lancer(self, exe: Path, *options, env: dict | None = None) -> int:
+        env = {**os.environ, "USERPROFILE": str(self.profil), **(env or {})}
         return subprocess.run([str(exe), *options], env=env, capture_output=True, timeout=60).returncode
 
     def proposerait(self, exe: Path, *options) -> bool:
@@ -168,6 +168,47 @@ class Lanceur(unittest.TestCase):
         fil.join()
         self.assertGreaterEqual(time.time() - debut, 1.5)  # il a attendu l'icône avant d'installer
         self.assertTrue((self.maison / "programme.precedent").is_dir())
+
+    def prete_a_mettre_a_jour(self) -> Path:
+        """Une version 2.1.0 installée, et la 2.2.0 décompressée comme le fait Aria dans cache\\mise-a-jour."""
+        self.assertEqual(self.lancer(self.zip / EXE, "--essai-installer"), 0)
+        nouvelle = self.maison / "cache" / "mise-a-jour" / "Aria-Studio-2.2.0"
+        shutil.copytree(self.zip, nouvelle)
+        (nouvelle / "app" / "__init__.py").write_text('VERSION = "2.2.0"', encoding="utf-8")
+        return nouvelle
+
+    def version_installee(self, dossier: Path) -> str:
+        return (dossier / "app" / "__init__.py").read_text(encoding="utf-8")
+
+    def test_mise_a_jour_reessaie_tant_que_programme_reste_ouvert(self):
+        """Vu le 2026-11-16 en vrai : l'icône relâche son verrou un instant avant que son processus ait fini de se
+        fermer, donc programme\\ reste ouvert encore un peu. Le lanceur abandonnait aussitôt (« Aria Studio tourne
+        encore depuis… ») et relançait l'ancienne version ; il réessaie maintenant avant de renoncer."""
+        import threading
+        import time
+        nouvelle = self.prete_a_mettre_a_jour()
+        ouvert = open(self.programme / "config.yaml", encoding="utf-8")  # l'icône qui finit de se fermer
+        fermeture = threading.Timer(2.0, ouvert.close)
+        fermeture.start()
+        debut = time.time()
+        try:
+            self.assertEqual(self.lancer(nouvelle / EXE, "--essai-mise-a-jour", "999999"), 0)
+        finally:
+            fermeture.join()
+            ouvert.close()
+        self.assertGreaterEqual(time.time() - debut, 1.5)  # il a attendu que programme\ se libère
+        self.assertEqual(self.version_installee(self.programme), 'VERSION = "2.2.0"')
+        self.assertEqual(self.version_installee(self.maison / "programme.precedent"), 'VERSION = "2.1.0"')
+
+    def test_mise_a_jour_renonce_si_programme_reste_ouvert(self):
+        """Si rien ne se libère dans le délai, rien ne change : programme\\ reste tel quel et le code de sortie le dit."""
+        nouvelle = self.prete_a_mettre_a_jour()
+        with open(self.programme / "config.yaml", encoding="utf-8"):  # Aria toujours lancée depuis programme\
+            code = self.lancer(nouvelle / EXE, "--essai-mise-a-jour", "999999", env={"ARIA_ESSAI_ATTENTE_DOSSIER": "1000"})
+        self.assertEqual(code, 1)
+        self.assertEqual(self.version_installee(self.programme), 'VERSION = "2.1.0"')
+        self.assertFalse((self.maison / "programme.precedent").exists())
+        self.assertFalse((self.maison / "programme.nouveau").exists())
 
     def test_mise_a_jour_sans_numero_refusee(self):
         self.assertEqual(self.lancer(self.zip / EXE, "--essai-mise-a-jour"), 1)
