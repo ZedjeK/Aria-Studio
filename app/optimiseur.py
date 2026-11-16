@@ -1,7 +1,11 @@
-"""⚡ Optimiser (onglet Réglages) : propositions de réglages selon le matériel et les recommandations des modèles.
+"""Réglages recommandés (onglet Réglages) : « Adapter à ma machine » pour les LLM, « Recommander » pour un modèle.
 
-Rien n'est appliqué ici : on renvoie un tableau « actuel → proposé », avec la raison et la source de chaque
-ligne, et c'est l'utilisateur qui coche ce qu'il garde (l'interface passe ensuite par les routes de réglages).
+Rien n'est appliqué ici : on renvoie ce qui changerait (« actuel → proposé »), avec la raison et la source de
+chaque ligne, et c'est l'utilisateur qui garde ou non (l'interface passe ensuite par les routes de réglages).
+
+    propositions()                  LLM : selon la carte graphique (VRAM, contexte) et les recommandations du modèle ;
+    recommandations_workflow(id)    modèle d'image ou de vidéo : les valeurs de sa fiche (CFG, sampler…), plus ce
+                                    que sa taille demande à la carte graphique, en notes.
 
 Sources des recommandations, relevées sur les pages officielles des modèles :
     workflows : bloc « recommandations » de workflows/<id>/fiche.yaml ;
@@ -76,39 +80,60 @@ def _recommandations_llm() -> dict:
     return {**locales, **catalogue}
 
 
+def _alertes_workflow(wf, params: dict, actuelles: dict, libre: float) -> list[str]:
+    """Ce que la taille du modèle demande à la carte graphique : des notes, jamais des réglages imposés."""
+    alertes = []
+    reco = wf.fiche.get("recommandations") or {}
+    nom = wf.fiche["nom"]
+    estimee = float(wf.materiel["vram_estimee_go"])
+    if estimee > libre:
+        alertes.append(f"{nom} demande environ {estimee:g} Go de VRAM pour {libre:g} Go libres : ComfyUI en "
+                       "décharge une partie en RAM, ça fonctionne mais plus lentement.")
+    natif = reco.get("resolution_native_mp")
+    if wf.fiche["tache"].endswith("video") and natif:
+        # Vidéo : la taille coûte des minutes par clip ; c'est un choix de résolution (0,4 / 0,6 / 1 MP), pas un
+        # réglage à corriger. On informe sans proposer.
+        alertes.append(f"{nom} est entraîné vers {natif:g} MP. Dans le Montage, c'est la résolution choisie qui "
+                       f"décide (1 MP ≈ natif) ; ici, {actuelles.get('megapixels'):g} MP "
+                       "pour le Casting. Plus haut = plus fin mais nettement plus lent (voir les notes de sa fiche).")
+    elif "megapixels" in params and natif:
+        cible = _plafond_megapixels(libre - estimee, float(natif))
+        if cible < natif:
+            alertes.append(f"{nom} est entraîné jusqu'à {natif:g} MP ; avec ta VRAM, je conseille de rester "
+                           f"à {cible:g} MP (au-delà, risque de débordement et lenteur).")
+    return alertes
+
+
+def recommandations_workflow(id_workflow: str) -> dict:
+    """Pour un modèle d'image ou de vidéo : toutes les valeurs que sa fiche recommande (celles déjà en place comprises :
+    l'interface les compare à ce que le formulaire contient, pas à ce qui est enregistré), et en notes ce que sa taille
+    demande à la carte graphique. Ne propose jamais la résolution : elle dépend de la carte, c'est une note."""
+    wf = workflows.obtenir(id_workflow)
+    materiel = profil_materiel()
+    params, actuelles = reglages.params_workflow(wf), reglages.valeurs_workflow(wf)
+    reco = wf.fiche.get("recommandations") or {}
+    sortie = []
+    for r in reco.get("valeurs") or []:
+        p = params.get(r["cle"])  # les steps se valident par checkpoint : ils ne sont pas dans ces réglages
+        if p is None:
+            continue
+        try:
+            valeur = p.valider(r["valeur"])
+        except reglages.ErreurReglages:
+            continue  # valeur que ce réglage n'accepte pas ici (sampler absent de ComfyUI…) : on ne propose rien
+        sortie.append({"type": "workflow", "cible": wf.id, "nom": wf.fiche["nom"], "cle": p.cle, "libelle": p.libelle,
+                       "actuel": actuelles[p.cle], "propose": valeur,
+                       "raison": r.get("note", "Recommandation officielle"), "source": r.get("source")})
+    return {"workflow": wf.id, "nom": wf.fiche["nom"], "propositions": sortie,
+            "alertes": _alertes_workflow(wf, params, actuelles, materiel["vram_libre_go"]),
+            "sans_recommandation": not reco.get("valeurs")}
+
+
 def propositions() -> dict:
+    """⚡ Adapter à ma machine : les LLM seulement. Les modèles d'image et de vidéo ont leur « Recommander »."""
     materiel = profil_materiel()
     libre = materiel["vram_libre_go"]
     sortie, alertes, sans_reco = [], [], []
-
-    for wf in workflows.catalogue():
-        params, actuelles = reglages.params_workflow(wf), reglages.valeurs_workflow(wf)
-        nom = wf.fiche["nom"]
-        reco = wf.fiche.get("recommandations") or {}
-        if not reco.get("valeurs"):
-            sans_reco.append(nom)
-        for r in reco.get("valeurs") or []:
-            if r["cle"] in params:
-                _proposer(sortie, "workflow", wf.id, nom, params[r["cle"]], actuelles[r["cle"]], r["valeur"],
-                          r.get("note", "Recommandation officielle"), r.get("source"))
-        estimee = float(wf.materiel["vram_estimee_go"])
-        if estimee > libre:
-            alertes.append(f"{nom} demande environ {estimee:g} Go de VRAM pour {libre:g} Go libres : ComfyUI en "
-                           "décharge une partie en RAM, ça fonctionne mais plus lentement.")
-        if wf.fiche["tache"].endswith("video") and (natif := reco.get("resolution_native_mp")):
-            # Vidéo : la taille coûte des minutes par clip ; c'est un choix de résolution (0,4 / 0,6 / 1 MP), pas un
-            # réglage à corriger. On informe sans proposer.
-            alertes.append(f"{nom} est entraîné vers {natif:g} MP. Dans le Montage, c'est la résolution choisie qui "
-                           f"décide (1 MP ≈ natif) ; ici, {actuelles.get('megapixels'):g} MP "
-                           "pour le Casting. Plus haut = plus fin mais nettement plus lent (voir les notes de sa fiche).")
-        elif "megapixels" in params and (natif := reco.get("resolution_native_mp")):
-            cible = _plafond_megapixels(libre - estimee, float(natif))
-            if cible < natif:
-                alertes.append(f"{nom} est entraîné jusqu'à {natif:g} MP ; avec ta VRAM, je conseille de rester "
-                               f"à {cible:g} MP (au-delà, risque de débordement et lenteur).")
-            _proposer(sortie, "workflow", wf.id, nom, params["megapixels"], actuelles["megapixels"], cible,
-                      f"Résolution native {natif:g} MP, plafonnée à ce que ta VRAM encaisse",
-                      reco.get("source_resolution"))
 
     recos_llm = _recommandations_llm()
     params = reglages.params_llm()

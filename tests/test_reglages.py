@@ -86,15 +86,14 @@ class Workflows(AvecFichierTemporaire):
         aide = reglages.params_workflow(workflows.obtenir("minimax_h3_t2v"))["megapixels"].aide
         self.assertIn("Montage", aide)
 
-    def test_optimiser_propose_le_sampler_officiel_de_h3(self):
+    def test_recommander_donne_le_sampler_officiel_de_h3(self):
         from app import optimiseur
         reglages.modifier_workflow("minimax_h3_i2v", {"sampler": "euler"})
-        with mock.patch.object(optimiseur, "profil_materiel", return_value={"vram_libre_go": 14}), \
-                mock.patch.object(optimiseur.os.path, "getsize", return_value=6 * 2**30):  # LLM simulé, absent du disque
-            r = optimiseur.propositions()
-        h3 = {(p["cible"], p["cle"]): p for p in r["propositions"] if p["cible"].startswith("minimax_h3")}
-        self.assertEqual(h3[("minimax_h3_i2v", "sampler")]["propose"], "res_multistep")
-        self.assertNotIn(("minimax_h3_t2v", "sampler"), h3)  # déjà au réglage officiel
+        with mock.patch.object(optimiseur, "profil_materiel", return_value={"vram_libre_go": 14}):
+            i2v = {p["cle"]: p for p in optimiseur.recommandations_workflow("minimax_h3_i2v")["propositions"]}
+            t2v = {p["cle"]: p for p in optimiseur.recommandations_workflow("minimax_h3_t2v")["propositions"]}
+        self.assertEqual((i2v["sampler"]["actuel"], i2v["sampler"]["propose"]), ("euler", "res_multistep"))
+        self.assertEqual(t2v["sampler"]["actuel"], t2v["sampler"]["propose"])  # déjà au réglage officiel
 
     def test_valeurs_d_origine(self):
         wf = workflows.obtenir("qwen_image_2_1_edit")

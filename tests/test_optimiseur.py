@@ -54,28 +54,56 @@ class Optimiseur(unittest.TestCase):
 
     def test_recommandations_sourcees(self):
         props, r = self.propositions()
-        # Les steps se valident par checkpoint (Modèles → Ma collection) : l'Optimiser ne les propose plus.
-        self.assertNotIn(("qwen_image_2_1", "steps"), props)
-        self.assertFalse([cle for (cible, cle) in props if cle == "shift"])  # plus aucun workflow livré ne le recommande
         self.assertNotIn((BONSAI, "temperature_reecriture"), props)  # déjà à la valeur de sa fiche (0,7)
         self.assertNotIn((LLM, "temperature_traduction"), props)  # hors catalogue : aucune recommandation
         self.assertEqual(props[(BONSAI, "presence_penalty")]["propose"], 1.5)
         self.assertEqual(r["materiel"]["gpu"], "GPU de test")
 
+    def test_adapter_ne_concerne_que_les_llm(self):
+        """« Adapter à ma machine » ne touche plus aux modèles d'image ni de vidéo : ils ont leur « Recommander »."""
+        _, r = self.propositions()
+        self.assertEqual({p["type"] for p in r["propositions"]}, {"llm"})
+        self.assertFalse(any("Krea 2" in a or "MiniMax" in a or "Qwen" in a for a in r["alertes"]), r["alertes"])
+        self.assertFalse(set(r["sans_recommandation"]) & {wf.fiche["nom"] for wf in workflows.catalogue()})
+
     def test_appliquer_vide_les_propositions(self):
         props, _ = self.propositions()
         for (cible, cle), p in props.items():
-            if p["type"] == "llm":
-                reglages.modifier_llm(cible, {cle: p["propose"]})
-            else:
-                reglages.modifier_workflow(cible, {cle: p["propose"]})
+            reglages.modifier_llm(cible, {cle: p["propose"]})
         props, _ = self.propositions()
         self.assertEqual(props, {})
 
+    def test_recommander_un_modele_donne_les_valeurs_de_sa_fiche(self):
+        reglages.modifier_workflow("krea2_turbo", {"cfg": 4.0})
+        r = optimiseur.recommandations_workflow("krea2_turbo")
+        props = {p["cle"]: p for p in r["propositions"]}
+        self.assertEqual((props["cfg"]["actuel"], props["cfg"]["propose"]), (4.0, 1.0))
+        self.assertTrue(props["cfg"]["source"].startswith("https://"))
+        self.assertTrue(props["cfg"]["raison"])
+        self.assertNotIn("steps", props)  # les steps se valident par checkpoint (Modèles → Ma collection)
+        self.assertNotIn("megapixels", props)  # la résolution dépend de la carte : une note, jamais une valeur imposée
+        self.assertFalse(r["sans_recommandation"])
+        reglages.modifier_workflow("krea2_turbo", {"cfg": 1.0})  # déjà en place : la valeur est quand même donnée
+        props = {p["cle"]: p for p in optimiseur.recommandations_workflow("krea2_turbo")["propositions"]}
+        self.assertEqual((props["cfg"]["actuel"], props["cfg"]["propose"]), (1.0, 1.0))
+
+    def test_recommander_chaque_modele_livre(self):
+        for wf in workflows.catalogue():
+            r = optimiseur.recommandations_workflow(wf.id)
+            for p in r["propositions"]:
+                reglages.modifier_workflow(wf.id, {p["cle"]: p["propose"]})
+            for p in optimiseur.recommandations_workflow(wf.id)["propositions"]:
+                self.assertEqual(p["actuel"], p["propose"], (wf.id, p["cle"]))
+
+    def test_modele_inconnu(self):
+        with self.assertRaises(workflows.ErreurWorkflow):
+            optimiseur.recommandations_workflow("n_existe_pas")
+
     def test_alertes_vram_sur_16_go(self):
-        _, r = self.propositions()
-        self.assertTrue(any("MiniMax H3 · image vers vidéo" in a and "RAM" in a for a in r["alertes"]))
-        self.assertTrue(any("Krea 2" in a and "1 MP" in a for a in r["alertes"]))
+        h3 = optimiseur.recommandations_workflow("minimax_h3_i2v")
+        self.assertTrue(any("MiniMax H3 · image vers vidéo" in a and "RAM" in a for a in h3["alertes"]), h3["alertes"])
+        krea = optimiseur.recommandations_workflow("krea2_turbo")
+        self.assertTrue(any("Krea 2" in a and "1 MP" in a for a in krea["alertes"]), krea["alertes"])
 
     def test_vram_du_projecteur_comptee(self):
         """La vision est chargée d'office avec le LLM : son projecteur (0,6 Go pour Bonsai 2) occupe la carte aussi."""
@@ -128,25 +156,35 @@ class Optimiseur(unittest.TestCase):
             _, r = self.propositions()
         self.assertFalse(any(a.startswith(LLM.removesuffix(".gguf")) for a in r["alertes"]))
 
-    def test_mégapixels_selon_la_carte(self):
+    def test_megapixels_selon_la_carte(self):
+        """La résolution dépend de la carte : « Recommander » la dit en note, il ne l'impose jamais."""
+        def conseil():
+            r = optimiseur.recommandations_workflow("qwen_image_2_1")
+            self.assertNotIn("megapixels", {p["cle"] for p in r["propositions"]})
+            return " ".join(a for a in r["alertes"] if "MP" in a)
+
         self.carte(48)
-        props, _ = self.propositions()
-        self.assertEqual(props[("qwen_image_2_1", "megapixels")]["propose"], 4.2)  # assez de VRAM : natif
+        self.assertEqual(conseil(), "")  # assez de VRAM : le natif convient, rien à dire
         self.carte(20)  # 19 Go libres - 8,7 Go estimés : marge entre 6 et 12 Go
-        props, _ = self.propositions()
-        self.assertEqual(props[("qwen_image_2_1", "megapixels")]["propose"], 2.0)  # marge moyenne : plafonné
-        self.carte(12)  # petite marge : reste à 1 MP, déjà en place, donc rien à proposer
-        props, _ = self.propositions()
-        self.assertNotIn(("qwen_image_2_1", "megapixels"), props)
+        self.assertIn("à 2 MP", conseil())  # marge moyenne : plafonné
+        self.carte(12)  # petite marge : 1 MP
+        self.assertIn("à 1 MP", conseil())
 
     def test_valeur_refusee_non_proposee(self):
         # Une recommandation que le réglage n'accepte pas (ici un sampler inconnu) est ignorée, sans erreur.
         wf = workflows.obtenir("krea2_turbo")
         fiche = {**wf.fiche, "recommandations": {"valeurs": [{"cle": "sampler", "valeur": "inexistant"}]}}
-        faux = [workflows.Workflow(fiche, wf.api)]
-        with mock.patch.object(optimiseur.workflows, "catalogue", return_value=faux):
-            props, _ = self.propositions()
-        self.assertNotIn(("krea2_turbo", "sampler"), props)
+        with mock.patch.object(optimiseur.workflows, "obtenir", return_value=workflows.Workflow(fiche, wf.api)):
+            r = optimiseur.recommandations_workflow("krea2_turbo")
+        self.assertEqual(r["propositions"], [])
+
+    def test_modele_sans_recommandation_dans_sa_fiche(self):
+        wf = workflows.obtenir("krea2_turbo")
+        fiche = {k: v for k, v in wf.fiche.items() if k != "recommandations"}
+        with mock.patch.object(optimiseur.workflows, "obtenir", return_value=workflows.Workflow(fiche, wf.api)):
+            r = optimiseur.recommandations_workflow("krea2_turbo")
+        self.assertTrue(r["sans_recommandation"])
+        self.assertEqual(r["propositions"], [])
 
     def test_modele_sans_recommandation(self):
         with mock.patch.object(modeles, "llm_disponibles", return_value=["inconnu.gguf"]), \

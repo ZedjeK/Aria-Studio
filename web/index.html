@@ -975,15 +975,13 @@
                        placeholder="Chercher un réglage…" autocomplete="off"></label>
                 <label class="case"><input type="checkbox" id="modifies-reglages"> Modifiés seulement <span id="nb-modifies" class="badge" hidden></span></label>
                 <span class="discret aide-reglages">Seuls tes changements sont enregistrés (data/reglages.yaml) : ↺ ramène une valeur à celle d'origine.</span>
-                <button id="optimiser" type="button" class="principal"
-                        title="Propose des réglages adaptés à ta carte graphique (rien n'est appliqué sans ton accord)">⚡ Adapter à ma machine</button>
             </div>
             <div class="mise-reglages">
             <nav class="nav-reglages" aria-label="Sections des réglages">
-                <button type="button" class="actif" data-section="tout" data-savoir="Tout ce qui se règle : le système, le LLM et les modèles d'image. Seuls tes changements sont enregistrés.">Tout</button>
-                <button type="button" data-section="systeme" data-savoir="Moteurs, emplacements, clés d'accès, mises à jour : ce qu'on règle une fois.">🖥️ Système</button>
-                <button type="button" data-section="llm" data-savoir="Les réglages du LLM qui écrit tes prompts. ↺ ramène une valeur à celle d'origine.">💬 LLM <i class="point-modifie" hidden></i></button>
-                <button type="button" data-section="workflows" data-savoir="Les réglages de chaque modèle d'image. ↺ ramène une valeur à celle d'origine.">🎨 Modèles image <i class="point-modifie" hidden></i></button>
+                <button type="button" class="actif" data-section="systeme" data-savoir="Moteurs, emplacements, clés d'accès, mises à jour : ce qu'on règle une fois.">🖥️ Système</button>
+                <button type="button" data-section="llm" data-savoir="Les réglages du LLM qui écrit tes prompts. « Adapter à ma machine » propose des valeurs selon ta carte graphique ; ↺ ramène une valeur à celle d'origine.">💬 LLM <i class="point-modifie" hidden></i></button>
+                <button type="button" data-section="workflows" data-savoir="Les réglages de chaque modèle d'image (texte vers image, retouche). « Recommander » remplit les valeurs que recommande la fiche du modèle ; ↺ ramène une valeur à celle d'origine.">🎨 Modèles image <i class="point-modifie" hidden></i></button>
+                <button type="button" data-section="video" data-savoir="Les réglages de chaque modèle vidéo (texte vers vidéo, image vers vidéo). « Recommander » remplit les valeurs que recommande la fiche du modèle ; ↺ ramène une valeur à celle d'origine.">🎬 Modèles vidéo <i class="point-modifie" hidden></i></button>
             </nav>
             <div class="savoir" data-pour="#vue-reglages .nav-reglages"><b>À SAVOIR</b><span></span></div>
             <div class="contenu-reglages">
@@ -1116,22 +1114,27 @@
                 <p id="journal-vide" class="discret" hidden>Rien encore.</p>
             </section>
             </details>
-            <section id="carte-optimiser" class="carte" hidden>
-                <h2>Propositions</h2>
-                <p id="materiel-optimiser" class="discret"></p>
-                <ul id="alertes-optimiser" class="alertes-prompt"></ul>
-                <div id="tableau-optimiser"></div>
-                <p id="sans-reco-optimiser" class="discret"></p>
-                <div class="ligne pied-reglages">
-                    <span id="etat-optimiser" class="discret"></span>
-                    <button id="fermer-optimiser" type="button">Fermer</button>
-                    <button id="appliquer-optimiser" type="button" class="principal" disabled>Appliquer la sélection</button>
-                </div>
-            </section>
             <div class="grille-reglages">
                 <section class="carte" data-section="llm">
                     <h2>LLM</h2>
-                    <label class="cible-reglages">Modèle <select id="llm-reglages"></select></label>
+                    <div class="ligne cible-ligne">
+                        <label class="cible-reglages">Modèle <select id="llm-reglages"></select></label>
+                        <button id="optimiser" type="button" class="petit"
+                                title="Propose des réglages adaptés à ta carte graphique (rien n'est appliqué sans ton accord)">⚡ Adapter à ma machine</button>
+                    </div>
+                    <!-- Propositions de « Adapter à ma machine » (LLM seulement) : une case par ligne, rien n'est appliqué sans elle. -->
+                    <div id="carte-optimiser" class="encart-reglages" hidden>
+                        <h3 class="titre-bloc">Propositions</h3>
+                        <p id="materiel-optimiser" class="discret"></p>
+                        <ul id="alertes-optimiser" class="alertes-prompt"></ul>
+                        <div id="tableau-optimiser"></div>
+                        <p id="sans-reco-optimiser" class="discret"></p>
+                        <div class="ligne pied-reglages">
+                            <span id="etat-optimiser" class="discret"></span>
+                            <button id="fermer-optimiser" type="button" class="petit">Fermer</button>
+                            <button id="appliquer-optimiser" type="button" class="petit" disabled>Appliquer la sélection</button>
+                        </div>
+                    </div>
                     <p id="note-llm-defaut" class="discret" hidden></p>
                     <div id="params-llm" class="params"></div>
                     <h3 class="titre-bloc">Consignes du LLM</h3>
@@ -1143,9 +1146,15 @@
                         <button id="enregistrer-llm" class="principal" type="button" disabled>Enregistrer</button>
                     </div>
                 </section>
-                <section class="carte" data-section="workflows">
-                    <h2>Modèles image <span class="discret">workflows et échantillonnage</span></h2>
-                    <label class="cible-reglages">Workflow <select id="workflow-reglages"></select></label>
+                <!-- Modèles image et Modèles vidéo : la même carte, ses modèles et son titre suivent l'onglet choisi (web/reglages.js). -->
+                <section class="carte" data-section="workflows video">
+                    <h2 id="titre-workflows">Modèles image <span class="discret">workflows et échantillonnage</span></h2>
+                    <div class="ligne cible-ligne">
+                        <label class="cible-reglages">Workflow <select id="workflow-reglages"></select></label>
+                        <button id="recommander-workflow" type="button" class="petit"
+                                title="Remplit les réglages avec ce que recommande la fiche de ce modèle (rien n'est enregistré sans « Enregistrer »)">Recommander</button>
+                    </div>
+                    <div id="recommandations-workflow" class="encart-reglages" hidden></div>
                     <div id="params-workflow" class="params"></div>
                     <div id="variantes-workflow" hidden>
                         <div class="ligne">

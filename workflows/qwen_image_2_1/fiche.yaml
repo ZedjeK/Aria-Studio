@@ -96,7 +96,7 @@ profil_prompt:
         - 'An aspect ratio or a resolution in the prompt.'
     regles_sources:
     - 'https://huggingface.co/Qwen/Qwen-Image-2.1-PE-T2I (system_prompt.txt, relu mot pour mot le 2026-11-12)'
-# Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
+# Recommandations officielles, lues par « Recommander » (onglet Réglages) (relevées le 2026-10-20).
 recommandations:
     resolution_native_mp: 4.2  # 2048 × 2048, « native 2K »
     source_resolution: https://github.com/QwenLM/Qwen-Image-2.1
