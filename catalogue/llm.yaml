@@ -1,6 +1,6 @@
 # Fiches des LLM qui réécrivent les prompts (format 2, voir app/fiches.py) : un GGUF = une fiche.
 # Livré avec Aria (modeles/ n'est pas versionné) : c'est d'ici que l'assistant de premier lancement les propose,
-# et que l'Optimiser de l'onglet Réglages lit leurs recommandations officielles (relevées le 2026-10-20).
+# et que « Adapter à ma machine » (onglet Réglages) lit leurs recommandations officielles (relevées le 2026-10-20).
 # Licences relues à leur source le 2026-10-26 (API Hugging Face).
 format: 2
 llm:

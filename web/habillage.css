@@ -1190,3 +1190,32 @@ body.large :is(#vue-plateau, #vue-retouche, #vue-montage) select[data-destinatio
         border-bottom: 1px solid var(--line);
     }
 }
+
+/* ===== Réglages : « Adapter à ma machine » (LLM) et « Recommander » (modèles) ===== */
+.cible-ligne {
+    justify-content: space-between;
+    align-items: center;
+}
+
+.encart-reglages {
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid var(--accent-2);
+    background: rgba(92, 139, 255, 0.06);
+}
+
+.encart-reglages[hidden] {
+    display: none;
+}
+
+.liste-recommandations {
+    display: grid;
+    gap: 6px;
+    margin: 6px 0 10px;
+    padding-left: 18px;
+}
+
+.param.recommande {
+    outline: 1px solid var(--accent);
+    outline-offset: 4px;
+}

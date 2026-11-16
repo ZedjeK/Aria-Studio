@@ -36,8 +36,9 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 - **Montage** : des clips vidéo avec le son (MiniMax H3), en animant un rush ou depuis le texte, et les séquences :
   il tourne les plans écrits au Scénario, avec la voix de référence de ta bibliothèque, puis assemble le film.
 - **Casting** : des bancs pour comparer les modèles d'image et les LLM sur les mêmes idées, et choisir tes favoris.
-- **Réglages** : par LLM, par modèle et par checkpoint, avec un bouton *Optimiser* qui part des recommandations
-  officielles et de ta carte. Le moteur de chaque LLM (llama.cpp officiel ou PrismML pour les GGUF ternaires, Bonsai 2
+- **Réglages** : par LLM, par modèle et par checkpoint, avec un bouton *Recommander* par modèle d'image ou de vidéo (les valeurs
+  de sa fiche : CFG, sampler…) et *Adapter à ma machine* pour les LLM (d'après ta carte et leurs recommandations
+  officielles). Le moteur de chaque LLM (llama.cpp officiel ou PrismML pour les GGUF ternaires, Bonsai 2
   et ses dérivés) se choisit tout seul d'après le fichier, et peut s'imposer à la main. La réflexion des LLM est
   activée par défaut : l'écriture est plus lente, mais plus soignée. Elle se coupe LLM par LLM ; les courtes
   traductions et les questions du chat Libre s'en passent toujours.

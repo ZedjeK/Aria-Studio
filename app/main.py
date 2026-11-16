@@ -869,8 +869,18 @@ class DemandeReglagesWorkflow(BaseModel):
 
 @app.get("/api/reglages/optimiser")
 def optimiser_reglages():
-    """Propositions seulement : rien n'est appliqué sans l'accord de l'utilisateur (routes PUT ci-dessus et dessous)."""
+    """⚡ Adapter à ma machine (LLM). Propositions seulement : rien n'est appliqué sans l'accord de l'utilisateur
+    (routes PUT ci-dessus et dessous)."""
     return optimiseur.propositions()
+
+
+@app.get("/api/reglages/workflows/{id_workflow}/recommandations")
+def recommander_workflow(id_workflow: str):
+    """Recommander (modèle d'image ou de vidéo) : ce que sa fiche recommande. Rien n'est appliqué ici."""
+    try:
+        return optimiseur.recommandations_workflow(id_workflow)
+    except workflows.ErreurWorkflow as e:
+        raise HTTPException(404, str(e))
 
 
 @app.put("/api/reglages/workflows/{id_workflow}")

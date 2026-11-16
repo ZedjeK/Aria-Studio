@@ -13,6 +13,28 @@ const AIDES_CONSIGNES = {
 };
 let etatReglages = null;
 
+// Modèles image et Modèles vidéo : une même carte, dont les modèles et le titre suivent l'onglet choisi.
+const FAMILLES_WORKFLOWS = {
+    workflows: { titre: "Modèles image", groupes: { texte_vers_image: "Texte vers image", retouche: "Retouche" } },
+    video: { titre: "Modèles vidéo", groupes: { texte_vers_video: "Texte vers vidéo", image_vers_video: "Image vers vidéo" } },
+};
+let familleWorkflows = "workflows";
+
+function remplirWorkflows() {
+    const famille = FAMILLES_WORKFLOWS[familleWorkflows];
+    const wf = document.getElementById("workflow-reglages");
+    const dansLaFamille = etatReglages.workflows.filter((w) => w.tache in famille.groupes);
+    const gardeWf = dansLaFamille.some((w) => w.id === wf.value) ? wf.value : dansLaFamille[0]?.id;
+    wf.innerHTML = Object.entries(famille.groupes).map(([tache, titre]) => `<optgroup label="${titre}">${dansLaFamille
+        .filter((w) => w.tache === tache)
+        .map((w) => `<option value="${echapper(w.id)}" ${w.id === gardeWf ? "selected" : ""}>${echapper(w.nom)}</option>`)
+        .join("")}</optgroup>`).join("");
+    document.getElementById("titre-workflows").firstChild.textContent = `${famille.titre} `;
+}
+
+// Un workflow dont un réglage (ou celui d'un de ses checkpoints) n'est pas à la valeur d'origine.
+const workflowModifie = (w) => w.params.some((p) => p.modifie) || w.variantes.some((v) => v.params.some((p) => p.modifie));
+
 async function chargerReglages() {
     try {
         etatReglages = await api("GET", "/api/reglages");
@@ -24,14 +46,7 @@ async function chargerReglages() {
     const gardeLlm = llm.value || etatReglages.defaut_llm;
     llm.innerHTML = etatReglages.llm.map((m) =>
         `<option value="${echapper(m.fichier)}" ${m.fichier === gardeLlm ? "selected" : ""}>${echapper(m.nom)}</option>`).join("");
-    const wf = document.getElementById("workflow-reglages");
-    const gardeWf = wf.value || etatReglages.workflows[0]?.id;
-    const groupes = { texte_vers_image: "Texte vers image", retouche: "Retouche",
-                      texte_vers_video: "Texte vers vidéo", image_vers_video: "Image vers vidéo" };
-    wf.innerHTML = Object.entries(groupes).map(([tache, titre]) => `<optgroup label="${titre}">${etatReglages.workflows
-        .filter((w) => w.tache === tache)
-        .map((w) => `<option value="${echapper(w.id)}" ${w.id === gardeWf ? "selected" : ""}>${echapper(w.nom)}</option>`)
-        .join("")}</optgroup>`).join("");
+    remplirWorkflows();
     const note = document.getElementById("note-llm-defaut");
     note.textContent = etatReglages.note_defaut ?? "";
     note.hidden = !etatReglages.note_defaut;
@@ -125,6 +140,7 @@ function majBoutonLlm() {
 
 function afficherWorkflow() {
     const w = workflowAffiche();
+    document.getElementById("recommandations-workflow").hidden = true;  // celles d'un autre modèle, ou déjà enregistrées
     if (!w) return;
     document.getElementById("params-workflow").innerHTML = w.params.map((p) => champReglage(p)).join("");
     afficherVariantes(w);
@@ -201,6 +217,57 @@ document.getElementById("enregistrer-workflow").addEventListener("click", () => 
     }, "etat-workflow");
 });
 
+// Recommander : remplit les champs du modèle affiché avec ce que recommande sa fiche (workflows/<id>/fiche.yaml),
+// raison et source de chaque valeur sous les yeux. Rien n'est enregistré avant « Enregistrer » ; ↺ revient en arrière.
+document.getElementById("recommander-workflow").addEventListener("click", async () => {
+    const w = workflowAffiche();
+    if (!w) return;
+    const etat = document.getElementById("etat-workflow");
+    const encart = document.getElementById("recommandations-workflow");
+    etat.classList.remove("ko");
+    let r;
+    try {
+        r = await api("GET", `${urlWorkflow()}/recommandations`);
+    } catch (err) {
+        etat.textContent = err.message;
+        etat.classList.add("ko");
+        return;
+    }
+    const champs = document.getElementById("params-workflow");
+    // On compare à ce que contiennent les champs (réglages enregistrés, ou saisie en cours), pas seulement à l'enregistré.
+    const aChanger = [];
+    const dejaBon = [];
+    r.propositions.forEach((p) => {
+        const champ = champs.querySelector(`[data-cle="${p.cle}"]`);
+        if (!champ) return;
+        const courant = champ.type === "checkbox" ? champ.checked : champ.type === "number" ? Number(champ.value) : champ.value;
+        const voulu = champ.type === "checkbox" ? Boolean(p.propose) : champ.type === "number" ? Number(p.propose) : String(p.propose);
+        if (courant === voulu) {
+            dejaBon.push(p);
+            return;
+        }
+        if (champ.type === "checkbox") champ.checked = voulu;
+        else champ.value = p.propose;
+        champ.closest(".param")?.classList.add("recommande");
+        aChanger.push({ ...p, avant: courant });
+    });
+    champs.dispatchEvent(new Event("input"));  // le bouton Enregistrer et le compteur de changements suivent
+    const valeur = (cle, v) => echapper(formatValeur(w.params.find((x) => x.cle === cle) ?? { type: "nombre" }, v));
+    const lignes = aChanger.map((p) => `<li><strong>${echapper(p.libelle)}</strong> : ${valeur(p.cle, p.avant)} →
+        <strong>${valeur(p.cle, p.propose)}</strong> · ${echapper(p.raison)}${p.source
+            ? ` · <a href="${echapper(p.source)}" target="_blank" rel="noopener">source</a>` : ""}</li>`);
+    const dejaDit = dejaBon.length ? `<p class="discret">Déjà aux valeurs recommandées : ${dejaBon.map((p) => echapper(p.libelle)).join(", ")}.</p>` : "";
+    const bilan = aChanger.length
+        ? `<ul class="liste-recommandations">${lignes.join("")}</ul>${dejaDit}
+           <p class="discret">Ces valeurs sont dans les champs ci-dessous, pas encore enregistrées : « Enregistrer » les garde.</p>`
+        : r.sans_recommandation
+            ? '<p class="discret">La fiche de ce modèle ne range pas de recommandation officielle : rien à remplir.</p>'
+            : `<p class="ok">Les réglages suivent déjà ce que recommande la fiche de ce modèle ✓</p>${dejaDit}`;
+    encart.innerHTML = `<h3 class="titre-bloc">Recommandations de la fiche</h3>${bilan}`
+        + (r.alertes.length ? `<ul class="alertes-prompt">${r.alertes.map((a) => `<li>${echapper(a)}</li>`).join("")}</ul>` : "");
+    encart.hidden = false;
+});
+
 // ↺ : retour immédiat à la valeur d'origine (les autres saisies en cours sont abandonnées).
 document.getElementById("vue-reglages").addEventListener("click", (e) => {
     const bouton = e.target.closest(".restaurer");
@@ -214,7 +281,7 @@ document.getElementById("vue-reglages").addEventListener("click", (e) => {
     }
 });
 
-// ⚡ Optimiser : propositions selon le matériel et les recommandations officielles. Rien n'est appliqué
+// ⚡ Adapter à ma machine (LLM) : propositions selon le matériel et les recommandations officielles. Rien n'est appliqué
 // sans une case cochée : chaque ligne donne sa raison et sa source.
 
 let propositionsOptimiser = [];
@@ -333,7 +400,7 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
     const nav = vue.querySelector(".nav-reglages");
     const recherche = document.getElementById("recherche-reglages");
     const modifies = document.getElementById("modifies-reglages");
-    let section = "tout";
+    let section = "systeme";  // la recherche et « Modifiés seulement » portent sur la section affichée
 
     const norme = (t) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -341,7 +408,7 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
         const q = norme(recherche.value.trim());
         const filtre = Boolean(q) || modifies.checked;
         contenu.querySelectorAll("[data-section]").forEach((bloc) => {
-            const visibleParNav = section === "tout" || bloc.dataset.section === section;
+            const visibleParNav = bloc.dataset.section.split(" ").includes(section);  // « workflows video » : une carte, deux onglets
             let reste = true;
             if (filtre && bloc.dataset.section !== "systeme") {
                 const lignes = [...bloc.querySelectorAll(".param, details.consigne")];
@@ -364,7 +431,12 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
         compte.textContent = total;
         nav.querySelectorAll("[data-section]").forEach((b) => {
             const point = b.querySelector(".point-modifie");
-            if (point) point.hidden = !contenu.querySelector(`[data-section="${b.dataset.section}"] .modifie`);
+            if (!point) return;
+            const famille = FAMILLES_WORKFLOWS[b.dataset.section];
+            // Image et vidéo partagent une carte : leur pastille se lit dans les données, pas dans ce qui est affiché.
+            point.hidden = famille
+                ? !(etatReglages?.workflows ?? []).some((w) => w.tache in famille.groupes && workflowModifie(w))
+                : !contenu.querySelector(`[data-section~="${b.dataset.section}"] .modifie`);
         });
     }
 
@@ -373,6 +445,14 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
         if (!b) return;
         section = b.dataset.section;
         nav.querySelectorAll("button").forEach((x) => x.classList.toggle("actif", x === b));
+        if (section in FAMILLES_WORKFLOWS && familleWorkflows !== section) {  // la carte des modèles change de famille
+            familleWorkflows = section;
+            if (etatReglages) {
+                document.getElementById("etat-workflow").textContent = "";
+                remplirWorkflows();
+                afficherWorkflow();
+            }
+        }
         appliquer();
     });
     recherche.addEventListener("input", appliquer);

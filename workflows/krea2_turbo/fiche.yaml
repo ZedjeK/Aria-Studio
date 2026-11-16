@@ -93,7 +93,7 @@ profil_prompt:
     - 'template ComfyUI image_krea2_turbo_t2i (consigne de son affineur de prompt)'
     - 'https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt (même consigne, officielle ; relue mot pour mot le 2026-11-12)'
     - 'https://github.com/krea-ai/krea-2/blob/main/docs/prompting.md (guide et 20 exemples ; relu mot pour mot le 2026-11-12)'
-# Recommandations officielles, lues par l'Optimiser de l'onglet Réglages (relevées le 2026-10-20).
+# Recommandations officielles, lues par « Recommander » (onglet Réglages) (relevées le 2026-10-20).
 recommandations:
     resolution_native_mp: 4.2  # 2048 × 2048
     source_resolution: https://huggingface.co/krea/Krea-2-Turbo
