@@ -1,6 +1,7 @@
 """Pilote du ComfyUI portable : processus, VRAM, exécution de workflows au format API."""
 
 import asyncio
+import copy
 import json
 import os
 import shutil
@@ -40,6 +41,23 @@ def video_et_affiche(fichiers: list[tuple[str, bytes]]) -> tuple[bytes | None, b
     def trouver(extension: str) -> bytes | None:
         return next((octets for nom, octets in fichiers if nom.lower().endswith(extension)), None)
     return trouver(".mp4"), trouver(".png")
+
+def _avec_prefixes_uniques(workflow: dict) -> dict:
+    """Copie du workflow où chaque nom de fichier à enregistrer (`filename_prefix`) porte un jeton propre à cet envoi.
+
+    Une seed rejouée renvoie le même workflow : ComfyUI ne le refait pas, tout sort de son cache, et son historique
+    annonce les fichiers de la première fois, que `_suivre` a déjà effacés (« 404 Not Found » sur /view, vu le
+    2026-11-16). Avec un nom neuf, seul l'enregistrement est refait : le calcul reste en cache, l'image rejouée est la
+    même, presque aussitôt, et le fichier annoncé existe. Le jeton se place à la fin du préfixe : l'extension et le
+    sous-dossier ne bougent pas. Un préfixe qui vient d'un autre nœud (une liste) est laissé tel quel."""
+    jeton = uuid.uuid4().hex[:8]
+    copie = copy.deepcopy(workflow)
+    for noeud in copie.values():
+        entrees = noeud.get("inputs") if isinstance(noeud, dict) else None
+        if isinstance(entrees, dict) and isinstance(entrees.get("filename_prefix"), str):
+            entrees["filename_prefix"] += f"_{jeton}"
+    return copie
+
 
 class ComfyUI:
     """Le ComfyUI d'Aria. Un seul à la fois : celui qu'elle a lancé (`process`), ou celui qu'une Aria précédente a
@@ -271,6 +289,7 @@ class ComfyUI:
         progression: Callable[[int, int], None] | None = None,
     ) -> list[tuple[str, bytes]]:
         """Exécute un workflow au format API et renvoie les fichiers produits (images, vidéos) : [(nom, octets)]."""
+        workflow = _avec_prefixes_uniques(workflow)  # rejouer une seed ne doit pas ressortir du cache sans fichier
         client_id = str(uuid.uuid4())
         ws_url = f"ws://127.0.0.1:{self.port}/ws?clientId={client_id}"
         async with websockets.connect(ws_url, max_size=None) as ws, httpx.AsyncClient(timeout=30) as client:
