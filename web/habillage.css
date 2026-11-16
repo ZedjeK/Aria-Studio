@@ -80,13 +80,36 @@ body.large main {
     border-left: 0;
 }
 
+/* Le titre d'une famille (Création, Préparation) : en cyan, avec un filet qui court jusqu'au bord du menu. */
 .menu-lateral .etiquette-famille {
+    display: flex;
+    align-items: center;
     align-self: auto;
+    gap: 10px;
     margin: 0;
-    padding: 18px 20px 6px;
-    color: var(--muted);
-    font: 500 0.66rem/1 var(--font-body);
-    letter-spacing: 0.16em;
+    padding: 20px 20px 8px;
+    color: var(--accent);
+    font: 600 0.72rem/1 var(--font-display);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+.menu-lateral .etiquette-famille::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line-strong);
+}
+
+.menu-lateral .famille-onglets + .famille-onglets .etiquette-famille {
+    padding-top: 26px;
+}
+
+/* Quitter : sous les pages, séparé d'elles par un filet. */
+.menu-lateral .zone-quitter {
+    margin: 16px 20px 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-strong);
 }
 
 body.large .menu-lateral button.onglet {
@@ -354,6 +377,12 @@ body.large .bandeau-maj #lien-maj {
 
     body.large .menu-lateral button.onglet.actif {
         border-bottom-color: var(--accent);
+    }
+
+    .menu-lateral .zone-quitter {
+        margin: 0 0 0 12px;
+        padding: 0;
+        border-top: 0;
     }
 
     .menu-lateral .bas-menu {
@@ -1218,4 +1247,74 @@ body.large :is(#vue-plateau, #vue-retouche, #vue-montage) select[data-destinatio
 .param.recommande {
     outline: 1px solid var(--accent);
     outline-offset: 4px;
+}
+
+/* ===== Quitter : rouge, il arrête l'appli (le serveur, ComfyUI et Llama) ===== */
+body.large .menu-lateral button.quitter-appli {
+    background: var(--danger);
+    color: var(--danger);
+}
+
+body.large .menu-lateral button.quitter-appli:hover:not(:disabled) {
+    color: var(--danger);
+    filter: brightness(1.15);
+}
+
+body.large .menu-lateral button.quitter-appli:hover:not(:disabled)::before {
+    background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+}
+
+/* ===== Montage : ce qui part d'images, et ce qui part d'un texte ===== */
+body.large .modes-montage {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) 1px minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+    margin-bottom: 1rem;
+}
+
+.groupe-montage {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.groupe-montage .cartes-mode {
+    flex: 1;
+}
+
+.titre-groupe {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    color: var(--accent-2);
+    font: 600 0.7rem/1 var(--font-display);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.titre-groupe::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line-strong);
+}
+
+.titre-groupe svg {
+    flex: none;
+}
+
+.filet-groupes {
+    background: var(--line-strong);
+}
+
+@media (max-width: 900px) {
+    body.large .modes-montage {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .filet-groupes {
+        display: none;
+    }
 }

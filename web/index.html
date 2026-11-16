@@ -33,11 +33,14 @@
                     <button class="onglet" data-vue="reglages">Réglages</button>
                 </div>
             </nav>
-            <div class="bas-menu">
+            <!-- Quitter : sous Réglages, séparé des pages par un filet, en rouge (il arrête le serveur, ComfyUI et Llama). -->
+            <div class="zone-quitter">
                 <button id="quitter-appli" type="button" class="quitter-appli"
                         title="Quitter Aria : arrête son serveur, ComfyUI et Llama">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                          stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quitter</button>
+            </div>
+            <div class="bas-menu">
                 <p class="sous-titre">Studio d'images et de vidéos <span id="version-appli" class="discret"></span></p>
             </div>
         </aside>
@@ -423,16 +426,27 @@
             <section class="carte">
                 <h2>Tourner un clip</h2>
                 <form id="form-montage">
+                    <!-- Deux groupes : ce qui part d'images (Animer un rush ; la Séquence, dont les images sont facultatives) et ce qui part d'un texte. -->
                     <div class="modes-montage" role="radiogroup" aria-label="Comment tourner">
-                        <label class="mode-carte"><input type="radio" name="mode-montage" value="animer" checked>
-                            <span class="icone">🎬</span>
-                            <span class="texte"><strong>Animer un rush</strong><small>Une image de ton Plateau devient un clip</small></span></label>
-                        <label class="mode-carte"><input type="radio" name="mode-montage" value="texte">
-                            <span class="icone">✍️</span>
-                            <span class="texte"><strong>Texte → vidéo</strong><small>Tu décris, le modèle tourne tout</small></span></label>
-                        <label class="mode-carte"><input type="radio" name="mode-montage" value="sequence">
-                            <span class="icone">📽️</span>
-                            <span class="texte"><strong>Séquence</strong><small>Plusieurs plans enchaînés, découpés pour toi</small></span></label>
+                        <div class="groupe-montage">
+                            <p class="titre-groupe"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg>Avec des images</p>
+                            <div class="cartes-mode">
+                                <label class="carte-mode" title="Une image de ton Plateau devient la première image du clip"><input type="radio" name="mode-montage" value="animer" checked>
+                                    <strong>🎬 Animer un rush</strong><small>Une image de ton Plateau devient un clip</small></label>
+                                <label class="carte-mode" title="Plusieurs plans enchaînés : le premier part d'un rush ou du texte, un personnage de référence est facultatif"><input type="radio" name="mode-montage" value="sequence">
+                                    <strong>📽️ Séquence</strong><small>Plusieurs plans enchaînés, découpés pour toi (images facultatives)</small></label>
+                            </div>
+                        </div>
+                        <div class="filet-groupes" aria-hidden="true"></div>
+                        <div class="groupe-montage">
+                            <p class="titre-groupe"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 11h16M4 16h10"/></svg>Sans image</p>
+                            <div class="cartes-mode">
+                                <label class="carte-mode" title="Aucune image : tu décris le clip, le modèle tourne tout"><input type="radio" name="mode-montage" value="texte">
+                                    <strong>✍️ Texte → vidéo</strong><small>Tu décris, le modèle tourne tout</small></label>
+                            </div>
+                        </div>
                     </div>
                     <div class="ligne grille-montage">
                         <div id="bloc-source-montage" class="bloc-source">
