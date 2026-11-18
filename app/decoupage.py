@@ -269,9 +269,8 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     debut = time.perf_counter()
     async with orchestrateur.llm(llm) as llama:
         for essai in range(2):  # une réponse mal formée est redemandée une fois
-            reponse = await llama.generer(echanges, temperature=regle["temperature_reecriture"],
-                                          max_tokens=max(regle["max_tokens"], 260 * len(cibles) + 100),
-                                          **reglages.echantillonnage(llm))
+            reponse = await llama.generer(echanges, max_tokens=max(regle["max_tokens"], 260 * len(cibles) + 100),
+                                          **reglages.ecriture(llm, prompt.pense(llama)))
             try:
                 blocs = lire_blocs(reponse.texte, [k + 1 for k in cibles], exact=cible is None)
                 break

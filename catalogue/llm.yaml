@@ -33,24 +33,44 @@ llm:
         mesure: null
         cartes_verifiees: [RTX 4080 16 Go]
     casting: "Labo LLM du 2026-10-20 : 4,38 de moyenne sur 2 bancs, au choix. Garde les termes adultes tels quels (test du 2026-10-20)."
+    # Un jeu par mode, relu mot pour mot à la source le 2026-11-18 (section « Generation Parameters ») :
+    #   « Thinking Mode: temperature=1.0, top_p=0.95, top_k=20, min_p=0.05, presence_penalty=0.0, repetition_penalty=1.0 »
+    #   « Instruct (or non-thinking) mode: temperature=0.7, top_p=0.80, top_k=20, min_p=0.0, presence_penalty=1.5,
+    #     repetition_penalty=1.0 »
+    # Aria choisit le jeu à chaque demande, selon qu'elle réfléchit ou non (app/reglages.ecriture).
     recommandations:
         source: https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
         valeurs:
         -   cle: temperature_reecriture
             valeur: 0.7
-            note: Mode instruct (réflexion coupée), réglages de la fiche
+            note: Mode sans réflexion (instruct), réglages de la fiche
         -   cle: top_p
             valeur: 0.8
-            note: Mode instruct, réglages de la fiche
+            note: Mode sans réflexion (instruct), réglages de la fiche
         -   cle: top_k
             valeur: 20
-            note: Mode instruct, réglages de la fiche
+            note: Mode sans réflexion (instruct), réglages de la fiche
         -   cle: min_p
             valeur: 0.0
-            note: Mode instruct, réglages de la fiche
+            note: Mode sans réflexion (instruct), réglages de la fiche
         -   cle: presence_penalty
             valeur: 1.5
-            note: Mode instruct, réglages de la fiche (évite les répétitions)
+            note: Mode sans réflexion (instruct), réglages de la fiche (évite les répétitions)
+        -   cle: temperature_reflexion
+            valeur: 1.0
+            note: Mode réflexion, réglages de la fiche
+        -   cle: top_p_reflexion
+            valeur: 0.95
+            note: Mode réflexion, réglages de la fiche
+        -   cle: top_k_reflexion
+            valeur: 20
+            note: Mode réflexion, réglages de la fiche
+        -   cle: min_p_reflexion
+            valeur: 0.05
+            note: Mode réflexion, réglages de la fiche (c'est aussi le défaut de llama.cpp)
+        -   cle: presence_penalty_reflexion
+            valeur: 0.0
+            note: Mode réflexion, réglages de la fiche (pas de pénalité quand le modèle réfléchit)
 
 # LLM spécialisés : entraînés par l'auteur d'un modèle d'image pour lui écrire ses prompts. Ils gardent leur propre
 # consigne (livrée avec eux, téléchargée et vérifiée comme le GGUF) et ne servent qu'à la réécriture des workflows

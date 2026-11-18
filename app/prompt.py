@@ -661,6 +661,13 @@ def _voit(llama) -> bool:
     return getattr(llama, "vision", None) is not None
 
 
+def pense(llama, reflechir: bool = True) -> bool:
+    """Cette demande va-t-elle réfléchir ? Il faut que la Réflexion soit active pour le GGUF chargé et qu'elle ne soit
+    pas coupée pour la demande. De là dépend le jeu d'échantillonnage (reglages.ecriture) : les modèles en
+    recommandent un par mode."""
+    return bool(getattr(llama, "reflexion_active", False)) and reflechir
+
+
 def nettoyer_markdown(texte: str) -> str:
     """Prompt vidéo en prose simple : Llama glisse parfois **gras**, *bruitages* ou titres, que H3 n'a pas à lire."""
     texte = re.sub(r"\*{1,2}([^*]+?)\*{1,2}", r"\1", texte)
@@ -710,9 +717,8 @@ async def reecrire(orchestrateur: Orchestrateur, idee: str, modele: str | None =
     async with orchestrateur.llm(modele) as llama:
         echanges[-1]["content"] = montrer(echanges[-1]["content"], vues, usage, voit=_voit(llama), workflow=workflow)
         debut = time.perf_counter()
-        reponse = await llama.generer(echanges, temperature=regle["temperature_reecriture"],
-                                      max_tokens=max(regle["max_tokens"], tokens_pour_mots(mots)),
-                                      **reglages.echantillonnage(modele))
+        reponse = await llama.generer(echanges, max_tokens=max(regle["max_tokens"], tokens_pour_mots(mots)),
+                                      **reglages.ecriture(modele, pense(llama)))
         duree = time.perf_counter() - debut
     texte = garde_cjk(nettoyer_markdown(reponse.texte), idee)  # **gras**, *italique*, titres : ni ComfyUI ni H3 n'en veulent
     if video and workflows.dialogue_en_balise(workflow):
@@ -986,7 +992,6 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     systeme += f"\n\n{CLAUSE_MINEURS}"
     rubriques = noms_guide(sujet, sans_sujet, forme == "clip", workflows.rubriques_ignorees(workflow)) if forme in ("image", "clip") else set()
     ecrire = bool(echanges) and echanges[-1]["role"] == "user" and echanges[-1]["content"].strip() == ECRIRE
-    regle = reglages.valeurs_llm(modele)
     async with orchestrateur.llm(modele) as llama:
         messages_ = [{"role": "system", "content": systeme}]
         for k, e in enumerate(echanges):
@@ -997,9 +1002,9 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
             messages_.append({"role": e["role"], "content": contenu})
         debut = time.perf_counter()
         for essai in range(2):  # une réponse sans JSON est redemandée une fois
-            reponse = await llama.generer(messages_, temperature=regle["temperature_reecriture"],
+            reponse = await llama.generer(messages_,
                                           max_tokens=max(1200, 600 + tokens_pour_mots(mots)),  # JSON : message, fiche, questions + prompt
-                                          reflechir=ecrire, **reglages.echantillonnage(modele))
+                                          reflechir=ecrire, **reglages.ecriture(modele, pense(llama, ecrire)))
             try:
                 tour = lire_libre(reponse.texte, rubriques)
                 if cjk_inattendu(_textes_du_tour(tour), [contexte, *textes]):

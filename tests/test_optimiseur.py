@@ -57,6 +57,12 @@ class Optimiseur(unittest.TestCase):
         self.assertNotIn((BONSAI, "temperature_reecriture"), props)  # déjà à la valeur de sa fiche (0,7)
         self.assertNotIn((LLM, "temperature_traduction"), props)  # hors catalogue : aucune recommandation
         self.assertEqual(props[(BONSAI, "presence_penalty")]["propose"], 1.5)
+        # Un jeu par mode (fiche de Bonsai 2) : celui de la réflexion est proposé à part, pour ses propres réglages.
+        self.assertEqual(props[(BONSAI, "temperature_reflexion")]["propose"], 1.0)
+        self.assertEqual(props[(BONSAI, "top_k_reflexion")]["propose"], 20)
+        self.assertIn("réflexion", props[(BONSAI, "temperature_reflexion")]["raison"])
+        self.assertNotIn((BONSAI, "presence_penalty_reflexion"), props)  # 0 : déjà la valeur d'origine
+        self.assertNotIn((BONSAI, "min_p_reflexion"), props)  # 0,05 : le défaut de llama.cpp
         self.assertEqual(r["materiel"]["gpu"], "GPU de test")
 
     def test_adapter_ne_concerne_que_les_llm(self):
