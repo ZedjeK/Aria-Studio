@@ -6,6 +6,9 @@
 // ce que sait ✨ Tout écrire). Pendant qu'il réfléchit : une bulle qui compte les secondes et ✕ Annuler.
 
 const ECRIRE_LIBRE = "ÉCRIS LE PROMPT";  // comme prompt.ECRIRE : ce tour-là réfléchit
+// Les heures de coupe d'un clip H3 qui tombent hors du clip ou dans le désordre (prompt.controler_coupes), dites à
+// côté de la durée, que le prompt vienne de ✍️ Écris-le ou de la conversation. Un plan a ses propres alertes.
+const coupesLibre = (r, forme) => (forme !== "plan" && r.alertes?.length ? ` · ⚠ ${r.alertes.join(" ")}` : "");
 
 // La conversation en cours : celle de l'atelier, ou celle du plan dont le chat est ouvert.
 const planAide = () => (formeScenario === "sequence" ? decoupage.aidePlan : null);
@@ -257,7 +260,7 @@ async function envoyerLibre(texte) {
         a.final = r.prompt;
         a.llm = llm;
     }
-    document.getElementById("statut-libre").textContent = `${virgule(r.duree_s, 1)} s`;
+    document.getElementById("statut-libre").textContent = `${virgule(r.duree_s, 1)} s${coupesLibre(r, forme)}`;
     rendreLibre();
     garderBrouillon();
 }
@@ -291,7 +294,7 @@ async function ecrireDepuisChat() {
     }
     a.echanges.push({ role: "note", content: `✍️ Prompt écrit par ${nomLlm()} (${r.mots} mots, ${virgule(r.duree_s, 1)} s) : `
         + "il est à droite, modifiable. Continue à préciser si besoin, puis ✍️ Écris-le à nouveau." });
-    document.getElementById("statut-libre").textContent = `${virgule(r.duree_s, 1)} s`;
+    document.getElementById("statut-libre").textContent = `${virgule(r.duree_s, 1)} s${coupesLibre(r, forme)}`;
     rendreLibre();
     garderBrouillon();
 }
