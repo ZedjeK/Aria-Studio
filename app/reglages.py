@@ -128,15 +128,32 @@ def params_llm() -> dict[str, Param]:
     llama = CONFIG["llama"]
     temperature = dict(type="reel", min=0.0, max=2.0, pas=0.05)
     return {p.cle: p for p in [
-        Param("temperature_reecriture", "Température · réécriture", defaut=0.7, aide="Idée → prompt (Plateau)",
-              **temperature),
+        Param("temperature_reecriture", "Température · écriture sans réflexion", defaut=0.7,
+              aide="Idée → prompt quand la Réflexion est coupée, et les tours de la conversation", **temperature),
         Param("temperature_retouche", "Température · consigne de retouche", defaut=0.2, **temperature),
         Param("temperature_traduction", "Température · traduction des précisions", defaut=0.2, **temperature),
-        # Échantillonnage : valeurs d'origine = défauts de llama-server.
-        Param("top_p", "Top-p", "reel", 0.95, 0.0, 1.0, 0.05, aide="Garde les mots les plus probables jusqu'à ce total"),
-        Param("top_k", "Top-k", "entier", 40, 0, 200, 1, aide="Nombre de mots candidats (0 = sans limite)"),
-        Param("min_p", "Min-p", "reel", 0.05, 0.0, 1.0, 0.01, aide="Écarte les mots trop improbables"),
-        Param("presence_penalty", "Pénalité de présence", "reel", 0.0, -2.0, 2.0, 0.1,
+        # Échantillonnage sans réflexion : valeurs d'origine = défauts de llama-server.
+        Param("top_p", "Top-p · sans réflexion", "reel", 0.95, 0.0, 1.0, 0.05,
+              aide="Garde les mots les plus probables jusqu'à ce total"),
+        Param("top_k", "Top-k · sans réflexion", "entier", 40, 0, 200, 1,
+              aide="Nombre de mots candidats (0 = sans limite)"),
+        Param("min_p", "Min-p · sans réflexion", "reel", 0.05, 0.0, 1.0, 0.01, aide="Écarte les mots trop improbables"),
+        Param("presence_penalty", "Pénalité de présence · sans réflexion", "reel", 0.0, -2.0, 2.0, 0.1,
+              aide="Positif = moins de répétitions"),
+        # Écriture avec la Réflexion (✨ Écrire le prompt, ✨ Tout écrire, « ÉCRIS LE PROMPT ») : son propre jeu. Les
+        # fiches des modèles en donnent un par mode (Bonsai 2 : 1,0 / 0,95 / 20 / 0,05 / 0 en réflexion ;
+        # 0,7 / 0,8 / 20 / 0 / 1,5 sans). Avant, un seul jeu servait aux deux, et celui du mode sans réflexion
+        # (pénalité de présence comprise) s'appliquait à une écriture qui réfléchit. Mêmes valeurs d'origine : les
+        # défauts de llama-server.
+        Param("temperature_reflexion", "Température · écriture avec réflexion", defaut=0.7,
+              aide="Idée → prompt et découpage, quand la Réflexion est active", **temperature),
+        Param("top_p_reflexion", "Top-p · avec réflexion", "reel", 0.95, 0.0, 1.0, 0.05,
+              aide="Garde les mots les plus probables jusqu'à ce total"),
+        Param("top_k_reflexion", "Top-k · avec réflexion", "entier", 40, 0, 200, 1,
+              aide="Nombre de mots candidats (0 = sans limite)"),
+        Param("min_p_reflexion", "Min-p · avec réflexion", "reel", 0.05, 0.0, 1.0, 0.01,
+              aide="Écarte les mots trop improbables"),
+        Param("presence_penalty_reflexion", "Pénalité de présence · avec réflexion", "reel", 0.0, -2.0, 2.0, 0.1,
               aide="Positif = moins de répétitions"),
         Param("max_tokens", "Longueur maximale de réponse (tokens)", "entier", 512, 64, 4096, 64),
         Param("contexte", "Contexte (tokens)", "entier", int(llama["contexte"]), 1024, 262144, 1024,
@@ -219,9 +236,21 @@ ECHANTILLONNAGE = ("top_p", "top_k", "min_p", "presence_penalty")
 
 
 def echantillonnage(modele: str | None) -> dict:
-    """Paramètres d'échantillonnage du GGUF, à passer à Llama.generer."""
+    """Paramètres d'échantillonnage du GGUF pour une demande qui ne réfléchit pas (traductions, tours de la
+    conversation), à passer à Llama.generer."""
     valeurs = valeurs_llm(modele)
     return {cle: valeurs[cle] for cle in ECHANTILLONNAGE}
+
+
+def ecriture(modele: str | None, reflexion: bool) -> dict:
+    """Température et échantillonnage de l'écriture d'un prompt, à passer à Llama.generer : le jeu « avec réflexion »
+    quand cette demande réfléchit vraiment (Réflexion active pour ce GGUF, et non coupée pour la demande), sinon le
+    jeu « sans réflexion ». Les modèles recommandent un jeu par mode."""
+    valeurs = valeurs_llm(modele)
+    if not reflexion:
+        return {"temperature": valeurs["temperature_reecriture"], **{cle: valeurs[cle] for cle in ECHANTILLONNAGE}}
+    return {"temperature": valeurs["temperature_reflexion"],
+            **{cle: valeurs[f"{cle}_reflexion"] for cle in ECHANTILLONNAGE}}
 
 
 def consigne_llm(modele: str | None, nom: str) -> str | None:

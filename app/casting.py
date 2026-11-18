@@ -300,9 +300,8 @@ class BancLLM(Banc):
                         texte = prompt.lire_specialiste(reponse.texte, specialiste)
                     else:
                         reponse = await llama.generer(prompt.messages(p["prompt"], candidat), seed=seed,
-                                                      temperature=regle["temperature_reecriture"],
                                                       max_tokens=regle["max_tokens"],
-                                                      **reglages.echantillonnage(candidat))
+                                                      **reglages.ecriture(candidat, prompt.pense(llama)))
                         texte = prompt.nettoyer_markdown(reponse.texte)
                     duree = time.perf_counter() - debut
                 securite.verifier(p["prompt"], texte)

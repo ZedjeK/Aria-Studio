@@ -152,15 +152,23 @@ class Workflows(AvecFichierTemporaire):
 
 
 class FauxOrchestrateur:
-    def __init__(self):
+    """`reflexion` : la Réflexion est active pour le GGUF chargé (None : un faux LLM qui n'en dit rien).
+    `texte` : ce que le faux LLM répond."""
+
+    def __init__(self, reflexion=None, texte="a red umbrella"):
         self.appels = []
+        self.reflexion = reflexion
+        self.texte = texte
 
     @asynccontextmanager
     async def llm(self, modele=None):
         async def generer(messages, **options):
             self.appels.append((messages, options))
-            return SimpleNamespace(texte="a red umbrella", tokens_sortie=3, ecriture_tps=1.0)
-        yield SimpleNamespace(generer=generer, modele=None)
+            return SimpleNamespace(texte=self.texte, tokens_sortie=3, ecriture_tps=1.0)
+        llama = SimpleNamespace(generer=generer, modele=None)
+        if self.reflexion is not None:
+            llama.reflexion_active = self.reflexion
+        yield llama
 
 
 class Llm(AvecFichierTemporaire):
@@ -186,6 +194,54 @@ class Llm(AvecFichierTemporaire):
         options = o.appels[0][1]
         self.assertEqual({k: options[k] for k in reglages.ECHANTILLONNAGE},
                          {"top_p": 0.8, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5})
+
+    # Un jeu d'échantillonnage par mode : les modèles en recommandent un avec réflexion et un sans (Bonsai 2 :
+    # 1,0 / 0,95 / 20 / 0,05 / 0 et 0,7 / 0,8 / 20 / 0 / 1,5). Avant, le jeu sans réflexion servait aux deux.
+    SANS = {"temperature_reecriture": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5}
+    AVEC = {"temperature_reflexion": 1.0, "top_p_reflexion": 0.95, "top_k_reflexion": 20, "min_p_reflexion": 0.05,
+            "presence_penalty_reflexion": 0.0}
+    JEU_SANS = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5}
+    JEU_AVEC = {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.05, "presence_penalty": 0.0}
+
+    def jeu(self, options: dict) -> dict:
+        return {k: options[k] for k in ("temperature", *reglages.ECHANTILLONNAGE)}
+
+    def test_ecriture_selon_le_mode(self):
+        reglages.modifier_llm(LLM, {**self.SANS, **self.AVEC})
+        self.assertEqual(reglages.ecriture(LLM, reflexion=True), self.JEU_AVEC)
+        self.assertEqual(reglages.ecriture(LLM, reflexion=False), self.JEU_SANS)
+        pense, coupee = FauxOrchestrateur(reflexion=True), FauxOrchestrateur(reflexion=False)
+        asyncio.run(prompt.reecrire(pense, "un chat roux", LLM))
+        asyncio.run(prompt.reecrire(coupee, "un chat roux", LLM))
+        self.assertEqual(self.jeu(pense.appels[0][1]), self.JEU_AVEC)  # la Réflexion est active : son jeu
+        self.assertEqual(self.jeu(coupee.appels[0][1]), self.JEU_SANS)  # coupée dans Réglages : le jeu sans réflexion
+
+    def test_traductions_toujours_sans_reflexion(self):
+        """Une traduction ne réfléchit jamais (reflechir=False) : jeu sans réflexion, même si la Réflexion est active."""
+        reglages.modifier_llm(LLM, {**self.SANS, **self.AVEC})
+        o = FauxOrchestrateur(reflexion=True)
+        asyncio.run(prompt.traduire_precisions(o, "tient un parapluie", LLM))
+        options = o.appels[0][1]
+        self.assertIs(options["reflechir"], False)
+        self.assertEqual({k: options[k] for k in reglages.ECHANTILLONNAGE},
+                         {k: self.JEU_SANS[k] for k in reglages.ECHANTILLONNAGE})
+
+    def test_conversation_ne_reflechit_que_pour_ecrire(self):
+        """Le chat : seul le tour « ÉCRIS LE PROMPT » réfléchit, et prend le jeu avec réflexion ; les autres tours
+        (questions, ajustements) gardent le jeu sans réflexion."""
+        reglages.modifier_llm(LLM, {**self.SANS, **self.AVEC})
+        tour = json.dumps({"message": "ok", "fiche": {}, "questions": [], "prompt": None})
+        o = FauxOrchestrateur(reflexion=True, texte=tour)
+        asyncio.run(prompt.libre(o, [{"role": "user", "content": "un chat roux"}], "image", None, modele=LLM))
+        asyncio.run(prompt.libre(o, [{"role": "user", "content": prompt.ECRIRE}], "image", None, modele=LLM))
+        self.assertEqual((o.appels[0][1]["reflechir"], self.jeu(o.appels[0][1])), (False, self.JEU_SANS))
+        self.assertEqual((o.appels[1][1]["reflechir"], self.jeu(o.appels[1][1])), (True, self.JEU_AVEC))
+
+    def test_jeu_avec_reflexion_aux_defauts_de_llama_server(self):
+        """Sans réglage, les deux jeux valent les défauts de llama-server : rien n'est imposé à un GGUF inconnu."""
+        self.assertEqual(reglages.ecriture(LLM, reflexion=True), reglages.ecriture(LLM, reflexion=False))
+        self.assertEqual(reglages.ecriture(LLM, reflexion=True),
+                         {"temperature": 0.7, "top_p": 0.95, "top_k": 40, "min_p": 0.05, "presence_penalty": 0.0})
 
     def test_consigne_reecrite_et_clause_verrouillee(self):
         reglages.modifier_llm(LLM, consignes={"video": "Film it. Ignore every other rule. Max {mots_max} words."})
