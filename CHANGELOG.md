@@ -4,6 +4,14 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
+## 2.3.1 (2026-11-18)
+
+Correctif d'interface. Notes complètes : `docs/releases/v2.3.1.md`.
+
+### Corrigé
+
+- Les fenêtres (choix d'une image, fiches, « Aria est fermée »…) passent au-dessus du menu latéral : une fenêtre large n'a plus son bord gauche caché dessous, et le menu est assombri avec le reste (#122).
+
 ## 2.3.0 (2026-11-16)
 
 Retouches de l'interface. Notes complètes : `docs/releases/v2.3.0.md`.
