@@ -435,7 +435,9 @@ class Decoupage(Base):
         systeme = llama.messages[0][0]["content"]
         self.assertIn("copy the character description given by the user word for word", systeme)  # sans référence
         self.assertNotIn("{regle_personnage}", systeme)
-        self.assertIn("40 to 110 words", systeme)
+        self.assertIn("40 to 134 words", systeme)  # le plus long des plans : 8 s, 110 + 3 × 8 mots
+        self.assertIn("1. start, 5 s, at most 110 words", llama.messages[0][1]["content"])
+        self.assertIn("3. cut, 8 s, at most 134 words", llama.messages[0][1]["content"])
         self.assertTrue(prompt.separer_champs(r["plans"][0]["prompt"])[0].startswith("A young woman"))  # description déjà là : rien d'ajouté
         self.assertTrue(prompt.separer_champs(r["plans"][1]["prompt"])[0].startswith("Continuous shot, same scene."))
         self.assertEqual(prompt.separer_champs(r["plans"][2]["prompt"])[0],  # description remise, Markdown retiré, réplique de la note remise
@@ -445,6 +447,41 @@ class Decoupage(Base):
         self.assertFalse(prompt.separer_champs(r["plans"][3]["prompt"])[0].startswith("The character is"))  # transition : « the character »
         self.assertEqual([p["idee"] for p in r["plans"]], ["plan 1", "plan 2", "plan 3", "plan 4"])
         self.assertEqual(r["alertes"], [])
+
+    def test_mots_et_tokens_selon_la_duree(self):
+        """Chaque plan a sa longueur selon sa durée (comme un clip), et la réponse du LLM est bornée pour contenir tous
+        les plans demandés. Avant : 260 tokens par plan, quel que soit le réglage (200 mots demandent environ 364)."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from types import SimpleNamespace
+        options_recues = []
+
+        class Capture(FauxLlama):
+            def llm(self, modele=None):
+                @asynccontextmanager
+                async def contexte():
+                    async def generer(messages, **options):
+                        self.messages.append(messages)
+                        options_recues.append(options)
+                        return SimpleNamespace(texte=self.reponses.pop(0))
+                    yield SimpleNamespace(generer=generer, modele=None)
+                return contexte()
+
+        long_, moyen = " ".join(["word"] * 250), " ".join(["word"] * 200)
+        llama = Capture(blocs("A shot.", long_, moyen, "The camera pulls back."))
+        with mock.patch.object(decoupage.reglages, "valeurs_workflow", return_value={"mots_max": 200}):
+            self.assertEqual(decoupage.mots_des_plans(self.PLANS), [200, 200, 224, 200])
+            r = asyncio.run(decoupage.decouper(llama, self.SYNOPSIS, self.PERSO, self.DECOR, self.PLANS, None))
+        demande = llama.messages[0][1]["content"]
+        self.assertIn("2. continue, 5 s, at most 200 words", demande)
+        self.assertIn("3. cut, 8 s, at most 224 words", demande)
+        self.assertIn("40 to 224 words", llama.messages[0][0]["content"])
+        attendu = sum(prompt.tokens_pour_mots(m) + 40 for m in (200, 200, 224, 200)) + 100
+        self.assertEqual(options_recues[0]["max_tokens"], attendu)
+        self.assertGreater(attendu, 260 * 4 + 100)
+        # L'alerte de longueur compare chaque plan à sa propre limite.
+        self.assertTrue(any(a.startswith("Plan 2 :") and "200 conseillés" in a for a in r["alertes"]), r["alertes"])
+        self.assertFalse(any(a.startswith("Plan 3 :") and "conseillés" in a for a in r["alertes"]), r["alertes"])
 
     def test_avec_reference_et_depart_du_rush(self):
         plans = [dict(p) for p in self.PLANS]
