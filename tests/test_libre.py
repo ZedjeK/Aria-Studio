@@ -356,3 +356,63 @@ class RubriquesParModele(unittest.TestCase):
         self.assertEqual(workflows.rubriques_ignorees("minimax_h3_i2v"), {"Style", "Palette", "Finition", "Objectif"})
         self.assertEqual(workflows.rubriques_ignorees("krea2_turbo"), set())
         self.assertEqual(workflows.rubriques_ignorees(None), set())
+
+
+class ReglesDEcriture(unittest.TestCase):
+    """La conversation écrit parfois le prompt elle-même (plus rien d'essentiel d'ouvert, ajustements) : elle reçoit
+    les mêmes règles d'écriture que ✨ Écrire le prompt, pas seulement celles de la fiche du modèle cible."""
+
+    def consigne(self, **options) -> str:
+        o = FauxLlm(json.dumps(TOUR))
+        tour(o, [{"role": "user", "content": "Un chat roux"}], **options)
+        return o.appels[0][0][0]["content"]
+
+    def test_image_pour_krea_2(self):
+        s = self.consigne(workflow="krea2_turbo")
+        for regle in ("never a comma-separated list of keywords",  # banc du 2026-11-11 : sans elle, des mots-clés
+                      "never switch to painting or illustration on your own",
+                      "Add characters, animals or objects the idea does not imply",
+                      "Group each subject with its own attributes and action"):  # celle de la fiche reste
+            self.assertIn(regle, s)
+        self.assertEqual(s.count("PROMPT OUTLINE"), 1)
+
+    def test_memes_sections_que_ecrire_le_prompt(self):
+        from app import workflows
+        for forme, usage, wf in (("image", "reecriture", "qwen_image_2_1"), ("clip", "video", "minimax_h3_t2v"),
+                                 ("retouche", "retouche", "qwen_image_2_1_edit")):
+            s = self.consigne(forme=forme, workflow=wf)
+            self.assertIn(prompt.ENTETE_USAGE, s)
+            for section in prompt.sections_usage(usage, workflows.sections_prompt(wf)):
+                self.assertIn(section, s, (forme, section[:50]))
+
+    def test_clip_camera_plan_continu_et_duree(self):
+        s = self.consigne(forme="clip", workflow="minimax_h3_t2v")
+        for regle in ("Camera: use the user's camera choice", "One continuous take", "Fit the clip duration"):
+            self.assertIn(regle, s)
+        # La façon d'écrire une réplique est celle de la fiche de H3, qui remplace celle de la consigne générale.
+        self.assertNotIn("Describe the speaker the first time", s)
+        self.assertIn("Before a speaker's first line", s)
+
+    def test_references_nommees_comme_le_modele(self):
+        s = self.consigne(workflow="qwen_image_2_1_edit", role="inspirer", vues=[prompt.Vue(b"x", "a ginger cat")])
+        self.assertIn('"the woman from <image1>"', s)  # les règles des références, dans le nom que Qwen leur donne
+        self.assertNotIn("One flowing paragraph", s)  # pas celles de la réécriture d'une idée
+
+    def test_sequence_et_plan_inchanges(self):
+        self.assertNotIn("PROMPT OUTLINE", self.consigne(forme="sequence", workflow="minimax_h3_t2v"))
+        plan = self.consigne(forme="plan", workflow="minimax_h3_t2v")
+        self.assertNotIn(prompt.ENTETE_USAGE, plan)  # un plan garde les règles de la fiche seule
+        self.assertIn(prompt.ENTETE_REGLES, plan)
+
+    def test_coupes_d_un_clip_controlees(self):
+        """Comme ✨ Écrire le prompt : une heure de coupe hors du clip est signalée, même écrite par la conversation."""
+        hors = "[Shot 1] A cat sleeps. [Shot 2] At 00:09.000, the camera cuts to the window."
+        o = FauxLlm(json.dumps({**TOUR, "questions": [], "prompt": hors}))
+        r = tour(o, [{"role": "user", "content": "Un chat"}], forme="clip", workflow="minimax_h3_t2v", duree=5)
+        self.assertTrue(any("après la fin du clip" in a for a in r["alertes"]), r["alertes"])
+        o = FauxLlm(json.dumps({**TOUR, "questions": [], "prompt": "[Shot 1] A cat sleeps on a sofa."}))
+        r = tour(o, [{"role": "user", "content": "Un chat"}], forme="clip", workflow="minimax_h3_t2v", duree=5)
+        self.assertEqual(r["alertes"], [])
+        o = FauxLlm(json.dumps(TOUR))  # un tour de questions : pas de prompt, pas d'alertes
+        self.assertNotIn("alertes", tour(o, [{"role": "user", "content": "Un chat"}], forme="clip",
+                                         workflow="minimax_h3_t2v"))

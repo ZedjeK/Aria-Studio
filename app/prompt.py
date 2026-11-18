@@ -251,11 +251,13 @@ def _section(cle: str, lignes: list[str]) -> str:
     return f"{TITRES.get(cle, cle)}:\n{_puces(lignes)}"
 
 
-def gabarit(nom: str, regles: dict | list | None = None, champs: bool = False) -> str:
-    """La consigne d'origine d'un usage, avec les règles du modèle cible rangées dans ses sections. Les longueurs
-    restent en repères ({mots_min}, {mots_max}) : consigne() les remplit."""
+def sections_usage(nom: str, regles: dict | list | None = None) -> list[str]:
+    """Les sections d'écriture d'un usage (plan, contenu, dialogue, texte, interdits), celles du modèle cible rangées
+    dedans : une section de la fiche remplace celle du gabarit quand l'usage la dit remplaçable, et s'y ajoute sinon.
+    Ce sont les règles d'écriture du prompt, communes à ✨ Écrire le prompt (gabarit) et à la conversation
+    (bloc_usage) : sans le rôle, la priorité de l'utilisateur ni le format de sortie, que chacun a les siens."""
     g, modele = GABARITS[nom], sections_modele(regles)
-    blocs = [f"ROLE:\n{g['role']}", f"USER PRIORITY:\n{g['priorite']}"]
+    blocs = []
     for cle in SECTIONS:
         du_modele = modele.get(cle, [])
         lignes = du_modele if du_modele and cle in g["remplace"] else [*g.get(cle, []), *du_modele]
@@ -263,8 +265,31 @@ def gabarit(nom: str, regles: dict | list | None = None, champs: bool = False) -
             blocs.append(_section(cle, lignes))
     if modele.get("regles"):
         blocs.append(f"{ENTETE_REGLES}\n{_puces(modele['regles'])}")
+    return blocs
+
+
+def gabarit(nom: str, regles: dict | list | None = None, champs: bool = False) -> str:
+    """La consigne d'origine d'un usage, avec les règles du modèle cible rangées dans ses sections. Les longueurs
+    restent en repères ({mots_min}, {mots_max}) : consigne() les remplit."""
+    g = GABARITS[nom]
+    blocs = [f"ROLE:\n{g['role']}", f"USER PRIORITY:\n{g['priorite']}", *sections_usage(nom, regles)]
     blocs.append(f"OUTPUT FORMAT:\n{_puces(g['format_champs'] if champs and 'format_champs' in g else g['format'])}")
     return "\n\n".join(blocs)
+
+
+# La conversation (💬 M'aider à préciser) écrit parfois le prompt elle-même : quand plus rien d'essentiel n'est
+# ouvert, et à chaque ajustement. Avant, elle ne recevait que les règles de la fiche du modèle cible (bloc_modele),
+# pas celles de l'usage : pour Krea 2, ni « jamais une liste de mots-clés » (banc du 2026-11-11), ni le maintien du
+# médium, ni l'interdit d'ajouter des personnages ; pour un clip, ni la caméra par défaut, ni le plan continu, ni
+# l'adaptation à la durée. Elle reçoit maintenant les mêmes sections que ✨ Écrire le prompt.
+ENTETE_USAGE = ("Rules for writing the prompt. They shape the OPEN parts only: whenever one clashes with what the "
+                "user fixed or asked, the user wins.")
+
+
+def bloc_usage(nom: str, regles: dict | list | None = None) -> str:
+    """Les règles d'écriture d'un usage en un bloc, pour la conversation : l'en-tête, puis les mêmes sections que le
+    gabarit (sections_usage)."""
+    return "\n\n".join([ENTETE_USAGE, *sections_usage(nom, regles)])
 
 
 def bloc_modele(regles: dict | list | None) -> str:
@@ -981,9 +1006,16 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
             sujet, sans_sujet, forme == "clip", lancement_llm(modele)["contexte"] < CONTEXTE_CATALOGUE,
             workflows.rubriques_ignorees(workflow))):
         systeme += f"\n\n{guide}"
-    # Les règles du modèle cible écrivent ses prompts ; l'histoire d'une séquence n'en est pas un (le découpage
-    # les applique ensuite plan par plan). À l'essai, elles en faisaient un brief anglais en plans.
-    if forme != "sequence" and (bloc := bloc_modele(workflows.sections_prompt(workflow))):
+    # Les règles d'écriture. Image, Clip, Retouche : celles de l'usage, avec celles du modèle cible rangées dedans,
+    # comme pour ✨ Écrire le prompt (bloc_usage). Un plan de séquence garde celles de la fiche seule : le découpage a
+    # ses propres règles. L'histoire d'une séquence n'est pas un prompt (le découpage les applique ensuite plan par
+    # plan) : à l'essai, elles en faisaient un brief anglais en plans.
+    usages = {"image": "references" if vues and role == "inspirer" else "reecriture", "clip": "video",
+              "retouche": "retouche"}
+    if usage := usages.get(forme):
+        bloc = bloc_usage(usage, workflows.sections_prompt(workflow))
+        systeme += f"\n\n{avec_noms_images(bloc, workflow) if usage == 'references' else bloc}"
+    elif forme != "sequence" and (bloc := bloc_modele(workflows.sections_prompt(workflow))):
         systeme += f"\n\n{bloc}"
     # Un clip pour H3 s'écrit en trois champs, comme à la réécriture directe (reecrire) : même format, quel que soit l'onglet.
     en_champs = forme == "clip" and workflows.champs_video(workflow)
@@ -1027,9 +1059,12 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     if tour["prompt"] and en_champs:
         tour = {**tour, "prompt": mettre_en_champs(tour["prompt"], animer=role == "animer")}
     securite.verifier(contexte, *textes, *tour["fiche"].values(), tour["prompt"] or "")
-    return {**tour, "brut": json.dumps({k: tour[k] for k in ("message", "fiche", "questions", "prompt")},
-                                       ensure_ascii=False),
-            "modele": llama.modele.name if llama.modele else modele, "duree_s": round(duree_s, 2)}
+    resultat = {**tour, "brut": json.dumps({k: tour[k] for k in ("message", "fiche", "questions", "prompt")},
+                                           ensure_ascii=False),
+                "modele": llama.modele.name if llama.modele else modele, "duree_s": round(duree_s, 2)}
+    if tour["prompt"] and en_champs:  # comme ✨ Écrire le prompt : les heures de coupe tombent-elles dans le clip ?
+        resultat["alertes"] = controler_coupes(tour["prompt"], duree)
+    return resultat
 
 
 # Contrôles automatiques d'un prompt produit (Casting LLM).
