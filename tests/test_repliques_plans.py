@@ -29,7 +29,7 @@ class Repliques(Base):
         r, demande = self.decouper(blocs("She walks in.", f'She takes off her helmet and says "{REPLIQUE}"',
                                          "She smiles."))
         self.assertIn("Story: told by the shots below, in order.", demande)  # sans fil
-        self.assertIn(f"2. cut, 5 s, note: elle retire son casque, line, word for word, in its <d> tag: "
+        self.assertIn(f"2. cut, 5 s, at most 110 words, note: elle retire son casque, line, word for word, in its <d> tag: "
                       f"<d>[French] {REPLIQUE}</d>, spoken at the end of the shot, after the action, as a reaction", demande)
         self.assertNotIn("Nobody speaks", demande)
         # le LLM l'a écrite entre guillemets : le filet la passe dans la balise de H3

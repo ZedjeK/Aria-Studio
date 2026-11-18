@@ -78,6 +78,16 @@ def _valider_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[
     return propres
 
 
+def mots_des_plans(plans: list[dict]) -> list[int]:
+    """Longueur conseillée du prompt de chaque plan : celle du modèle vidéo (Réglages, mots_max) jusqu'à 5 s, puis
+    quelques mots de plus par seconde, comme pour un clip (prompt.mots_pour_duree). Avant, tous les plans avaient la
+    même longueur, quelle que soit leur durée, et la réponse du LLM était bornée pour 110 mots par plan quel que soit
+    le réglage (260 tokens par plan : un réglage à 200 mots demande environ 364 tokens)."""
+    wf = workflows.obtenir(CONFIG.get("generation", {}).get("texte_vers_video"))
+    mots_max = reglages.valeurs_workflow(wf).get("mots_max") or 110
+    return [prompt.mots_pour_duree(mots_max, p["duree"]) for p in plans]
+
+
 def ligne_replique(p: dict) -> str:
     """La réplique d'un plan, telle que le LLM la reçoit : mot pour mot, sa langue, son moment, la voix off."""
     off = ", as an off-screen voiceover (the character's lips stay closed)" if p["off"] else ""
@@ -85,7 +95,8 @@ def ligne_replique(p: dict) -> str:
 
 
 def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[dict], reference: str | None,
-                      contrainte: str = "", musique: str | None = None, cible: int | None = None) -> str:
+                      contrainte: str = "", musique: str | None = None, cible: int | None = None,
+                      mots: list[int] | None = None) -> str:
     """Message envoyé à Llama : le fil de l'histoire, le personnage (sauf avec une image de référence), le décor, la
     contrainte, la langue de chaque réplique, puis la liste des plans avec leur type, durée, ce qui s'y passe, leur
     réplique et leur arrivée. `cible` : un seul plan à écrire, avec le prompt déjà écrit de ses voisins."""
@@ -105,6 +116,8 @@ def demande_decoupage(synopsis: str, personnage_: str, decor: str, plans: list[d
     lignes.append("Shots:")
     for k, p in enumerate(plans, 1):
         morceaux = [f"{k}. {TYPES_DECOUPAGE[p['enchainement']]}, {p['duree']} s"]
+        if mots:  # la longueur du prompt de ce plan, selon sa durée (mots_des_plans)
+            morceaux.append(f"at most {mots[k - 1]} words")
         if p["note"]:
             morceaux.append(f"note: {p['note']}")
         if parlent and p.get("replique"):
@@ -231,13 +244,15 @@ def preparer_ecriture(synopsis: str, personnage_: str, decor: str, plans: list[d
         raise ErreurSequence(f"Musique de {LONGUEUR_MUSIQUE} caractères au plus")
     if reference:
         personnage_ = ""  # l'image fait l'identité : la décrire ferait dériver H3 (essais du mode Séquence)
+    mots = mots_des_plans(plans)
     rushes_ = [r for r in [reference, *(p["rush"] for p in plans)] if r]
     entrees = [synopsis, personnage_, decor, contrainte, musique or "", *(p["note"] for p in plans),
                *(p["replique"] for p in plans), *plateau.textes_origine(rushes_), *(["minor"] if mineur else [])]
     securite.verifier(*entrees)
     return {"plans": plans, "personnage": personnage_, "contrainte": contrainte, "musique": musique,
-            "entrees": entrees, "source": source_repliques(synopsis, contrainte, plans),
-            "demande": demande_decoupage(synopsis, personnage_, decor, plans, reference, contrainte, musique, cible),
+            "entrees": entrees, "source": source_repliques(synopsis, contrainte, plans), "mots": mots,
+            "demande": demande_decoupage(synopsis, personnage_, decor, plans, reference, contrainte, musique, cible,
+                                         mots),
             "regle_personnage": prompt.REGLE_AVEC_REFERENCE if reference else prompt.REGLE_SANS_REFERENCE}
 
 
@@ -255,7 +270,8 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     cibles = list(range(len(plans))) if cible is None else [cible]
 
     wf = workflows.obtenir(CONFIG.get("generation", {}).get("texte_vers_video"))
-    mots_max = reglages.valeurs_workflow(wf).get("mots_max") or 110
+    mots = e["mots"]
+    mots_max = max(mots[k] for k in cibles)  # le plus long des plans à écrire ; chacun a le sien dans la demande
     # Le LLM de ce workflow (onglet Modèles), sinon celui par défaut ; un spécialiste ne fait pas de découpage.
     llm = prompt.generaliste(llm or workflows.llm_de(wf.id))
     champs = workflows.champs_video(wf.id)
@@ -269,7 +285,9 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
     debut = time.perf_counter()
     async with orchestrateur.llm(llm) as llama:
         for essai in range(2):  # une réponse mal formée est redemandée une fois
-            reponse = await llama.generer(echanges, max_tokens=max(regle["max_tokens"], 260 * len(cibles) + 100),
+            # Chaque bloc : son prompt (tokens_pour_mots), et environ 40 tokens pour « SHOT n », la ligne FR et « EN: ».
+            besoin = sum(prompt.tokens_pour_mots(mots[k]) + 40 for k in cibles) + 100
+            reponse = await llama.generer(echanges, max_tokens=max(regle["max_tokens"], besoin),
                                           **reglages.ecriture(llm, prompt.pense(llama)))
             try:
                 blocs = lire_blocs(reponse.texte, [k + 1 for k in cibles], exact=cible is None)
@@ -284,8 +302,8 @@ async def decouper(orchestrateur, synopsis: str, personnage_: str, decor: str, p
         texte, alertes_plan = finir_plan(k + 1, p, en, e["personnage"], e["source"], champs)
         fr, _ = sans_repliques_inventees(e["source"], prompt.nettoyer_markdown(fr))
         alertes += alertes_plan
-        if len(texte.split()) > mots_max + 20:
-            alertes.append(f"Plan {k + 1} : {len(texte.split())} mots, au-delà des {mots_max} conseillés")
+        if len(texte.split()) > mots[k] + 20:
+            alertes.append(f"Plan {k + 1} : {len(texte.split())} mots, au-delà des {mots[k]} conseillés")
         sortie.append({**p, "idee": fr, "prompt": texte})
     tout = " ".join(p["prompt"] for p in sortie)
     if cible is None:
