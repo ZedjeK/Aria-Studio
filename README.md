@@ -38,7 +38,8 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 - **Casting** : des bancs pour comparer les modèles d'image et les LLM sur les mêmes idées, et choisir tes favoris.
 - **Réglages** : par LLM, par modèle et par checkpoint, avec un bouton *Recommander* par modèle d'image ou de vidéo (les valeurs
   de sa fiche : CFG, sampler…) et *Adapter à ma machine* pour les LLM (d'après ta carte et leurs recommandations
-  officielles). Le moteur de chaque LLM (llama.cpp officiel ou PrismML pour les GGUF ternaires, Bonsai 2
+  officielles, un jeu d'échantillonnage avec réflexion et un sans ; un dérivé, comme Bonsai 2 Heretic, reprend
+  celles de son modèle d'origine). Le moteur de chaque LLM (llama.cpp officiel ou PrismML pour les GGUF ternaires, Bonsai 2
   et ses dérivés) se choisit tout seul d'après le fichier, et peut s'imposer à la main. La réflexion des LLM est
   activée par défaut : l'écriture est plus lente, mais plus soignée. Elle se coupe LLM par LLM ; les courtes
   traductions et les questions du chat Libre s'en passent toujours.
@@ -293,7 +294,7 @@ Publier une version : passer `VERSION` de `app/__init__.py` au nouveau numéro, 
 et son `.sha256` sur Windows et crée la release en brouillon, à relire et à publier :
 
 ```powershell
-git tag -a v2.3.1 -m "Version 2.3.1"; git push origin v2.3.1
+git tag -a v2.4.0 -m "Version 2.4.0"; git push origin v2.4.0
 ```
 
 | Dossier | Rôle |
