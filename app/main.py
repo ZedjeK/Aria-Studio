@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import re
+import sys
 import threading
 import uuid
 import webbrowser
@@ -266,6 +267,20 @@ def regler_demarrage(d: DemandeDemarrage):
         raise HTTPException(409, str(e))
     except OSError as e:
         raise HTTPException(500, f"Le registre a refusé : {e}")
+
+
+@app.get("/api/mcp")
+def commande_mcp():
+    """Réglages → Système, carte « Claude (MCP) » : de quoi déclarer le serveur MCP d'Aria (app/mcp.py) dans Claude
+    Code, en commande ou en bloc JSON (« mcpServers »). Le Python et le script sont ceux de cette Aria : programme\\
+    une fois installée. Python avec console : pythonw n'a ni entrée ni sortie standard."""
+    python = Path(sys.executable)
+    if python.name.lower() == "pythonw.exe":
+        python = python.with_name("python.exe")
+    script = ROOT / "app" / "mcp.py"
+    return {"nom": "aria-studio", "python": str(python), "script": str(script),
+            "commande": f'claude mcp add --transport stdio --scope user aria-studio -- "{python}" "{script}"',
+            "serveur": {"type": "stdio", "command": str(python), "args": [str(script)]}}
 
 
 class DemandeInstallation(BaseModel):

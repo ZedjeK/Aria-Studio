@@ -148,6 +148,15 @@ quitter.
 l'ouverture de ta session, sans ouvrir le navigateur : seule l'icône apparaît. Il n'existe que pour Aria installée (dans
 `programme\`), et il écrit une valeur « Aria Studio » sous la clé `Run` de ton compte Windows, que décocher retire.
 
+### Piloter Aria depuis Claude (MCP)
+
+Aria livre un serveur MCP (`app\mcp.py`) : Claude Code peut voir son état, écrire un prompt avec ton LLM local, lancer
+un rendu d'image et le suivre, et lire la fiche d'une image. Rien ne supprime, ne déplace, ne change un réglage ni
+n'installe, et le filtre de protection des mineurs s'applique comme dans l'interface. Réglages → Système, carte
+**Claude (MCP)**, donne la commande `claude mcp add` toute prête, ou le bloc à ajouter sous `mcpServers` (dans
+`~/.claude.json` ou le `.mcp.json` d'un projet). Aria doit être lancée : le serveur MCP n'ouvre aucun port, il passe
+par l'API d'Aria avec le jeton du lancement en cours.
+
 ## Où vont tes affaires
 
 Tout ce qui t'appartient vit dans `%USERPROFILE%\.Aria-Studio`, qu'une mise à jour ne touche jamais :
@@ -248,6 +257,10 @@ Ce qu'Aria ne fait pas, ou ne garantit pas, pour que tu ne le découvres pas par
 - **Les sauvegardes des réglages sont limitées.** Aria garde les 20 dernières versions de `reglages.json` : au-delà,
   les plus anciennes s'effacent. Revenir à une version d'avant d'Aria retrouve ses anciens fichiers de réglages, mais
   pas ce qui a changé depuis qu'ils ont été réunis dans `reglages.json`.
+- **Ce que Claude reçoit part vers ton compte Claude.** Avec le serveur MCP, l'état d'Aria, les prompts écrits et les
+  fiches des images (idée, prompt, modèle, seed) passent par Claude, donc par le compte Claude que tu utilises. Les
+  images elles-mêmes restent sur ton PC : Claude ne reçoit que leur chemin, mais il peut ouvrir un fichier si ses
+  propres outils le lui permettent.
 - **Testée sur une seule machine** (Windows 11, RTX 4080 SUPER 16 Go, 64 Go de RAM) et lanceur non signé : voir
   Installation.
 

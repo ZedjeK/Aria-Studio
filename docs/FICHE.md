@@ -49,6 +49,8 @@ Au build seulement : `github.com/astral-sh/python-build-standalone` (Python port
 
 Aucune télémétrie, rien n'est envoyé à l'auteur. Les appels éventuels de ComfyUI et de llama-server eux-mêmes : non vérifiés.
 
+**Serveur MCP pour Claude** (`app/mcp.py`, à déclarer soi-même dans Claude, commande dans Réglages → Système) : pas une connexion d'Aria. Claude lance ce script et lui parle sur l'entrée et la sortie standard ; le script lit le port et le jeton dans `cache\session.json` et n'appelle que l'API d'Aria sur `127.0.0.1`. Aucun port ni secret en plus. Ce que ses outils rendent (état, prompts écrits, fiches des images : idée, prompt, modèle, seed) part ensuite vers Claude, donc vers le compte Claude de l'utilisateur ; les images elles-mêmes ne sont pas rendues, seulement leur chemin. Outils limités à lire, écrire un prompt et lancer un rendu : rien ne supprime, ne déplace, ne règle ni n'installe.
+
 ## Écarts connus au contrat des applis Aria
 
 Ils sont décrits ici pour que personne ne les découvre par accident ; chacun est

@@ -763,6 +763,29 @@ document.getElementById("demarrage-windows").addEventListener("change", async (e
     }
 });
 
+// Claude (MCP) : la commande et le bloc JSON qui déclarent le serveur MCP d'Aria (app/mcp.py) dans Claude Code
+async function chargerMcp() {
+    try {
+        const m = await api("GET", "/api/mcp");
+        document.getElementById("mcp-commande").textContent = m.commande;
+        document.getElementById("mcp-json").textContent = JSON.stringify({ [m.nom]: m.serveur }, null, 2);
+    } catch {
+        // pas de serveur : la barre d'état le dit déjà
+    }
+}
+
+for (const [bouton, source] of [["mcp-copier-commande", "mcp-commande"], ["mcp-copier-json", "mcp-json"]]) {
+    document.getElementById(bouton).addEventListener("click", async (ev) => {
+        try {
+            await navigator.clipboard.writeText(document.getElementById(source).textContent);
+            ev.target.textContent = "Copié ✓";
+            setTimeout(() => { ev.target.textContent = "Copier"; }, 2000);
+        } catch {
+            alert("Le navigateur refuse la copie : sélectionne le texte et copie-le à la main.");
+        }
+    });
+}
+
 // « Aller à » du menu de l'icône : le serveur redirige vers « /#modeles » ; l'ancre choisit la page, puis s'efface
 function ouvrirDepuisAncre() {
     const vue = location.hash.slice(1);
@@ -778,6 +801,7 @@ function ouvrirDepuisAncre() {
 }
 window.addEventListener("load", ouvrirDepuisAncre);  // après tous les scripts : chaque onglet sait se charger
 chargerDemarrage();
+chargerMcp();
 
 chargerMiseAJour();
 suivreMaj();  // une mise à jour déjà en cours (page rechargée) reprend son suivi ; sinon, dit si elle est possible
