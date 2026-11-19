@@ -64,7 +64,8 @@ pour les images et les vidéos, [llama.cpp](https://github.com/ggml-org/llama.cp
 
 ## Configuration requise
 
-- **Windows 11, 64 bits.** Windows 10 n'a pas été vérifié.
+- **Windows 11, 64 bits.** Windows 10 n'a pas été vérifié ; son `tar` ne lit pas l'archive de ComfyUI (format 7z,
+  LZMA) : il y faut **7-Zip**, qu'Aria utilise s'il est installé, et qu'elle demande avant tout téléchargement sinon.
 - **Une carte NVIDIA** avec un pilote de la branche **580 ou plus récente** (les moteurs sont compilés pour CUDA 13).
   Testé seulement sur 16 Go de VRAM : les minimums par carte ne sont pas encore mesurés.
 - **De la place disque**, selon ce que tu installes :

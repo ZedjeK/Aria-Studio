@@ -15,6 +15,7 @@ catalogue, et rien n'est exécuté pendant l'installation.
 
 import asyncio
 import contextlib
+import functools
 import hashlib
 import json
 import os
@@ -39,8 +40,14 @@ from app.emplacements import MOTEURS
 CATALOGUE = ROOT / "catalogue" / "moteurs.yaml"
 FICHE = ".aria-moteur.json"  # dans le dossier d'un moteur installé par Aria : id, version, archives
 BLOC = 1024 * 1024
-TAR = Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32" / "tar.exe"  # bsdtar : lit aussi le 7z
+TAR = Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32" / "tar.exe"  # bsdtar : lit le 7z s'il a liblzma
+# Dossiers habituels de 7-Zip (64 puis 32 bits), après celui qu'il déclare dans le registre (_sept_zip).
 SEPT_ZIP = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "7-Zip" / "7z.exe"
+SEPT_ZIP_32 = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "7-Zip" / "7z.exe"
+# Le tar de Windows 10 est compilé sans liblzma : il ne lit pas le 7z de ComfyUI (LZMA2, filtre BCJ2) et échouait
+# sur « Error exit delayed from previous errors » après 2 Go de téléchargement (retour d'un utilisateur, 2026-11-19).
+SANS_EXTRACTEUR_7Z = ("le tar de Windows de ce PC ne lit pas le format 7z (LZMA) : installe 7-Zip (7-zip.org), "
+                      "puis réessaie")
 EXPANSION = 3  # place à prévoir une fois extrait, par octet d'archive (mesuré : ComfyUI ×2,3, llama.cpp ×1,3)
 
 
@@ -102,6 +109,8 @@ def etat(dans: Path = MOTEURS, dossier_archives: Path | None = None) -> list[dic
             "precedente": dossier.with_name(dossier.name + ".prev").is_dir(),
             "a_telecharger": sum(a["taille"] for a in m["archives"] if not _deja_la(a, dossier_archives)),
             "occupe": ports[m["port"]],
+            # Ce qui manque au PC pour l'installer (7-Zip sous Windows 10), dit avant le clic sur Installer
+            "prerequis": None if statut in ("a_jour", "externe") else prerequis(id_moteur),
         })
     return sortie
 
@@ -187,7 +196,68 @@ async def obtenir(archive: dict, dossier_archives: Path, progression=None) -> Pa
     return cible
 
 
+@functools.cache
+def _tar_lit_lzma() -> bool:
+    """Le tar de Windows sait-il décompresser du LZMA ? Celui de Windows 11 cite liblzma dans sa version
+    (« bsdtar 3.8.9 - libarchive 3.8.9 zlib/… liblzma/5.8.3 … »), celui de Windows 10 non. Lu une fois par lancement."""
+    if not TAR.is_file():
+        return False
+    try:
+        r = subprocess.run([str(TAR), "--version"], capture_output=True, text=True, timeout=10,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return "liblzma" in r.stdout
+
+
+def _sept_zip() -> Path | None:
+    """7z.exe : le dossier que 7-Zip déclare dans le registre (installation 64 ou 32 bits, pour la machine ou pour
+    l'utilisateur), sinon ses dossiers habituels. Relu à chaque fois : installé entre deux essais, il est trouvé.
+    Pas de recherche dans le PATH : sous Windows, elle commence par le dossier courant."""
+    candidats = []
+    try:
+        import winreg
+    except ImportError:  # hors de Windows
+        winreg = None
+    if winreg:
+        for racine in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            for vue in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+                try:
+                    with winreg.OpenKey(racine, r"SOFTWARE\7-Zip", 0, winreg.KEY_READ | vue) as cle:
+                        candidats.append(Path(winreg.QueryValueEx(cle, "Path")[0]) / "7z.exe")
+                except OSError:
+                    pass
+    return next((c for c in [*candidats, SEPT_ZIP, SEPT_ZIP_32] if c.is_file()), None)
+
+
+def _extracteurs_7z(archive: Path, vers: Path) -> list[list[str]]:
+    """Les commandes capables d'extraire un .7z, dans l'ordre : le tar de Windows s'il lit le LZMA (libarchive
+    refuse les chemins absolus et « .. »), puis 7-Zip."""
+    commandes = []
+    if _tar_lit_lzma():
+        commandes.append([str(TAR), "-xf", str(archive), "-C", str(vers)])
+    if sept := _sept_zip():
+        commandes.append([str(sept), "x", str(archive), f"-o{vers}", "-y"])
+    return commandes
+
+
+def prerequis(id_moteur: str) -> str | None:
+    """Ce qui manque à ce PC pour installer ce moteur, avant tout téléchargement (None : rien)."""
+    m = _moteur(id_moteur)
+    if any(a["fichier"].lower().endswith(".7z") for a in m["archives"]) and not (_tar_lit_lzma() or _sept_zip()):
+        return f"Pour installer {m['nom']}, {SANS_EXTRACTEUR_7Z}"
+    return None
+
+
+def _erreur_utile(sortie: str) -> str | None:
+    """La dernière ligne qui dit quelque chose : bsdtar finit toujours par « Error exit delayed from previous
+    errors », qui cachait la vraie cause écrite juste au-dessus."""
+    lignes = [ligne.strip() for ligne in sortie.splitlines() if ligne.strip() and "Error exit delayed" not in ligne]
+    return lignes[-1] if lignes else None
+
+
 def _extraire(archive: Path, vers: Path):
+    """`vers` : un dossier propre à cette extraction (<moteur>.extrait), vidé entre deux outils."""
     vers.mkdir(parents=True, exist_ok=True)
     if archive.suffix.lower() == ".zip":
         racine = vers.resolve()
@@ -197,15 +267,22 @@ def _extraire(archive: Path, vers: Path):
                     raise ErreurMoteur(f"{archive.name} contient un chemin dangereux : {nom}")
             z.extractall(vers)
         return
-    # .7z : le tar de Windows (libarchive refuse les chemins absolus et « .. »), sinon 7-Zip
-    for commande in ([str(TAR), "-xf", str(archive), "-C", str(vers)], [str(SEPT_ZIP), "x", str(archive), f"-o{vers}", "-y"]):
-        if Path(commande[0]).is_file():
-            r = subprocess.run(commande, capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            if r.returncode == 0:
-                return
-            erreur = (r.stderr or r.stdout).strip().splitlines()[-1:] or [f"code {r.returncode}"]
-            raise ErreurMoteur(f"Extraction de {archive.name} impossible : {erreur[0]}")
-    raise ErreurMoteur(f"Pour extraire {archive.name}, il faut le tar de Windows 11 ou 7-Zip")
+    commandes = _extracteurs_7z(archive, vers)
+    if not commandes:
+        raise ErreurMoteur(f"Pour extraire {archive.name}, {SANS_EXTRACTEUR_7Z}")
+    # Un outil qui échoue passe la main au suivant : avant, le premier échec arrêtait tout, et 7-Zip n'était essayé
+    # que sans tar.exe du tout.
+    erreurs = []
+    for commande in commandes:
+        r = subprocess.run(commande, capture_output=True, text=True,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode == 0:
+            return
+        cause = _erreur_utile(r.stderr or "") or _erreur_utile(r.stdout or "") or f"code {r.returncode}"
+        erreurs.append(f"{Path(commande[0]).name} : {cause}")
+        shutil.rmtree(vers, ignore_errors=True)  # l'outil suivant repart d'un dossier vide
+        vers.mkdir(parents=True, exist_ok=True)
+    raise ErreurMoteur(f"Extraction de {archive.name} impossible ({' ; '.join(erreurs)})")
 
 
 def _verser(source: Path, cible: Path):
@@ -257,6 +334,8 @@ async def _installer(id_moteur: str, dans: Path, dossier_archives: Path | None, 
     dossier_archives = dossier_archives or dans / "_archives"
     if verrou is None and occupe(id_moteur):
         raise ErreurMoteur(f"{m['nom']} tourne : arrête-le avant de l'installer")
+    if manque := prerequis(id_moteur):  # avant de télécharger 2 Go qu'on ne saurait pas extraire
+        raise ErreurMoteur(manque)
     dans.mkdir(parents=True, exist_ok=True)
     libre, besoin = shutil.disk_usage(dans).free, place_necessaire(id_moteur, dossier_archives)
     if libre < besoin:

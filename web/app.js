@@ -429,6 +429,7 @@ function afficherMoteurs(e) {
                 ${m.facultatif ? '<span class="badge">facultatif</span>' : ""}${m.occupe ? '<span class="badge">en marche</span>' : ""}
                 <div class="discret">${echapper(m.role)} · épinglé ${echapper(m.version)}${autre}</div>
                 ${m.externe ? `<div class="discret">Dossier : <code>${echapper(m.chemin)}</code></div>` : ""}
+                ${m.prerequis ? `<div class="ko">⚠ ${echapper(m.prerequis)}</div>` : ""}
             </div>
             <div class="actions-moteur">
                 ${installer}

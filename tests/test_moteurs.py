@@ -422,3 +422,106 @@ class Carte(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+TAR_WINDOWS_10 = "bsdtar 3.5.2 - libarchive 3.5.2 zlib/1.2.5.f-ipp\n"
+TAR_WINDOWS_11 = "bsdtar 3.8.9 - libarchive 3.8.9 zlib/1.2.13.1-motley liblzma/5.8.3 bz2lib/1.0.8 libzstd/1.5.7\n"
+
+
+class Extraction7z(Base):
+    """Le 7z de ComfyUI sous Windows 10 (retour d'un utilisateur, 2026-11-19) : son tar n'a pas liblzma. Avant, la
+    seule erreur montrée était « Error exit delayed from previous errors », 7-Zip n'était jamais essayé quand tar.exe
+    existait, et le refus arrivait après 2 Go de téléchargement."""
+
+    def setUp(self):
+        super().setUp()
+        self.archive = self._ecrire("ComfyUI.7z", b"7z")
+        self.vers = self.dans / "comfyui.extrait"
+        self.sept = self._ecrire("7z.exe", b"exe")
+        moteurs._tar_lit_lzma.cache_clear()
+        self.addCleanup(moteurs._tar_lit_lzma.cache_clear)
+
+    def _ecrire(self, nom, contenu):
+        f = Path(self.tmp.name) / nom
+        f.write_bytes(contenu)
+        return f
+
+    def outils(self, tar: bool, sept: bool):
+        return [mock.patch.object(moteurs, "_tar_lit_lzma", return_value=tar),
+                mock.patch.object(moteurs, "_sept_zip", return_value=self.sept if sept else None)]
+
+    def extraire(self, resultats, tar=True, sept=True):
+        """`resultats` : (code, stderr) de chaque outil lancé, dans l'ordre. Un outil laisse un fichier à moitié écrit."""
+        appels = []
+
+        def lancer(commande, **options):
+            appels.append((Path(commande[0]).name, sorted(p.name for p in self.vers.iterdir())))
+            (self.vers / "a-moitie.bin").write_bytes(b"x")
+            code, erreur = resultats[len(appels) - 1]
+            return mock.Mock(returncode=code, stderr=erreur, stdout="")
+
+        patchs = [*self.outils(tar, sept), mock.patch.object(moteurs.subprocess, "run", side_effect=lancer)]
+        for p in patchs:
+            p.start()
+        try:
+            moteurs._extraire(self.archive, self.vers)
+        finally:
+            for p in reversed(patchs):
+                p.stop()
+        return appels
+
+    def test_tar_en_echec_7zip_prend_le_relais(self):
+        appels = self.extraire([(1, "tar.exe: Unsupported compression\ntar.exe: Error exit delayed from previous errors.\n"),
+                                (0, "")])
+        self.assertEqual([nom for nom, _ in appels], ["tar.exe", "7z.exe"])
+        self.assertEqual(appels[1][1], [])  # 7-Zip repart d'un dossier vide
+
+    def test_la_vraie_erreur_de_chaque_outil(self):
+        with self.assertRaises(moteurs.ErreurMoteur) as e:
+            self.extraire([(1, "tar.exe: Unsupported compression\ntar.exe: Error exit delayed from previous errors.\n"),
+                           (2, "ERROR: Data Error : ComfyUI/main.py\n")])
+        message = str(e.exception)
+        self.assertIn("tar.exe : tar.exe: Unsupported compression", message)
+        self.assertIn("7z.exe : ERROR: Data Error : ComfyUI/main.py", message)
+        self.assertNotIn("Error exit delayed", message)
+
+    def test_tar_sans_lzma_n_est_pas_lance(self):
+        appels = self.extraire([(0, "")], tar=False)
+        self.assertEqual([nom for nom, _ in appels], ["7z.exe"])
+
+    def test_ni_tar_capable_ni_7zip(self):
+        with self.assertRaisesRegex(moteurs.ErreurMoteur, "installe 7-Zip"):
+            self.extraire([], tar=False, sept=False)
+
+    def test_refus_avant_le_telechargement(self):
+        catalogue = json.loads(json.dumps(CATALOGUE))
+        catalogue["moteurs"]["comfyui"]["archives"] = [archive("ComfyUI.7z", b"7z", racine="ComfyUI_portable")]
+        moteurs.CATALOGUE.write_text(yaml.safe_dump(catalogue), encoding="utf-8")
+        obtenir = mock.AsyncMock()
+        sans_tar, sans_7zip = self.outils(tar=False, sept=False)
+        with mock.patch.object(moteurs, "obtenir", obtenir), sans_tar, sans_7zip:
+            with self.assertRaisesRegex(moteurs.ErreurMoteur, "Pour installer ComfyUI, le tar de Windows de ce PC"):
+                self.installer("comfyui")
+            self.assertIn("installe 7-Zip", self.statut("comfyui")["prerequis"])  # dit dès l'écran des moteurs
+            self.assertIsNone(self.statut("llama")["prerequis"])  # des zip : rien ne manque
+        obtenir.assert_not_called()
+        with self.outils(tar=False, sept=True)[1]:
+            self.assertIsNone(moteurs.prerequis("comfyui"))  # 7-Zip installé : plus rien ne manque
+
+    def test_version_de_tar(self):
+        for sortie, attendu in ((TAR_WINDOWS_10, False), (TAR_WINDOWS_11, True)):
+            moteurs._tar_lit_lzma.cache_clear()
+            with mock.patch.object(moteurs, "TAR", self.sept), \
+                    mock.patch.object(moteurs.subprocess, "run", return_value=mock.Mock(stdout=sortie)) as run:
+                self.assertIs(moteurs._tar_lit_lzma(), attendu)
+                moteurs._tar_lit_lzma()
+            self.assertEqual(run.call_count, 1)  # lu une fois par lancement
+
+    def test_7zip_32_bits_trouve(self):
+        absent = Path(self.tmp.name) / "absent" / "7z.exe"
+        with mock.patch("winreg.OpenKey", side_effect=OSError), \
+                mock.patch.object(moteurs, "SEPT_ZIP", absent), mock.patch.object(moteurs, "SEPT_ZIP_32", self.sept):
+            self.assertEqual(moteurs._sept_zip(), self.sept)
+        with mock.patch("winreg.OpenKey", side_effect=OSError), \
+                mock.patch.object(moteurs, "SEPT_ZIP", absent), mock.patch.object(moteurs, "SEPT_ZIP_32", absent):
+            self.assertIsNone(moteurs._sept_zip())
