@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from PIL import Image
 
 from app import fiches, listes, modeles, reglages, securite, workflows
-from app.llm import ErreurLlama
+from app.llm import BUDGET_REFLEXION, ErreurLlama
 from app.modeles import DOSSIER as MODELES
 from app.orchestrateur import Orchestrateur, lancement_llm
 from app.repliques import vers_balises
@@ -121,11 +121,13 @@ PRIORITE = f"""{FIDELITE}
 {ADULTES}
 Every rule below shapes the OPEN parts only: whenever one clashes with what the user fixed or asked, the user wins."""
 
-CHAMPS = """integrated_multimodal_description: [Shot 1] then the whole picture-and-action brief with the dialogue, as described above. No timestamp on Shot 1. Add a second shot only if the user asks for a cut: "[Shot 2] At 00:03.500, the camera cuts to ...".
+# Les sons vont dans overall_soundscape seulement : la description les demandait aussi (« end with the concrete
+# sounds »), et le LLM les écrivait deux fois (revue du 2026-11-18).
+CHAMPS = """integrated_multimodal_description: [Shot 1] then the whole picture-and-action brief with the dialogue, as described above, but without the sounds: they go in overall_soundscape. No timestamp on Shot 1. Add a second shot only if the user asks for a cut: "[Shot 2] At 00:03.500, the camera cuts to ...".
 overall_soundscape: one paragraph of 1 to 4 sentences: ambient sounds, sounds of the actions, non-verbal human sounds. Never put dialogue or music in it. Write N/A only if the user asks for silence.
 non_diegetic_music: the background score only if the user asks for it (1 to 3 sentences: instruments, tempo, rhythm, dynamics, no mood words); otherwise N/A."""
 # Ajouté tel quel à une consigne qui n'a pas de gabarit (découpage, chat Libre, consigne réécrite dans Réglages).
-FORMAT_CHAMPS = f"""Output format of the target model (it replaces the plain-prose layout above; every other rule stays):
+FORMAT_CHAMPS = f"""Output format of the target model (it replaces the plain-prose layout above, and the sounds move to overall_soundscape; every other rule stays):
 exactly these three fields, one per paragraph, in this order, with these exact labels.
 {CHAMPS}
 The word limit counts the three fields together."""
@@ -189,6 +191,11 @@ _REFERENCES = {
                "Output only the instruction: no preamble, no explanation."],
 }
 
+SONS = ("Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background "
+        "music unless the user asks for it.")
+SONS_CHAMPS = ("Sounds: the concrete sounds of what is seen (footsteps, rain, fabric, breath...) go in "
+               "overall_soundscape only, never in the description. No background music unless the user asks for it.")
+
 # Vidéo : d'après le guide d'écriture de MiniMax H3 : la chronologie, la caméra de l'utilisateur ou une seule simple,
 # les sons de ce qu'on voit toujours, la musique seulement si elle est demandée, les répliques mot pour mot. La façon
 # d'écrire une réplique (ci-dessous : celle de H3) se remplace dans la fiche d'un modèle qui en a une autre.
@@ -207,8 +214,9 @@ _VIDEO = {
         "distance or a slight angle changes, use a camera movement instead.",
         "Fit the clip duration: few actions, at most one or two short lines of dialogue. If the user asks you to "
         "invent a line, write one short line in the language they ask for, written like any other spoken line.",
-        "Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background "
-        "music unless the user asks for it."],
+        SONS],
+    # En trois champs (H3), les sons ont leur champ : la règle y renvoie au lieu de les mettre en fin de description.
+    "en_champs": {SONS: SONS_CHAMPS},
     "dialogue": [
         "Describe the speaker the first time (role, age range, gender, voice pitch, timbre, pace or accent) and give "
         "them an ID in parentheses, (S1), kept for that speaker.",
@@ -251,16 +259,20 @@ def _section(cle: str, lignes: list[str]) -> str:
     return f"{TITRES.get(cle, cle)}:\n{_puces(lignes)}"
 
 
-def sections_usage(nom: str, regles: dict | list | None = None) -> list[str]:
+def sections_usage(nom: str, regles: dict | list | None = None, champs: bool = False) -> list[str]:
     """Les sections d'écriture d'un usage (plan, contenu, dialogue, texte, interdits), celles du modèle cible rangées
     dedans : une section de la fiche remplace celle du gabarit quand l'usage la dit remplaçable, et s'y ajoute sinon.
     Ce sont les règles d'écriture du prompt, communes à ✨ Écrire le prompt (gabarit) et à la conversation
-    (bloc_usage) : sans le rôle, la priorité de l'utilisateur ni le format de sortie, que chacun a les siens."""
+    (bloc_usage) : sans le rôle, la priorité de l'utilisateur ni le format de sortie, que chacun a les siens.
+    `champs` : le prompt s'écrit en trois champs (H3) ; les règles que l'usage réécrit pour ce format (« en_champs »)
+    changent."""
     g, modele = GABARITS[nom], sections_modele(regles)
+    en_champs = g.get("en_champs", {}) if champs else {}
     blocs = []
     for cle in SECTIONS:
         du_modele = modele.get(cle, [])
-        lignes = du_modele if du_modele and cle in g["remplace"] else [*g.get(cle, []), *du_modele]
+        du_gabarit = [en_champs.get(ligne, ligne) for ligne in g.get(cle, [])]
+        lignes = du_modele if du_modele and cle in g["remplace"] else [*du_gabarit, *du_modele]
         if lignes:
             blocs.append(_section(cle, lignes))
     if modele.get("regles"):
@@ -272,7 +284,7 @@ def gabarit(nom: str, regles: dict | list | None = None, champs: bool = False) -
     """La consigne d'origine d'un usage, avec les règles du modèle cible rangées dans ses sections. Les longueurs
     restent en repères ({mots_min}, {mots_max}) : consigne() les remplit."""
     g = GABARITS[nom]
-    blocs = [f"ROLE:\n{g['role']}", f"USER PRIORITY:\n{g['priorite']}", *sections_usage(nom, regles)]
+    blocs = [f"ROLE:\n{g['role']}", f"USER PRIORITY:\n{g['priorite']}", *sections_usage(nom, regles, champs)]
     blocs.append(f"OUTPUT FORMAT:\n{_puces(g['format_champs'] if champs and 'format_champs' in g else g['format'])}")
     return "\n\n".join(blocs)
 
@@ -286,10 +298,10 @@ ENTETE_USAGE = ("Rules for writing the prompt. They shape the OPEN parts only: w
                 "user fixed or asked, the user wins.")
 
 
-def bloc_usage(nom: str, regles: dict | list | None = None) -> str:
+def bloc_usage(nom: str, regles: dict | list | None = None, champs: bool = False) -> str:
     """Les règles d'écriture d'un usage en un bloc, pour la conversation : l'en-tête, puis les mêmes sections que le
     gabarit (sections_usage)."""
-    return "\n\n".join([ENTETE_USAGE, *sections_usage(nom, regles)])
+    return "\n\n".join([ENTETE_USAGE, *sections_usage(nom, regles, champs)])
 
 
 def bloc_modele(regles: dict | list | None) -> str:
@@ -965,6 +977,36 @@ def _textes_du_tour(tour: dict) -> list[str]:
     return [tour["message"], *tour["fiche"].values(), *q, tour["prompt"] or ""]
 
 
+# Une conversation longue (jusqu'à 60 messages de 4 000 caractères) peut dépasser le contexte du LLM, qui la refusait
+# alors en entier. On garde le premier message (l'idée, les images) et les derniers échanges qui tiennent avec la
+# consigne, la réponse et la réflexion. Chaque réponse du LLM reprend la fiche de ce qui est compris : la plus ancienne
+# gardée porte ce qui a été décidé dans les échanges retirés.
+CARACTERES_PAR_TOKEN = 3  # estimation prudente (français, JSON) : mieux vaut un échange de moins qu'un refus
+TOKENS_PAR_IMAGE = 700  # ≈ 600 mesurés (PIXELS_VUE), plus une marge
+
+
+def tokens_estimes(contenu: str | list[dict]) -> int:
+    """Tokens d'un message, estimés sans le LLM : son texte, ses images, les balises du gabarit de chat."""
+    if isinstance(contenu, list):
+        return sum(TOKENS_PAR_IMAGE if p.get("type") == "image_url" else tokens_estimes(p.get("text", ""))
+                   for p in contenu)
+    return len(contenu) // CARACTERES_PAR_TOKEN + 8
+
+
+def elaguer(echanges: list[dict], budget: int) -> list[dict]:
+    """Les messages qui tiennent en `budget` tokens : le premier, puis la plus longue fin de conversation qui commence
+    par une réponse du LLM (les rôles alternent toujours). Si même le dernier échange ne tient pas, il part seul :
+    le LLM dira que son contexte est trop petit."""
+    if len(echanges) <= 3 or sum(tokens_estimes(e["content"]) for e in echanges) <= budget:
+        return echanges
+    premier, reste = echanges[0], echanges[1:]
+    place = budget - tokens_estimes(premier["content"])
+    for k, e in enumerate(reste):
+        if e["role"] == "assistant" and sum(tokens_estimes(x["content"]) for x in reste[k:]) <= place:
+            return [premier, *reste[k:]]
+    return [premier, *reste[-2:]]
+
+
 async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, workflow: str | None,
                 contexte: str = "", vues: list[Vue] | None = None, role: str | None = None,
                 modele: str | None = None, duree: int = 5, format_: str | None = None,
@@ -1010,32 +1052,38 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     # comme pour ✨ Écrire le prompt (bloc_usage). Un plan de séquence garde celles de la fiche seule : le découpage a
     # ses propres règles. L'histoire d'une séquence n'est pas un prompt (le découpage les applique ensuite plan par
     # plan) : à l'essai, elles en faisaient un brief anglais en plans.
+    # Un clip pour H3 s'écrit en trois champs, comme à la réécriture directe (reecrire) : même format, quel que soit l'onglet.
+    en_champs = forme == "clip" and workflows.champs_video(workflow)
     usages = {"image": "references" if vues and role == "inspirer" else "reecriture", "clip": "video",
               "retouche": "retouche"}
     if usage := usages.get(forme):
-        bloc = bloc_usage(usage, workflows.sections_prompt(workflow))
+        bloc = bloc_usage(usage, workflows.sections_prompt(workflow), en_champs)
         systeme += f"\n\n{avec_noms_images(bloc, workflow) if usage == 'references' else bloc}"
     elif forme != "sequence" and (bloc := bloc_modele(workflows.sections_prompt(workflow))):
         systeme += f"\n\n{bloc}"
-    # Un clip pour H3 s'écrit en trois champs, comme à la réécriture directe (reecrire) : même format, quel que soit l'onglet.
-    en_champs = forme == "clip" and workflows.champs_video(workflow)
     if en_champs:
         systeme += f"\n\n{FORMAT_CHAMPS}"
     systeme += f"\n\n{CLAUSE_MINEURS}"
     rubriques = noms_guide(sujet, sans_sujet, forme == "clip", workflows.rubriques_ignorees(workflow)) if forme in ("image", "clip") else set()
     ecrire = bool(echanges) and echanges[-1]["role"] == "user" and echanges[-1]["content"].strip() == ECRIRE
+    max_tokens = max(1200, 600 + tokens_pour_mots(mots))  # JSON : message, fiche, questions + prompt
     async with orchestrateur.llm(modele) as llama:
-        messages_ = [{"role": "system", "content": systeme}]
+        conversation = []
         for k, e in enumerate(echanges):
             contenu = e["content"]
             if k == 0 and vues:  # les images de référence : il les voit, ou lit leur fiche
                 usage = {"animer": "animer", "variation": "variation", "retouche": "retouche"}.get(role, "references")
                 contenu = montrer(contenu, vues, usage, voit=_voit(llama), workflow=workflow)
-            messages_.append({"role": e["role"], "content": contenu})
+            conversation.append({"role": e["role"], "content": contenu})
+        # La place du contexte : la consigne, la réponse et, si la Réflexion est active, son budget (llm.generer
+        # l'ajoute alors même quand la demande ne réfléchit pas).
+        contexte_llm = getattr(llama, "contexte_actif", None) or lancement_llm(modele)["contexte"]
+        reserve = max_tokens + (BUDGET_REFLEXION if getattr(llama, "reflexion_active", False) else 0)
+        messages_ = [{"role": "system", "content": systeme},
+                     *elaguer(conversation, contexte_llm - tokens_estimes(systeme) - reserve)]
         debut = time.perf_counter()
         for essai in range(2):  # une réponse sans JSON est redemandée une fois
-            reponse = await llama.generer(messages_,
-                                          max_tokens=max(1200, 600 + tokens_pour_mots(mots)),  # JSON : message, fiche, questions + prompt
+            reponse = await llama.generer(messages_, max_tokens=max_tokens,
                                           reflechir=ecrire, **reglages.ecriture(modele, pense(llama, ecrire)))
             try:
                 tour = lire_libre(reponse.texte, rubriques)
@@ -1075,14 +1123,16 @@ _PREAMBULES = re.compile(r"^\s*(here('s| is)|sure|certainly|okay|voici|prompt\s*
 _CITATIONS = re.compile(r"[«\"“]\s*([^»\"”]+?)\s*[»\"”]")
 
 
-def controler(texte: str, idee: str) -> dict:
+def controler(texte: str, idee: str, mots_max: int | None = None) -> dict:
+    """`mots_max` : la longueur conseillée du modèle de rendu (celle qu'a reçue le LLM) ; sans elle, celle d'une
+    réécriture sans modèle cible."""
     mots = re.findall(r"[a-zàâçéèêëîïôûùüÿœ']+", texte.lower())
     en = sum(m in _MOTS_EN for m in mots)
     fr = sum(m in _MOTS_FR for m in mots)
     citations = _CITATIONS.findall(idee)
     return {
         "anglais": en > 2 * fr,
-        "longueur": 40 <= len(mots) <= 120,
+        "longueur": MOTS_MIN <= len(mots) <= (mots_max or MOTS_MAX_DEFAUT["reecriture"]),
         "sans_preambule": not _PREAMBULES.match(texte),
         "texte_conserve": all(c in texte for c in citations) if citations else None,
         "mots": len(mots),

@@ -382,7 +382,8 @@ class ReglesDEcriture(unittest.TestCase):
                                  ("retouche", "retouche", "qwen_image_2_1_edit")):
             s = self.consigne(forme=forme, workflow=wf)
             self.assertIn(prompt.ENTETE_USAGE, s)
-            for section in prompt.sections_usage(usage, workflows.sections_prompt(wf)):
+            # H3 écrit en trois champs, ici comme à ✨ Écrire le prompt : les sons vont dans leur champ.
+            for section in prompt.sections_usage(usage, workflows.sections_prompt(wf), workflows.champs_video(wf)):
                 self.assertIn(section, s, (forme, section[:50]))
 
     def test_clip_camera_plan_continu_et_duree(self):
@@ -416,3 +417,58 @@ class ReglesDEcriture(unittest.TestCase):
         o = FauxLlm(json.dumps(TOUR))  # un tour de questions : pas de prompt, pas d'alertes
         self.assertNotIn("alertes", tour(o, [{"role": "user", "content": "Un chat"}], forme="clip",
                                          workflow="minimax_h3_t2v"))
+
+
+class Elagage(unittest.TestCase):
+    """Une conversation longue est élaguée pour tenir dans le contexte du LLM : avant, elle partait en entier, et
+    llama-server la refusait au-delà de son contexte (60 messages de 4 000 caractères : environ 80 000 tokens)."""
+
+    @staticmethod
+    def conversation(n: int, taille: int = 3000) -> list[dict]:
+        echanges = [{"role": "user", "content": "Une pilote rentre au hangar"}]
+        for k in range(n):
+            echanges += [{"role": "assistant", "content": json.dumps({**TOUR, "message": f"tour {k} " + "x" * taille})},
+                         {"role": "user", "content": f"réponse {k}"}]
+        return echanges
+
+    def test_courte_inchangee(self):
+        echanges = self.conversation(3, 10)
+        self.assertEqual(prompt.elaguer(echanges, 10_000), echanges)
+
+    def test_premier_message_et_derniers_echanges(self):
+        echanges = self.conversation(20)
+        garde = prompt.elaguer(echanges, 4000)
+        self.assertEqual(garde[0], echanges[0])  # l'idée et les images
+        self.assertEqual(garde[-1], echanges[-1])  # la demande en cours
+        self.assertEqual(garde[1:], echanges[-(len(garde) - 1):])  # une fin de conversation, sans trou
+        for a, b in zip(garde, garde[1:]):  # les rôles alternent toujours
+            self.assertNotEqual(a["role"], b["role"])
+        self.assertLessEqual(sum(prompt.tokens_estimes(e["content"]) for e in garde), 4000)
+        self.assertLess(len(garde), len(echanges))
+
+    def test_le_dernier_echange_part_meme_trop_long(self):
+        echanges = self.conversation(5)
+        self.assertEqual(prompt.elaguer(echanges, 10), [echanges[0], *echanges[-2:]])
+
+    def test_le_tour_compte_consigne_reponse_et_reflexion(self):
+        o = FauxLlm(json.dumps(TOUR))
+
+        @asynccontextmanager
+        async def llm(modele=None):
+            async def generer(messages, **options):
+                o.appels.append((messages, options))
+                return SimpleNamespace(texte=o.reponses.pop(0))
+            yield SimpleNamespace(generer=generer, modele=None, vision=None, contexte_actif=16384,
+                                  reflexion_active=True)
+
+        o.llm = llm
+        echanges = self.conversation(30)
+        tour(o, echanges)
+        messages, options = o.appels[0]
+        envoyes = messages[1:]
+        self.assertEqual(envoyes[0], echanges[0])
+        self.assertEqual(envoyes[-1], echanges[-1])
+        self.assertLess(len(envoyes), len(echanges))
+        total = sum(prompt.tokens_estimes(m["content"]) for m in messages) + options["max_tokens"] \
+            + prompt.BUDGET_REFLEXION
+        self.assertLessEqual(total, 16384)

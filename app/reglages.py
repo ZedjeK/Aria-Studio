@@ -185,6 +185,11 @@ def projecteurs() -> list[str]:
     return sorted(trouves, key=lambda f: (modeles.DOSSIER / "llm" / f).stat().st_size)
 
 
+def famille(projecteur: str) -> str:
+    """Le début de nom qu'un projecteur partage avec les GGUF qu'il sert : « Ternary-Bonsai-2-27B »."""
+    return _MMPROJ.split(projecteur)[0]
+
+
 def projecteur_llm(modele: str | None) -> tuple[str | None, str]:
     """(projecteur, raison) : le choix de Réglages l'emporte ; en automatique, le plus léger de la même famille."""
     nom = nom_llm(modele)
@@ -194,7 +199,7 @@ def projecteur_llm(modele: str | None) -> tuple[str | None, str]:
     if choisi in presents:
         return choisi, "choisi à la main"
     for p in presents:  # un choix dont le fichier a disparu revient à l'automatique
-        if nom.lower().startswith(_MMPROJ.split(p)[0].lower()):
+        if nom.lower().startswith(famille(p).lower()):
             return p, "projecteur de la même famille"
     return None, "aucun projecteur de sa famille dans modeles/llm"
 

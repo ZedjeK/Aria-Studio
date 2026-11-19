@@ -192,6 +192,22 @@ class Optimiseur(unittest.TestCase):
         self.assertTrue(r["sans_recommandation"])
         self.assertEqual(r["propositions"], [])
 
+    def test_un_derive_reprend_les_recommandations_de_son_origine(self):
+        """Bonsai 2 Heretic n'est pas au catalogue : il reprend les valeurs de Bonsai 2, dont il porte le début de nom
+        (celui du projecteur qu'ils partagent). Avant, « Adapter à ma machine » ne lui proposait rien."""
+        heretic = "Ternary-Bonsai-2-27B-Uncensored-Heretic-PQ2_0.gguf"
+        with mock.patch.object(modeles, "llm_disponibles", return_value=[heretic, LLM]):
+            props, r = self.propositions()
+        self.assertEqual(props[(heretic, "temperature_reflexion")]["propose"], 1.0)
+        self.assertEqual(props[(heretic, "top_k_reflexion")]["propose"], 20)
+        self.assertEqual(props[(heretic, "presence_penalty")]["propose"], 1.5)
+        self.assertIn("reprise de Bonsai 2 27B, son modèle d'origine", props[(heretic, "temperature_reflexion")]["raison"])
+        self.assertTrue(props[(heretic, "top_k_reflexion")]["source"].startswith("https://huggingface.co/prism-ml/"))
+        self.assertNotIn(heretic.removesuffix(".gguf"), r["sans_recommandation"])
+        self.assertIn(LLM.removesuffix(".gguf"), r["sans_recommandation"])  # sans famille connue : rien
+        self.assertEqual(optimiseur._recommandations_de("Autre-Bonsai-2-27B.gguf", optimiseur._recommandations_llm()),
+                         ({}, None))  # le nom doit commencer pareil, pas seulement le contenir
+
     def test_modele_sans_recommandation(self):
         with mock.patch.object(modeles, "llm_disponibles", return_value=["inconnu.gguf"]), \
                 mock.patch.object(optimiseur.os.path, "getsize", return_value=4 * GO):

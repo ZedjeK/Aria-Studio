@@ -206,6 +206,11 @@ class BancLLM(Banc):
         self.rendu = workflows.obtenir(id_rendu)
         if self.rendu.manquants():
             raise ErreurBanc(f"Workflow de rendu incomplet : {id_rendu}")
+        # Les candidats écrivent comme ✨ Écrire le prompt pour ce modèle : ses règles et sa longueur. Avant, ils
+        # écrivaient sans elles (120 mots au plus) et le contrôle de longueur restait à 40-120 mots, même pour un
+        # modèle réglé à 200.
+        self.regles = workflows.sections_prompt(id_rendu)
+        self.mots_max = prompt.mots_max_de(id_rendu)
 
         self.prompts = jeu_de_prompts("reecriture")
         self.seeds = [CONFIG["casting"]["seed_llm"]]
@@ -299,8 +304,10 @@ class BancLLM(Banc):
                         reponse = await llama.generer(messages, seed=seed, **parametres)
                         texte = prompt.lire_specialiste(reponse.texte, specialiste)
                     else:
-                        reponse = await llama.generer(prompt.messages(p["prompt"], candidat), seed=seed,
-                                                      max_tokens=regle["max_tokens"],
+                        reponse = await llama.generer(prompt.messages(p["prompt"], candidat, self.regles,
+                                                                      self.mots_max), seed=seed,
+                                                      max_tokens=max(regle["max_tokens"],
+                                                                     prompt.tokens_pour_mots(self.mots_max)),
                                                       **reglages.ecriture(candidat, prompt.pense(llama)))
                         texte = prompt.nettoyer_markdown(reponse.texte)
                     duree = time.perf_counter() - debut
@@ -327,10 +334,9 @@ class BancLLM(Banc):
         resultats = [v for g in gens for k, v in g["controles"].items() if k != "mots" and v is not None]
         return f"{sum(resultats)}/{len(resultats)}"
 
-    @staticmethod
-    def _generation(cle: str, p: dict, seed: int, texte: str) -> dict:
+    def _generation(self, cle: str, p: dict, seed: int, texte: str) -> dict:
         return {"prompt": p["id"], "seed": seed, "image": f"{cle}/{p['id']}_{seed}.png",
-                "texte": texte, "controles": prompt.controler(texte, p["prompt"])}
+                "texte": texte, "controles": prompt.controler(texte, p["prompt"], self.mots_max)}
 
     async def _rendre(self, comfy, candidat: str):
         cle = self._cle(candidat)

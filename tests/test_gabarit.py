@@ -87,6 +87,21 @@ class Gabarit(unittest.TestCase):
             self.assertIn("No background music unless the user asks for it", texte, id_wf)
         self.assertIn("3. Animating a picture", prompt.consigne("video", regles=workflows.sections_prompt("minimax_h3_i2v")))
 
+    def test_h3_les_sons_une_seule_fois(self):
+        """En trois champs, les sons vont dans overall_soundscape seulement : la description les demandait aussi
+        (« end with the concrete sounds »), et le LLM les écrivait deux fois."""
+        sections = workflows.sections_prompt("minimax_h3_t2v")
+        champs = prompt.consigne("video", None, 110, sections, champs=True)
+        self.assertNotIn("end with the concrete sounds", champs)
+        self.assertIn("go in overall_soundscape only, never in the description", champs)
+        self.assertIn("with the dialogue, as described above, but without the sounds", champs)
+        prose = prompt.consigne("video", None, 110, sections)  # un modèle en prose garde ses sons en fin de brief
+        self.assertIn("end with the concrete sounds", prose)
+        self.assertNotIn("overall_soundscape", prose)
+        # La conversation d'un clip H3 reçoit la même règle ; le découpage, sans gabarit, est prévenu par le format.
+        self.assertNotIn("end with the concrete sounds", prompt.bloc_usage("video", sections, champs=True))
+        self.assertIn("the sounds move to overall_soundscape", prompt.FORMAT_CHAMPS)
+
     def test_aucune_ligne_en_double_dans_les_consignes_livrees(self):
         for (fiche, usage), texte in _outil().relever().items():
             lignes = [ligne for ligne in texte.split("\n") if len(ligne) > 40]
