@@ -1087,14 +1087,16 @@ _PREAMBULES = re.compile(r"^\s*(here('s| is)|sure|certainly|okay|voici|prompt\s*
 _CITATIONS = re.compile(r"[«\"“]\s*([^»\"”]+?)\s*[»\"”]")
 
 
-def controler(texte: str, idee: str) -> dict:
+def controler(texte: str, idee: str, mots_max: int | None = None) -> dict:
+    """`mots_max` : la longueur conseillée du modèle de rendu (celle qu'a reçue le LLM) ; sans elle, celle d'une
+    réécriture sans modèle cible."""
     mots = re.findall(r"[a-zàâçéèêëîïôûùüÿœ']+", texte.lower())
     en = sum(m in _MOTS_EN for m in mots)
     fr = sum(m in _MOTS_FR for m in mots)
     citations = _CITATIONS.findall(idee)
     return {
         "anglais": en > 2 * fr,
-        "longueur": 40 <= len(mots) <= 120,
+        "longueur": MOTS_MIN <= len(mots) <= (mots_max or MOTS_MAX_DEFAUT["reecriture"]),
         "sans_preambule": not _PREAMBULES.match(texte),
         "texte_conserve": all(c in texte for c in citations) if citations else None,
         "mots": len(mots),
