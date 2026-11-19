@@ -1078,6 +1078,27 @@
                 </div>
                 <p id="etat-demarrage" class="discret"></p>
             </section>
+            <!-- Claude (MCP) (app/mcp.py, /api/mcp) : de quoi déclarer le serveur MCP d'Aria dans Claude Code. -->
+            <section class="carte" id="carte-mcp">
+                <h2>Claude (MCP)</h2>
+                <p class="discret">Claude Code peut piloter Aria : voir son état, écrire un prompt avec ton LLM local, lancer un
+                    rendu et le suivre, lire la fiche d'une image. Rien ne supprime, ne déplace ni ne change un réglage, et le
+                    filtre de protection des mineurs s'applique comme ici. Aria doit être lancée.</p>
+                <p class="discret">Ce que ces outils rendent (prompts, fiches des images) part vers ton compte Claude. Les images
+                    restent sur ton PC : Claude ne reçoit que leur chemin.</p>
+                <h3 class="titre-bloc">Avec la commande <code>claude</code></h3>
+                <div class="ligne">
+                    <code id="mcp-commande" class="mcp-commande"></code>
+                    <button id="mcp-copier-commande" type="button" class="petit">Copier</button>
+                </div>
+                <details>
+                    <summary>Sans elle : le serveur à ajouter sous « mcpServers »</summary>
+                    <p class="discret">Dans <code>~/.claude.json</code> pour tous tes projets, ou dans le <code>.mcp.json</code>
+                        d'un projet. Puis relance Claude.</p>
+                    <pre id="mcp-json" class="mcp-json"></pre>
+                    <button id="mcp-copier-json" type="button" class="petit">Copier</button>
+                </details>
+            </section>
             <section class="carte" id="carte-notifications">
                 <h2>Notifications</h2>
                 <p class="discret">À la fin d'une image, d'une retouche, d'un clip, d'une séquence ou d'un casting : une notification

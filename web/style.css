@@ -2280,6 +2280,19 @@ label.carte-mode:has(input:focus-visible) {
     word-break: break-all;
 }
 
+/* Claude (MCP) : la commande et le bloc JSON, longs chemins compris, sans débordement */
+.mcp-commande {
+    flex: 1;
+    min-width: 0;
+    word-break: break-all;
+}
+
+.mcp-json {
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 0.8rem;
+}
+
 .avertissement-dossier {
     color: var(--warn);
     font-size: 0.85rem;
