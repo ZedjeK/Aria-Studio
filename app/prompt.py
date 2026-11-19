@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from PIL import Image
 
 from app import fiches, listes, modeles, reglages, securite, workflows
-from app.llm import ErreurLlama
+from app.llm import BUDGET_REFLEXION, ErreurLlama
 from app.modeles import DOSSIER as MODELES
 from app.orchestrateur import Orchestrateur, lancement_llm
 from app.repliques import vers_balises
@@ -977,6 +977,36 @@ def _textes_du_tour(tour: dict) -> list[str]:
     return [tour["message"], *tour["fiche"].values(), *q, tour["prompt"] or ""]
 
 
+# Une conversation longue (jusqu'à 60 messages de 4 000 caractères) peut dépasser le contexte du LLM, qui la refusait
+# alors en entier. On garde le premier message (l'idée, les images) et les derniers échanges qui tiennent avec la
+# consigne, la réponse et la réflexion. Chaque réponse du LLM reprend la fiche de ce qui est compris : la plus ancienne
+# gardée porte ce qui a été décidé dans les échanges retirés.
+CARACTERES_PAR_TOKEN = 3  # estimation prudente (français, JSON) : mieux vaut un échange de moins qu'un refus
+TOKENS_PAR_IMAGE = 700  # ≈ 600 mesurés (PIXELS_VUE), plus une marge
+
+
+def tokens_estimes(contenu: str | list[dict]) -> int:
+    """Tokens d'un message, estimés sans le LLM : son texte, ses images, les balises du gabarit de chat."""
+    if isinstance(contenu, list):
+        return sum(TOKENS_PAR_IMAGE if p.get("type") == "image_url" else tokens_estimes(p.get("text", ""))
+                   for p in contenu)
+    return len(contenu) // CARACTERES_PAR_TOKEN + 8
+
+
+def elaguer(echanges: list[dict], budget: int) -> list[dict]:
+    """Les messages qui tiennent en `budget` tokens : le premier, puis la plus longue fin de conversation qui commence
+    par une réponse du LLM (les rôles alternent toujours). Si même le dernier échange ne tient pas, il part seul :
+    le LLM dira que son contexte est trop petit."""
+    if len(echanges) <= 3 or sum(tokens_estimes(e["content"]) for e in echanges) <= budget:
+        return echanges
+    premier, reste = echanges[0], echanges[1:]
+    place = budget - tokens_estimes(premier["content"])
+    for k, e in enumerate(reste):
+        if e["role"] == "assistant" and sum(tokens_estimes(x["content"]) for x in reste[k:]) <= place:
+            return [premier, *reste[k:]]
+    return [premier, *reste[-2:]]
+
+
 async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, workflow: str | None,
                 contexte: str = "", vues: list[Vue] | None = None, role: str | None = None,
                 modele: str | None = None, duree: int = 5, format_: str | None = None,
@@ -1036,18 +1066,24 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     systeme += f"\n\n{CLAUSE_MINEURS}"
     rubriques = noms_guide(sujet, sans_sujet, forme == "clip", workflows.rubriques_ignorees(workflow)) if forme in ("image", "clip") else set()
     ecrire = bool(echanges) and echanges[-1]["role"] == "user" and echanges[-1]["content"].strip() == ECRIRE
+    max_tokens = max(1200, 600 + tokens_pour_mots(mots))  # JSON : message, fiche, questions + prompt
     async with orchestrateur.llm(modele) as llama:
-        messages_ = [{"role": "system", "content": systeme}]
+        conversation = []
         for k, e in enumerate(echanges):
             contenu = e["content"]
             if k == 0 and vues:  # les images de référence : il les voit, ou lit leur fiche
                 usage = {"animer": "animer", "variation": "variation", "retouche": "retouche"}.get(role, "references")
                 contenu = montrer(contenu, vues, usage, voit=_voit(llama), workflow=workflow)
-            messages_.append({"role": e["role"], "content": contenu})
+            conversation.append({"role": e["role"], "content": contenu})
+        # La place du contexte : la consigne, la réponse et, si la Réflexion est active, son budget (llm.generer
+        # l'ajoute alors même quand la demande ne réfléchit pas).
+        contexte_llm = getattr(llama, "contexte_actif", None) or lancement_llm(modele)["contexte"]
+        reserve = max_tokens + (BUDGET_REFLEXION if getattr(llama, "reflexion_active", False) else 0)
+        messages_ = [{"role": "system", "content": systeme},
+                     *elaguer(conversation, contexte_llm - tokens_estimes(systeme) - reserve)]
         debut = time.perf_counter()
         for essai in range(2):  # une réponse sans JSON est redemandée une fois
-            reponse = await llama.generer(messages_,
-                                          max_tokens=max(1200, 600 + tokens_pour_mots(mots)),  # JSON : message, fiche, questions + prompt
+            reponse = await llama.generer(messages_, max_tokens=max_tokens,
                                           reflechir=ecrire, **reglages.ecriture(modele, pense(llama, ecrire)))
             try:
                 tour = lire_libre(reponse.texte, rubriques)
