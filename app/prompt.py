@@ -121,11 +121,13 @@ PRIORITE = f"""{FIDELITE}
 {ADULTES}
 Every rule below shapes the OPEN parts only: whenever one clashes with what the user fixed or asked, the user wins."""
 
-CHAMPS = """integrated_multimodal_description: [Shot 1] then the whole picture-and-action brief with the dialogue, as described above. No timestamp on Shot 1. Add a second shot only if the user asks for a cut: "[Shot 2] At 00:03.500, the camera cuts to ...".
+# Les sons vont dans overall_soundscape seulement : la description les demandait aussi (« end with the concrete
+# sounds »), et le LLM les écrivait deux fois (revue du 2026-11-18).
+CHAMPS = """integrated_multimodal_description: [Shot 1] then the whole picture-and-action brief with the dialogue, as described above, but without the sounds: they go in overall_soundscape. No timestamp on Shot 1. Add a second shot only if the user asks for a cut: "[Shot 2] At 00:03.500, the camera cuts to ...".
 overall_soundscape: one paragraph of 1 to 4 sentences: ambient sounds, sounds of the actions, non-verbal human sounds. Never put dialogue or music in it. Write N/A only if the user asks for silence.
 non_diegetic_music: the background score only if the user asks for it (1 to 3 sentences: instruments, tempo, rhythm, dynamics, no mood words); otherwise N/A."""
 # Ajouté tel quel à une consigne qui n'a pas de gabarit (découpage, chat Libre, consigne réécrite dans Réglages).
-FORMAT_CHAMPS = f"""Output format of the target model (it replaces the plain-prose layout above; every other rule stays):
+FORMAT_CHAMPS = f"""Output format of the target model (it replaces the plain-prose layout above, and the sounds move to overall_soundscape; every other rule stays):
 exactly these three fields, one per paragraph, in this order, with these exact labels.
 {CHAMPS}
 The word limit counts the three fields together."""
@@ -189,6 +191,11 @@ _REFERENCES = {
                "Output only the instruction: no preamble, no explanation."],
 }
 
+SONS = ("Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background "
+        "music unless the user asks for it.")
+SONS_CHAMPS = ("Sounds: the concrete sounds of what is seen (footsteps, rain, fabric, breath...) go in "
+               "overall_soundscape only, never in the description. No background music unless the user asks for it.")
+
 # Vidéo : d'après le guide d'écriture de MiniMax H3 : la chronologie, la caméra de l'utilisateur ou une seule simple,
 # les sons de ce qu'on voit toujours, la musique seulement si elle est demandée, les répliques mot pour mot. La façon
 # d'écrire une réplique (ci-dessous : celle de H3) se remplace dans la fiche d'un modèle qui en a une autre.
@@ -207,8 +214,9 @@ _VIDEO = {
         "distance or a slight angle changes, use a camera movement instead.",
         "Fit the clip duration: few actions, at most one or two short lines of dialogue. If the user asks you to "
         "invent a line, write one short line in the language they ask for, written like any other spoken line.",
-        "Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background "
-        "music unless the user asks for it."],
+        SONS],
+    # En trois champs (H3), les sons ont leur champ : la règle y renvoie au lieu de les mettre en fin de description.
+    "en_champs": {SONS: SONS_CHAMPS},
     "dialogue": [
         "Describe the speaker the first time (role, age range, gender, voice pitch, timbre, pace or accent) and give "
         "them an ID in parentheses, (S1), kept for that speaker.",
@@ -251,16 +259,20 @@ def _section(cle: str, lignes: list[str]) -> str:
     return f"{TITRES.get(cle, cle)}:\n{_puces(lignes)}"
 
 
-def sections_usage(nom: str, regles: dict | list | None = None) -> list[str]:
+def sections_usage(nom: str, regles: dict | list | None = None, champs: bool = False) -> list[str]:
     """Les sections d'écriture d'un usage (plan, contenu, dialogue, texte, interdits), celles du modèle cible rangées
     dedans : une section de la fiche remplace celle du gabarit quand l'usage la dit remplaçable, et s'y ajoute sinon.
     Ce sont les règles d'écriture du prompt, communes à ✨ Écrire le prompt (gabarit) et à la conversation
-    (bloc_usage) : sans le rôle, la priorité de l'utilisateur ni le format de sortie, que chacun a les siens."""
+    (bloc_usage) : sans le rôle, la priorité de l'utilisateur ni le format de sortie, que chacun a les siens.
+    `champs` : le prompt s'écrit en trois champs (H3) ; les règles que l'usage réécrit pour ce format (« en_champs »)
+    changent."""
     g, modele = GABARITS[nom], sections_modele(regles)
+    en_champs = g.get("en_champs", {}) if champs else {}
     blocs = []
     for cle in SECTIONS:
         du_modele = modele.get(cle, [])
-        lignes = du_modele if du_modele and cle in g["remplace"] else [*g.get(cle, []), *du_modele]
+        du_gabarit = [en_champs.get(ligne, ligne) for ligne in g.get(cle, [])]
+        lignes = du_modele if du_modele and cle in g["remplace"] else [*du_gabarit, *du_modele]
         if lignes:
             blocs.append(_section(cle, lignes))
     if modele.get("regles"):
@@ -272,7 +284,7 @@ def gabarit(nom: str, regles: dict | list | None = None, champs: bool = False) -
     """La consigne d'origine d'un usage, avec les règles du modèle cible rangées dans ses sections. Les longueurs
     restent en repères ({mots_min}, {mots_max}) : consigne() les remplit."""
     g = GABARITS[nom]
-    blocs = [f"ROLE:\n{g['role']}", f"USER PRIORITY:\n{g['priorite']}", *sections_usage(nom, regles)]
+    blocs = [f"ROLE:\n{g['role']}", f"USER PRIORITY:\n{g['priorite']}", *sections_usage(nom, regles, champs)]
     blocs.append(f"OUTPUT FORMAT:\n{_puces(g['format_champs'] if champs and 'format_champs' in g else g['format'])}")
     return "\n\n".join(blocs)
 
@@ -286,10 +298,10 @@ ENTETE_USAGE = ("Rules for writing the prompt. They shape the OPEN parts only: w
                 "user fixed or asked, the user wins.")
 
 
-def bloc_usage(nom: str, regles: dict | list | None = None) -> str:
+def bloc_usage(nom: str, regles: dict | list | None = None, champs: bool = False) -> str:
     """Les règles d'écriture d'un usage en un bloc, pour la conversation : l'en-tête, puis les mêmes sections que le
     gabarit (sections_usage)."""
-    return "\n\n".join([ENTETE_USAGE, *sections_usage(nom, regles)])
+    return "\n\n".join([ENTETE_USAGE, *sections_usage(nom, regles, champs)])
 
 
 def bloc_modele(regles: dict | list | None) -> str:
@@ -1010,15 +1022,15 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
     # comme pour ✨ Écrire le prompt (bloc_usage). Un plan de séquence garde celles de la fiche seule : le découpage a
     # ses propres règles. L'histoire d'une séquence n'est pas un prompt (le découpage les applique ensuite plan par
     # plan) : à l'essai, elles en faisaient un brief anglais en plans.
+    # Un clip pour H3 s'écrit en trois champs, comme à la réécriture directe (reecrire) : même format, quel que soit l'onglet.
+    en_champs = forme == "clip" and workflows.champs_video(workflow)
     usages = {"image": "references" if vues and role == "inspirer" else "reecriture", "clip": "video",
               "retouche": "retouche"}
     if usage := usages.get(forme):
-        bloc = bloc_usage(usage, workflows.sections_prompt(workflow))
+        bloc = bloc_usage(usage, workflows.sections_prompt(workflow), en_champs)
         systeme += f"\n\n{avec_noms_images(bloc, workflow) if usage == 'references' else bloc}"
     elif forme != "sequence" and (bloc := bloc_modele(workflows.sections_prompt(workflow))):
         systeme += f"\n\n{bloc}"
-    # Un clip pour H3 s'écrit en trois champs, comme à la réécriture directe (reecrire) : même format, quel que soit l'onglet.
-    en_champs = forme == "clip" and workflows.champs_video(workflow)
     if en_champs:
         systeme += f"\n\n{FORMAT_CHAMPS}"
     systeme += f"\n\n{CLAUSE_MINEURS}"

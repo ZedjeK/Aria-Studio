@@ -382,7 +382,8 @@ class ReglesDEcriture(unittest.TestCase):
                                  ("retouche", "retouche", "qwen_image_2_1_edit")):
             s = self.consigne(forme=forme, workflow=wf)
             self.assertIn(prompt.ENTETE_USAGE, s)
-            for section in prompt.sections_usage(usage, workflows.sections_prompt(wf)):
+            # H3 écrit en trois champs, ici comme à ✨ Écrire le prompt : les sons vont dans leur champ.
+            for section in prompt.sections_usage(usage, workflows.sections_prompt(wf), workflows.champs_video(wf)):
                 self.assertIn(section, s, (forme, section[:50]))
 
     def test_clip_camera_plan_continu_et_duree(self):
