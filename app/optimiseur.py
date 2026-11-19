@@ -80,6 +80,20 @@ def _recommandations_llm() -> dict:
     return {**locales, **catalogue}
 
 
+def _recommandations_de(fichier: str, recos: dict) -> tuple[dict, str | None]:
+    """(recommandations, modèle d'origine) : celles du GGUF, ou à défaut celles du modèle du catalogue dont il dérive,
+    reconnu au début de son nom, celui du projecteur qu'ils partagent (comme la vision : reglages.projecteur_llm).
+    Bonsai 2 Heretic (OS-Software, page lue le 2026-11-19) : sa commande d'exemple donne, réflexion active, les
+    valeurs du jeu « réflexion » de Bonsai 2 (temp 1,0, top_p 0,95, top_k 20), et rien pour le mode sans réflexion."""
+    if recos.get(fichier):
+        return recos[fichier], None
+    for f in fiches.catalogue_llm():
+        vision = (f.get("vision") or {}).get("nom")
+        if vision and recos.get(f["id"]) and fichier.lower().startswith(reglages.famille(vision).lower()):
+            return recos[f["id"]], f["nom"]
+    return {}, None
+
+
 def _alertes_workflow(wf, params: dict, actuelles: dict, libre: float) -> list[str]:
     """Ce que la taille du modèle demande à la carte graphique : des notes, jamais des réglages imposés."""
     alertes = []
@@ -141,13 +155,16 @@ def propositions() -> dict:
     for fichier in modeles.llm_disponibles():
         nom = favoris.get(fichier, fichier.removesuffix(".gguf"))
         actuelles = reglages.valeurs_llm(fichier)
-        reco = recos_llm.get(fichier) or {}
+        reco, origine = _recommandations_de(fichier, recos_llm)
         if not reco.get("valeurs"):
             sans_reco.append(nom)
         for r in reco.get("valeurs") or []:
             if r["cle"] in params:
+                raison = r.get("note", "Recommandation officielle")
+                if origine:
+                    raison += f" ; reprise de {origine}, son modèle d'origine"
                 _proposer(sortie, "llm", fichier, nom, params[r["cle"]], actuelles[r["cle"]], r["valeur"],
-                          r.get("note", "Recommandation officielle"), r.get("source") or reco.get("source"))
+                          raison, r.get("source") or reco.get("source"))
         # Le contexte ne se réduit pas : llama.cpp (--fit) place lui-même ce qui ne tient pas, et un MoE comme Gemma 26B
         # A4B reste rapide malgré le débordement (81 tokens/s mesurés au Casting). On ne propose que de le remonter
         # au minimum que la Réflexion ou la vision exige (voir plus bas) ; le débordement, lui, est signalé.
