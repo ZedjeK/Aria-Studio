@@ -4,6 +4,26 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
+## 2.4.0 (2026-11-19)
+
+Écriture des prompts par le LLM, après une revue de ses consignes et de ses réglages. Notes complètes : `docs/releases/v2.4.0.md`.
+
+### Ajouté
+
+- Réglages, onglet LLM : un jeu d'échantillonnage « avec réflexion » (température, top-p, top-k, min-p, pénalité de présence) à côté du jeu existant, qui devient « sans réflexion ». Chaque demande prend le jeu de son mode ; « Adapter à ma machine » propose celui de la fiche de Bonsai 2 (#124).
+- Adapter à ma machine : un GGUF dérivé d'un modèle du catalogue (même début de nom, comme Bonsai 2 Heretic) reprend ses recommandations, et la raison affichée le dit (#127).
+
+### Modifié
+
+- Scénario, conversation (💬 M'aider à préciser) : elle écrit ses prompts avec les mêmes règles que ✨ Écrire le prompt, et les heures de coupe d'un clip qu'elle écrit sont contrôlées et affichées (#125).
+- Séquence, découpage : chaque plan a une longueur conseillée selon sa durée, et la réponse du LLM est bornée pour contenir tous les plans demandés (#126).
+- Casting LLM : les candidats écrivent avec les règles et la longueur du modèle de rendu, et le contrôle de longueur suit cette longueur (#127).
+
+### Corrigé
+
+- Scénario, conversation : une conversation longue n'est plus refusée par le LLM ; elle garde le premier message et les derniers échanges qui tiennent dans son contexte (#127).
+- MiniMax H3 : en trois champs, les sons étaient demandés deux fois, en fin de description et dans `overall_soundscape` ; ils vont maintenant dans `overall_soundscape` seulement (#127).
+
 ## 2.3.1 (2026-11-18)
 
 Correctif d'interface. Notes complètes : `docs/releases/v2.3.1.md`.
