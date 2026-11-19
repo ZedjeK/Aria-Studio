@@ -6,10 +6,11 @@ GitHub (pour les précédentes).
 
 ## 2.4.0 (2026-11-19)
 
-Écriture des prompts par le LLM, après une revue de ses consignes et de ses réglages. Notes complètes : `docs/releases/v2.4.0.md`.
+Écriture des prompts par le LLM, après une revue de ses consignes et de ses réglages ; un serveur MCP pour piloter Aria depuis Claude ; ComfyUI s'installe sous Windows 10 avec 7-Zip. Notes complètes : `docs/releases/v2.4.0.md`.
 
 ### Ajouté
 
+- Un serveur MCP (`app/mcp.py`) : Claude Code peut voir l'état d'Aria, écrire un prompt avec le LLM local, lancer un rendu d'image, le suivre et lire la fiche d'une image. Il passe par l'API d'Aria avec le jeton du lancement en cours, sans port ni secret en plus ; rien ne supprime, ne règle ni n'installe. Réglages → Système, carte « Claude (MCP) » : la commande pour le déclarer (#130).
 - Réglages, onglet LLM : un jeu d'échantillonnage « avec réflexion » (température, top-p, top-k, min-p, pénalité de présence) à côté du jeu existant, qui devient « sans réflexion ». Chaque demande prend le jeu de son mode ; « Adapter à ma machine » propose celui de la fiche de Bonsai 2 (#124).
 - Adapter à ma machine : un GGUF dérivé d'un modèle du catalogue (même début de nom, comme Bonsai 2 Heretic) reprend ses recommandations, et la raison affichée le dit (#127).
 
@@ -23,6 +24,7 @@ GitHub (pour les précédentes).
 
 - Scénario, conversation : une conversation longue n'est plus refusée par le LLM ; elle garde le premier message et les derniers échanges qui tiennent dans son contexte (#127).
 - MiniMax H3 : en trois champs, les sons étaient demandés deux fois, en fin de description et dans `overall_soundscape` ; ils vont maintenant dans `overall_soundscape` seulement (#127).
+- Moteurs : sous Windows 10, l'installation de ComfyUI échouait sur « Error exit delayed from previous errors » (le `tar` de Windows 10 ne lit pas son archive 7z). 7-Zip prend maintenant le relais, la vraie erreur de chaque outil s'affiche, et un PC sans outil capable est prévenu avant le téléchargement (#129).
 
 ## 2.3.1 (2026-11-18)
 
