@@ -921,13 +921,36 @@ def cadre_format(format_: str | None, forme_: str = "image") -> str:
             "written for, adapt its framing and composition to the new frame and give the whole new prompt.")
 
 
+class RefusLibre(ErreurLibre):
+    """Le LLM refuse la demande : la redemander en JSON n'y change rien."""
+
+
+# Un LLM qui refuse (Bonsai 2 d'origine, sur une retouche sensuelle d'une photo réaliste, 2026-11-20) répond en prose,
+# sans JSON. L'erreur ne disait que « illisible (pas de JSON) » ; elle montre maintenant le début de sa réponse, et un
+# refus est dit comme tel. Repéré au début de la réponse seulement : un refus commence par lui.
+_REFUS = re.compile(r"\b(?:I\s+(?:can(?:no|['’])t|won['’]t|will\s+not|am\s+(?:not\s+able|unable|sorry))|I['’]m\s+(?:sorry|"
+                    r"not\s+able|unable)|unable\s+to\s+(?:help|assist|comply|create|fulfil)|je\s+ne\s+(?:peux|vais)\s+pas|"
+                    r"d[ée]sol[ée]e?)\b", re.IGNORECASE)
+
+
+def _extrait(texte: str, longueur: int = 160) -> str:
+    """Le début d'une réponse, sur une ligne."""
+    texte = " ".join(texte.split())
+    return texte if len(texte) <= longueur else texte[:longueur].rstrip() + "…"
+
+
 def lire_libre(texte: str, rubriques: set[str] | None = None) -> dict:
     """L'objet JSON d'un tour, vérifié : message, fiche (texte → texte), 0 à 3 questions à 2-4 choix, prompt ou None."""
     texte = texte.rpartition("</think>")[2]
     try:
         d = json.loads(texte[texte.index("{"):texte.rindex("}") + 1])
     except ValueError:
-        raise ErreurLibre("Réponse du LLM illisible (pas de JSON)")
+        if not texte.strip():
+            raise ErreurLibre("Réponse du LLM vide") from None
+        if _REFUS.search(texte.strip()[:300]):
+            raise RefusLibre(f"Le LLM refuse cette demande : « {_extrait(texte)} ». Un autre LLM de la liste peut "
+                             "l'accepter.") from None
+        raise ErreurLibre(f"Réponse du LLM illisible (pas de JSON) : « {_extrait(texte)} »") from None
     if not isinstance(d, dict):
         raise ErreurLibre("Réponse du LLM illisible")
     brute = d.get("fiche") if isinstance(d.get("fiche"), dict) else {}
@@ -1094,7 +1117,7 @@ async def libre(orchestrateur: Orchestrateur, echanges: list[dict], forme: str, 
                     raise ErreurLibre("caractères chinois, japonais ou coréens inattendus")
                 break
             except ErreurLibre as err:
-                if essai:
+                if essai or isinstance(err, RefusLibre):  # un refus redemandé en JSON reste un refus
                     raise
                 rappel = ("Answer ONLY with the JSON object described, and write ONLY in French or English: "
                           "no Chinese, Japanese or Korean characters." if "inattendus" in str(err)

@@ -80,6 +80,32 @@ class Tour(unittest.TestCase):
         with self.assertRaises(prompt.ErreurLibre):
             tour(FauxLlm("non", "toujours non"), [{"role": "user", "content": "Un chat"}])
 
+    def test_la_reponse_du_llm_est_montree(self):
+        """Une réponse sans JSON : l'erreur montre son début, sur une ligne, au lieu de « illisible » seul."""
+        with self.assertRaisesRegex(prompt.ErreurLibre, r"^Réponse du LLM illisible \(pas de JSON\) : « Voici une "
+                                                        r"idée : un chat roux, de nuit\. »$"):
+            tour(FauxLlm("Voici une idée :\n un chat roux,   de nuit.", "Voici une idée :\n un chat roux, de nuit."),
+                 [{"role": "user", "content": "Un chat"}])
+        with self.assertRaisesRegex(prompt.ErreurLibre, "^Réponse du LLM vide$"):
+            tour(FauxLlm("<think>…</think>", "  "), [{"role": "user", "content": "Un chat"}])
+        long = prompt._extrait("mot " * 100)
+        self.assertTrue(long.endswith("…") and len(long) <= 161)
+
+    def test_un_refus_n_est_pas_redemande(self):
+        """Bonsai 2 d'origine refusait une retouche sensuelle d'une photo réaliste (2026-11-20) : deux réponses en
+        prose, puis « illisible (pas de JSON) ». Le refus est dit comme tel, et pas redemandé en JSON."""
+        for refus in ("I'm sorry, but I can't help with making this image more sensual.",
+                      "I can’t create sexualized edits of a real person's photo.",
+                      "Désolée, je ne peux pas modifier cette image de cette façon."):
+            o = FauxLlm(refus, json.dumps(TOUR))
+            with self.assertRaisesRegex(prompt.RefusLibre, "^Le LLM refuse cette demande : « .+ ». Un autre LLM"):
+                tour(o, [{"role": "user", "content": "Plus sensuelle"}])
+            self.assertEqual(len(o.appels), 1, refus)  # pas de seconde demande pour rien
+        # « sorry » plus loin dans une réponse n'est pas un refus : elle est redemandée en JSON
+        o = FauxLlm("Voici ce que je propose. " * 20 + "I'm sorry if it is long.", json.dumps(TOUR))
+        tour(o, [{"role": "user", "content": "Un chat"}])
+        self.assertEqual(len(o.appels), 2)
+
     def test_clip_avec_le_rush(self):
         o = FauxLlm(json.dumps(TOUR))
         vue = prompt.Vue(b"PNG", "An orange cat asleep on a windowsill.")
