@@ -1118,7 +1118,7 @@ body.large .cartes-mode {
    l'orange en dernier. La fenêtre a le fond de l'appli et un cadre au liseré fin ; elle n'est jamais accentuée.
    Les étapes reprennent l'encoche des sous-onglets, sans être cliquables (StyleEtape d'Aria-Modele). */
 
-body.large #assistant:not(#_) .fenetre.assistant {
+body.large :is(#assistant, #demande):not(#_) .fenetre.assistant {
     position: relative;
     isolation: isolate;
     display: flex;
@@ -1132,27 +1132,27 @@ body.large #assistant:not(#_) .fenetre.assistant {
     background: none;
 }
 
-body.large #assistant:not(#_) .fenetre.assistant::before,
-body.large #assistant:not(#_) .fenetre.assistant::after {
+body.large :is(#assistant, #demande):not(#_) .fenetre.assistant::before,
+body.large :is(#assistant, #demande):not(#_) .fenetre.assistant::after {
     content: "";
     position: absolute;
     pointer-events: none;
     clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
 }
 
-body.large #assistant:not(#_) .fenetre.assistant::before {
+body.large :is(#assistant, #demande):not(#_) .fenetre.assistant::before {
     inset: 0;
     z-index: -2;
     background: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-body.large #assistant:not(#_) .fenetre.assistant::after {
+body.large :is(#assistant, #demande):not(#_) .fenetre.assistant::after {
     inset: 1px;
     z-index: -1;
     background: var(--bg);
 }
 
-body.large #assistant:not(#_) .titre-assistant {
+body.large :is(#assistant, #demande):not(#_) .titre-assistant {
     margin: 0 0 14px;
     color: var(--accent);
     font: 600 1.25rem var(--font-display);
@@ -1238,7 +1238,7 @@ body.large #assistant:not(#_) .corps-assistant {
 }
 
 /* Panneaux à coins coupés (StylePanneau) ; « accent » : celui où agit le bouton orange (StylePanneauAccentue). */
-body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant) {
+body.large :is(#assistant, #demande):not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant) {
     position: relative;
     isolation: isolate;
     margin-top: 12px;
@@ -1247,46 +1247,46 @@ body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-
     border-radius: 0;
 }
 
-body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::before,
-body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::after {
+body.large :is(#assistant, #demande):not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::before,
+body.large :is(#assistant, #demande):not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::after {
     content: "";
     position: absolute;
     pointer-events: none;
     clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
 }
 
-body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::before {
+body.large :is(#assistant, #demande):not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::before {
     inset: 0;
     z-index: -2;
     background: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-body.large #assistant:not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::after {
+body.large :is(#assistant, #demande):not(#_) :is(.panneau-assistant, .pack-assistant, .licence-assistant)::after {
     inset: 1px;
     z-index: -1;
     background: var(--surface);
 }
 
-body.large #assistant:not(#_) .panneau-assistant.accent::before {
+body.large :is(#assistant, #demande):not(#_) .panneau-assistant.accent::before {
     background: var(--accent);
 }
 
-body.large #assistant:not(#_) .panneau-assistant.accent::after {
+body.large :is(#assistant, #demande):not(#_) .panneau-assistant.accent::after {
     inset: 2px;
 }
 
-body.large #assistant:not(#_) .panneau-assistant > h3 {
+body.large :is(#assistant, #demande):not(#_) .panneau-assistant > h3 {
     margin: 0 0 12px;
     color: var(--muted);
     font: 500 0.68rem var(--font-body);
     letter-spacing: 0.1em;
 }
 
-body.large #assistant:not(#_) .panneau-assistant.accent > h3 {
+body.large :is(#assistant, #demande):not(#_) .panneau-assistant.accent > h3 {
     color: var(--accent);
 }
 
-body.large #assistant:not(#_) .panneau-assistant > p {
+body.large :is(#assistant, #demande):not(#_) .panneau-assistant > p {
     margin: 0;
 }
 
@@ -1375,7 +1375,7 @@ body.large #assistant:not(#_) .statut-assistant {
     font-size: 0.85rem;
 }
 
-body.large #assistant:not(#_) .pied-assistant {
+body.large :is(#assistant, #demande):not(#_) .pied-assistant {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
@@ -1384,7 +1384,7 @@ body.large #assistant:not(#_) .pied-assistant {
 }
 
 /* Boutons en biais : contour cyan par défaut, plein orange pour l'action à faire, contour discret pour fermer. */
-body.large #assistant:not(#_) button {
+body.large :is(#assistant, #demande):not(#_) button {
     position: relative;
     isolation: isolate;
     min-height: 40px;
@@ -1401,7 +1401,7 @@ body.large #assistant:not(#_) button {
     filter: none;
 }
 
-body.large #assistant:not(#_) button::before {
+body.large :is(#assistant, #demande):not(#_) button::before {
     content: "";
     position: absolute;
     inset: 1px;
@@ -1410,43 +1410,57 @@ body.large #assistant:not(#_) button::before {
     clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
 }
 
-body.large #assistant:not(#_) button:hover:not(:disabled)::before {
+body.large :is(#assistant, #demande):not(#_) button:hover:not(:disabled)::before {
     background: var(--hover);
 }
 
-body.large #assistant:not(#_) button.petit {
+body.large :is(#assistant, #demande):not(#_) button.petit {
     min-height: 32px;
     padding: 6px 18px;
     font-size: 0.7rem;
 }
 
-body.large #assistant:not(#_) :is(#plus-tard-assistant, #precedent-assistant, [data-annuler-moteur]) {
+body.large :is(#assistant, #demande):not(#_) :is(#plus-tard-assistant, #precedent-assistant, [data-annuler-moteur], #refuser-demande) {
     background: var(--line-strong);
     color: var(--muted);
 }
 
-body.large #assistant:not(#_) :is(#plus-tard-assistant, #precedent-assistant, [data-annuler-moteur]):hover:not(:disabled) {
+body.large :is(#assistant, #demande):not(#_) :is(#plus-tard-assistant, #precedent-assistant, [data-annuler-moteur], #refuser-demande):hover:not(:disabled) {
     color: var(--text);
 }
 
 /* Une seule action orange : Suivant, sauf quand l'étape attend une autre action (« Installer » d'un moteur manquant,
    classe « a-faire ») ; Suivant prend alors le contour cyan (classe « attend »). */
-body.large #assistant:not(#_) :is(#suivant-assistant:not(.attend), button.a-faire) {
+body.large :is(#assistant, #demande):not(#_) :is(#suivant-assistant:not(.attend), button.a-faire) {
     background: var(--action);
     color: var(--on-action);
 }
 
-body.large #assistant:not(#_) :is(#suivant-assistant:not(.attend), button.a-faire)::before {
+body.large :is(#assistant, #demande):not(#_) :is(#suivant-assistant:not(.attend), button.a-faire)::before {
     display: none;
 }
 
-body.large #assistant:not(#_) :is(#suivant-assistant:not(.attend), button.a-faire):hover:not(:disabled) {
+body.large :is(#assistant, #demande):not(#_) :is(#suivant-assistant:not(.attend), button.a-faire):hover:not(:disabled) {
     filter: brightness(1.1);
 }
 
-body.large #assistant:not(#_) button:disabled {
+body.large :is(#assistant, #demande):not(#_) button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+/* ===== Fenêtre de confirmation (web/commun.js, demander) : les pièces du dialogue ci-dessus, en plus étroit ===== */
+
+body.large #demande:not(#_) .fenetre.assistant {
+    width: min(540px, 100%);
+}
+
+body.large #demande:not(#_) .panneau-assistant {
+    margin-top: 0;
+}
+
+body.large #demande:not(#_) .panneau-assistant > p + p {
+    margin-top: 8px;
 }
 
 /* ===== Journal des opérations (Réglages → Historique) ===== */

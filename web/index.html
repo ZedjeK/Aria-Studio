@@ -81,6 +81,23 @@
             <button id="voir-moteurs" type="button" class="petit">Installer…</button>
         </div>
 
+        <!-- Fenêtre de confirmation de l'appli (web/commun.js, demander) : titre cyan, un panneau accentué qui porte la
+             question, puis les boutons à droite, l'orange en dernier. Elle reprend les pièces du dialogue de l'assistant. -->
+        <div id="demande" class="voile" hidden>
+            <div class="fenetre assistant" role="alertdialog" aria-modal="true" aria-labelledby="titre-demande"
+                 aria-describedby="texte-demande">
+                <h2 class="titre-assistant" id="titre-demande"></h2>
+                <div class="panneau-assistant accent">
+                    <p id="texte-demande"></p>
+                    <p class="discret" id="detail-demande" hidden></p>
+                </div>
+                <div class="pied-assistant">
+                    <button type="button" id="refuser-demande"></button>
+                    <button type="button" id="accepter-demande" class="a-faire"></button>
+                </div>
+            </div>
+        </div>
+
         <!-- Assistant de premier lancement (web/assistant.js, app/assistant.py) -->
         <div id="assistant" class="voile" hidden>
             <!-- Assistant de premier lancement (web/assistant.js), habillé comme les dialogues d'Aria-Modele : titre cyan,

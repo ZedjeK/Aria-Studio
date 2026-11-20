@@ -332,7 +332,15 @@ document.getElementById("banc").addEventListener("click", async (e) => {
             majCarteBanc(b);
         } else if (cible.id === "reveler") {
             const b = await api("GET", url);
-            if (b.notees < b.total && !confirm(`Seulement ${b.notees} ${unitesNotees(b.tache)} sur ${b.total}. Révéler quand même ?`)) return;
+            // Révéler ne se défait pas : avant d'avoir tout noté, la fenêtre de l'appli le rappelle (web/commun.js).
+            if (b.notees < b.total && !await demander({
+                titre: "Révéler les modèles",
+                texte: `Seulement ${b.notees} ${unitesNotees(b.tache)} sur ${b.total}.`,
+                detail: "Une fois les noms affichés, ce casting n'est plus à l'aveugle : ça ne se défait pas. "
+                    + "Tes notes restent, et tu peux encore noter après.",
+                valider: "Révéler quand même",
+                annuler: "Continuer à noter",
+            })) return;
             afficherBanc(await api("POST", `${url}/reveler`));
             chargerCasting();
         } else if (cible.dataset.favori) {
