@@ -109,6 +109,24 @@ class PreparationLLM(unittest.TestCase):
         self.assertIn("par défaut", p["blocage"])
         self.assertIsNone(p["rendu"])
 
+    def test_un_modele_de_rendu_inconnu_bloque_sans_texte_d_exception(self):
+        """Le message est écrit par le Casting : celui de l'exception ne part pas vers la page."""
+        inconnu = casting.workflows.ErreurWorkflow("texte interne de l'exception")
+        with mock.patch.object(casting, "jeu_de_prompts", side_effect=lambda t: PROMPTS[t]),              mock.patch.object(casting.workflows, "obtenir", side_effect=inconnu),              mock.patch.dict(CONFIG, {"generation": {"texte_vers_image": "disparu"}}):
+            p = casting.preparation_de("reecriture")
+            with self.assertRaises(casting.ErreurBanc) as refus:
+                casting.creer("reecriture")
+        self.assertEqual(p["blocage"], "Le modèle par défaut de Texte vers image est inconnu : disparu")
+        self.assertEqual(str(refus.exception), p["blocage"])
+        self.assertIsNone(p["rendu"])
+
+    def test_la_preparation_ne_convertit_aucune_exception_en_texte(self):
+        """Garde de l'alerte CodeQL py/stack-trace-exposure : entre `_candidats` et `preparation`, pas de str(e)."""
+        source = Path(casting.__file__).read_text(encoding="utf-8")
+        bloc = source[source.index("def _candidats("):source.index("class Banc:")]
+        self.assertFalse("str(e)" in bloc)
+        self.assertFalse("repr(e)" in bloc)
+
     def test_les_candidats_absents_du_disque_sont_ecartes(self):
         p = self.preparer({"texte_vers_image": "rendu"}, ["present.gguf"])
         self.assertIsNone(p["blocage"])
