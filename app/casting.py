@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from app import emplacements, fiches, garde, mesures, prompt, reglages, securite, workflows
+from app import emplacements, fiches, garde, mesures, modeles, prompt, reglages, securite, workflows
 from app.config import CONFIG, ROOT, chemin
 from app.emplacements import DATA
 from app.modeles import DOSSIER as MODELES
@@ -509,8 +509,9 @@ def _par_defaut(r: dict) -> str | None:
     """Le modèle de ce casting qui sert par défaut aujourd'hui, s'il y en a un. Ce n'est pas `favori` : celui-là est
     le choix fait dans ce casting, et le défaut a pu changer depuis (page Modèles, ou un autre casting)."""
     if r["tache"] == "reecriture":
-        fichier = CONFIG.get("llama", {}).get("modele") or None  # vide : pas de LLM, donc le témoin
-        return next((cle for cle, w in r["workflows"].items() if w.get("fichier") == fichier), None)
+        # Le LLM par défaut de l'appli (app/modeles.py) : celui de la configuration s'il est installé, sinon son repli.
+        fichier = modeles.llm_defaut()
+        return next((cle for cle, w in r["workflows"].items() if w.get("fichier") and w["fichier"] == fichier), None)
     id_workflow = CONFIG.get("generation", {}).get(r["tache"])
     return id_workflow if id_workflow in r["workflows"] else None
 

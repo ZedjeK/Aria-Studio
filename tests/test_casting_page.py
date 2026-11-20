@@ -126,6 +126,15 @@ class Comparer(unittest.TestCase):
         self.assertIn("window.scrollTo(0, hauteur);", self.script)
         self.assertIn("majCarteBanc(b);", self.script)
 
+    def test_par_defaut_remplace_favori(self):
+        """Le mot de la page Modèles, pour le même réglage. L'étoile suit le défaut du moment (`par_defaut`)."""
+        for ancien in ("Choisir comme favori", "favori ✓"):
+            self.assertFalse(ancien in self.script, ancien)
+        self.assertIn("b.par_defaut === m.cle", self.script)
+        self.assertIn(">Choisir par défaut</button>", self.script)
+        self.assertIn("<th>Par défaut</th>", self.script)
+        self.assertFalse("favori" in vue_casting())
+
 
 if __name__ == "__main__":
     unittest.main()
