@@ -722,6 +722,17 @@ body.large label.carte-mode:has(input:focus-visible) strong {
     text-decoration: underline;
 }
 
+/* Casting → Comparer : le nombre de castings encore à l'aveugle, sur le sous-onglet. */
+body.large #vue-casting .compte-onglet {
+    margin-left: 8px;
+    padding: 0 6px;
+    background: var(--warn);
+    color: var(--bg);
+    font: 600 0.66rem var(--font-body);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
 /* ===== Une seule action orange par page : les autres « principales » prennent le contour cyan ===== */
 
 body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #appliquer-optimiser) {

@@ -1236,7 +1236,16 @@
         </div>
 
         <div class="vue" id="vue-casting" hidden>
-            <section class="carte">
+            <!-- Page Casting (web/casting.js) : lancer un casting, puis comparer ses résultats à l'aveugle -->
+            <div class="sous-onglets">
+                <button class="sous-onglet actif" type="button" data-sous="lancer" data-savoir="Un casting fait passer le même jeu d'essai à tous les modèles d'une tâche : mêmes prompts, mêmes seeds. Tu notes ensuite les résultats sans savoir quel modèle a fait quoi.">🎬 Nouveau casting</button>
+                <button class="sous-onglet" type="button" data-sous="comparer" data-savoir="Tu notes à l'aveugle : les modèles s'appellent A, B… tant que tu ne les as pas révélés. Après la révélation, tu vois leurs mesures et tu peux choisir ton favori.">⚖️ Comparer<span id="a-noter-casting" class="compte-onglet" hidden></span></button>
+            </div>
+            <div class="savoir" data-pour="#vue-casting .sous-onglets"><b>À SAVOIR</b><span></span></div>
+
+            <!-- Nouveau casting : le panneau accentué est celui sur lequel agit « Lancer le casting » -->
+            <div data-panneau-casting="lancer">
+            <section class="carte accent">
                 <h2>Lancer un casting</h2>
                 <div class="pastilles-taches" id="taches-banc" role="tablist" aria-label="Tâche à comparer">
                     <button type="button" class="actif" data-tache="texte_vers_image">🖼️ Texte vers image</button>
@@ -1245,13 +1254,6 @@
                     <button type="button" data-tache="image_vers_video">🎬 Image vers vidéo</button>
                     <button type="button" data-tache="texte_vers_video">🎞️ Texte vers vidéo</button>
                 </div>
-                <select id="tache-banc" hidden>
-                    <option value="texte_vers_image">Texte vers image</option>
-                    <option value="retouche">Retouche</option>
-                    <option value="reecriture">Écriture (LLM)</option>
-                    <option value="image_vers_video">Image vers vidéo</option>
-                    <option value="texte_vers_video">Texte vers vidéo</option>
-                </select>
                 <details class="options-casting">
                     <summary>⚙️ Options du casting</summary>
                     <p class="discret">Pour l'instant, le casting compare tous les modèles installés de la tâche choisie.
@@ -1266,17 +1268,20 @@
                 </div>
                 <p id="erreur-banc" class="ko" hidden></p>
             </section>
+            </div>
 
+            <!-- Comparer : « Résultats » est accentué tant que « Révéler les modèles » agit dessus (web/casting.js) -->
+            <div data-panneau-casting="comparer" hidden>
             <section class="carte">
                 <h2>Historique</h2>
                 <div id="historique-bancs" class="historique-bancs"></div>
-                <select id="liste-bancs" hidden></select>
             </section>
 
-            <section class="carte">
+            <section class="carte" id="carte-banc">
                 <h2>Résultats</h2>
                 <div id="banc"></div>
             </section>
+            </div>
         </div>
         </div>
         </div>

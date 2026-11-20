@@ -11,15 +11,31 @@ const media = (url, titre) => url.endsWith(".mp4")
 const CONTROLES = { anglais: "anglais", longueur: "longueur", sans_preambule: "sans préambule", texte_conserve: "texte gardé" };
 let bancAffiche = null;
 let suiviBanc = null;
+let tacheBanc = "texte_vers_image";  // la tâche du prochain casting (les pastilles)
+let sousOngletCasting = "lancer";
+
+// Deux sous-onglets : lancer un casting, puis comparer ses résultats. L'encadré « À savoir » suit l'onglet actif
+// (web/habillage.js).
+function afficherSousOngletCasting(sous) {
+    sousOngletCasting = sous;
+    document.querySelectorAll("#vue-casting .sous-onglet").forEach((b) => b.classList.toggle("actif", b.dataset.sous === sous));
+    document.querySelectorAll("#vue-casting [data-panneau-casting]").forEach((p) => { p.hidden = p.dataset.panneauCasting !== sous; });
+}
+
+document.querySelectorAll("#vue-casting .sous-onglet").forEach((b) => {
+    b.addEventListener("click", () => afficherSousOngletCasting(b.dataset.sous));
+});
 
 async function chargerCasting() {
     const { actif, bancs } = await api("GET", "/api/bancs");
     afficherProgression(actif);
 
-    const select = document.getElementById("liste-bancs");
-    select.innerHTML = bancs.map((b) => `<option value="${echapper(b.id)}">
-        ${echapper(b.date.replace("T", " "))} · ${NOMS_TACHES[b.tache] ?? echapper(b.tache)}
-        · ${b.nb_workflows} modèles${b.revele ? "" : " · à l'aveugle"}</option>`).join("");
+    // Sur le sous-onglet « Comparer » : combien de castings attendent encore leurs notes.
+    const aNoter = bancs.filter((b) => !b.revele).length;
+    const compte = document.getElementById("a-noter-casting");
+    compte.hidden = !aNoter;
+    compte.textContent = `${aNoter} à noter`;
+
     const histo = document.getElementById("historique-bancs");
     histo.innerHTML = bancs.length ? bancs.map((b) => `<button type="button" class="carte-banc ${b.id === bancAffiche ? "actif" : ""}"
         data-banc="${echapper(b.id)}"><strong>${NOMS_TACHES[b.tache] ?? echapper(b.tache)}</strong>
@@ -28,10 +44,10 @@ async function chargerCasting() {
         : '<p class="discret">Aucun casting pour l\'instant.</p>';
     if (!bancs.length) {
         document.getElementById("banc").innerHTML = '<p class="discret">Aucun banc pour l\'instant.</p>';
+        document.getElementById("carte-banc").classList.remove("accent");
         return;
     }
     if (!bancs.some((b) => b.id === bancAffiche)) bancAffiche = bancs[0].id;
-    select.value = bancAffiche;
     histo.querySelectorAll("[data-banc]").forEach((c) => c.classList.toggle("actif", c.dataset.banc === bancAffiche));
     chargerBanc();
 }
@@ -53,7 +69,10 @@ function afficherProgression(actif) {
         suiviBanc = null;
         const nom = NOMS_TACHES[actif?.tache] ?? "Casting";
         if (actif?.etat === "erreur") notifierFin("Casting en erreur", actif.erreur || nom, "casting", false);
-        else notifierFin("Casting terminé", `${nom} · résultats à comparer`, "casting");
+        else {
+            notifierFin("Casting terminé", `${nom} · résultats à comparer`, "casting");
+            afficherSousOngletCasting("comparer");  // les résultats sont là : c'est le moment de noter
+        }
         chargerCasting();
     }
 }
@@ -67,17 +86,12 @@ document.getElementById("lancer-banc").addEventListener("click", async () => {
     const erreur = document.getElementById("erreur-banc");
     erreur.hidden = true;
     try {
-        const actif = await api("POST", "/api/bancs", { tache: document.getElementById("tache-banc").value });
+        const actif = await api("POST", "/api/bancs", { tache: tacheBanc });
         bancAffiche = actif.id;
         afficherProgression(actif);
     } catch (err) {
         afficherErreur(erreur, err.message);
     }
-});
-
-document.getElementById("liste-bancs").addEventListener("change", (e) => {
-    bancAffiche = e.target.value;
-    chargerBanc();
 });
 
 async function chargerBanc() {
@@ -136,12 +150,12 @@ function detailsPrompt(g) {
 
 function afficherBanc(b) {
     const conteneur = document.getElementById("banc");
-    const complet = b.notees === b.total;
+    // « Révéler les modèles » est l'action de l'onglet : le panneau qu'elle révèle est accentué tant qu'elle est là.
+    document.getElementById("carte-banc").classList.toggle("accent", !b.revele);
     const entete = `<div class="entete-banc">
         <span class="discret">${NOMS_TACHES[b.tache] ?? echapper(b.tache)} · ${b.notees} / ${b.total} ${b.tache.endsWith("video") ? "clips notés" : "images notées"}
             · VRAM au repos ${b.vram_base_go ?? "—"} Go${b.en_cours ? " · banc en cours…" : ""}</span>
-        ${b.revele ? "" : `<button id="reveler" ${b.en_cours ? "disabled" : ""}
-            class="${complet ? "principal" : ""}">Révéler les modèles</button>`}
+        ${b.revele ? "" : `<button id="reveler" class="principal" ${b.en_cours ? "disabled" : ""}>Révéler les modèles</button>`}
     </div>
     ${b.revele ? tableauResume(b) : ""}`;
 
@@ -199,11 +213,11 @@ document.getElementById("banc").addEventListener("click", async (e) => {
     }
 });
 
-// Pastilles de tâche (le select caché reste la source de vérité pour le lancement).
+// Pastilles de tâche : la tâche du prochain casting.
 document.getElementById("taches-banc").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-tache]");
     if (!b) return;
-    document.getElementById("tache-banc").value = b.dataset.tache;
+    tacheBanc = b.dataset.tache;
     document.querySelectorAll("#taches-banc button").forEach((x) => x.classList.toggle("actif", x === b));
 });
 
@@ -211,7 +225,6 @@ document.getElementById("historique-bancs").addEventListener("click", (e) => {
     const c = e.target.closest("[data-banc]");
     if (!c) return;
     bancAffiche = c.dataset.banc;
-    document.getElementById("liste-bancs").value = bancAffiche;
     document.querySelectorAll("#historique-bancs [data-banc]").forEach((x) => x.classList.toggle("actif", x === c));
     chargerBanc();
 });
