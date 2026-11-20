@@ -23,6 +23,7 @@ SOURCES = ROOT / "casting" / "sources"
 GO = 2**30
 TEMOIN = "temoin"  # candidat du Casting LLM qui envoie l'idée brute, sans LLM
 AVEC_SOURCE = ("retouche", "image_vers_video")  # tâches dont chaque test part d'une image de casting/sources
+TACHES = ("texte_vers_image", "retouche", "reecriture", "image_vers_video", "texte_vers_video")  # l'ordre de la page
 
 
 class ErreurBanc(RuntimeError):
@@ -52,25 +53,122 @@ def _garde_vram() -> int:
     return base
 
 
+# Ce qu'un casting comparerait, et ce qui l'empêche de partir. La page l'annonce avant le clic (preparation) et le
+# lancement le vérifie (Banc, BancLLM) avec les mêmes fonctions : mêmes règles, mêmes messages.
+
+def _candidats(tache: str, ids_workflows: list[str] | None = None) -> list[workflows.Workflow]:
+    candidats = [wf for wf in workflows.catalogue() if wf.fiche["tache"] == tache]
+    return [wf for wf in candidats if wf.id in ids_workflows] if ids_workflows else candidats
+
+
+def _pas_complets(noms: list[str]) -> str:
+    sujet = f"{noms[0]} n'est pas complet" if len(noms) == 1 else f"{', '.join(noms)} ne sont pas complets"
+    return f"{sujet} : télécharge ce qui manque dans Modèles"
+
+
+def _blocage_candidats(candidats: list[workflows.Workflow], choisis: bool = False) -> str | None:
+    """`choisis` : les candidats viennent d'une sélection, pas de toute la tâche."""
+    if len(candidats) < 2:
+        if choisis:
+            return "Il faut au moins deux modèles à comparer"
+        return ("Il faut au moins deux modèles à comparer : un seul fait cette tâche" if candidats
+                else "Aucun modèle ne fait cette tâche")
+    incomplets = [wf.fiche["nom"] for wf in candidats if wf.manquants()]
+    return _pas_complets(incomplets) if incomplets else None
+
+
+def _sources(tache: str, prompts: list[dict]) -> list[str]:
+    return sorted({p["source"] for p in prompts}) if tache in AVEC_SOURCE else []
+
+
+def _blocage_sources(tache: str, prompts: list[dict]) -> str | None:
+    absentes = [s for s in _sources(tache, prompts) if not (SOURCES / s).is_file()]
+    return f"Images de départ absentes de casting/sources : {', '.join(absentes)}" if absentes else None
+
+
+def _rendu_llm() -> workflows.Workflow:
+    """Le workflow qui rend les prompts du Casting LLM : le modèle par défaut de Texte vers image."""
+    id_rendu = CONFIG.get("generation", {}).get("texte_vers_image")
+    if not id_rendu:
+        raise ErreurBanc("Choisis d'abord le modèle par défaut de Texte vers image : c'est lui qui rend les prompts")
+    try:
+        return workflows.obtenir(id_rendu)
+    except workflows.ErreurWorkflow as e:
+        raise ErreurBanc(str(e)) from e
+
+
+def _candidats_llm(id_rendu: str) -> list[str]:
+    # Les candidats de config.yaml qui ne sont plus dans modeles/llm sont écartés (un GGUF supprimé depuis le
+    # Labo) : le banc compare ce qui est là.
+    candidats = [c for c in CONFIG["casting"]["candidats_llm"] if c == TEMOIN or (MODELES / "llm" / c).is_file()]
+    # Le LLM entraîné pour le workflow de rendu, s'il est installé, entre au banc face aux généralistes.
+    candidats += [f["id"] for f in fiches.specialistes(id_rendu)
+                  if f["specialiste"]["usage"] == "creation" and f["id"] not in candidats
+                  and (MODELES / "llm" / f["id"]).is_file()]
+    return candidats
+
+
+def _blocage_llm(candidats: list[str], rendu: workflows.Workflow) -> str | None:
+    if len(candidats) < 2:
+        return "Il faut au moins deux candidats à comparer"
+    return _pas_complets([rendu.fiche["nom"]]) if rendu.manquants() else None
+
+
+def _cle_llm(candidat: str) -> str:
+    return candidat.removesuffix(".gguf")
+
+
+def _nom_llm(candidat: str) -> str:
+    return "Sans LLM (témoin)" if candidat == TEMOIN else _cle_llm(candidat)
+
+
+def preparation_de(tache: str) -> dict:
+    """Ce que ferait un casting de cette tâche, sans rien lancer : qui serait comparé, sur quel jeu d'essai, combien
+    de générations, et ce qui l'empêche de partir (`blocage`, None si rien)."""
+    prompts = jeu_de_prompts(tache)
+    p = {"tache": tache, "candidats": [], "rendu": None, "sources": [], "total": 0, "blocage": None,
+         "essais": [{"id": e["id"], "teste": e["teste"], "prompt": e["prompt"], "source": e.get("source")}
+                    for e in prompts]}
+    if tache == "reecriture":
+        p["seeds"] = [CONFIG["casting"]["seed_llm"]]
+        try:
+            rendu = _rendu_llm()
+        except ErreurBanc as e:
+            return {**p, "blocage": str(e)}
+        candidats = _candidats_llm(rendu.id)
+        return {**p, "candidats": [{"id": _cle_llm(c), "nom": _nom_llm(c), "manquants": 0} for c in candidats],
+                "rendu": {"id": rendu.id, "nom": rendu.fiche["nom"], "manquants": len(rendu.manquants())},
+                "total": 2 * len(candidats) * len(prompts),  # réécriture puis rendu
+                "blocage": _blocage_llm(candidats, rendu)}
+    candidats = _candidats(tache)
+    p["seeds"] = list(CONFIG["casting"]["seeds"])
+    return {**p, "candidats": [{"id": wf.id, "nom": wf.fiche["nom"], "manquants": len(wf.manquants())}
+                               for wf in candidats],
+            "sources": [{"nom": s, "presente": (SOURCES / s).is_file()} for s in _sources(tache, prompts)],
+            "total": len(candidats) * len(prompts) * len(p["seeds"]),
+            "blocage": _blocage_candidats(candidats) or _blocage_sources(tache, prompts)}
+
+
+def preparation() -> dict:
+    """Pour la page Casting : chaque tâche, et la VRAM occupée au-delà de laquelle un casting refuse de partir."""
+    return {"vram_max_occupee_go": CONFIG["casting"]["vram_max_occupee_go"],
+            "taches": {tache: preparation_de(tache) for tache in TACHES}}
+
+
 class Banc:
     def __init__(self, tache: str, ids_workflows: list[str] | None = None):
-        candidats = [wf for wf in workflows.catalogue() if wf.fiche["tache"] == tache]
-        if ids_workflows:
-            candidats = [wf for wf in candidats if wf.id in ids_workflows]
-        if len(candidats) < 2:
-            raise ErreurBanc(f"Il faut au moins deux workflows « {tache} » à comparer")
-        pas_prets = [wf.id for wf in candidats if wf.manquants()]
-        if pas_prets:
-            raise ErreurBanc(f"Workflows incomplets : {', '.join(pas_prets)}")
+        candidats = _candidats(tache, ids_workflows)
+        blocage = _blocage_candidats(candidats, bool(ids_workflows))
+        if blocage:
+            raise ErreurBanc(blocage)
 
         self.tache = tache
         self.workflows = candidats
         self.prompts = jeu_de_prompts(tache)
         self.seeds = list(CONFIG["casting"]["seeds"])
-        if tache in AVEC_SOURCE:
-            absentes = sorted({p["source"] for p in self.prompts if not (SOURCES / p["source"]).is_file()})
-            if absentes:
-                raise ErreurBanc(f"Images sources absentes de casting/sources : {', '.join(absentes)}")
+        blocage = _blocage_sources(tache, self.prompts)
+        if blocage:
+            raise ErreurBanc(blocage)
 
         self.id = f"{datetime.now():%Y-%m-%d_%H%M%S}_{tache}"
         self.dossier = DOSSIER / self.id
@@ -190,22 +288,12 @@ class BancLLM(Banc):
 
     def __init__(self):
         self.tache = "reecriture"
-        id_rendu = CONFIG.get("generation", {}).get("texte_vers_image")
-        if not id_rendu:
-            raise ErreurBanc("Choisis d'abord un favori texte vers image dans le Casting")
-        # Les candidats de config.yaml qui ne sont plus dans modeles/llm sont écartés (un GGUF supprimé depuis le
-        # Labo) : le banc compare ce qui est là.
-        self.candidats = [c for c in CONFIG["casting"]["candidats_llm"]
-                          if c == TEMOIN or (MODELES / "llm" / c).is_file()]
-        # Le LLM entraîné pour le workflow de rendu, s'il est installé, entre au banc face aux généralistes.
-        self.candidats += [f["id"] for f in fiches.specialistes(id_rendu)
-                           if f["specialiste"]["usage"] == "creation" and f["id"] not in self.candidats
-                           and (MODELES / "llm" / f["id"]).is_file()]
-        if len(self.candidats) < 2:
-            raise ErreurBanc("Il faut au moins deux candidats à comparer")
-        self.rendu = workflows.obtenir(id_rendu)
-        if self.rendu.manquants():
-            raise ErreurBanc(f"Workflow de rendu incomplet : {id_rendu}")
+        self.rendu = _rendu_llm()
+        id_rendu = self.rendu.id
+        self.candidats = _candidats_llm(id_rendu)
+        blocage = _blocage_llm(self.candidats, self.rendu)
+        if blocage:
+            raise ErreurBanc(blocage)
         # Les candidats écrivent comme ✨ Écrire le prompt pour ce modèle : ses règles et sa longueur. Avant, ils
         # écrivaient sans elles (120 mots au plus) et le contrôle de longueur restait à 40-120 mots, même pour un
         # modèle réglé à 200.
@@ -232,7 +320,7 @@ class BancLLM(Banc):
             "vram_base_go": None,
             "workflows": {
                 self._cle(c): {
-                    "nom": "Sans LLM (témoin)" if c == TEMOIN else self._cle(c),
+                    "nom": _nom_llm(c),
                     "fichier": None if c == TEMOIN else c,
                     "generations": [], "liberation": None, "resume": None,
                 }
@@ -246,7 +334,7 @@ class BancLLM(Banc):
 
     @staticmethod
     def _cle(candidat: str) -> str:
-        return candidat.removesuffix(".gguf")
+        return _cle_llm(candidat)
 
     async def executer(self, orchestrateur: Orchestrateur, telechargeur: Telechargeur):
         self.etat = "en_cours"
@@ -364,7 +452,9 @@ def liste() -> list[dict]:
     for f in sorted(DOSSIER.glob("*/resultats.json"), reverse=True):
         r = _completer(json.loads(f.read_text(encoding="utf-8")))
         bancs.append({"id": r["id"], "tache": r["tache"], "date": r["date"], "revele": r["revele"],
-                       "nb_workflows": len(r["workflows"]), "favori": r["favori"] if r["revele"] else None})
+                       "nb_workflows": len(r["workflows"]), "favori": r["favori"] if r["revele"] else None,
+                       "notees": len(r["notes"]),
+                       "total": sum(len(w["generations"]) for w in r["workflows"].values())})
     return bancs
 
 
@@ -415,6 +505,16 @@ def origine_sources() -> dict:
     return json.loads(ORIGINE_SOURCES.read_text(encoding="utf-8"))
 
 
+def _par_defaut(r: dict) -> str | None:
+    """Le modèle de ce casting qui sert par défaut aujourd'hui, s'il y en a un. Ce n'est pas `favori` : celui-là est
+    le choix fait dans ce casting, et le défaut a pu changer depuis (page Modèles, ou un autre casting)."""
+    if r["tache"] == "reecriture":
+        fichier = CONFIG.get("llama", {}).get("modele") or None  # vide : pas de LLM, donc le témoin
+        return next((cle for cle, w in r["workflows"].items() if w.get("fichier") == fichier), None)
+    id_workflow = CONFIG.get("generation", {}).get(r["tache"])
+    return id_workflow if id_workflow in r["workflows"] else None
+
+
 def vue(id_banc: str) -> dict:
     """Résultats présentables : noms, chemins et mesures masqués tant que le banc n'est pas révélé."""
     r = charger(id_banc)
@@ -453,6 +553,7 @@ def vue(id_banc: str) -> dict:
         "id": r["id"], "tache": r["tache"], "date": r["date"], "seeds": r["seeds"], "prompts": r["prompts"],
         "vram_base_go": r["vram_base_go"], "revele": r["revele"],
         "favori": r["favori"] if r["revele"] else None,
+        "par_defaut": _par_defaut(r) if r["revele"] else None,
         "notees": len(notes), "total": total,
         "modeles": modeles,
     }

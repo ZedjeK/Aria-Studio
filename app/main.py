@@ -794,6 +794,13 @@ async def lancer_banc(demande: DemandeBanc):
     return services.banc_actif.etat_public()
 
 
+@app.get("/api/bancs/preparation")
+def preparation_bancs():
+    """Ce que ferait un casting de chaque tâche, avant de le lancer. Déclarée avant /api/bancs/{id_banc}, qui la
+    prendrait pour l'identifiant d'un casting."""
+    return casting.preparation()
+
+
 def _en_cours(id_banc: str) -> bool:
     return bool(services.banc_actif and services.banc_actif.id == id_banc and services.banc_actif.etat in ("attente", "en_cours"))
 
