@@ -287,11 +287,6 @@ body.large main {
     max-width: 1200px;
 }
 
-#liste-bancs {
-    width: 100%;
-    margin-bottom: 16px;
-}
-
 .entete-banc {
     display: flex;
     flex-wrap: wrap;
