@@ -364,7 +364,7 @@ def params_workflow(wf) -> dict[str, Param]:
         # Aucun checkpoint installé : la liste garde celui d'origine, dit « pas installé ». Vide, elle ne montrait pas
         # sa valeur, et l'onglet Réglages comptait ce champ vide comme un changement à enregistrer.
         absent = () if presents else ((wf.modele_origine, f"{wf.modele_origine} (pas installé)"),)
-        params.append(Param("modele", "Modèle par défaut", "choix", (presents or [wf.modele_origine])[0],
+        params.append(Param("modele", "Checkpoint par défaut", "choix", (presents or [wf.modele_origine])[0],
                             choix=tuple(presents) or (wf.modele_origine,), libelles=absent,
                             aide=f"Checkpoint utilisé partout (Plateau, Montage, séquences) quand rien d'autre n'est "
                                  f"choisi. Dépose les tiens dans modeles/{wf.dossier_modeles}"))

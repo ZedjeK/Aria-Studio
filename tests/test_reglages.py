@@ -138,7 +138,7 @@ class Workflows(AvecFichierTemporaire):
         self.assertFalse(fichier_reglages.fichier().exists())
 
     def test_une_liste_montre_toujours_sa_valeur(self):
-        """Aucun checkpoint installé : la liste « Modèle par défaut » était vide, sa valeur n'était dans aucun de ses
+        """Aucun checkpoint installé : la liste du checkpoint par défaut était vide, sa valeur n'était dans aucun de ses
         choix, et l'onglet Réglages comptait ce champ vide comme « 1 changement non enregistré »."""
         with mock.patch.object(workflows.Workflow, "variantes", return_value=[]):
             e = reglages.etat()
