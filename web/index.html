@@ -1168,8 +1168,8 @@
             </section>
             </div>
             <div class="grille-reglages">
-                <section class="carte" data-section="llm">
-                    <h2>LLM</h2>
+                <section class="carte accent" data-section="llm">
+                    <h2>LLM <span class="discret">les réglages de ce modèle</span></h2>
                     <div class="ligne cible-ligne">
                         <label class="cible-reglages">Modèle <select id="llm-reglages"></select></label>
                         <button id="optimiser" type="button" class="petit"
@@ -1189,18 +1189,21 @@
                         </div>
                     </div>
                     <p id="note-llm-defaut" class="discret" hidden></p>
-                    <div id="params-llm" class="params"></div>
-                    <h3 class="titre-bloc">Consignes du LLM</h3>
-                    <div id="consignes-llm" class="consignes"></div>
-                    <p class="clause">🔒 Toujours ajoutée à la fin de chaque consigne, non modifiable :
-                        <em id="clause-reglages"></em></p>
+                    <!-- Les réglages, rangés en groupes par web/reglages.js (GROUPES_LLM). -->
+                    <div id="params-llm"></div>
+                    <div class="groupe-params">
+                        <h3 class="titre-bloc">Consignes du LLM</h3>
+                        <div id="consignes-llm" class="consignes"></div>
+                        <p class="clause">🔒 Toujours ajoutée à la fin de chaque consigne, non modifiable :
+                            <em id="clause-reglages"></em></p>
+                    </div>
                     <div class="ligne pied-reglages">
                         <span id="etat-llm" class="discret"></span>
                         <button id="enregistrer-llm" class="principal" type="button" disabled>Enregistrer</button>
                     </div>
                 </section>
                 <!-- Modèles image et Modèles vidéo : la même carte, ses modèles et son titre suivent l'onglet choisi (web/reglages.js). -->
-                <section class="carte" data-section="workflows video">
+                <section class="carte accent" data-section="workflows video">
                     <h2 id="titre-workflows">Modèles image <span class="discret">workflows et échantillonnage</span></h2>
                     <div class="ligne cible-ligne">
                         <label class="cible-reglages">Workflow <select id="workflow-reglages"></select></label>

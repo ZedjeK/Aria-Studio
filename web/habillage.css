@@ -724,7 +724,7 @@ body.large label.carte-mode:has(input:focus-visible) strong {
 
 /* ===== Une seule action orange par page : les autres « principales » prennent le contour cyan ===== */
 
-body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #enregistrer-llm, #enregistrer-workflow, #appliquer-optimiser) {
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #appliquer-optimiser) {
     position: relative;
     isolation: isolate;
     min-height: 40px;
@@ -740,7 +740,7 @@ body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-cas
     filter: none;
 }
 
-body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #enregistrer-llm, #enregistrer-workflow, #appliquer-optimiser)::before {
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #appliquer-optimiser)::before {
     content: "";
     position: absolute;
     inset: 1px;
@@ -749,13 +749,44 @@ body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-cas
     clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
 }
 
-body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #enregistrer-llm, #enregistrer-workflow, #appliquer-optimiser):hover:not(:disabled) {
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #appliquer-optimiser):hover:not(:disabled) {
     border: 0;
     filter: none;
 }
 
-body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #enregistrer-llm, #enregistrer-workflow, #appliquer-optimiser):hover:not(:disabled)::before {
+body.large :is(#vue-montage, #vue-plateau, #vue-scenario, #vue-modeles, #vue-casting, #vue-retouche, #vue-reglages):not(#_) button.principal:is(#optimiser-scenario, #appliquer-optimiser):hover:not(:disabled)::before {
     background: var(--hover);
+}
+
+/* Réglages : « Enregistrer » est l'action orange de sa page (LLM, Modèles image, Modèles vidéo), sur le panneau
+   accentué. Même parallélogramme plein que l'action principale des autres pages. */
+body.large #vue-reglages:not(#_) button.principal:is(#enregistrer-llm, #enregistrer-workflow) {
+    min-height: 40px;
+    padding: 10px 28px;
+    border: 0;
+    border-radius: 0;
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    font: 600 0.78rem var(--font-display);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* Réglages du LLM : un sous-titre bleu suivi d'un filet par groupe. */
+body.large #vue-reglages .groupe-params > .titre-bloc {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0 10px;
+    color: var(--accent-2);
+    font: 600 0.7rem/1 var(--font-display);
+    letter-spacing: 0.18em;
+}
+
+body.large #vue-reglages .groupe-params > .titre-bloc::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line-strong);
 }
 
 body.large .cartes-mode {

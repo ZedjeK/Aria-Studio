@@ -11,6 +11,17 @@ const NOMS_CONSIGNES = {
 const AIDES_CONSIGNES = {
     decoupage: "{mots_max} : limite de mots du modèle vidéo ; {regle_personnage} : règle selon qu'une image de référence est choisie ou non.",
 };
+// Les réglages du LLM, rangés par usage. « court » : le titre du groupe dit déjà le mode, le libellé perd sa fin
+// (« Top-p · sans réflexion » → « Top-p »). Chaque clé d'app/reglages.py (params_llm) est dans un groupe, un test
+// le vérifie ; une clé oubliée ici s'afficherait quand même, dans un dernier groupe « Autres réglages ».
+const GROUPES_LLM = [
+    { titre: "Écriture sans réflexion", court: true,
+      cles: ["temperature_reecriture", "top_p", "top_k", "min_p", "presence_penalty"] },
+    { titre: "Écriture avec réflexion", court: true,
+      cles: ["temperature_reflexion", "top_p_reflexion", "top_k_reflexion", "min_p_reflexion", "presence_penalty_reflexion"] },
+    { titre: "Autres tâches", cles: ["temperature_retouche", "temperature_traduction"] },
+    { titre: "Capacité et moteur", cles: ["max_tokens", "contexte", "reflexion", "moteur", "vision"] },
+];
 let etatReglages = null;
 
 // Modèles image et Modèles vidéo : une même carte, dont les modèles et le titre suivent l'onglet choisi.
@@ -60,7 +71,7 @@ async function chargerReglages() {
 
 const formatValeur = (p, v) => p.type === "booleen" ? (v ? "oui" : "non") : String(p.libelles?.[v] ?? v);
 
-function champReglage(p, prefixe = "reglage") {
+function champReglage(p, prefixe = "reglage", libelle = p.libelle) {
     const id = `${prefixe}-${p.cle}`;
     let saisie;
     if (p.type === "booleen") {
@@ -74,7 +85,7 @@ function champReglage(p, prefixe = "reglage") {
     }
     return `<div class="param ${p.modifie ? "modifie" : ""}">
         <div class="entete-param">
-            <label for="${id}">${echapper(p.libelle)}</label>
+            <label for="${id}">${echapper(libelle)}</label>
             ${p.modifie ? `<button type="button" class="petit restaurer" data-restaurer="${p.cle}"
                 title="Revenir à la valeur d'origine">↺ ${echapper(formatValeur(p, p.defaut))}</button>` : ""}
         </div>
@@ -106,7 +117,19 @@ const workflowAffiche = () => etatReglages.workflows.find((w) => w.id === docume
 function afficherLlm() {
     const m = llmAffiche();
     if (!m) return;
-    document.getElementById("params-llm").innerHTML = m.params.map(champReglage).join("");
+    const parCle = Object.fromEntries(m.params.map((p) => [p.cle, p]));
+    const rangees = new Set(GROUPES_LLM.flatMap((g) => g.cles));
+    const groupes = [...GROUPES_LLM,
+        { titre: "Autres réglages", cles: m.params.map((p) => p.cle).filter((cle) => !rangees.has(cle)) }];
+    document.getElementById("params-llm").innerHTML = groupes.map((g) => {
+        const params = g.cles.map((cle) => parCle[cle]).filter(Boolean);
+        if (!params.length) return "";
+        return `<div class="groupe-params" data-titre="${echapper(g.titre)}">
+            <h3 class="titre-bloc">${echapper(g.titre)}</h3>
+            <div class="params">${params.map((p) =>
+                champReglage(p, "reglage", g.court ? p.libelle.split(" · ")[0] : p.libelle)).join("")}</div>
+        </div>`;
+    }).join("");
     document.getElementById("consignes-llm").innerHTML = m.consignes.map((c) => `
         <details class="consigne ${c.modifie ? "modifie" : ""}" data-consigne="${c.cle}">
             <summary>${echapper(NOMS_CONSIGNES[c.cle] ?? c.cle)}${c.modifie ? ' <span class="badge">modifiée</span>' : ""}</summary>
@@ -407,6 +430,8 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
 
     const norme = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const trouve = (q, texte) => !q || norme(texte).includes(q);
+    // Un réglage rangé dans un groupe se trouve aussi par le titre du groupe (« sans réflexion » → ses cinq réglages).
+    const texteDe = (ligne) => `${ligne.closest(".groupe-params")?.dataset.titre ?? ""} ${ligne.textContent}`;
 
     // Une famille de modèles qui n'est pas affichée n'a pas ses champs dans la page : la recherche compte dans les
     // réglages de son premier workflow, celui que la carte montrera à l'ouverture de l'onglet.
@@ -431,13 +456,17 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
             } else {
                 const lignes = [...bloc.querySelectorAll(".param, details.consigne")];
                 lignes.forEach((l) => {
-                    l.hidden = filtre && !(trouve(q, l.textContent) && (!modifies.checked || l.matches(".modifie")
+                    l.hidden = filtre && !(trouve(q, texteDe(l)) && (!modifies.checked || l.matches(".modifie")
                         || l.querySelector(".modifie, .badge")));
+                });
+                // Un groupe dont le filtre ne garde rien disparaît avec son titre.
+                bloc.querySelectorAll(".groupe-params").forEach((g) => {
+                    g.hidden = filtre && ![...g.querySelectorAll(".param, details.consigne")].some((l) => !l.hidden);
                 });
                 if (filtre) reste = lignes.some((l) => !l.hidden);
                 const affichee = sections.length > 1 ? familleWorkflows : sections[0];
                 sections.forEach((s) => {
-                    trouves[s] = s === affichee ? lignes.filter((l) => trouve(q, l.textContent)).length : trouvesHorsCarte(q, s);
+                    trouves[s] = s === affichee ? lignes.filter((l) => trouve(q, texteDe(l))).length : trouvesHorsCarte(q, s);
                 });
             }
             if (sections.includes(section)) resteIci = reste;
