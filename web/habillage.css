@@ -940,6 +940,12 @@ body.large #vue-casting .preparation-casting {
     font: 400 0.7rem var(--font-body);
 }
 
+/* Après la révélation : la meilleure note moyenne ressort. */
+#vue-casting .resume .meilleure-note {
+    color: var(--warn);
+    font-weight: 600;
+}
+
 /* Casting → Comparer : le nombre de castings encore à l'aveugle, sur le sous-onglet. */
 body.large #vue-casting .compte-onglet {
     margin-left: 8px;

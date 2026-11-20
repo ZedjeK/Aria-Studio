@@ -188,6 +188,18 @@ class ListeEtVue(unittest.TestCase):
             vue = casting.vue("essai")
         self.assertEqual((vue["favori"], vue["par_defaut"]), ("a", "b"))
 
+    def test_le_llm_par_defaut_est_celui_que_l_appli_calcule(self):
+        """Casting LLM : le défaut est `modeles.llm_defaut()` (avec son repli), pas la configuration brute. Le témoin,
+        qui n'a pas de fichier, n'est jamais marqué."""
+        self.resultats.update(tache="reecriture", revele=True)
+        self.resultats["workflows"]["a"]["fichier"] = "a.gguf"
+        self.resultats["workflows"]["b"]["fichier"] = None  # le témoin
+        self.ecrire()
+        with mock.patch.object(casting.modeles, "llm_defaut", return_value="a.gguf"):
+            self.assertEqual(casting.vue("essai")["par_defaut"], "a")
+        with mock.patch.object(casting.modeles, "llm_defaut", return_value="autre.gguf"):
+            self.assertIsNone(casting.vue("essai")["par_defaut"])
+
 
 if __name__ == "__main__":
     unittest.main()

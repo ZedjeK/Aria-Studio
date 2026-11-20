@@ -207,30 +207,41 @@ function etoiles(modele, g) {
     return `<div class="etoiles">${boutons}${source}</div>`;
 }
 
+// Après la révélation : les mesures de chaque modèle, et lequel sert par défaut. « Par défaut » est le mot de la page
+// Modèles, et c'est le même réglage : `b.par_defaut` dit le défaut du moment, `b.favori` le choix fait dans ce casting
+// (il a pu changer depuis).
 function tableauResume(b) {
     const llm = b.tache === "reecriture";
-    const ligne = (m) => {
+    const moyennes = b.modeles.map((m) => {
         const notes = m.generations.map((g) => g.note).filter(Boolean);
-        const moyenne = notes.length ? (notes.reduce((a, n) => a + n, 0) / notes.length).toFixed(2) : "—";
+        return notes.length ? notes.reduce((a, n) => a + n, 0) / notes.length : null;
+    });
+    const meilleure = Math.max(...moyennes.filter((v) => v !== null));
+    const ligne = (m, i) => {
+        const moyenne = moyennes[i] === null ? "—" : moyennes[i].toFixed(2);
         const r = m.resume ?? {};
         const l = m.liberation ?? {};
-        const favori = b.favori === m.cle
-            ? '<span class="ok">favori ✓</span>'
-            : `<button class="petit" data-favori="${echapper(m.cle)}">Choisir comme favori</button>`;
+        const defaut = b.par_defaut === m.cle
+            ? '<span class="ok">★ par défaut</span>'
+            : `<button class="petit" data-favori="${echapper(m.cle)}">Choisir par défaut</button>`
+              + (b.favori === m.cle ? ' <span class="discret">choisi ici, changé depuis</span>' : "");
         const mesures = llm
             ? `<td>${r.chargement_s ?? "—"} s</td><td>${r.ecriture_tps_moyen ?? "—"} tok/s</td>
                <td>${r.duree_moyenne_s ?? "—"} s</td><td>${r.pic_vram_go ?? "—"} Go</td><td>${r.controles_reussis ?? "—"}</td>`
             : `<td>${r.temps_froid_s ?? "—"} s</td><td>${r.temps_chaud_moyen_s ?? "—"} s</td>
                <td>${r.pic_ram_go ?? "—"} Go</td><td>${l.vram_avant_go ?? "—"} → ${l.vram_apres_go ?? "—"} Go</td>`;
-        return `<tr><td>${echapper(m.nom)}</td><td>${moyenne}</td>${mesures}<td>${favori}</td></tr>`;
+        return `<tr><td>${echapper(m.nom)}</td><td class="${moyennes[i] === meilleure ? "meilleure-note" : ""}">${moyenne}</td>
+            ${mesures}<td>${defaut}</td></tr>`;
     };
     const titres = llm
-        ? "<th>Chargement</th><th>Écriture</th><th>Durée moy.</th><th>Pic VRAM</th><th>Contrôles</th>"
-        : "<th>À froid</th><th>À chaud</th><th>Pic RAM</th><th>VRAM /free</th>";
+        ? "<th>Chargement</th><th>Écriture</th><th>Durée moyenne</th><th>Pic de VRAM</th><th>Contrôles</th>"
+        : "<th>À froid</th><th>À chaud</th><th>Pic de RAM</th><th>VRAM avant → après libération</th>";
     return `<table class="resume">
-        <thead><tr><th>Modèle</th><th>Note moy.</th>${titres}<th></th></tr></thead>
+        <thead><tr><th>Modèle</th><th>Note moyenne</th>${titres}<th>Par défaut</th></tr></thead>
         <tbody>${b.modeles.map(ligne).join("")}</tbody>
-    </table>`;
+    </table>
+    <p class="discret">${llm ? "Le LLM par défaut sert aux modèles qui n'ont pas le leur, au Scénario et aux traductions."
+        : "Le modèle par défaut est celui que prennent le Plateau, le Montage et le Scénario pour cette tâche. Il se change aussi dans Modèles."}</p>`;
 }
 
 function detailsPrompt(g) {
@@ -299,7 +310,7 @@ function afficherBanc(b) {
     conteneur.innerHTML = entete + blocs;
 }
 
-// Actions : notes, révélation, favori, source
+// Actions : notes, révélation, modèle par défaut, source
 
 document.getElementById("banc").addEventListener("click", async (e) => {
     const cible = e.target.closest("button");
