@@ -2,7 +2,7 @@
 
     claude mcp add --scope user aria-studio -- "<python.exe d'Aria>" "<dossier d'Aria>\\app\\mcp.py"
 
-La commande exacte est dans Réglages → Système, carte « Claude (MCP) ». Claude lance ce script lui-même et lui parle
+La commande exacte est dans Réglages → Application, carte « Claude (MCP) ». Claude lance ce script lui-même et lui parle
 sur l'entrée et la sortie standard (transport stdio : un message JSON-RPC 2.0 par ligne ; spécification MCP 2025-11-25,
 relue le 2026-11-19). Il n'ouvre aucun port et n'a aucun secret : il lit le port et le jeton du lancement en cours
 dans cache\\session.json, comme le lanceur, et passe par l'API locale d'Aria. Tout ce que l'interface contrôle l'est

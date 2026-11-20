@@ -1,7 +1,7 @@
 // Fond animé : des gouttes en cercles qui allument, à chaque passage, quelques points d'une grille. Elles tombent au
 // hasard dans la zone des pages (jamais sous le menu), en cyan, orange et bleu.
 //
-// Les quatre réglages viennent du serveur (GET /api/fond) et se changent dans Réglages → Système → Fond animé.
+// Les quatre réglages viennent du serveur (GET /api/fond) et se changent dans Réglages → Application → Fond animé.
 // Le fond se met en pause quand l'onglet est caché, et ses gouttes disparaissent si Windows demande moins
 // d'animations (la grille de points reste). Il ne touche à rien d'autre dans l'appli.
 
@@ -55,7 +55,7 @@
         minuterie = setTimeout(passage, duree * 1600);
     }
 
-    // Carte Réglages → Système → Fond animé
+    // Carte Réglages → Application → Fond animé
     const cases = {
         actif: document.getElementById("fond-actif"),
         vitesse: document.getElementById("fond-vitesse"),

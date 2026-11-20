@@ -546,6 +546,81 @@ body.large .nav-reglages {
     background: transparent;
 }
 
+/* Deux groupes de sous-onglets : l'appli, puis ce qui génère. */
+body.large .nav-reglages button.groupe {
+    margin-left: 18px;
+}
+
+/* Sept sous-onglets : des marges plus serrées qu'ailleurs, pour tenir sur une ligne dans une fenêtre de 1 440 px. */
+body.large #vue-reglages:not(#_) .nav-reglages button {
+    padding: 10px 20px 10px 14px;
+}
+
+/* Ce que la recherche trouve dans un sous-onglet, compté dessus. */
+.nav-reglages .trouve {
+    padding: 0 6px;
+    background: var(--accent-2);
+    color: var(--bg);
+    font: 600 0.68rem var(--font-body);
+    letter-spacing: 0;
+}
+
+/* Recherche et « Modifiés seulement » : une barre opaque, sous le commentaire de l'onglet. */
+body.large .entete-reglages,
+.rien-reglages {
+    margin: 0 0 16px;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+}
+
+.rien-reglages {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Pages du système : deux colonnes de panneaux ; les plus larges prennent la ligne. */
+.page-reglages {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+.page-reglages > .carte {
+    margin: 0;
+}
+
+/* Dans une colonne étroite, un bouton passe à la ligne entier plutôt que de couper son texte. */
+.page-reglages button {
+    white-space: nowrap;
+}
+
+.page-reglages > :is(#carte-moteurs, #carte-securite, #carte-mcp) {
+    grid-column: 1 / -1;
+}
+
+.contenu-reglages .hors-recherche {
+    display: none;
+}
+
+/* Sécurité : les listes à gauche, l'essai et les phrases témoins à droite. */
+.colonnes-securite {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 28px;
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .page-reglages,
+    .colonnes-securite {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 /* ===== Commentaire de l'onglet actif : un encadré bleu, la couleur de l'information ===== */
 
 .savoir {
@@ -1080,7 +1155,7 @@ body.large #assistant:not(#_) button:disabled {
     cursor: not-allowed;
 }
 
-/* ===== Journal des opérations (Réglages → Système) ===== */
+/* ===== Journal des opérations (Réglages → Historique) ===== */
 .liste.journal li {
     flex-wrap: wrap;
     gap: 2px 10px;

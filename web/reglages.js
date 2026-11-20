@@ -393,43 +393,68 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
     }
 });
 
-// Refonte : navigation à gauche, recherche, « Modifiés seulement », pastille orange des sections touchées.
+// Sous-onglets des Réglages, recherche, « Modifiés seulement », pastille orange des sections touchées.
 (() => {
     const vue = document.getElementById("vue-reglages");
     const contenu = vue.querySelector(".contenu-reglages");
     const nav = vue.querySelector(".nav-reglages");
     const recherche = document.getElementById("recherche-reglages");
     const modifies = document.getElementById("modifies-reglages");
-    let section = "systeme";  // la recherche et « Modifiés seulement » portent sur la section affichée
+    const rien = document.getElementById("rien-reglages");
+    // Les pages du système : des panneaux fixes. La recherche garde ceux qui en parlent ; rien n'y est « modifié ».
+    const SYSTEME = ["moteurs", "application", "securite", "historique"];
+    let section = "moteurs";  // « Modifiés seulement » porte sur la section affichée ; la recherche compte dans toutes
 
-    const norme = (t) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const norme = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const trouve = (q, texte) => !q || norme(texte).includes(q);
+
+    // Une famille de modèles qui n'est pas affichée n'a pas ses champs dans la page : la recherche compte dans les
+    // réglages de son premier workflow, celui que la carte montrera à l'ouverture de l'onglet.
+    function trouvesHorsCarte(q, cle) {
+        const w = (etatReglages?.workflows ?? []).find((x) => x.tache in FAMILLES_WORKFLOWS[cle].groupes);
+        return w ? w.params.filter((p) => trouve(q, `${p.libelle} ${p.aide ?? ""}`)).length : 0;
+    }
 
     function appliquer() {
         const q = norme(recherche.value.trim());
         const filtre = Boolean(q) || modifies.checked;
+        const trouves = {};  // par section : ce que la recherche y trouve
+        let resteIci = true;  // la section affichée montre-t-elle encore quelque chose ?
         contenu.querySelectorAll("[data-section]").forEach((bloc) => {
-            const visibleParNav = bloc.dataset.section.split(" ").includes(section);  // « workflows video » : une carte, deux onglets
+            const sections = bloc.dataset.section.split(" ");  // « workflows video » : une carte, deux onglets
             let reste = true;
-            if (filtre && bloc.dataset.section !== "systeme") {
+            if (SYSTEME.includes(sections[0])) {
+                const cartes = [...bloc.querySelectorAll(":scope > .carte")];
+                cartes.forEach((c) => c.classList.toggle("hors-recherche", !trouve(q, c.textContent)));
+                trouves[sections[0]] = cartes.filter((c) => !c.classList.contains("hors-recherche")).length;
+                reste = trouves[sections[0]] > 0;
+            } else {
                 const lignes = [...bloc.querySelectorAll(".param, details.consigne")];
                 lignes.forEach((l) => {
-                    const ok = (!q || norme(l.textContent).includes(q)) && (!modifies.checked || l.matches(".modifie")
-                        || l.querySelector(".modifie, .badge"));
-                    l.hidden = !ok;
+                    l.hidden = filtre && !(trouve(q, l.textContent) && (!modifies.checked || l.matches(".modifie")
+                        || l.querySelector(".modifie, .badge")));
                 });
-                reste = lignes.some((l) => !l.hidden);
-            } else {
-                bloc.querySelectorAll(".param, details.consigne").forEach((l) => (l.hidden = false));
+                if (filtre) reste = lignes.some((l) => !l.hidden);
+                const affichee = sections.length > 1 ? familleWorkflows : sections[0];
+                sections.forEach((s) => {
+                    trouves[s] = s === affichee ? lignes.filter((l) => trouve(q, l.textContent)).length : trouvesHorsCarte(q, s);
+                });
             }
-            bloc.hidden = !visibleParNav || !reste;
+            if (sections.includes(section)) resteIci = reste;
+            bloc.hidden = !sections.includes(section) || !reste;
         });
-        const systeme = document.getElementById("systeme-reglages");
-        if (section === "systeme") systeme.open = true;
         const total = contenu.querySelectorAll(".param.modifie, details.consigne.modifie").length;
         const compte = document.getElementById("nb-modifies");
         compte.hidden = !total;
         compte.textContent = total;
+        nav.querySelectorAll(".trouve").forEach((e) => e.remove());
         nav.querySelectorAll("[data-section]").forEach((b) => {
+            if (q && trouves[b.dataset.section]) {
+                const n = trouves[b.dataset.section];
+                const badge = Object.assign(document.createElement("span"), { className: "trouve", textContent: n });
+                badge.title = `${n} résultat${n > 1 ? "s" : ""} dans cet onglet`;
+                b.append(badge);
+            }
             const point = b.querySelector(".point-modifie");
             if (!point) return;
             const famille = FAMILLES_WORKFLOWS[b.dataset.section];
@@ -438,6 +463,18 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
                 ? !(etatReglages?.workflows ?? []).some((w) => w.tache in famille.groupes && workflowModifie(w))
                 : !contenu.querySelector(`[data-section~="${b.dataset.section}"] .modifie`);
         });
+        // Rien à montrer ici : le dire, et mener à la première page qui en parle.
+        rien.hidden = !filtre || resteIci;
+        if (!rien.hidden) {
+            rien.replaceChildren(q ? "Rien dans cette page pour cette recherche. " : "Aucun réglage modifié dans cette page.");
+            const ailleurs = q ? [...nav.querySelectorAll("[data-section]")].find((b) => trouves[b.dataset.section]) : null;
+            if (ailleurs) {
+                const lien = Object.assign(document.createElement("button"), { type: "button", className: "petit" });
+                lien.textContent = `Voir « ${ailleurs.firstChild.textContent.trim()} »`;
+                lien.addEventListener("click", () => ailleurs.click());
+                rien.append(lien);
+            }
+        }
     }
 
     nav.addEventListener("click", (e) => {
@@ -462,7 +499,7 @@ document.getElementById("variantes-workflow").addEventListener("click", async (e
     appliquer();
 })();
 
-// Réglages → Système → Notifications (web/commun.js : prefsNotifications, notifierFin).
+// Réglages → Application → Notifications (web/commun.js : prefsNotifications, notifierFin).
 function afficherNotifications() {
     document.getElementById("active-notifications").checked = prefsNotifications.active;
     const son = document.getElementById("son-notifications");
@@ -497,7 +534,7 @@ document.getElementById("essai-notifications").addEventListener("click", async (
 });
 api("GET", "/api/notifications").then((p) => { Object.assign(prefsNotifications, p); afficherNotifications(); }).catch(() => {});
 
-// Réglages → Système → Sécurité (app/securite.py) : les listes du filtre AS-18. Le socle se lit et grandit par
+// Réglages → Sécurité (app/securite.py) : les listes du filtre AS-18. Le socle se lit et grandit par
 // promotion ; seuls tes ajouts se retirent. Aucun bouton ne retire ni ne modifie un terme du socle.
 const NOMS_ETAGES = { socle: "socle", ajouts: "tes ajouts", age: "âge lu dans le texte" };
 const termesEnCause = (termes) => termes.map((t) => `« ${echapper(t.terme)} » (${NOMS_ETAGES[t.etage] ?? t.etage})`).join(", ");

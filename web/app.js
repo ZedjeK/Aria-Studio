@@ -449,7 +449,6 @@ function afficherMoteurs(e) {
     const manquants = e.moteurs.filter((m) => m.statut === "absent" && !m.facultatif);
     const bandeau = document.getElementById("bandeau-moteurs");
     bandeau.hidden = !manquants.length;
-    if (manquants.length) document.getElementById("systeme-reglages").open = true;  // à installer : visible d'emblée
     bandeau.querySelector("span").textContent = manquants.length
         ? `⚠ ${manquants.map((m) => m.nom).join(" et ")} : absent${manquants.length > 1 ? "s" : ""}, Aria ne peut pas générer sans.`
         : "";
@@ -519,7 +518,7 @@ async function choisirComfyui(sien) {
 
 document.getElementById("voir-moteurs").addEventListener("click", () => {
     document.querySelector('.onglet[data-vue="reglages"]').click();
-    document.getElementById("systeme-reglages").open = true;
+    document.querySelector('.nav-reglages [data-section="moteurs"]').click();
     document.getElementById("carte-moteurs").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
@@ -709,7 +708,7 @@ Tes réglages actuels sont d'abord sauvegardés. Le dossier des `
     }
 });
 
-// Journal des opérations (app/journal.py) : relu à l'ouverture de Réglages → Système
+// Journal des opérations (app/journal.py) : relu à l'ouverture de Réglages → Historique
 const RESULTATS_JOURNAL = { ok: "", erreur: "ko", partiel: "avertissement", annule: "discret" };
 
 async function chargerJournal() {
@@ -728,10 +727,13 @@ async function chargerJournal() {
     </li>`).join("");
 }
 
-document.getElementById("systeme-reglages").addEventListener("toggle", (e) => {
-    if (e.target.open) {
+// Réglages : un sous-onglet relit ce qu'il montre quand on l'ouvre (le registre et les fichiers ont pu changer)
+document.querySelector(".nav-reglages").addEventListener("click", (e) => {
+    const section = e.target.closest("button[data-section]")?.dataset.section;
+    if (section === "historique") {
         chargerJournal();
         chargerSauvegardes();
+    } else if (section === "application") {
         chargerDemarrage();
     }
 });
@@ -794,7 +796,7 @@ function ouvrirDepuisAncre() {
     history.replaceState(null, "", location.pathname);
     if (vue === "mise-a-jour") {
         document.querySelector('.onglet[data-vue="reglages"]')?.click();
-        document.getElementById("systeme-reglages").open = true;
+        document.querySelector('.nav-reglages [data-section="application"]').click();
         document.getElementById("carte-maj").scrollIntoView({ block: "start" });
         return;
     }

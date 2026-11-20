@@ -288,7 +288,7 @@ def _sauvegarder(chemin: Path):
 
 
 def sauvegardes() -> list[dict]:
-    """Ce que montre Réglages → Système : chaque sauvegarde, sa date et sa taille, la plus récente en premier."""
+    """Ce que montre Réglages → Historique : chaque sauvegarde, sa date et sa taille, la plus récente en premier."""
     liste = []
     for f in _fichiers_sauvegardes():
         jour, heure = _SAUVEGARDE.match(f.name).groups()

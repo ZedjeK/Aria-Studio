@@ -984,24 +984,30 @@
         </div>
 
         <div class="vue" id="vue-reglages" hidden>
+            <div class="mise-reglages">
+            <!-- Sept sous-onglets à plat, en deux groupes : l'appli (moteurs et dossiers, application, sécurité,
+                 historique), puis ce qui génère (LLM, modèles image, modèles vidéo). -->
+            <nav class="nav-reglages" aria-label="Sections des réglages">
+                <button type="button" class="actif" data-section="moteurs" data-savoir="Ce qui fait tourner Aria et où elle range ses affaires : les moteurs, les dossiers, tes clés d'accès. On y passe à l'installation, rarement ensuite.">🖥️ Moteurs et dossiers</button>
+                <button type="button" data-section="application" data-savoir="Comment Aria se comporte sur ton PC : ses mises à jour, son démarrage, ses notifications, son fond, et le lien avec Claude.">⚙️ Application</button>
+                <button type="button" data-section="securite" data-savoir="Le filtre de protection des mineurs (AS-18). Il ne se désactive pas : tu peux lire le socle, y ajouter tes termes, et vérifier ce qu'il bloque.">🛡️ Sécurité</button>
+                <button type="button" data-section="historique" data-savoir="Ce qu'Aria a gardé de tes réglages et de ses opérations : de quoi revenir en arrière, et savoir ce qui a été fait.">🕘 Historique</button>
+                <button type="button" class="groupe" data-section="llm" data-savoir="Les réglages du LLM qui écrit tes prompts. « Adapter à ma machine » propose des valeurs selon ta carte graphique ; ↺ ramène une valeur à celle d'origine.">💬 LLM <i class="point-modifie" hidden></i></button>
+                <button type="button" data-section="workflows" data-savoir="Les réglages de chaque modèle d'image (texte vers image, retouche). « Recommander » remplit les valeurs que recommande la fiche du modèle ; ↺ ramène une valeur à celle d'origine.">🎨 Modèles image <i class="point-modifie" hidden></i></button>
+                <button type="button" data-section="video" data-savoir="Les réglages de chaque modèle vidéo (texte vers vidéo, image vers vidéo). « Recommander » remplit les valeurs que recommande la fiche du modèle ; ↺ ramène une valeur à celle d'origine.">🎬 Modèles vidéo <i class="point-modifie" hidden></i></button>
+            </nav>
+            <div class="savoir" data-pour="#vue-reglages .nav-reglages"><b>À SAVOIR</b><span></span></div>
+            <!-- Recherche et « Modifiés seulement » : une barre opaque, sous le commentaire de l'onglet (web/reglages.js). -->
             <div class="ligne entete-reglages">
                 <label class="recherche-reglages">🔎 <input id="recherche-reglages" type="search"
                        placeholder="Chercher un réglage…" autocomplete="off"></label>
                 <label class="case"><input type="checkbox" id="modifies-reglages"> Modifiés seulement <span id="nb-modifies" class="badge" hidden></span></label>
                 <span class="discret aide-reglages">Seuls tes changements sont enregistrés (reglages.json) : ↺ ramène une valeur à celle d'origine.</span>
             </div>
-            <div class="mise-reglages">
-            <nav class="nav-reglages" aria-label="Sections des réglages">
-                <button type="button" class="actif" data-section="systeme" data-savoir="Moteurs, emplacements, clés d'accès, mises à jour : ce qu'on règle une fois.">🖥️ Système</button>
-                <button type="button" data-section="llm" data-savoir="Les réglages du LLM qui écrit tes prompts. « Adapter à ma machine » propose des valeurs selon ta carte graphique ; ↺ ramène une valeur à celle d'origine.">💬 LLM <i class="point-modifie" hidden></i></button>
-                <button type="button" data-section="workflows" data-savoir="Les réglages de chaque modèle d'image (texte vers image, retouche). « Recommander » remplit les valeurs que recommande la fiche du modèle ; ↺ ramène une valeur à celle d'origine.">🎨 Modèles image <i class="point-modifie" hidden></i></button>
-                <button type="button" data-section="video" data-savoir="Les réglages de chaque modèle vidéo (texte vers vidéo, image vers vidéo). « Recommander » remplit les valeurs que recommande la fiche du modèle ; ↺ ramène une valeur à celle d'origine.">🎬 Modèles vidéo <i class="point-modifie" hidden></i></button>
-            </nav>
-            <div class="savoir" data-pour="#vue-reglages .nav-reglages"><b>À SAVOIR</b><span></span></div>
+            <p id="rien-reglages" class="discret rien-reglages" hidden></p>
             <div class="contenu-reglages">
-            <!-- Système : ce qu'on règle une fois (s'ouvre seul si un moteur manque) -->
-            <details id="systeme-reglages" class="systeme-reglages" data-section="systeme">
-                <summary><h2>🖥️ Système <span class="discret">moteurs, emplacements, clés d'accès, mises à jour</span></h2></summary>
+            <!-- Moteurs et dossiers : ce qu'on règle à l'installation (la page affichée à l'ouverture des Réglages) -->
+            <div class="page-reglages" data-section="moteurs">
             <section class="carte" id="carte-moteurs">
                 <div class="ligne entete-assistant">
                     <h2>Moteurs</h2>
@@ -1025,6 +1031,8 @@
                     et Aria ne la réaffiche jamais.</p>
                 <ul id="liste-cles" class="liste"></ul>
             </section>
+            </div>
+            <div class="page-reglages" data-section="securite">
             <!-- Sécurité (web/reglages.js, app/securite.py) : les listes du filtre AS-18. Le socle se lit et grandit
                  (promotion) ; il ne se retire pas d'ici. -->
             <section class="carte" id="carte-securite">
@@ -1034,7 +1042,11 @@
                     d'ici tu peux le lire et y promouvoir un terme, pas en retirer. <strong>Tes ajouts</strong> s'y
                     additionnent et comptent dès la génération suivante.</p>
                 <p id="erreur-securite" class="ko" hidden></p>
+                <div class="colonnes-securite">
+                <div>
                 <div id="listes-securite"></div>
+                </div>
+                <div>
                 <h3 class="titre-bloc">Essayer une phrase</h3>
                 <div class="ligne">
                     <input id="phrase-securite" type="text" placeholder="Une phrase, comme dans un prompt" autocomplete="off">
@@ -1049,9 +1061,13 @@
                         que la phrase attend.</p>
                     <ul id="temoins-securite" class="temoins-securite"></ul>
                 </details>
+                </div>
+                </div>
                 <p class="discret">Corriger un terme du socle se fait à la main, dans <code id="fichier-socle-securite"></code>
                     (resserre-le plutôt que de le supprimer, puis regarde les phrases témoins).</p>
             </section>
+            </div>
+            <div class="page-reglages" data-section="application">
             <section class="carte" id="carte-maj">
                 <h2>Mises à jour</h2>
                 <p id="etat-maj" class="discret"></p>
@@ -1077,27 +1093,6 @@
                     <label class="case"><input type="checkbox" id="demarrage-windows"> Démarrer Aria Studio avec Windows</label>
                 </div>
                 <p id="etat-demarrage" class="discret"></p>
-            </section>
-            <!-- Claude (MCP) (app/mcp.py, /api/mcp) : de quoi déclarer le serveur MCP d'Aria dans Claude Code. -->
-            <section class="carte" id="carte-mcp">
-                <h2>Claude (MCP)</h2>
-                <p class="discret">Claude Code peut piloter Aria : voir son état, écrire un prompt avec ton LLM local, lancer un
-                    rendu et le suivre, lire la fiche d'une image. Rien ne supprime, ne déplace ni ne change un réglage, et le
-                    filtre de protection des mineurs s'applique comme ici. Aria doit être lancée.</p>
-                <p class="discret">Ce que ces outils rendent (prompts, fiches des images) part vers ton compte Claude. Les images
-                    restent sur ton PC : Claude ne reçoit que leur chemin.</p>
-                <h3 class="titre-bloc">Avec la commande <code>claude</code></h3>
-                <div class="ligne">
-                    <code id="mcp-commande" class="mcp-commande"></code>
-                    <button id="mcp-copier-commande" type="button" class="petit">Copier</button>
-                </div>
-                <details>
-                    <summary>Sans elle : le serveur à ajouter sous « mcpServers »</summary>
-                    <p class="discret">Dans <code>~/.claude.json</code> pour tous tes projets, ou dans le <code>.mcp.json</code>
-                        d'un projet. Puis relance Claude.</p>
-                    <pre id="mcp-json" class="mcp-json"></pre>
-                    <button id="mcp-copier-json" type="button" class="petit">Copier</button>
-                </details>
             </section>
             <section class="carte" id="carte-notifications">
                 <h2>Notifications</h2>
@@ -1131,6 +1126,29 @@
                 </div>
                 <p id="fond-note" class="ko" hidden></p>
             </section>
+            <!-- Claude (MCP) (app/mcp.py, /api/mcp) : de quoi déclarer le serveur MCP d'Aria dans Claude Code. -->
+            <section class="carte" id="carte-mcp">
+                <h2>Claude (MCP)</h2>
+                <p class="discret">Claude Code peut piloter Aria : voir son état, écrire un prompt avec ton LLM local, lancer un
+                    rendu et le suivre, lire la fiche d'une image. Rien ne supprime, ne déplace ni ne change un réglage, et le
+                    filtre de protection des mineurs s'applique comme ici. Aria doit être lancée.</p>
+                <p class="discret">Ce que ces outils rendent (prompts, fiches des images) part vers ton compte Claude. Les images
+                    restent sur ton PC : Claude ne reçoit que leur chemin.</p>
+                <h3 class="titre-bloc">Avec la commande <code>claude</code></h3>
+                <div class="ligne">
+                    <code id="mcp-commande" class="mcp-commande"></code>
+                    <button id="mcp-copier-commande" type="button" class="petit">Copier</button>
+                </div>
+                <details>
+                    <summary>Sans elle : le serveur à ajouter sous « mcpServers »</summary>
+                    <p class="discret">Dans <code>~/.claude.json</code> pour tous tes projets, ou dans le <code>.mcp.json</code>
+                        d'un projet. Puis relance Claude.</p>
+                    <pre id="mcp-json" class="mcp-json"></pre>
+                    <button id="mcp-copier-json" type="button" class="petit">Copier</button>
+                </details>
+            </section>
+            </div>
+            <div class="page-reglages" data-section="historique">
             <!-- Sauvegardes de reglages.json (app/fichier_reglages.py) : une avant chaque changement, 20 gardées. -->
             <section class="carte" id="carte-sauvegardes">
                 <h2>Sauvegardes des réglages</h2>
@@ -1148,7 +1166,7 @@
                 <ul id="liste-journal" class="liste journal"></ul>
                 <p id="journal-vide" class="discret" hidden>Rien encore.</p>
             </section>
-            </details>
+            </div>
             <div class="grille-reglages">
                 <section class="carte" data-section="llm">
                     <h2>LLM</h2>

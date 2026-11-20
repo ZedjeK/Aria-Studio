@@ -271,7 +271,7 @@ def regler_demarrage(d: DemandeDemarrage):
 
 @app.get("/api/mcp")
 def commande_mcp():
-    """Réglages → Système, carte « Claude (MCP) » : de quoi déclarer le serveur MCP d'Aria (app/mcp.py) dans Claude
+    """Réglages → Application, carte « Claude (MCP) » : de quoi déclarer le serveur MCP d'Aria (app/mcp.py) dans Claude
     Code, en commande ou en bloc JSON (« mcpServers »). Le Python et le script sont ceux de cette Aria : programme\\
     une fois installée. Python avec console : pythonw n'a ni entrée ni sortie standard."""
     python = Path(sys.executable)
@@ -300,7 +300,7 @@ def regler_installation(d: DemandeInstallation):
 
 @app.get("/api/journal")
 def lire_journal():
-    """Les dernières opérations (journal.json, app/journal.py) : Réglages → Système."""
+    """Les dernières opérations (journal.json, app/journal.py) : Réglages → Historique."""
     return journal.lire()
 
 
@@ -330,7 +330,7 @@ class DemandeNotifications(BaseModel):
 
 @app.get("/api/notifications")
 def lire_notifications():
-    """Prévenir à la fin d'un job (bandeau, notification Windows) et avec un son : les choix de Réglages → Système."""
+    """Prévenir à la fin d'un job (bandeau, notification Windows) et avec un son : les choix de Réglages → Application."""
     return notifications.etat()
 
 
@@ -348,7 +348,7 @@ class DemandeFond(BaseModel):
 
 @app.get("/api/fond")
 def lire_fond():
-    """Fond animé de l'interface : les quatre réglages de Réglages → Système → Fond animé."""
+    """Fond animé de l'interface : les quatre réglages de Réglages → Application → Fond animé."""
     return fond.etat()
 
 

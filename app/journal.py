@@ -22,7 +22,7 @@ from pathlib import Path
 from app import fichier_reglages
 
 MAX = 500
-VISIBLES = 50  # ce que montre Réglages → Système
+VISIBLES = 50  # ce que montre Réglages → Historique
 RESULTATS = ("ok", "erreur", "partiel", "annule")
 log = logging.getLogger(__name__)
 _verrou = threading.Lock()
