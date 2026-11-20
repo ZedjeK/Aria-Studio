@@ -86,15 +86,17 @@ def _blocage_sources(tache: str, prompts: list[dict]) -> str | None:
     return f"Images de départ absentes de casting/sources : {', '.join(absentes)}" if absentes else None
 
 
-def _rendu_llm() -> workflows.Workflow:
-    """Le workflow qui rend les prompts du Casting LLM : le modèle par défaut de Texte vers image."""
+def _rendu_llm() -> tuple[workflows.Workflow | None, str | None]:
+    """Le workflow qui rend les prompts du Casting LLM (le modèle par défaut de Texte vers image), ou ce qui empêche
+    de le trouver. Le message est écrit ici : la préparation part vers la page, et aucun texte d'exception ne doit y
+    transiter (CodeQL, py/stack-trace-exposure)."""
     id_rendu = CONFIG.get("generation", {}).get("texte_vers_image")
     if not id_rendu:
-        raise ErreurBanc("Choisis d'abord le modèle par défaut de Texte vers image : c'est lui qui rend les prompts")
+        return None, "Choisis d'abord le modèle par défaut de Texte vers image : c'est lui qui rend les prompts"
     try:
-        return workflows.obtenir(id_rendu)
-    except workflows.ErreurWorkflow as e:
-        raise ErreurBanc(str(e)) from e
+        return workflows.obtenir(id_rendu), None
+    except workflows.ErreurWorkflow:
+        return None, f"Le modèle par défaut de Texte vers image est inconnu : {id_rendu}"
 
 
 def _candidats_llm(id_rendu: str) -> list[str]:
@@ -131,10 +133,9 @@ def preparation_de(tache: str) -> dict:
                     for e in prompts]}
     if tache == "reecriture":
         p["seeds"] = [CONFIG["casting"]["seed_llm"]]
-        try:
-            rendu = _rendu_llm()
-        except ErreurBanc as e:
-            return {**p, "blocage": str(e)}
+        rendu, blocage = _rendu_llm()
+        if rendu is None:
+            return {**p, "blocage": blocage}
         candidats = _candidats_llm(rendu.id)
         return {**p, "candidats": [{"id": _cle_llm(c), "nom": _nom_llm(c), "manquants": 0} for c in candidats],
                 "rendu": {"id": rendu.id, "nom": rendu.fiche["nom"], "manquants": len(rendu.manquants())},
@@ -288,7 +289,9 @@ class BancLLM(Banc):
 
     def __init__(self):
         self.tache = "reecriture"
-        self.rendu = _rendu_llm()
+        self.rendu, blocage = _rendu_llm()
+        if self.rendu is None:
+            raise ErreurBanc(blocage)
         id_rendu = self.rendu.id
         self.candidats = _candidats_llm(id_rendu)
         blocage = _blocage_llm(self.candidats, self.rendu)
