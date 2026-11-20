@@ -1,0 +1,24 @@
+# Catégories des notes générées par GitHub (« Generate release notes », ou l'API releases/generate-notes) : chaque PR
+# fusionnée est rangée sous la première catégorie dont elle porte un label. Une PR sans label de type tombe dans
+# « Autres changements ».
+#
+# Ces notes ne sont qu'une base : les notes publiées sont celles de docs/releases/<tag>.md, réécrites pour les
+# utilisateurs à partir de .github/release-notes.md.
+#
+# Labels de type, un par PR : feat, fix, securite, deps, docs, ci. Dependabot pose « dependencies » de lui-même.
+changelog:
+  categories:
+    - title: Nouveautés
+      labels: [feat]
+    - title: Corrections
+      labels: [fix]
+    - title: Sécurité
+      labels: [securite]
+    - title: Dépendances
+      labels: [deps, dependencies]
+    - title: Documentation
+      labels: [docs, documentation]
+    - title: CI et outils du dépôt
+      labels: [ci]
+    - title: Autres changements
+      labels: ["*"]

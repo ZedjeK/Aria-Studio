@@ -1,0 +1,16 @@
+# Le socle commun des applis Aria : les fichiers que toute appli garde identiques à ceux du dépôt modèle.
+#
+# .\tools\verifier-socle.ps1 compare ces fichiers à ceux du modèle et dit lesquels sont en retard.
+#
+# N'entrent ici que des fichiers que init.ps1 laisse tels quels : ni marqueur à remplir, ni bloc de stack. Les tests
+# du modèle (tools\tester.ps1) le vérifient sur une appli d'essai fraîchement créée.
+#
+# Un chemin par ligne, depuis la racine du dépôt, avec des barres obliques.
+
+.github/pull_request_template.md
+.github/release.yml
+docs/releases/LISEZ-MOI.md
+tools/proteger-depot.ps1
+tools/socle.txt
+tools/verifier-release.ps1
+tools/verifier-socle.ps1
