@@ -3556,15 +3556,8 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     .panneau-modeles[data-panneau="rechercher"] > #plus-decouvrir { grid-column: 1; grid-row: auto; position: static; }
 }
 
-/* Casting : pastilles de tâche, options, historique */
+/* Casting : le pied du panneau de lancement */
 .pied-casting { justify-content: flex-end; }
-.historique-bancs { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .6rem; }
-.carte-banc { display: flex; flex-direction: column; gap: .2rem; text-align: left; background: var(--surface-sunken);
-    border: 1px solid var(--line); border-radius: 10px; padding: .7rem .9rem; color: var(--text); cursor: pointer; font: inherit; }
-.carte-banc:hover { border-color: var(--line-strong); }
-.carte-banc.actif { border-color: var(--accent); box-shadow: 0 0 12px rgba(125, 249, 255, .15); }
-.carte-banc .aveugle { color: var(--warn); font-size: .75rem; }
-.carte-banc .ok { font-size: .75rem; }
 
 /* Écrire avec le LLM (Plateau, Montage) */
 .actions-ecriture { display: inline-flex; gap: .4rem; flex-wrap: wrap; align-items: center; justify-content: flex-end; }

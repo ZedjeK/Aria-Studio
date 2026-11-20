@@ -90,5 +90,42 @@ class SousOnglets(unittest.TestCase):
         self.assertIn('id="a-noter-casting"', self.vue)
 
 
+class Comparer(unittest.TestCase):
+    """Les castings en cartes à onglet, et des résultats dont l'en-tête reste visible."""
+
+    def setUp(self):
+        self.vue = vue_casting().split('<div data-panneau-casting="comparer"')[1]
+        self.script = (WEB / "casting.js").read_text(encoding="utf-8")
+
+    def test_les_castings_sont_des_cartes_a_onglet(self):
+        self.assertIn('id="historique-bancs" class="cartes-mode" role="radiogroup"', self.vue)
+        self.assertIn('<input type="radio" name="banc-affiche"', self.script)
+        self.assertIn("${b.notees} / ${b.total}", self.script)  # où en sont les notes, sur chaque carte
+        self.assertFalse(".carte-banc" in (WEB / "style.css").read_text(encoding="utf-8"))
+
+    def test_sans_casting_une_invitation_a_en_lancer_un(self):
+        self.assertIn('id="carte-vide-casting" hidden', self.vue)
+        self.assertIn('id="vers-nouveau-casting"', self.vue)
+        self.assertIn('getElementById("vers-nouveau-casting").addEventListener("click", () => afficherSousOngletCasting("lancer"))',
+                      self.script)
+
+    def test_l_en_tete_des_resultats_porte_l_avancement_les_sauts_et_reveler(self):
+        tete = self.script[self.script.index('<div class="tete-banc">'):self.script.index("${b.revele ? tableauResume(b)")]
+        for morceau in ('id="reveler" class="principal"', 'class="avancement-banc"', 'class="jauge-notes"', "${sauts}"):
+            self.assertIn(morceau, tete)
+        self.assertRegex((WEB / "habillage.css").read_text(encoding="utf-8"),
+                         r"#vue-casting \.tete-banc \{\s+position: sticky;")
+
+    def test_un_saut_mene_au_prompt(self):
+        self.assertIn('data-saut="${echapper(p.id)}"', self.script)
+        self.assertIn('data-prompt-banc="${echapper(p.id)}"', self.script)
+        self.assertIn('[data-prompt-banc="${CSS.escape(cible.dataset.saut)}"]', self.script)
+
+    def test_noter_ne_fait_pas_bouger_la_page(self):
+        self.assertIn("const hauteur = window.scrollY;", self.script)
+        self.assertIn("window.scrollTo(0, hauteur);", self.script)
+        self.assertIn("majCarteBanc(b);", self.script)
+
+
 if __name__ == "__main__":
     unittest.main()

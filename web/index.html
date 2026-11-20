@@ -1297,13 +1297,19 @@
 
             <!-- Comparer : « Résultats » est accentué tant que « Révéler les modèles » agit dessus (web/casting.js) -->
             <div data-panneau-casting="comparer" hidden>
-            <section class="carte">
-                <h2>Historique</h2>
-                <div id="historique-bancs" class="historique-bancs"></div>
+            <section class="carte" id="carte-castings">
+                <h2>Castings <span class="discret" id="nb-castings"></span></h2>
+                <div id="historique-bancs" class="cartes-mode" role="radiogroup" aria-label="Casting affiché"></div>
             </section>
 
+            <section class="carte" id="carte-vide-casting" hidden>
+                <h2>Aucun casting pour l'instant</h2>
+                <p class="discret">Lance un premier casting : ses résultats arriveront ici, à noter à l'aveugle.</p>
+                <button type="button" class="petit" id="vers-nouveau-casting">Nouveau casting</button>
+            </section>
+
+            <!-- Les résultats du casting choisi : leur en-tête (titre, avancement, sauts, « Révéler ») reste visible. -->
             <section class="carte" id="carte-banc">
-                <h2>Résultats</h2>
                 <div id="banc"></div>
             </section>
             </div>

@@ -860,6 +860,86 @@ body.large #vue-casting .preparation-casting {
     margin-right: auto;
 }
 
+/* ===== Casting → Comparer : les castings, puis les résultats de celui qui est choisi ===== */
+
+#vue-casting .etat-aveugle {
+    color: var(--warn);
+}
+
+#vue-casting .etat-revele {
+    color: var(--accent);
+}
+
+/* L'en-tête des résultats reste sous la main pendant qu'on note : avancement, saut par prompt, « Révéler ». */
+#vue-casting .tete-banc {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: -8px -10px 4px;
+    padding: 8px 10px 10px;
+    border-bottom: 1px solid var(--line-strong);
+    background: var(--surface);
+}
+
+#vue-casting .tete-banc .entete-banc {
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+#vue-casting .tete-banc h2 {
+    margin: 0;
+}
+
+#carte-banc.accent .tete-banc h2 {
+    color: var(--accent);
+}
+
+#vue-casting .avancement-banc {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    font-size: 0.8rem;
+}
+
+#vue-casting .jauge-notes {
+    flex: 1;
+    max-width: 260px;
+    height: 6px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-sunken);
+}
+
+#vue-casting .jauge-notes span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+}
+
+#vue-casting .sauts-banc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+/* Un saut amène le prompt sous l'en-tête, pas dessous. */
+#vue-casting .bloc-prompt {
+    scroll-margin-top: 150px;
+}
+
+#vue-casting .bloc-prompt:first-of-type {
+    border-top: 0;
+}
+
+#vue-casting .sert-banc {
+    margin-left: 10px;
+    padding: 1px 8px;
+    border: 1px solid var(--accent-2);
+    color: var(--accent-2);
+    font: 400 0.7rem var(--font-body);
+}
+
 /* Casting → Comparer : le nombre de castings encore à l'aveugle, sur le sous-onglet. */
 body.large #vue-casting .compte-onglet {
     margin-left: 8px;
