@@ -10,6 +10,18 @@ const ORIGINES = {
 let sousOngletModeles = "collection";
 let sourcesEnCours = false;
 let minuteurSources = null;  // une seule relecture en attente, quel que soit le nombre de clics sur l'onglet
+// L'onglet d'usage où se range un workflow, d'après sa tâche (app/collection.py, USAGES ; un test les compare).
+const USAGE_DE_TACHE = { texte_vers_image: "texte_vers_image", retouche: "image_vers_image",
+                         image_vers_video: "video", texte_vers_video: "video" };
+let workflowAMontrer = null;  // venu de Réglages : la carte à amener sous les yeux une fois son onglet dessiné
+
+// Depuis Réglages (« Ouvrir dans Modèles ») : l'onglet d'usage du workflow, et sa carte sous les yeux. C'est là que
+// ☆ Par défaut choisit son checkpoint.
+function montrerWorkflow(id, tache) {
+    workflowAMontrer = id;
+    sousOngletModeles = USAGE_DE_TACHE[tache] ?? sousOngletModeles;
+    document.querySelector('.onglet[data-vue="modeles"]').click();  // web/app.js : ouvrirModeles() dessine l'onglet
+}
 
 function ouvrirModeles() {
     chargerTelechargements();
@@ -381,6 +393,11 @@ async function chargerUsages() {
     for (const [id, usage] of Object.entries(usages)) {
         document.querySelector(`.usage[data-usage="${id}"]`).innerHTML = rendreUsage(id, usage);
     }
+    if (workflowAMontrer) {
+        document.querySelector(`.workflow-usage[data-carte-workflow="${CSS.escape(workflowAMontrer)}"]`)
+            ?.scrollIntoView({ block: "start" });
+        workflowAMontrer = null;
+    }
 }
 
 const STYLES_PROMPT = { prose: "de la prose descriptive", instruction: "une consigne d'édition", brief_video: "un brief vidéo" };
@@ -452,7 +469,8 @@ async function choisirLlm(idWorkflow, llm) {
     if (optionsMontage) optionsMontage.llm = (optionsPlateau ?? await api("GET", "/api/plateau/options")).llm;
 }
 
-// ☆ Par défaut sur un checkpoint : le réglage « Modèle par défaut » du workflow (celui de l'onglet Réglages).
+// ☆ Par défaut sur un checkpoint : le réglage « modele » du workflow. Il ne se choisit qu'ici ; l'onglet Réglages
+// le montre en lecture, avec un lien vers cette carte.
 document.getElementById("vue-modeles").addEventListener("click", async (e) => {
     const bouton = e.target.closest("[data-checkpoint-defaut]");
     if (!bouton) return;
@@ -500,7 +518,7 @@ function carteWorkflow(wf, idUsage, u) {
     const nature = idUsage === "video" ? "video" : "image";
     const r = wf.reecriture;
     const llmNom = llmsUsages.choix.find((m) => m.fichier === (r.llm || llmsUsages.defaut))?.nom ?? "LLM par défaut";
-    return `<section class="carte workflow-usage">
+    return `<section class="carte workflow-usage" data-carte-workflow="${echapper(wf.id)}">
         <header class="entete-wf">
             <h2>${echapper(wf.nom)}</h2>
             ${wf.pret ? '<span class="etat-wf ok">prêt ✓</span>'

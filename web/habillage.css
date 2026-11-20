@@ -771,8 +771,8 @@ body.large #vue-reglages:not(#_) button.principal:is(#enregistrer-llm, #enregist
     text-transform: uppercase;
 }
 
-/* Réglages du LLM : un sous-titre bleu suivi d'un filet par groupe. */
-body.large #vue-reglages .groupe-params > .titre-bloc {
+/* Réglages : un sous-titre bleu suivi d'un filet par groupe (LLM, checkpoint par défaut, checkpoints de la famille). */
+body.large #vue-reglages :is(.groupe-params > .titre-bloc, #variantes-workflow .titre-bloc) {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -782,11 +782,39 @@ body.large #vue-reglages .groupe-params > .titre-bloc {
     letter-spacing: 0.18em;
 }
 
-body.large #vue-reglages .groupe-params > .titre-bloc::after {
+/* « Checkpoints de la famille » partage sa ligne avec « Ouvrir le dossier » : la marge va à la ligne. */
+body.large #vue-reglages #variantes-workflow .titre-bloc {
+    flex: 1;
+    margin: 0;
+}
+
+body.large #vue-reglages #variantes-workflow > .ligne {
+    align-items: center;
+    margin: 20px 0 10px;
+}
+
+body.large #vue-reglages :is(.groupe-params > .titre-bloc, #variantes-workflow .titre-bloc)::after {
     content: "";
     flex: 1;
     height: 1px;
     background: var(--line-strong);
+}
+
+/* Réglages → Modèles image, Modèles vidéo : le checkpoint par défaut, en lecture, et le bouton qui mène à Modèles. */
+body.large #vue-reglages .lecture-defaut {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+}
+
+body.large #vue-reglages .lecture-defaut small {
+    flex: 1 1 320px;
+}
+
+/* Modèles : la carte d'un workflow amenée sous les yeux depuis Réglages garde un peu d'air au-dessus. */
+body.large #vue-modeles .workflow-usage {
+    scroll-margin-top: 16px;
 }
 
 body.large .cartes-mode {

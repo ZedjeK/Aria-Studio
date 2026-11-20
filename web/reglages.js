@@ -31,6 +31,10 @@ const FAMILLES_WORKFLOWS = {
 };
 let familleWorkflows = "workflows";
 
+// Le checkpoint par défaut d'un workflow se choisit dans Modèles (☆ Par défaut), à côté de ses fichiers : ici il se
+// lit, avec un lien. Ce n'est donc ni un champ de la carte, ni un réglage « modifié » de l'onglet.
+const reglables = (w) => w.params.filter((p) => p.cle !== "modele");
+
 function remplirWorkflows() {
     const famille = FAMILLES_WORKFLOWS[familleWorkflows];
     const wf = document.getElementById("workflow-reglages");
@@ -44,7 +48,7 @@ function remplirWorkflows() {
 }
 
 // Un workflow dont un réglage (ou celui d'un de ses checkpoints) n'est pas à la valeur d'origine.
-const workflowModifie = (w) => w.params.some((p) => p.modifie) || w.variantes.some((v) => v.params.some((p) => p.modifie));
+const workflowModifie = (w) => reglables(w).some((p) => p.modifie) || w.variantes.some((v) => v.params.some((p) => p.modifie));
 
 async function chargerReglages() {
     try {
@@ -165,10 +169,30 @@ function afficherWorkflow() {
     const w = workflowAffiche();
     document.getElementById("recommandations-workflow").hidden = true;  // celles d'un autre modèle, ou déjà enregistrées
     if (!w) return;
-    document.getElementById("params-workflow").innerHTML = w.params.map((p) => champReglage(p)).join("");
+    document.getElementById("params-workflow").innerHTML = reglables(w).map((p) => champReglage(p)).join("");
+    afficherDefaut(w);
     afficherVariantes(w);
     majBoutonWorkflow();
 }
+
+// Checkpoint par défaut : son nom, ce à quoi il sert, et le chemin vers Modèles où il se choisit.
+function afficherDefaut(w) {
+    const p = w.params.find((x) => x.cle === "modele");
+    const absent = p && p.valeur in p.libelles;  // aucun checkpoint installé : le serveur le dit dans son libellé
+    document.getElementById("defaut-workflow").innerHTML = p ? `<div class="groupe-params" data-titre="${echapper(p.libelle)}">
+        <h3 class="titre-bloc">${echapper(p.libelle)}</h3>
+        <div class="param lecture-defaut">
+            <strong>${absent ? "" : "★ "}${echapper(formatValeur(p, p.valeur).replace(".safetensors", ""))}</strong>
+            <small class="discret">${echapper(p.aide)}. Il se choisit dans Modèles (☆ Par défaut), à côté de ses fichiers.</small>
+            <button type="button" class="petit" data-defaut-dans-modeles>Ouvrir dans Modèles</button>
+        </div>
+    </div>` : "";
+}
+
+document.getElementById("defaut-workflow").addEventListener("click", (e) => {
+    const w = workflowAffiche();
+    if (w && e.target.closest("[data-defaut-dans-modeles]")) montrerWorkflow(w.id, w.tache);  // web/modeles.js
+});
 
 // Checkpoints de la famille : chacun ses réglages (un checkpoint « Turbo » intègre déjà la LoRA du workflow).
 function afficherVariantes(w) {
@@ -190,7 +214,7 @@ function afficherVariantes(w) {
 }
 
 function majBoutonWorkflow() {
-    const n = Object.keys(changementsParams(document.getElementById("params-workflow"), workflowAffiche().params)).length;
+    const n = Object.keys(changementsParams(document.getElementById("params-workflow"), reglables(workflowAffiche()))).length;
     document.getElementById("enregistrer-workflow").disabled = !n;
     if (n) document.getElementById("etat-workflow").textContent = `${n} changement${n > 1 ? "s" : ""} non enregistré${n > 1 ? "s" : ""}`;
 }
@@ -236,7 +260,7 @@ document.getElementById("enregistrer-llm").addEventListener("click", () => {
 
 document.getElementById("enregistrer-workflow").addEventListener("click", () => {
     enregistrerReglages(urlWorkflow(), {
-        valeurs: changementsParams(document.getElementById("params-workflow"), workflowAffiche().params),
+        valeurs: changementsParams(document.getElementById("params-workflow"), reglables(workflowAffiche())),
     }, "etat-workflow");
 });
 
