@@ -107,6 +107,50 @@ function poserMaxNombre(id, max) {
     champ.value = String(nombreDuChamp(id));
 }
 
+// Fenêtre de confirmation de l'appli, à la place du confirm() du navigateur : un titre, la question, un détail
+// facultatif, et deux boutons (celui qui n'engage rien, puis l'action, en orange). Rend une promesse : vrai si l'action
+// est validée. Échap ou un clic sur le voile referment sans valider. Tout le texte est posé par textContent.
+function demander({ titre, texte, detail = "", valider = "Continuer", annuler = "Annuler" }) {
+    const voile = document.getElementById("demande");
+    if (!voile.hidden) return Promise.resolve(false);  // une question à la fois
+    const refuser = document.getElementById("refuser-demande");
+    const accepter = document.getElementById("accepter-demande");
+    const blocDetail = document.getElementById("detail-demande");
+    document.getElementById("titre-demande").textContent = titre;
+    document.getElementById("texte-demande").textContent = texte;
+    blocDetail.textContent = detail;
+    blocDetail.hidden = !detail;
+    refuser.textContent = annuler;
+    accepter.textContent = valider;
+    const avant = document.activeElement;
+    voile.hidden = false;
+    refuser.focus();  // le bouton qui n'engage rien : Entrée par réflexe ne valide pas
+    return new Promise((resoudre) => {
+        const fermer = (reponse) => {
+            voile.hidden = true;
+            voile.removeEventListener("click", clic);
+            document.removeEventListener("keydown", touche, true);
+            if (avant instanceof HTMLElement) avant.focus();
+            resoudre(reponse);
+        };
+        const clic = (e) => {
+            if (e.target === accepter) fermer(true);
+            else if (e.target === refuser || e.target === voile) fermer(false);
+        };
+        const touche = (e) => {
+            if (e.key === "Escape") {
+                e.stopPropagation();
+                fermer(false);
+            } else if (e.key === "Tab") {  // le focus reste dans la fenêtre, entre ses deux boutons
+                e.preventDefault();
+                (document.activeElement === refuser ? accepter : refuser).focus();
+            }
+        };
+        voile.addEventListener("click", clic);
+        document.addEventListener("keydown", touche, true);
+    });
+}
+
 function afficherErreur(element, message) {
     element.textContent = message;
     element.hidden = false;
