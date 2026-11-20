@@ -69,6 +69,16 @@ class SousOnglets(unittest.TestCase):
                       self.script)
         self.assertEqual(self.script.count('getElementById("lancer-banc").disabled'), 1)
 
+    def test_la_tache_lue_dans_la_page_n_est_pas_reecrite_dans_le_html(self):
+        """La tâche choisie vient d'une valeur de la page : elle sert de clé, elle n'est jamais interpolée dans du HTML
+        (alerte CodeQL js/xss-through-dom). Le bouton « Ouvrir dans Modèles » ne porte que l'identifiant du modèle."""
+        self.assertFalse('data-tache="${' in self.script)
+        self.assertFalse("dataset.tache" in self.script)
+        self.assertIn('"rendu" in b.dataset ? "texte_vers_image" : tacheBanc', self.script)
+        for ligne in self.script.splitlines():
+            if "${tacheBanc}" in ligne:
+                self.fail(f"tacheBanc interpolée : {ligne.strip()[:80]}")
+
     def test_les_anciennes_pastilles_ont_disparu(self):
         for fichier in ("index.html", "casting.js", "style.css", "habillage.css"):
             contenu = (WEB / fichier).read_text(encoding="utf-8")

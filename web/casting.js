@@ -87,18 +87,20 @@ function dessinerPreparation() {
     if (!p) return;
     const llm = tacheBanc === "reecriture";
     const manque = (c) => c.manquants > 1 ? `${c.manquants} fichiers manquent` : "1 fichier manque";
-    const versModeles = (c, tache) => c.manquants
-        ? `<button type="button" class="petit" data-ouvrir-modele="${echapper(c.id)}" data-tache="${tache}">Ouvrir dans Modèles</button>` : "";
+    // Le bouton ne porte que l'identifiant du modèle : sa tâche est celle de la page, ou Texte vers image pour le
+    // modèle de rendu du Casting LLM. Rien de ce qui est lu dans la page n'est réécrit dans le HTML.
+    const versModeles = (c, rendu = false) => c.manquants
+        ? `<button type="button" class="petit" data-ouvrir-modele="${echapper(c.id)}"${rendu ? " data-rendu" : ""}>Ouvrir dans Modèles</button>` : "";
 
     document.getElementById("nom-tache-banc").textContent = NOMS_TACHES[tacheBanc];
     document.getElementById("titre-candidats-banc").textContent = llm ? "Candidats comparés" : "Modèles comparés";
     document.getElementById("candidats-banc").innerHTML = p.candidats.map((c) => `<li><strong>${echapper(c.nom)}</strong>
         <span class="badge ${c.manquants ? "manque" : "ok"}">${c.manquants ? `incomplet · ${manque(c)}` : "prêt"}</span>
-        ${versModeles(c, tacheBanc)}</li>`).join("") || '<li class="discret">Aucun candidat pour l\'instant.</li>';
+        ${versModeles(c)}</li>`).join("") || '<li class="discret">Aucun candidat pour l\'instant.</li>';
     document.getElementById("note-candidats-banc").innerHTML = !llm
         ? "Tous les modèles de la tâche passent, dans un ordre tiré au hasard que tu ne vois pas."
         : p.rendu ? `Chaque candidat réécrit les idées, puis ${echapper(p.rendu.nom)} les rend en image : c'est le modèle par défaut
-            de Texte vers image. ${versModeles(p.rendu, "texte_vers_image")}` : "";
+            de Texte vers image. ${versModeles(p.rendu, true)}` : "";
 
     document.getElementById("titre-essais-banc").textContent = llm ? "Idées à réécrire" : "Jeu d'essai";
     document.getElementById("essais-banc").innerHTML = p.essais.map((e) =>
@@ -128,7 +130,7 @@ function dessinerPreparation() {
 // « Ouvrir dans Modèles » sur un modèle incomplet : sa carte, dans l'onglet d'usage de sa tâche (web/modeles.js).
 document.getElementById("carte-preparation").addEventListener("click", (e) => {
     const b = e.target.closest("[data-ouvrir-modele]");
-    if (b) montrerWorkflow(b.dataset.ouvrirModele, b.dataset.tache);
+    if (b) montrerWorkflow(b.dataset.ouvrirModele, "rendu" in b.dataset ? "texte_vers_image" : tacheBanc);
 });
 
 function afficherProgression(actif) {
