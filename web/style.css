@@ -454,20 +454,6 @@ body.large main {
     color: var(--action);
 }
 
-/* Réglages : la section Système, repliable. */
-.systeme-reglages {
-    margin-bottom: 16px;
-}
-
-.systeme-reglages > summary {
-    cursor: pointer;
-    margin-bottom: 12px;
-}
-
-.systeme-reglages > summary h2 {
-    display: inline;
-}
-
 /* LoRAs repliées : le titre dit combien sont actives. */
 .choix-loras > summary {
     cursor: pointer;

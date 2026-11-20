@@ -267,7 +267,7 @@ def verifier(*textes: str):
         raise ErreurSecurite(refus["message"])
 
 
-# Réglages → Système → Sécurité : voir les listes, ajouter, essayer, promouvoir (app/main.py, web/reglages.js).
+# Réglages → Sécurité : voir les listes, ajouter, essayer, promouvoir (app/main.py, web/reglages.js).
 
 def essayer(texte: str) -> dict:
     """Le verdict du filtre sur une phrase, sans rien générer."""

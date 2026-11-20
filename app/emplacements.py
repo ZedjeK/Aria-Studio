@@ -117,7 +117,7 @@ def installe() -> bool:
 
 
 def installation() -> dict:
-    """Réglages → Système : le programme est-il installé, et le lanceur propose-t-il de l'installer ?
+    """Réglages → Application : le programme est-il installé, et le lanceur propose-t-il de l'installer ?
 
     Le lanceur lit « installation.proposee » dans %USERPROFILE%\\.Aria-Studio\\reglages.json ; en mode portable,
     il ne propose rien."""

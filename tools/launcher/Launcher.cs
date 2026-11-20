@@ -7,7 +7,7 @@
 // programme.precedent), sans la marque « téléchargé depuis Internet », crée le raccourci du Bureau si la case est
 // cochée, puis relance depuis programme\. Pas de proposition si : Aria répond déjà, le lanceur est déjà dans
 // programme\, un dossier data\ est à côté de lui (mode portable), --portable, ou « installation.proposee: false »
-// dans reglages.json (case « Ne plus me proposer », réactivable dans Réglages → Système).
+// dans reglages.json (case « Ne plus me proposer », réactivable dans Réglages → Application).
 //
 // Réservés aux essais (tests/test_lanceur.py, sans fenêtre ni lancement) :
 //   --essai-proposer          code 0 si la fenêtre serait proposée, 2 sinon

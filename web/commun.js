@@ -202,7 +202,7 @@ function remplirSelect(id, valeurs, defaut) {
 
 // Fin d'un job (Plateau, Montage, Casting) : une notification Windows (API Notifications du navigateur), toujours, que la
 // fenêtre d'Aria soit au premier plan ou non, et un son. Si le navigateur ne les autorise pas (pas encore accordées,
-// refusées, absentes), un bandeau dans l'appli prend le relais pour ne rien rater. Choix dans Réglages → Système.
+// refusées, absentes), un bandeau dans l'appli prend le relais pour ne rien rater. Choix dans Réglages → Application.
 const prefsNotifications = { active: true, son: true };  // lus au démarrage par web/reglages.js
 
 // Le navigateur ne demande l'autorisation qu'après un geste : au premier clic sur un bouton d'action (Créer, Tourner…).

@@ -109,7 +109,7 @@ garde libres.
      tel quel : tu peux le supprimer ensuite ;
    - **Lancer sans installer** : Aria tourne depuis le dossier du zip, rien n'est copié.
 
-   « Ne plus me proposer » coupe la question ; elle se réactive dans Réglages → Système, carte Mises à jour. Avec
+   « Ne plus me proposer » coupe la question ; elle se réactive dans Réglages → Application, carte Mises à jour. Avec
    `Aria-Studio.exe --portable`, ou un dossier `data` à côté de l'exe (mode portable), la fenêtre ne s'ouvre pas.
 
    L'interface s'ouvre ensuite dans ton navigateur, et l'**icône d'Aria** apparaît près de l'horloge (voir plus bas).
@@ -145,7 +145,7 @@ disponible. Un clic l'ouvre ; son menu donne l'état, et permet d'annuler la gé
 graphique (ComfyUI et le LLM s'arrêtent, Aria reste ouverte), d'aller à une page, de démarrer avec Windows et de
 quitter.
 
-**Démarrer avec Windows** (dans ce menu, ou dans Réglages → Système) est décoché d'office. Coché, Aria se lance à
+**Démarrer avec Windows** (dans ce menu, ou dans Réglages → Application) est décoché d'office. Coché, Aria se lance à
 l'ouverture de ta session, sans ouvrir le navigateur : seule l'icône apparaît. Il n'existe que pour Aria installée (dans
 `programme\`), et il écrit une valeur « Aria Studio » sous la clé `Run` de ton compte Windows, que décocher retire.
 
@@ -153,7 +153,7 @@ l'ouverture de ta session, sans ouvrir le navigateur : seule l'icône apparaît.
 
 Aria livre un serveur MCP (`app\mcp.py`) : Claude Code peut voir son état, écrire un prompt avec ton LLM local, lancer
 un rendu d'image et le suivre, et lire la fiche d'une image. Rien ne supprime, ne déplace, ne change un réglage ni
-n'installe, et le filtre de protection des mineurs s'applique comme dans l'interface. Réglages → Système, carte
+n'installe, et le filtre de protection des mineurs s'applique comme dans l'interface. Réglages → Application, carte
 **Claude (MCP)**, donne la commande `claude mcp add` toute prête, ou le bloc à ajouter sous `mcpServers` (dans
 `~/.claude.json` ou le `.mcp.json` d'un projet). Aria doit être lancée : le serveur MCP n'ouvre aucun port, il passe
 par l'API d'Aria avec le jeton du lancement en cours.
@@ -169,15 +169,15 @@ Tout ce qui t'appartient vit dans `%USERPROFILE%\.Aria-Studio`, qu'une mise à j
 | `moteurs\` | ComfyUI portable et llama-server |
 | `cache\` | Ce qui se recalcule (empreintes des modèles, listes annoncées par ComfyUI) et les dossiers de travail de ComfyUI (`cache\comfyui\`, vidés au fil des générations) : l'effacer ne perd rien |
 | `reglages.json` | Tous tes réglages et choix : dossier des modèles, favoris, licences acceptées, fond, notifications, réglages des LLM et des workflows… |
-| `sauvegardes\` | Une copie de `reglages.json` avant chaque changement (les 20 dernières, à restaurer dans Réglages → Système), et les anciens fichiers de réglages copiés quand une version les a réunis dans `reglages.json` |
-| `journal.json` | Les 500 dernières opérations d'Aria sur tes affaires (téléchargements, moteurs, corbeilles, migrations, réglages), visibles dans Réglages → Système |
+| `sauvegardes\` | Une copie de `reglages.json` avant chaque changement (les 20 dernières, à restaurer dans Réglages → Historique), et les anciens fichiers de réglages copiés quand une version les a réunis dans `reglages.json` |
+| `journal.json` | Les 500 dernières opérations d'Aria sur tes affaires (téléchargements, moteurs, corbeilles, migrations, réglages), visibles dans Réglages → Historique |
 | `programme\` | Le programme, si tu l'as installé (la version d'avant reste dans `programme.precedent\`) |
 
 **Mode portable** (clé USB, disque externe…) : crée un dossier `data` à côté de `Aria-Studio.exe`, et tout restera
 dans le dossier du programme (les moteurs vont alors dans `services`).
 
 **Mettre à jour** : quand une nouvelle version est publiée, le bandeau « ✨ Aria Studio X.Y.Z est disponible » propose
-**Installer la mise à jour** (aussi dans Réglages → Système). Après ta confirmation, Aria la télécharge depuis la
+**Installer la mise à jour** (aussi dans Réglages → Application). Après ta confirmation, Aria la télécharge depuis la
 release sur GitHub, vérifie son empreinte SHA-256 deux fois (celle que calcule GitHub et le `.sha256` publié), puis
 redémarre : la nouvelle version remplace `programme\`, la version d'avant devient `programme.precedent\`, et
 l'interface se rouvre dans un nouvel onglet. Une génération en cours empêche la mise à jour. Pour revenir à la version
