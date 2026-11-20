@@ -16,6 +16,12 @@ let preparation = null;  // /api/bancs/preparation : ce que ferait un casting de
 let bancEnCours = false;
 const UNITES_BANC = { reecriture: "étape", image_vers_video: "clip", texte_vers_video: "clip" };  // sinon : image
 const nombreDe = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
+const unitesNotees = (tache) => tache.endsWith("video") ? "clips notés" : "images notées";
+// « 20 nov. · 10:15 », à partir de la date ISO d'un casting.
+const dateBanc = (iso) => new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    .replace(/,| à/, " ·");
+// Sous la carte d'un casting : à l'aveugle ou révélé, et où en sont les notes (liste ou détail d'un casting).
+const etatBanc = (b) => `${b.revele ? "révélé" : "à l'aveugle"} · ${b.notees} / ${b.total} ${b.tache.endsWith("video") ? "notés" : "notées"}`;
 let sousOngletCasting = "lancer";
 
 // Deux sous-onglets : lancer un casting, puis comparer ses résultats. L'encadré « À savoir » suit l'onglet actif
@@ -43,20 +49,26 @@ async function chargerCasting() {
     compte.hidden = !aNoter;
     compte.textContent = `${aNoter} à noter`;
 
-    const histo = document.getElementById("historique-bancs");
-    histo.innerHTML = bancs.length ? bancs.map((b) => `<button type="button" class="carte-banc ${b.id === bancAffiche ? "actif" : ""}"
-        data-banc="${echapper(b.id)}"><strong>${NOMS_TACHES[b.tache] ?? echapper(b.tache)}</strong>
-        <span class="discret">${echapper(b.date.replace("T", " "))} · ${b.nb_workflows} modèles</span>
-        <span class="${b.revele ? "ok" : "aveugle"}">${b.revele ? "révélé" : "à l'aveugle"}</span></button>`).join("")
-        : '<p class="discret">Aucun casting pour l\'instant.</p>';
-    if (!bancs.length) {
-        document.getElementById("banc").innerHTML = '<p class="discret">Aucun banc pour l\'instant.</p>';
-        document.getElementById("carte-banc").classList.remove("accent");
-        return;
-    }
+    // Les castings : des cartes à onglet, un seul affiché à la fois. Sans aucun casting, une invitation à en lancer un.
+    const vide = !bancs.length;
+    document.getElementById("carte-castings").hidden = vide;
+    document.getElementById("carte-banc").hidden = vide;
+    document.getElementById("carte-vide-casting").hidden = !vide;
+    if (vide) return;
     if (!bancs.some((b) => b.id === bancAffiche)) bancAffiche = bancs[0].id;
-    histo.querySelectorAll("[data-banc]").forEach((c) => c.classList.toggle("actif", c.dataset.banc === bancAffiche));
+    document.getElementById("nb-castings").textContent = nombreDe(bancs.length, "casting");
+    document.getElementById("historique-bancs").innerHTML = bancs.map((b) => `<label class="carte-mode">
+        <input type="radio" name="banc-affiche" value="${echapper(b.id)}" ${b.id === bancAffiche ? "checked" : ""}>
+        <strong>${NOMS_TACHES[b.tache] ?? echapper(b.tache)}</strong>
+        <small>${dateBanc(b.date)} · ${nombreDe(b.nb_workflows, "modèle")}</small>
+        <small class="${b.revele ? "etat-revele" : "etat-aveugle"}" data-etat-banc>${etatBanc(b)}</small></label>`).join("");
     chargerBanc();
+}
+
+// Après une note : la carte du casting affiché dit où il en est, sans relire toute la liste.
+function majCarteBanc(b) {
+    const etat = document.querySelector("#historique-bancs input:checked")?.closest("label").querySelector("[data-etat-banc]");
+    if (etat) etat.textContent = etatBanc(b);
 }
 
 // Nouveau casting : ce que le serveur annonce pour chaque tâche (app/casting.py, preparation)
@@ -234,10 +246,26 @@ function afficherBanc(b) {
     const conteneur = document.getElementById("banc");
     // « Révéler les modèles » est l'action de l'onglet : le panneau qu'elle révèle est accentué tant qu'elle est là.
     document.getElementById("carte-banc").classList.toggle("accent", !b.revele);
-    const entete = `<div class="entete-banc">
-        <span class="discret">${NOMS_TACHES[b.tache] ?? echapper(b.tache)} · ${b.notees} / ${b.total} ${b.tache.endsWith("video") ? "clips notés" : "images notées"}
-            · VRAM au repos ${b.vram_base_go ?? "—"} Go${b.en_cours ? " · banc en cours…" : ""}</span>
-        ${b.revele ? "" : `<button id="reveler" class="principal" ${b.en_cours ? "disabled" : ""}>Révéler les modèles</button>`}
+    // L'en-tête reste visible pendant qu'on descend dans les résultats : où en sont les notes, un saut par prompt,
+    // et « Révéler les modèles » sous la main.
+    const duPrompt = (id) => b.modeles.flatMap((m) => m.generations.filter((g) => g.prompt === id));
+    const sauts = b.prompts.map((p) => {
+        const generations = duPrompt(p.id);
+        const notees = generations.filter((g) => g.note).length;
+        return `<button type="button" class="petit" data-saut="${echapper(p.id)}" title="Aller à ce prompt">${echapper(p.id)}
+            ${notees === generations.length ? "✓" : `${notees}/${generations.length}`}</button>`;
+    }).join("");
+    const entete = `<div class="tete-banc">
+        <div class="entete-banc">
+            <h2>${NOMS_TACHES[b.tache] ?? echapper(b.tache)} <span class="discret">${dateBanc(b.date)}${b.revele ? "" : " · à l'aveugle"}${b.en_cours ? " · casting en cours…" : ""}</span></h2>
+            ${b.revele ? "" : `<button id="reveler" class="principal" ${b.en_cours ? "disabled" : ""}>Révéler les modèles</button>`}
+        </div>
+        <div class="avancement-banc">
+            <span>${b.notees} / ${b.total} ${unitesNotees(b.tache)}</span>
+            <span class="jauge-notes"><span style="width:${b.total ? (100 * b.notees / b.total).toFixed(1) : 0}%"></span></span>
+            <span class="discret">VRAM au repos : ${b.vram_base_go ?? "—"} Go</span>
+        </div>
+        <div class="sauts-banc">${sauts}</div>
     </div>
     ${b.revele ? tableauResume(b) : ""}`;
 
@@ -249,7 +277,7 @@ function afficherBanc(b) {
                 <img src="/api/sources/${encodeURIComponent(p.source)}" alt="source" loading="lazy"></a></div></div>`
             : "";
         const modeles = b.modeles.map((m) => `<div class="colonne">
-            <h4>${echapper(m.nom)}</h4>
+            <h4>${echapper(m.nom)} <span class="discret">${b.seeds.length > 1 ? "seeds" : "seed"} ${b.seeds.join(" · ")}</span></h4>
             <div class="seeds" style="grid-template-columns: repeat(${b.seeds.length}, 1fr)">
             ${m.generations.filter((g) => g.prompt === p.id).map((g) => `
                 <div class="vignette ${g.est_la_source ? "source" : ""}">
@@ -259,8 +287,10 @@ function afficherBanc(b) {
                 </div>`).join("")}
             </div>
         </div>`).join("");
-        return `<div class="bloc-prompt">
-            <h3>${echapper(p.id)} <span class="discret">· ${echapper(p.teste)}</span></h3>
+        const sert = duPrompt(p.id).some((g) => g.peut_servir_de_source)
+            ? '<span class="sert-banc">sert d\'image de départ à la Retouche</span>' : "";
+        return `<div class="bloc-prompt" data-prompt-banc="${echapper(p.id)}">
+            <h3>${echapper(p.id)} <span class="discret">· ${echapper(p.teste)}</span>${sert}</h3>
             <p class="discret">${echapper(p.prompt)}</p>
             <div class="grille" style="grid-template-columns: repeat(${colonnes}, 1fr)">${source}${modeles}</div>
         </div>`;
@@ -274,15 +304,24 @@ function afficherBanc(b) {
 document.getElementById("banc").addEventListener("click", async (e) => {
     const cible = e.target.closest("button");
     if (!cible) return;
+    if (cible.dataset.saut) {
+        document.querySelector(`#banc [data-prompt-banc="${CSS.escape(cible.dataset.saut)}"]`)
+            ?.scrollIntoView({ block: "start", behavior: "smooth" });
+        return;
+    }
     const url = `/api/bancs/${bancAffiche}`;
     try {
         if (cible.dataset.noter) {
-            afficherBanc(await api("POST", `${url}/notes`, {
+            const b = await api("POST", `${url}/notes`, {
                 cle: cible.dataset.cle, fichier: cible.dataset.fichier, note: Number(cible.dataset.noter),
-            }));
+            });
+            const hauteur = window.scrollY;  // la page ne doit pas bouger sous le doigt pendant qu'on note
+            afficherBanc(b);
+            window.scrollTo(0, hauteur);
+            majCarteBanc(b);
         } else if (cible.id === "reveler") {
             const b = await api("GET", url);
-            if (b.notees < b.total && !confirm(`Seulement ${b.notees} ${b.tache.endsWith("video") ? "clips notés" : "images notées"} sur ${b.total}. Révéler quand même ?`)) return;
+            if (b.notees < b.total && !confirm(`Seulement ${b.notees} ${unitesNotees(b.tache)} sur ${b.total}. Révéler quand même ?`)) return;
             afficherBanc(await api("POST", `${url}/reveler`));
             chargerCasting();
         } else if (cible.dataset.favori) {
@@ -302,10 +341,10 @@ document.getElementById("taches-banc").addEventListener("change", (e) => {
     dessinerPreparation();
 });
 
-document.getElementById("historique-bancs").addEventListener("click", (e) => {
-    const c = e.target.closest("[data-banc]");
-    if (!c) return;
-    bancAffiche = c.dataset.banc;
-    document.querySelectorAll("#historique-bancs [data-banc]").forEach((x) => x.classList.toggle("actif", x === c));
+// Cartes à onglet : le casting affiché.
+document.getElementById("historique-bancs").addEventListener("change", (e) => {
+    bancAffiche = e.target.value;
     chargerBanc();
 });
+
+document.getElementById("vers-nouveau-casting").addEventListener("click", () => afficherSousOngletCasting("lancer"));
