@@ -1,7 +1,8 @@
 ﻿<#
 .SYNOPSIS
-Pose les protections GitHub d'une appli Aria : fusion en squash, rulesets, signalement privé, alertes et correctifs
-Dependabot, secret scanning, releases immuables, actions épinglées par SHA.
+Pose les protections GitHub d'une appli Aria : fusion en squash, rulesets (tests et analyse CodeQL exigés avant
+fusion), signalement privé, alertes et correctifs Dependabot, secret scanning, releases immuables, actions épinglées
+par SHA.
 
 .DESCRIPTION
 À lancer après le premier passage vert de la CI sur main : on n'exige jamais un check qui n'a pas encore tourné.
@@ -11,6 +12,7 @@ enregistré à chaque lancement dans un fichier daté, .work\protection-avant-<d
 arrière : une relance de vérification n'écrase pas l'état d'avant un changement.
 
     .\tools\proteger-depot.ps1              affiche le plan et demande confirmation
+    .\tools\proteger-depot.ps1 -Montrer     affiche le plan et ce qui serait envoyé pour les rulesets, sans rien écrire
     .\tools\proteger-depot.ps1 -Depot ZedjeK/Aria-Atlas
 
 Il a besoin de gh, connecté avec un compte qui administre le dépôt.
@@ -25,7 +27,9 @@ Les releases déjà publiées pendant que l'immuabilité était active le resten
 #>
 [CmdletBinding()]
 param(
-    [string]$Depot
+    [string]$Depot,
+    # Essai à blanc : le plan, et le corps des rulesets qui seraient envoyés. Rien n'est demandé ni écrit sur GitHub.
+    [switch]$Montrer
 )
 
 Set-StrictMode -Version Latest
@@ -112,9 +116,39 @@ if ($checks -and $checks.PSObject.Properties['check_runs']) {
     $testsVerts = @($exiges | Where-Object { $verts -notcontains $_ }).Count -eq 0
 }
 
+# Analyse de code (CodeQL) : sur un dépôt qui a ce workflow, la fusion attend ses résultats, et une alerte de sécurité
+# élevée ou critique, ou une alerte au niveau « erreur », la retient. Sans cette règle, seul le check de tests retient
+# une PR : CodeQL peut signaler une faille sans empêcher la fusion. Comme pour les tests, on ne l'exige qu'une fois
+# qu'il a rendu une analyse sur la branche par défaut.
+$outilAnalyse = 'CodeQL'
+$aCodeQL = [bool](Lire "repos/$Depot/contents/.github/workflows/codeql.yml")
+$codeqlATourne = $false
+if ($aCodeQL) {
+    $refBranche = [uri]::EscapeDataString("refs/heads/$branche")
+    $analyses = Lire "repos/$Depot/code-scanning/analyses?tool_name=$outilAnalyse&ref=$refBranche&per_page=1"
+    $codeqlATourne = $null -ne $analyses -and $analyses -isnot [bool] -and @($analyses).Count -gt 0
+}
+
 $plan = New-Object Collections.Generic.List[object]
-function Prevoir([string]$titre, [scriptblock]$action) {
-    $script:plan.Add([pscustomobject]@{ Titre = $titre; Action = $action })
+# $corps : ce qui serait envoyé, pour l'essai à blanc (-Montrer). Facultatif.
+function Prevoir([string]$titre, [scriptblock]$action, $corps = $null) {
+    $script:plan.Add([pscustomobject]@{ Titre = $titre; Action = $action; Corps = $corps })
+}
+
+# Compléter un ruleset déjà en place : ses règles sont renvoyées telles qu'elles ont été lues (GitHub y ajoute des
+# paramètres que ce script ne connaît pas), et seules celles qui manquent sont ajoutées. Le check exigé est réécrit
+# quand il n'est pas lié à GitHub Actions.
+function ReglesCompletees($actuelles, $voulues, [bool]$checkLie) {
+    $resultat = @()
+    foreach ($r in @($actuelles)) {
+        if ($r.type -eq 'required_status_checks' -and -not $checkLie) { continue }
+        $regle = @{ type = [string]$r.type }
+        if ($r.PSObject.Properties['parameters'] -and $null -ne $r.parameters) { $regle.parameters = $r.parameters }
+        $resultat += $regle
+    }
+    $presentes = @($resultat | ForEach-Object { $_.type })
+    foreach ($v in $voulues) { if ($presentes -notcontains $v.type) { $resultat += $v } }
+    return , $resultat
 }
 
 # 1. Méthode de fusion
@@ -162,13 +196,25 @@ $lies = @($regles | Where-Object { $_.type -eq 'required_status_checks' } |
     ForEach-Object { $_.parameters.required_status_checks } |
     Where-Object { $_.PSObject.Properties['integration_id'] -and $_.integration_id -eq $idActions } | ForEach-Object { $_.context })
 $checkLie = @($exiges | Where-Object { $lies -notcontains $_ }).Count -eq 0
-$complet = $types -contains 'deletion' -and $types -contains 'non_fast_forward' -and $types -contains 'pull_request' -and $checkLie
+$analyseExigee = @($regles | Where-Object { $_.type -eq 'code_scanning' } | ForEach-Object { $_.parameters.code_scanning_tools } |
+    Where-Object { $_.tool -eq $outilAnalyse }).Count -gt 0
+$analyseAPoser = $aCodeQL -and $codeqlATourne -and -not $analyseExigee
+if ($aCodeQL -and ($codeqlATourne -or $analyseExigee)) {
+    $corpsBranche.rules += @{ type = 'code_scanning'; parameters = @{
+            code_scanning_tools = @(@{ tool = $outilAnalyse; security_alerts_threshold = 'high_or_higher'; alerts_threshold = 'errors' })
+        }
+    }
+}
+$avecAnalyse = ''
+if ($analyseExigee -or $analyseAPoser) { $avecAnalyse = ", analyse $outilAnalyse exigée avant fusion" }
+$complet = $types -contains 'deletion' -and $types -contains 'non_fast_forward' -and $types -contains 'pull_request' -and $checkLie -and
+    -not $analyseAPoser
 # Le ruleset posé par ce script se reconnaît à son nom ; les règles venues d'ailleurs ne sont jamais modifiées.
 $notre = @($rulesets | Where-Object { $_ -and $_.PSObject.Properties['name'] -and $_.name -eq $nomRuleset -and $_.target -eq 'branch' })
 $etrangeres = @($regles | Where-Object { $notre.Count -eq 0 -or $_.ruleset_id -ne $notre[0].id } | ForEach-Object { $_.type })
 
 if ($complet) {
-    Write-Host "  déjà en place : $branche protégée, PR obligatoire, check(s) $listeExiges exigé(s) et lié(s) à GitHub Actions"
+    Write-Host "  déjà en place : $branche protégée, PR obligatoire, check(s) $listeExiges exigé(s) et lié(s) à GitHub Actions$avecAnalyse"
 }
 elseif ($etrangeres.Count -gt 0) {
     Write-Host "  À FAIRE À LA MAIN : $branche a des règles venues d'un autre ruleset ($($etrangeres -join ', ')). Complète-le plutôt que d'en créer un second." -ForegroundColor Yellow
@@ -178,14 +224,23 @@ elseif (-not $testsVerts) {
 }
 elseif ($notre.Count -gt 0) {
     $idRuleset = $notre[0].id
-    Prevoir "Ruleset « $nomRuleset » complété : PR obligatoire, check(s) $listeExiges liés à GitHub Actions" {
-        Ecrire 'PUT' "repos/$Depot/rulesets/$idRuleset" $corpsBranche
+    $actuel = Lire "repos/$Depot/rulesets/$idRuleset"
+    $corpsComplete = @{
+        name = $nomRuleset; target = 'branch'; enforcement = 'active'
+        conditions = $corpsBranche.conditions
+        rules = (ReglesCompletees $actuel.rules $corpsBranche.rules $checkLie)
     }
+    Prevoir "Ruleset « $nomRuleset » complété : PR obligatoire, check(s) $listeExiges liés à GitHub Actions$avecAnalyse" {
+        Ecrire 'PUT' "repos/$Depot/rulesets/$idRuleset" $corpsComplete
+    } $corpsComplete
 }
 else {
-    Prevoir "Ruleset « $nomRuleset » : suppression et réécriture interdites, PR obligatoire, check(s) $listeExiges exigé(s)" {
+    Prevoir "Ruleset « $nomRuleset » : suppression et réécriture interdites, PR obligatoire, check(s) $listeExiges exigé(s)$avecAnalyse" {
         Ecrire 'POST' "repos/$Depot/rulesets" $corpsBranche
-    }
+    } $corpsBranche
+}
+if ($aCodeQL -and -not $codeqlATourne -and -not $analyseExigee) {
+    Write-Host "  PAS ENCORE : $outilAnalyse n'a pas encore rendu d'analyse sur $branche. Relance ce script après son premier passage : son analyse sera alors exigée avant fusion." -ForegroundColor Yellow
 }
 
 # 3. Ruleset des tags de version
@@ -287,6 +342,16 @@ Write-Host "Ce script va faire $($plan.Count) changement(s) sur $Depot :"
 $n = 0
 foreach ($etape in $plan) { $n++; Write-Host "  $n. $($etape.Titre)" }
 Write-Host ""
+if ($Montrer) {
+    foreach ($etape in $plan) {
+        if ($null -eq $etape.Corps) { continue }
+        Write-Host "Ce qui serait envoyé pour : $($etape.Titre)"
+        Write-Host ($etape.Corps | ConvertTo-Json -Depth 10)
+        Write-Host ""
+    }
+    Write-Host "Essai à blanc : rien n'a été modifié." -ForegroundColor Cyan
+    exit 0
+}
 $reponse = (Read-Host "Appliquer ? (o/N)").Trim()
 if ($reponse -notmatch '^[oO]') {
     Write-Host "Rien n'a été modifié."
