@@ -137,6 +137,33 @@ class Workflows(AvecFichierTemporaire):
             reglages.modifier_workflow("inexistant", {"steps": 3})
         self.assertFalse(fichier_reglages.fichier().exists())
 
+    def test_une_liste_montre_toujours_sa_valeur(self):
+        """Aucun checkpoint installé : la liste « Modèle par défaut » était vide, sa valeur n'était dans aucun de ses
+        choix, et l'onglet Réglages comptait ce champ vide comme « 1 changement non enregistré »."""
+        with mock.patch.object(workflows.Workflow, "variantes", return_value=[]):
+            e = reglages.etat()
+        listes_vues = 0
+        for bloc in [*e["workflows"], *e["llm"]]:
+            for p in bloc["params"]:
+                if p["type"] == "choix":
+                    listes_vues += 1
+                    self.assertIn(p["valeur"], p["choix"], f"{bloc.get('id', bloc.get('fichier'))} · {p['cle']}")
+        self.assertGreater(listes_vues, len(e["workflows"]))  # au moins « modele » partout, et d'autres listes
+
+    def test_sans_checkpoint_la_liste_dit_que_l_origine_n_est_pas_installee(self):
+        wf = workflows.obtenir("krea2_turbo")
+        with mock.patch.object(workflows.Workflow, "variantes", return_value=[]):
+            p = reglages.params_workflow(wf)["modele"]
+            valeurs = reglages.valeurs_workflow(wf)
+        self.assertEqual((p.choix, p.defaut, valeurs["modele"]), ((wf.modele_origine,), wf.modele_origine, wf.modele_origine))
+        self.assertEqual(p.public(valeurs["modele"])["libelles"], {wf.modele_origine: f"{wf.modele_origine} (pas installé)"})
+
+    def test_avec_des_checkpoints_la_liste_ne_propose_qu_eux(self):
+        wf = workflows.obtenir("krea2_turbo")
+        with mock.patch.object(workflows.Workflow, "variantes", return_value=["autre.safetensors"]):
+            p = reglages.params_workflow(wf)["modele"]
+        self.assertEqual((p.choix, p.defaut, p.libelles), (("autre.safetensors",), "autre.safetensors", ()))
+
     def test_samplers_annonces_par_comfyui(self):
         reglages.memoriser_samplers(["euler", "res_multistep", "sa_solver"], ["simple", "beta57"])
         p = reglages.params_workflow(workflows.obtenir("qwen_image_2_1"))
