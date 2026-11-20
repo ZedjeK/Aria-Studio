@@ -11,7 +11,11 @@ const media = (url, titre) => url.endsWith(".mp4")
 const CONTROLES = { anglais: "anglais", longueur: "longueur", sans_preambule: "sans préambule", texte_conserve: "texte gardé" };
 let bancAffiche = null;
 let suiviBanc = null;
-let tacheBanc = "texte_vers_image";  // la tâche du prochain casting (les pastilles)
+let tacheBanc = "texte_vers_image";  // la tâche du prochain casting (les cartes à onglet)
+let preparation = null;  // /api/bancs/preparation : ce que ferait un casting de chaque tâche
+let bancEnCours = false;
+const UNITES_BANC = { reecriture: "étape", image_vers_video: "clip", texte_vers_video: "clip" };  // sinon : image
+const nombreDe = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 let sousOngletCasting = "lancer";
 
 // Deux sous-onglets : lancer un casting, puis comparer ses résultats. L'encadré « À savoir » suit l'onglet actif
@@ -27,7 +31,10 @@ document.querySelectorAll("#vue-casting .sous-onglet").forEach((b) => {
 });
 
 async function chargerCasting() {
-    const { actif, bancs } = await api("GET", "/api/bancs");
+    const [{ actif, bancs }, prep] = await Promise.all([api("GET", "/api/bancs"), api("GET", "/api/bancs/preparation")]);
+    preparation = prep;
+    dessinerTaches();
+    dessinerPreparation();
     afficherProgression(actif);
 
     // Sur le sous-onglet « Comparer » : combien de castings attendent encore leurs notes.
@@ -52,12 +59,87 @@ async function chargerCasting() {
     chargerBanc();
 }
 
+// Nouveau casting : ce que le serveur annonce pour chaque tâche (app/casting.py, preparation)
+
+// « Lancer le casting » s'éteint pendant un casting, et quand celui de la tâche choisie ne peut pas partir.
+function majLancer() {
+    document.getElementById("lancer-banc").disabled = bancEnCours || Boolean(preparation?.taches[tacheBanc]?.blocage);
+}
+
+// Sous le nom de chaque carte : combien de modèles, et ce que le casting produirait ou ce qui l'en empêche.
+function dessinerTaches() {
+    for (const [tache, p] of Object.entries(preparation.taches)) {
+        const carte = document.querySelector(`#taches-banc input[value="${tache}"]`)?.closest("label");
+        if (!carte) continue;
+        const n = p.candidats.length;
+        const incomplets = p.candidats.filter((c) => c.manquants).length;
+        const mot = tache === "reecriture" ? "candidat" : "modèle";
+        const qui = nombreDe(n, mot);
+        carte.classList.toggle("seul", Boolean(p.blocage));
+        carte.querySelector("small").textContent = !p.blocage ? `${qui} · ${nombreDe(p.total, UNITES_BANC[tache] ?? "image")} à produire`
+            : n === 0 ? `aucun ${mot}` : n === 1 ? `1 seul ${mot} · rien à comparer`
+            : incomplets ? `${qui} · ${incomplets} incomplet${incomplets > 1 ? "s" : ""}` : "ne peut pas partir";
+    }
+}
+
+function dessinerPreparation() {
+    const p = preparation?.taches[tacheBanc];
+    if (!p) return;
+    const llm = tacheBanc === "reecriture";
+    const manque = (c) => c.manquants > 1 ? `${c.manquants} fichiers manquent` : "1 fichier manque";
+    // Le bouton ne porte que l'identifiant du modèle : sa tâche est celle de la page, ou Texte vers image pour le
+    // modèle de rendu du Casting LLM. Rien de ce qui est lu dans la page n'est réécrit dans le HTML.
+    const versModeles = (c, rendu = false) => c.manquants
+        ? `<button type="button" class="petit" data-ouvrir-modele="${echapper(c.id)}"${rendu ? " data-rendu" : ""}>Ouvrir dans Modèles</button>` : "";
+
+    document.getElementById("nom-tache-banc").textContent = NOMS_TACHES[tacheBanc];
+    document.getElementById("titre-candidats-banc").textContent = llm ? "Candidats comparés" : "Modèles comparés";
+    document.getElementById("candidats-banc").innerHTML = p.candidats.map((c) => `<li><strong>${echapper(c.nom)}</strong>
+        <span class="badge ${c.manquants ? "manque" : "ok"}">${c.manquants ? `incomplet · ${manque(c)}` : "prêt"}</span>
+        ${versModeles(c)}</li>`).join("") || '<li class="discret">Aucun candidat pour l\'instant.</li>';
+    document.getElementById("note-candidats-banc").innerHTML = !llm
+        ? "Tous les modèles de la tâche passent, dans un ordre tiré au hasard que tu ne vois pas."
+        : p.rendu ? `Chaque candidat réécrit les idées, puis ${echapper(p.rendu.nom)} les rend en image : c'est le modèle par défaut
+            de Texte vers image. ${versModeles(p.rendu, true)}` : "";
+
+    document.getElementById("titre-essais-banc").textContent = llm ? "Idées à réécrire" : "Jeu d'essai";
+    document.getElementById("essais-banc").innerHTML = p.essais.map((e) =>
+        `<span class="essai-banc" title="${echapper(e.prompt)}"><b>${echapper(e.id)}</b> <i>· ${echapper(e.teste)}</i></span>`).join("");
+    document.getElementById("note-essais-banc").textContent = llm ? `Une seed de rendu : ${p.seeds[0]}.`
+        : `${nombreDe(p.seeds.length, "seed")} par prompt : ${p.seeds.join(" et ")}. Les mêmes pour tous les modèles.`;
+    document.getElementById("bloc-sources-banc").hidden = !p.sources.length;
+    document.getElementById("sources-banc").innerHTML = p.sources.map((s) => `<figure>${s.presente
+        ? `<img src="/api/sources/${encodeURIComponent(s.nom)}" alt="" loading="lazy">` : '<span class="ko">absente</span>'}
+        <figcaption>${echapper(s.nom.replace(/\.png$/, ""))}</figcaption></figure>`).join("");
+
+    const n = p.candidats.length;
+    const compte = document.getElementById("compte-rendu-banc");
+    compte.hidden = n < 2;
+    compte.innerHTML = `<strong>${nombreDe(p.total, UNITES_BANC[tacheBanc] ?? "image")}</strong>
+        <span>${llm ? `${nombreDe(n, "candidat")} × ${nombreDe(p.essais.length, "idée")} : une réécriture, puis un rendu`
+            : `${nombreDe(n, "modèle")} × ${nombreDe(p.essais.length, "prompt")} × ${nombreDe(p.seeds.length, "seed")}`}</span>
+        <span class="discret">Les téléchargements sont suspendus pendant le casting.</span>`;
+    const blocage = document.getElementById("blocage-banc");
+    blocage.hidden = !p.blocage;
+    blocage.querySelector("span").textContent = p.blocage ? `${p.blocage}.` : "";
+    document.getElementById("etat-lancer-banc").textContent = p.blocage ? ""
+        : `Le casting démarre si moins de ${preparation.vram_max_occupee_go.toLocaleString("fr-FR")} Go de VRAM sont occupés.`;
+    majLancer();
+}
+
+// « Ouvrir dans Modèles » sur un modèle incomplet : sa carte, dans l'onglet d'usage de sa tâche (web/modeles.js).
+document.getElementById("carte-preparation").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ouvrir-modele]");
+    if (b) montrerWorkflow(b.dataset.ouvrirModele, "rendu" in b.dataset ? "texte_vers_image" : tacheBanc);
+});
+
 function afficherProgression(actif) {
     const bloc = document.getElementById("progression-banc");
     const erreur = document.getElementById("erreur-banc");
     const enCours = actif && ["attente", "en_cours"].includes(actif.etat);
     bloc.hidden = !enCours;
-    document.getElementById("lancer-banc").disabled = enCours;
+    bancEnCours = Boolean(enCours);
+    majLancer();
     erreur.hidden = !(actif && actif.etat === "erreur");
     if (actif && actif.etat === "erreur") erreur.textContent = actif.erreur;
     if (enCours) {
@@ -213,12 +295,11 @@ document.getElementById("banc").addEventListener("click", async (e) => {
     }
 });
 
-// Pastilles de tâche : la tâche du prochain casting.
-document.getElementById("taches-banc").addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-tache]");
-    if (!b) return;
-    tacheBanc = b.dataset.tache;
-    document.querySelectorAll("#taches-banc button").forEach((x) => x.classList.toggle("actif", x === b));
+// Cartes à onglet : la tâche du prochain casting.
+document.getElementById("taches-banc").addEventListener("change", (e) => {
+    tacheBanc = e.target.value;
+    document.getElementById("erreur-banc").hidden = true;
+    dessinerPreparation();
 });
 
 document.getElementById("historique-bancs").addEventListener("click", (e) => {

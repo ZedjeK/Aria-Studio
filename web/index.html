@@ -1243,30 +1243,55 @@
             </div>
             <div class="savoir" data-pour="#vue-casting .sous-onglets"><b>À SAVOIR</b><span></span></div>
 
-            <!-- Nouveau casting : le panneau accentué est celui sur lequel agit « Lancer le casting » -->
+            <!-- Nouveau casting : la tâche se choisit par cartes à onglet (un choix exclusif) ; « Ce casting » dit ce
+                 qui va tourner avant le clic. C'est le panneau accentué : « Lancer le casting » agit dessus. -->
             <div data-panneau-casting="lancer">
-            <section class="carte accent">
-                <h2>Lancer un casting</h2>
-                <div class="pastilles-taches" id="taches-banc" role="tablist" aria-label="Tâche à comparer">
-                    <button type="button" class="actif" data-tache="texte_vers_image">🖼️ Texte vers image</button>
-                    <button type="button" data-tache="retouche">🖌️ Retouche</button>
-                    <button type="button" data-tache="reecriture">💬 Écriture (LLM)</button>
-                    <button type="button" data-tache="image_vers_video">🎬 Image vers vidéo</button>
-                    <button type="button" data-tache="texte_vers_video">🎞️ Texte vers vidéo</button>
+            <section class="carte">
+                <h2>Tâche à comparer</h2>
+                <div class="cartes-mode" id="taches-banc" role="radiogroup" aria-label="Tâche à comparer">
+                    <label class="carte-mode"><input type="radio" name="tache-banc" value="texte_vers_image" checked>
+                        <strong>🖼️ Texte vers image</strong><small></small></label>
+                    <label class="carte-mode"><input type="radio" name="tache-banc" value="retouche">
+                        <strong>🖌️ Retouche</strong><small></small></label>
+                    <label class="carte-mode"><input type="radio" name="tache-banc" value="reecriture">
+                        <strong>💬 Écriture (LLM)</strong><small></small></label>
+                    <label class="carte-mode"><input type="radio" name="tache-banc" value="image_vers_video">
+                        <strong>🎬 Image vers vidéo</strong><small></small></label>
+                    <label class="carte-mode"><input type="radio" name="tache-banc" value="texte_vers_video">
+                        <strong>🎞️ Texte vers vidéo</strong><small></small></label>
                 </div>
-                <details class="options-casting">
-                    <summary>⚙️ Options du casting</summary>
-                    <p class="discret">Pour l'instant, le casting compare tous les modèles installés de la tâche choisie.
-                        Les futures options (choix des modèles à comparer, nombre de seeds, prompts de test) arriveront ici.</p>
-                </details>
-                <div class="ligne pied-casting">
-                    <button id="lancer-banc" class="principal">Lancer le casting</button>
+            </section>
+
+            <section class="carte accent" id="carte-preparation">
+                <h2>Ce casting <span class="discret" id="nom-tache-banc"></span></h2>
+                <div class="preparation-casting">
+                    <div>
+                        <h3 class="titre-bloc" id="titre-candidats-banc">Modèles comparés</h3>
+                        <ul class="liste" id="candidats-banc"></ul>
+                        <p class="discret" id="note-candidats-banc"></p>
+                    </div>
+                    <div>
+                        <h3 class="titre-bloc" id="titre-essais-banc">Jeu d'essai</h3>
+                        <div class="essais-banc" id="essais-banc"></div>
+                        <p class="discret" id="note-essais-banc"></p>
+                        <div id="bloc-sources-banc" hidden>
+                            <h3 class="titre-bloc">Images de départ</h3>
+                            <div class="sources-banc" id="sources-banc"></div>
+                            <p class="discret">Elles se remplacent depuis un casting Texte vers image : « Utiliser comme source », sous l'image qui te plaît.</p>
+                        </div>
+                    </div>
                 </div>
+                <p class="compte-rendu-banc" id="compte-rendu-banc"></p>
+                <p class="blocage-banc" id="blocage-banc" hidden><b>BLOQUÉ</b><span></span></p>
                 <div id="progression-banc" hidden>
                     <div class="barre"><div></div></div>
                     <span class="discret"></span>
                 </div>
                 <p id="erreur-banc" class="ko" hidden></p>
+                <div class="ligne pied-casting">
+                    <span class="discret" id="etat-lancer-banc"></span>
+                    <button id="lancer-banc" class="principal">Lancer le casting</button>
+                </div>
             </section>
             </div>
 
