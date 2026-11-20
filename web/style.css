@@ -3557,14 +3557,6 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 }
 
 /* Casting : pastilles de tâche, options, historique */
-.pastilles-taches { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
-.pastilles-taches button { border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted);
-    padding: .45rem 1rem; cursor: pointer; font: inherit; font-size: .85rem; }
-.pastilles-taches button:hover { color: var(--text); border-color: var(--line-strong); }
-.pastilles-taches button.actif { color: var(--accent); border-color: var(--accent); background: var(--hover); }
-.options-casting { border: 1px dashed var(--line-strong); border-radius: 10px; padding: .6rem .9rem; margin-bottom: 1rem; }
-.options-casting summary { cursor: pointer; color: var(--muted); }
-.options-casting[open] summary { color: var(--accent); margin-bottom: .5rem; }
 .pied-casting { justify-content: flex-end; }
 .historique-bancs { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .6rem; }
 .carte-banc { display: flex; flex-direction: column; gap: .2rem; text-align: left; background: var(--surface-sunken);
@@ -3816,7 +3808,7 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
 
 /* Mêmes segments pour les autres sélecteurs en boutons : ateliers et onglets du Scénario, types de modèles, tâches du
    Casting, filtres des galeries. */
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,label.bouton.petit,#telecharger-retouche,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])) {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.vue-rush,label.bouton.petit,#telecharger-retouche,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])) {
     border-radius: 0;
     border: 1px solid var(--line-strong);
     background: transparent;
@@ -3831,12 +3823,12 @@ button.badge-telechargements { margin-left: auto; border-radius: 999px; }
     clip-path: polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,label.bouton.petit,#telecharger-retouche,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])):hover:not(.actif):not(:disabled) {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.vue-rush,label.bouton.petit,#telecharger-retouche,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])):hover:not(.actif):not(:disabled) {
     border-color: var(--accent);
     color: var(--texte);
 }
 
-:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.pastilles-taches button,.vue-rush,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])).actif {
+:is(#vue-montage,#vue-plateau,#vue-scenario,#vue-modeles,#vue-casting,#vue-retouche) :is(.onglet-scenario,.onglet-idee,.onglet-liste,.choix-type button,.vue-rush,#ecrire-libre,#envoyer-prompt,#outils-pinceau button,button:not([class])).actif {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--bg);

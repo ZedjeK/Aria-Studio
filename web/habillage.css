@@ -722,6 +722,144 @@ body.large label.carte-mode:has(input:focus-visible) strong {
     text-decoration: underline;
 }
 
+/* ===== Casting → Nouveau casting : « Ce casting », ce qui va tourner avant le clic ===== */
+
+/* Cinq tâches : elles tiennent sur une ligne dans une fenêtre large. */
+body.large #vue-casting .cartes-mode {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+body.large #vue-casting .carte-mode.seul small {
+    color: var(--muted);
+}
+
+body.large #vue-casting .preparation-casting {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 28px;
+}
+
+#vue-casting .titre-bloc {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 10px;
+    color: var(--accent-2);
+    font: 600 0.7rem/1 var(--font-display);
+    letter-spacing: 0.18em;
+}
+
+#vue-casting .titre-bloc::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line-strong);
+}
+
+#candidats-banc li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+}
+
+#candidats-banc strong {
+    font: 600 0.92rem var(--font-display);
+}
+
+#candidats-banc button {
+    margin-left: auto;
+}
+
+#vue-casting .badge.manque {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+#vue-casting .essais-banc,
+#vue-casting .sources-banc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin-bottom: 8px;
+}
+
+#vue-casting .essai-banc {
+    padding: 3px 10px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-sunken);
+    font-size: 0.78rem;
+}
+
+#vue-casting .essai-banc i {
+    color: var(--muted);
+    font-style: normal;
+}
+
+#vue-casting .sources-banc figure {
+    width: 84px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-align: center;
+}
+
+#vue-casting .sources-banc img,
+#vue-casting .sources-banc figure > span {
+    display: grid;
+    place-items: center;
+    width: 84px;
+    height: 84px;
+    border: 1px solid var(--line-strong);
+    object-fit: cover;
+}
+
+#vue-casting .compte-rendu-banc {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    margin: 16px 0 0;
+    padding: 10px 14px;
+    border: 1px dashed var(--line-strong);
+    background: var(--surface-sunken);
+}
+
+#vue-casting .compte-rendu-banc strong {
+    color: var(--accent);
+    font: 600 1rem var(--font-display);
+}
+
+#vue-casting .compte-rendu-banc .discret {
+    margin-left: auto;
+}
+
+/* Ce qui empêche le casting de partir : en ambre, la couleur de ce qui est à regarder. */
+#vue-casting .blocage-banc {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 14px 0 0;
+    padding: 9px 14px;
+    border: 1px solid var(--warn);
+    background: color-mix(in srgb, var(--warn) 8%, var(--surface));
+    color: var(--warn);
+}
+
+#vue-casting .blocage-banc b {
+    flex: none;
+    font: 600 0.66rem var(--font-display);
+    letter-spacing: 0.16em;
+}
+
+#vue-casting .pied-casting {
+    margin-top: 16px;
+}
+
+#etat-lancer-banc {
+    margin-right: auto;
+}
+
 /* Casting → Comparer : le nombre de castings encore à l'aveugle, sur le sous-onglet. */
 body.large #vue-casting .compte-onglet {
     margin-left: 8px;
