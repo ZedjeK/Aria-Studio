@@ -25,6 +25,7 @@
   import Panneau from '../lib/composants/Panneau.svelte';
   import VideoCreation from '../lib/composants/VideoCreation.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
+  import MontageVoix from './MontageVoix.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -44,6 +45,8 @@
   let modele = $state('');
   let lignesLoras = $state<Record<string, LigneLora>>({});
   let commandes = $state<Commande[]>([]);
+  /** Change quand la file a enregistré quelque chose : la bibliothèque des voix se relit. */
+  let rafraichir = $state(0);
   let envoi = $state(false);
   /** Le clip montré. */
   let regarde = $state<string | null>(null);
@@ -55,8 +58,14 @@
   const estimation = $derived(
     options && choisie ? dureeLisible(estimationClips(choisie, duree, nombre, options.exposantDuree)) : '',
   );
-  const clips = $derived(commandes.filter((c) => c.type === 'clip'));
-  const derniers = $derived(clips.flatMap((c) => c.images).slice(-12).reverse());
+  const clips = $derived(commandes.filter((c) => c.type === 'clip' || c.type === 'voix'));
+  const derniers = $derived(
+    clips
+      .filter((c) => c.type === 'clip')
+      .flatMap((c) => c.images)
+      .slice(-12)
+      .reverse(),
+  );
   const peutTourner = $derived(
     !envoi &&
       workflow !== undefined &&
@@ -88,7 +97,9 @@
 
   async function relireCommandes() {
     try {
+      const avant = commandes.reduce((total, c) => total + c.images.length, 0);
       commandes = await lireCommandes();
+      if (commandes.reduce((total, c) => total + c.images.length, 0) !== avant) rafraichir += 1;
     } catch (e) {
       signaler(messageErreur(e), true);
     }
@@ -144,7 +155,8 @@
 <p class="sous-titre">Tourne des clips avec le son, en animant un rush ou à partir d'un texte.</p>
 <ASavoir>
   Le prompt est tourné tel quel : écris-le au Scénario pour qu'un LLM le prépare, ou directement ici. Un clip prend la
-  carte graphique plusieurs minutes ; l'estimation vient des mesures de la version 2, sur une RTX 4080.
+  carte graphique plusieurs minutes ; l'estimation vient des mesures de la version 2, sur une RTX 4080. Les voix
+  gardées serviront de référence aux séquences.
 </ASavoir>
 
 {#if options && !workflow}
@@ -261,6 +273,8 @@
     </ul>
   </Panneau>
 {/if}
+
+<MontageVoix {signaler} enFile={() => void relireCommandes()} {rafraichir} />
 
 {#if derniers.length > 0}
   <Panneau titre="Derniers clips">

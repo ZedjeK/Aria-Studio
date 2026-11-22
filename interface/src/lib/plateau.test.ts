@@ -88,6 +88,7 @@ function commande(changements: Partial<Commande>): Commande {
     modeVideo: null,
     qualite: null,
     duree: null,
+    description: '',
     ...changements,
   };
 }

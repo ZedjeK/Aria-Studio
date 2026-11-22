@@ -97,6 +97,12 @@ fn main() {
         "options_montage",
         "commander_clip",
         "video_creation",
+        "lire_voix",
+        "essayer_voix",
+        "garder_voix",
+        "supprimer_voix",
+        "importer_voix",
+        "son_voix",
     ]);
     let attributs = tauri_build::Attributes::new().app_manifest(commandes);
     if let Err(erreur) = tauri_build::try_build(attributs) {

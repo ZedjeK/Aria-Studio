@@ -10,6 +10,7 @@ use aria_coeur::montage::{self, DemandeClip, OptionsMontage};
 use aria_coeur::plateau::{Commande, Contexte, Demande, Options, Plateau};
 use aria_coeur::retouche::{self, DemandeAgrandissement, DemandeRetouche};
 use aria_coeur::rushes::{self, EtatRushes};
+use aria_coeur::voix;
 use aria_coeur::{creations, journal};
 use serde_json::Value;
 use tauri::State;
@@ -238,6 +239,74 @@ pub async fn video_creation(plateau: State<'_, Arc<Plateau>>, id: String) -> Res
         std::fs::read(&chemin)
             .map(Response::new)
             .map_err(|e| format!("vidéo de {id} illisible : {e}"))
+    })
+    .await
+}
+
+/// Les voix de la bibliothèque (et les brouillons si demandé), et ce que l'interface doit savoir d'elles.
+#[tauri::command]
+pub async fn lire_voix(
+    plateau: State<'_, Arc<Plateau>>,
+    brouillons: bool,
+) -> Result<(Vec<voix::Voix>, voix::OptionsVoix), String> {
+    hors_interface(&plateau, move |p| {
+        let c = p.contexte();
+        Ok((voix::liste(&c.data, brouillons), voix::options(c)))
+    })
+    .await
+}
+
+/// Lance un essai de voix (un gros plan en cabine, dont seul le son est gardé).
+#[tauri::command]
+pub async fn essayer_voix(
+    plateau: State<'_, Arc<Plateau>>,
+    demande: voix::DemandeEssai,
+) -> Result<Commande, String> {
+    hors_interface(&plateau, move |p| p.commander_voix(&demande)).await
+}
+
+/// Garde un essai sous un nom, ou renomme une voix.
+#[tauri::command]
+pub async fn garder_voix(
+    plateau: State<'_, Arc<Plateau>>,
+    id: String,
+    nom: String,
+) -> Result<voix::Voix, String> {
+    hors_interface(&plateau, move |p| voix::garder(&p.contexte().data, &id, &nom)).await
+}
+
+/// Met une voix à la corbeille.
+#[tauri::command]
+pub async fn supprimer_voix(plateau: State<'_, Arc<Plateau>>, id: String) -> Result<(), String> {
+    hors_interface(&plateau, move |p| {
+        voix::supprimer(&p.contexte().data, &id).map(|_| ())
+    })
+    .await
+}
+
+/// Une voix enregistrée par l'utilisateur (data URL), gardée aussitôt.
+#[tauri::command]
+pub async fn importer_voix(
+    plateau: State<'_, Arc<Plateau>>,
+    son: String,
+    nom: String,
+    nom_origine: String,
+) -> Result<voix::Voix, String> {
+    hors_interface(&plateau, move |p| {
+        let octets = images::depuis_data_url(&son).map_err(|_| "Fichier audio illisible".to_owned())?;
+        voix::importer(&p.contexte().data, &octets, &nom, &nom_origine)
+    })
+    .await
+}
+
+/// Le son d'une voix, en octets.
+#[tauri::command]
+pub async fn son_voix(plateau: State<'_, Arc<Plateau>>, id: String) -> Result<Response, String> {
+    hors_interface(&plateau, move |p| {
+        let (chemin, _) = voix::son(&p.contexte().data, &id)?;
+        std::fs::read(&chemin)
+            .map(Response::new)
+            .map_err(|e| format!("son de la voix {id} illisible : {e}"))
     })
     .await
 }
