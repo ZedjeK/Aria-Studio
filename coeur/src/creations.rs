@@ -229,6 +229,27 @@ pub fn supprimer(data: &Path, id: &str) -> Result<(), String> {
     fs::remove_file(dossier.join(format!("{id}.json"))).map_err(|e| format!("{id}.json : {e}"))
 }
 
+/// Ce que montre une image d'après sa fiche, pour un LLM qui ne la voit pas : le prompt d'une création ou d'un clip ;
+/// pour une retouche ou un agrandissement, celui de l'image d'origine puis la retouche. Rien pour une image importée,
+/// ni si l'image d'origine a été supprimée.
+pub fn description(data: &Path, fiche: &Value, profondeur: u32) -> Option<String> {
+    let texte = |cle: &str| fiche.get(cle).and_then(Value::as_str).filter(|t| !t.is_empty());
+    match texte("type") {
+        Some("creation" | "clip") => texte("prompt").map(str::to_owned),
+        Some(genre @ ("retouche" | "agrandissement")) if profondeur > 0 => {
+            let parent = self::fiche(data, texte("parent")?).ok()?;
+            let origine = description(data, &parent, profondeur - 1)?;
+            let retouche = if genre == "retouche" {
+                texte("prompt").unwrap_or_default()
+            } else {
+                "outpainted to a wider view"
+            };
+            Some(format!("{origine} Then edited: {retouche}"))
+        }
+        _ => None,
+    }
+}
+
 /// Idées et prompts des créations données et de leurs ancêtres (parents, références), pour le filtre AS-18 : il ne
 /// lit pas les images, alors une création faite avec un personnage mineur le reste quand on la réutilise.
 ///
@@ -406,6 +427,43 @@ mod tests {
         supprimer(temp.path(), &id).unwrap();
         assert_eq!(fs::read_dir(&dossier).unwrap().count(), 0);
         assert!(supprimer(temp.path(), &id).is_err());
+    }
+
+    #[test]
+    fn description_pour_un_llm_aveugle() {
+        let temp = tempfile::tempdir().unwrap();
+        let d = temp.path();
+        let base = enregistrer(
+            d,
+            &png(8, 8),
+            &infos(json!({"type": "creation", "prompt": "a red fox"})),
+        )
+        .unwrap();
+        let retouchee = enregistrer(
+            d,
+            &png(8, 8),
+            &infos(json!({"type": "retouche", "prompt": "make it smile", "parent": base})),
+        )
+        .unwrap();
+        let agrandie = enregistrer(
+            d,
+            &png(8, 8),
+            &infos(json!({"type": "agrandissement", "parent": retouchee})),
+        )
+        .unwrap();
+        let lire = |id: &str| description(d, &fiche(d, id).unwrap(), 3);
+        assert_eq!(lire(&base).as_deref(), Some("a red fox"));
+        assert_eq!(
+            lire(&retouchee).as_deref(),
+            Some("a red fox Then edited: make it smile")
+        );
+        assert_eq!(
+            lire(&agrandie).as_deref(),
+            Some("a red fox Then edited: make it smile Then edited: outpainted to a wider view")
+        );
+        let importee = enregistrer(d, &png(8, 8), &infos(json!({"type": "import", "prompt": ""}))).unwrap();
+        assert_eq!(lire(&importee), None);
+        assert_eq!(description(d, &fiche(d, &retouchee).unwrap(), 0), None);
     }
 
     #[test]

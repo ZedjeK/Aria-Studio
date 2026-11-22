@@ -24,6 +24,7 @@ use crate::comfy_serveur::{ANNULEE, Fichier};
 use crate::llama::{self, Lancement};
 use crate::llm::{self, Lieux};
 use crate::orchestrateur::Orchestrateur;
+use crate::retouche::{self, DemandeAgrandissement, DemandeRetouche};
 use crate::workflows::{self, FORMATS, ReglagesWorkflow, Workflow};
 use crate::{Dossier, creations, fiches, prompt, reglages, securite};
 
@@ -76,6 +77,9 @@ pub struct Demande {
 #[serde(rename_all = "camelCase")]
 pub struct Commande {
     pub id: String,
+    /// `creation`, `retouche` ou `agrandissement`.
+    #[serde(rename = "type")]
+    pub genre: String,
     /// Ce que l'utilisateur a écrit.
     pub idee: String,
     /// Le prompt envoyé au modèle : l'idée telle quelle, ou vide tant que le LLM ne l'a pas réécrite.
@@ -96,6 +100,54 @@ pub struct Commande {
     /// Les créations enregistrées.
     pub images: Vec<String>,
     pub erreur: Option<String>,
+    /// L'image de départ d'une retouche ou d'un agrandissement.
+    pub parent: Option<String>,
+    /// Le masque peint (PNG) d'une retouche ; il ne part pas vers l'interface.
+    #[serde(skip)]
+    pub masque_png: Option<Vec<u8>>,
+    /// Un masque a été peint.
+    pub masque: bool,
+    /// Le fondu du recollage, en pixels.
+    pub fondu: u32,
+    /// La taille visée d'un agrandissement.
+    pub largeur: Option<u32>,
+    pub hauteur: Option<u32>,
+    pub ancrage: Option<String>,
+    /// Le format auquel la source d'une retouche est recadrée au centre.
+    pub cadrage: Option<String>,
+}
+
+impl Commande {
+    /// Une commande en attente, sans rien de réglé.
+    pub(crate) fn nouvelle(id: String, genre: &str, idee: String, workflow: String, format: &str) -> Self {
+        Self {
+            id,
+            genre: genre.to_owned(),
+            idee,
+            prompt: String::new(),
+            reecrire: false,
+            llm: None,
+            workflow,
+            format: format.to_owned(),
+            seed: None,
+            nombre: 1,
+            modele: None,
+            etat: EtatCommande::Attente,
+            annulee: false,
+            etape: String::new(),
+            progression: 0.0,
+            images: Vec::new(),
+            erreur: None,
+            parent: None,
+            masque_png: None,
+            masque: false,
+            fondu: 0,
+            largeur: None,
+            hauteur: None,
+            ancrage: None,
+            cadrage: None,
+        }
+    }
 }
 
 /// Un workflow proposé par le Plateau.
@@ -178,6 +230,12 @@ pub trait Generateur: Send + 'static {
     /// llama-server ne démarre pas, refuse la demande, ou rend une réponse vide.
     fn ecrire(&mut self, lancement: Lancement, demande: &llama::Demande) -> Result<llama::Reponse, String>;
 
+    /// Téléverse une image dans ComfyUI ; rend le nom sous lequel le graphe la retrouve.
+    ///
+    /// # Errors
+    /// ComfyUI ne démarre pas ou refuse l'image.
+    fn televerser(&mut self, nom: &str, octets: &[u8]) -> Result<String, String>;
+
     /// Exécute le graphe et rend ses fichiers de sortie.
     ///
     /// # Errors
@@ -198,6 +256,13 @@ impl Generateur for Arc<Mutex<Orchestrateur>> {
             .lock()
             .map_err(|_| "orchestrateur des moteurs indisponible".to_owned())?;
         orchestrateur.llm(lancement)?.generer(demande)
+    }
+
+    fn televerser(&mut self, nom: &str, octets: &[u8]) -> Result<String, String> {
+        let mut orchestrateur = self
+            .lock()
+            .map_err(|_| "orchestrateur des moteurs indisponible".to_owned())?;
+        orchestrateur.comfyui()?.televerser(nom, octets)
     }
 
     fn generer(
@@ -447,6 +512,14 @@ fn nouvel_id() -> Result<String, String> {
     Ok(format!("{:012x}", aleatoire(6)?))
 }
 
+/// Une seed tirée au hasard, sous 2⁴⁸ comme en v2.
+///
+/// # Errors
+/// Le système ne donne pas d'aléa.
+pub(crate) fn seed_au_hasard() -> Result<u64, String> {
+    Ok(aleatoire(6)? % SEED_MAX)
+}
+
 /// L'état partagé entre les commandes de l'interface et le fil du Plateau.
 #[derive(Debug, Default)]
 struct File {
@@ -472,6 +545,55 @@ impl Partage {
         if let Some(c) = self.file().commandes.iter_mut().find(|c| c.id == id) {
             modification(c);
         }
+    }
+}
+
+/// Le suivi d'une commande en cours, pour ce qui l'exécute : étape, avancement, prompt écrit, images enregistrées,
+/// annulation.
+pub struct Suivi<'a> {
+    partage: &'a Partage,
+    id: &'a str,
+}
+
+impl Suivi<'_> {
+    pub fn etape(&self, etape: &str) {
+        self.partage.modifier(self.id, |c| etape.clone_into(&mut c.etape));
+    }
+
+    pub fn prompt(&self, prompt: &str) {
+        self.partage
+            .modifier(self.id, |c| prompt.clone_into(&mut c.prompt));
+    }
+
+    pub fn progression(&self, part: f64) {
+        self.partage
+            .modifier(self.id, |c| c.progression = part.clamp(0.0, 1.0));
+    }
+
+    /// L'avancement donné par ComfyUI (valeur sur maximum).
+    pub fn progression_de(&self, valeur: u64, maximum: u64) {
+        if maximum > 0 {
+            #[allow(clippy::cast_precision_loss)] // une barre de progression
+            let part = valeur as f64 / maximum as f64;
+            self.progression(part);
+        }
+    }
+
+    pub fn image(&self, id: String) {
+        self.partage.modifier(self.id, |c| {
+            c.images.push(id);
+            c.progression = 1.0;
+        });
+    }
+
+    /// ✕ Annuler a été demandé.
+    pub fn annulee(&self) -> bool {
+        self.partage.annule.load(Ordering::Relaxed)
+    }
+
+    /// Le drapeau d'annulation, que ComfyUI surveille.
+    pub fn drapeau(&self) -> &AtomicBool {
+        &self.partage.annule
     }
 }
 
@@ -527,28 +649,51 @@ impl Plateau {
     /// Voir [`valider`] ; ou le fil du Plateau est arrêté.
     pub fn commander(&self, demande: &Demande) -> Result<Commande, String> {
         let validee = valider(&self.contexte, demande)?;
-        let commande = Commande {
-            id: nouvel_id()?,
-            prompt: if demande.reecrire {
-                String::new()
-            } else {
-                validee.texte.clone()
-            },
-            idee: validee.texte,
-            reecrire: demande.reecrire,
-            llm: validee.llm,
-            workflow: validee.workflow,
-            format: demande.format.clone(),
-            seed: demande.seed,
-            nombre: demande.nombre,
-            modele: demande.modele.clone(),
-            etat: EtatCommande::Attente,
-            annulee: false,
-            etape: String::new(),
-            progression: 0.0,
-            images: Vec::new(),
-            erreur: None,
-        };
+        let mut commande = Commande::nouvelle(
+            nouvel_id()?,
+            "creation",
+            validee.texte.clone(),
+            validee.workflow,
+            &demande.format,
+        );
+        if !demande.reecrire {
+            commande.prompt = validee.texte;
+        }
+        commande.reecrire = demande.reecrire;
+        commande.llm = validee.llm;
+        commande.seed = demande.seed;
+        commande.nombre = demande.nombre;
+        commande.modele.clone_from(&demande.modele);
+        self.mettre_en_file(commande)
+    }
+
+    /// Contrôle une demande de retouche et la met en file.
+    ///
+    /// # Errors
+    /// Voir [`retouche::commande_retouche`] ; ou le fil du Plateau est arrêté.
+    pub fn commander_retouche(&self, demande: &DemandeRetouche) -> Result<Commande, String> {
+        let commande = retouche::commande_retouche(&self.contexte, demande, nouvel_id()?)?;
+        self.mettre_en_file(commande)
+    }
+
+    /// Contrôle une demande d'agrandissement et la met en file.
+    ///
+    /// # Errors
+    /// Voir [`retouche::commande_agrandissement`] ; ou le fil du Plateau est arrêté.
+    pub fn commander_agrandissement(&self, demande: &DemandeAgrandissement) -> Result<Commande, String> {
+        let commande = retouche::commande_agrandissement(&self.contexte, demande, nouvel_id()?)?;
+        self.mettre_en_file(commande)
+    }
+
+    /// Ajoute une image personnelle aux créations ; rend son identifiant.
+    ///
+    /// # Errors
+    /// Voir [`retouche::importer`].
+    pub fn importer(&self, octets: &[u8], nom: &str) -> Result<String, String> {
+        retouche::importer(&self.contexte, octets, nom)
+    }
+
+    fn mettre_en_file(&self, commande: Commande) -> Result<Commande, String> {
         self.partage.file().commandes.push(commande.clone());
         self.envoi
             .send(commande.id.clone())
@@ -627,6 +772,10 @@ fn executer(
     partage: &Partage,
     c: &Commande,
 ) -> Result<(), String> {
+    if c.genre != "creation" {
+        let suivi = Suivi { partage, id: &c.id };
+        return retouche::executer(contexte, generateur, &suivi, c);
+    }
     // Relu au moment de générer : des ajouts écrits entre-temps comptent.
     let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
     filtre
@@ -660,7 +809,7 @@ fn executer(
     });
     let base = match c.seed {
         Some(seed) => seed,
-        None => aleatoire(6)? % SEED_MAX,
+        None => seed_au_hasard()?,
     };
     for i in 0..c.nombre {
         if partage.annule.load(Ordering::Relaxed) {
@@ -792,11 +941,20 @@ mod tests {
     struct Faux {
         recus: Arc<Mutex<Vec<Value>>>,
         ecrits: Arc<Mutex<Vec<(Lancement, llama::Demande)>>>,
+        televerses: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
         erreur: Option<String>,
         attente: Duration,
     }
 
     impl Generateur for Faux {
+        fn televerser(&mut self, nom: &str, octets: &[u8]) -> Result<String, String> {
+            self.televerses
+                .lock()
+                .unwrap()
+                .push((nom.to_owned(), octets.to_vec()));
+            Ok(format!("televerse/{nom}"))
+        }
+
         fn ecrire(
             &mut self,
             lancement: Lancement,
@@ -843,6 +1001,7 @@ mod tests {
             Faux {
                 recus: Arc::clone(&recus),
                 ecrits: Arc::new(Mutex::new(Vec::new())),
+                televerses: Arc::new(Mutex::new(Vec::new())),
                 erreur: erreur.map(str::to_owned),
                 attente,
             },
