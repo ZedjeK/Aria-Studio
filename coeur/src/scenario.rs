@@ -45,7 +45,11 @@ pub struct Ecrit {
     pub llm: String,
 }
 
-fn verifier_llm(contexte: &Contexte, choisi: Option<&str>) -> Result<(), String> {
+/// Un LLM choisi doit être dans `modeles\llm`.
+///
+/// # Errors
+/// GGUF absent.
+pub(crate) fn verifier_llm(contexte: &Contexte, choisi: Option<&str>) -> Result<(), String> {
     match choisi.filter(|l| !l.is_empty()) {
         Some(l) if !llm::disponibles(&contexte.modeles).iter().any(|d| d == l) => {
             Err(format!("GGUF absent de modeles/llm : {l}"))

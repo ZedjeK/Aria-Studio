@@ -162,6 +162,51 @@ pub fn repliques(texte: &str) -> Vec<String> {
     })
 }
 
+/// Une réplique trouvée dans un texte : sa place (octets), son contenu, et si elle est dans une balise `<d>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Repere {
+    pub debut: usize,
+    pub fin: usize,
+    pub contenu: String,
+    pub balise: bool,
+}
+
+/// Les répliques d'un texte, avec leur place.
+pub fn reperes(texte: &str) -> Vec<Repere> {
+    motif(&REPLIQUES).map_or_else(Vec::new, |r| {
+        r.captures_iter(texte)
+            .filter_map(|c| {
+                let tout = c.get(0)?;
+                let contenu = (1..=4).find_map(|i| c.get(i))?.as_str().trim().to_owned();
+                Some(Repere {
+                    debut: tout.start(),
+                    fin: tout.end(),
+                    contenu,
+                    balise: c.get(1).is_some(),
+                })
+            })
+            .collect()
+    })
+}
+
+/// Fin de phrase : le point peut être suivi de la balise fermante ou d'un guillemet fermant.
+static FIN_PHRASE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r#"(?i)[.!?…](?:</d>|["”»])?(?:\s|$)"#).ok());
+
+/// Les fins de phrase d'un texte (position juste après chacune).
+pub fn fins_de_phrase(texte: &str) -> Vec<usize> {
+    motif(&FIN_PHRASE).map_or_else(Vec::new, |r| r.find_iter(texte).map(|m| m.end()).collect())
+}
+
+/// La première fin de phrase à partir de `depuis` (position juste après), s'il y en a une.
+pub fn fin_de_phrase_depuis(texte: &str, depuis: usize) -> Option<usize> {
+    let mut depuis = depuis.min(texte.len());
+    while !texte.is_char_boundary(depuis) {
+        depuis -= 1;
+    }
+    motif(&FIN_PHRASE)?.find_at(texte, depuis).map(|m| m.end())
+}
+
 // --- champs d'un prompt H3 -------------------------------------------------------------------------------------------
 
 pub const CHAMP_DESCRIPTION: &str = "integrated_multimodal_description";

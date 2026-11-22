@@ -60,11 +60,14 @@
     enFile: () => void;
     /** Change quand la file a fini quelque chose : la séquence ouverte se relit (ses plans tournés). */
     rafraichir: number;
-    /** Une séquence à ouvrir (depuis un plan ou un film des Bobines) ; remis à null une fois pris en compte. */
+    /** Une séquence à ouvrir (depuis un plan ou un film des Bobines, ou le Scénario) ; remis à null une fois pris en
+     * compte. */
     ouvrir?: string | null;
+    /** La séquence repart au Scénario (atelier Séquence) pour être retravaillée. */
+    retravailler?: (s: Sequence) => void;
   }
 
-  let { signaler, options, workflow, enFile, rafraichir, ouvrir = $bindable(null) }: Props = $props();
+  let { signaler, options, workflow, enFile, rafraichir, ouvrir = $bindable(null), retravailler }: Props = $props();
   let cadre = $state<HTMLElement | null>(null);
 
   /** Une question avant d'agir (abandon de modifications, corbeille, vidage). */
@@ -616,6 +619,17 @@
           : 'Tous les plans sont à jour'} · film d'environ {dureeFilm} s
       </span>
       <Bouton genre="discret" desactive={bloque || !courante.id} onclick={mettreALaCorbeille}>Corbeille</Bouton>
+      {#if retravailler}
+        <Bouton
+          genre="discret"
+          desactive={bloque || !courante.id || nonEnregistree}
+          onclick={() => {
+            if (courante) retravailler?.($state.snapshot(courante));
+          }}
+        >
+          ✍️ Au Scénario
+        </Bouton>
+      {/if}
       <Bouton desactive={bloque} onclick={() => void enregistrer()}>Enregistrer</Bouton>
       <Bouton genre="principal" desactive={bloque || workflow.modeles.length === 0} onclick={() => void tourner()}>
         {indices.length > 0 ? 'Tourner la séquence' : 'Tout retourner'}

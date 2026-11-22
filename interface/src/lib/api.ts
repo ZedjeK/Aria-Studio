@@ -1464,3 +1464,66 @@ export const viderCorbeilleSequences = (): Promise<number> => invoke<number>('vi
 /** Tourne les plans demandés (tous ceux qui ne sont pas à jour si la liste est vide), puis assemble le film. */
 export const tournerSequence = (id: string, plans: number[]): Promise<Commande> =>
   invoke<Commande>('tourner_sequence', { id, plans });
+
+// --- Scénario : atelier Séquence (aria_coeur::decoupage) ---
+
+/** Le moment de la réplique dans le plan. */
+export type MomentReplique = 'debut' | 'pendant' | 'fin';
+
+/** La contrainte et sa traduction anglaise, reprise tant qu'elle vaut. */
+export interface TraductionContrainte {
+  fr: string;
+  en: string;
+}
+
+/** Un plan tel que l'atelier l'envoie au LLM. */
+export interface PlanDemandeDecoupage {
+  enchainement: Enchainement;
+  duree: number;
+  note: string;
+  rush: string | null;
+  replique: string;
+  moment: MomentReplique;
+  off: boolean;
+  /** Le prompt déjà écrit : le contexte des plans voisins. */
+  prompt: string;
+}
+
+/** ✨ Tout écrire (`plan` : null) ou ✨ d'un plan (son numéro, 0 pour le premier). */
+export interface DemandeDecoupage {
+  synopsis: string;
+  sujet: string;
+  choix: ChoixListes;
+  age: number | null;
+  plans: PlanDemandeDecoupage[];
+  reference: string | null;
+  contrainte: string;
+  llm: string | null;
+  /** La musique d'ambiance ; null : pas de musique de fond. */
+  musique: string | null;
+  plan: number | null;
+  contrainteEn: TraductionContrainte | null;
+  /** Le format de la séquence, si le premier plan part du texte. */
+  format: string | null;
+}
+
+/** Un plan écrit : le plan contrôlé, son prompt et son résumé en français. */
+export interface PlanEcrit extends PlanDemandeDecoupage {
+  idee: string;
+}
+
+export interface Decoupe {
+  plans: PlanEcrit[];
+  cible: number | null;
+  alertes: string[];
+  dureeS: number;
+  reference: string | null;
+  contrainte: string;
+  contrainteEn: TraductionContrainte | null;
+  /** Le GGUF qui a écrit. */
+  llm: string;
+}
+
+/** Le LLM écrit les prompts des plans ; les garde-fous du cœur les contrôlent. */
+export const decouperSequence = (demande: DemandeDecoupage): Promise<Decoupe> =>
+  invoke<Decoupe>('decouper_sequence', { demande });

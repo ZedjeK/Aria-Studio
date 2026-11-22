@@ -11,6 +11,7 @@ pub mod comfy;
 pub mod comfy_serveur;
 pub mod conversation;
 pub mod creations;
+pub mod decoupage;
 pub mod decouvrir;
 pub mod demarrage;
 pub mod donnees;

@@ -16,6 +16,7 @@
     type Identite,
     type InfosMiseAJour,
     type Reglages,
+    type Sequence,
   } from './lib/api';
   import type { Pastille } from './lib/menu';
   import Bandeau from './lib/composants/Bandeau.svelte';
@@ -70,6 +71,9 @@
   let page = $state<Page>('accueil');
   /** Un prompt écrit au Scénario, en route vers le Plateau. */
   let versPlateau = $state<{ prompt: string; workflow: string | null } | null>(null);
+  /** Une séquence écrite au Scénario, à ouvrir au Montage ; une séquence du Montage, à retravailler au Scénario. */
+  let versMontage = $state<string | null>(null);
+  let versScenario = $state<Sequence | null>(null);
   let fraction = $state<number | null>(null);
   let mesure = $state('');
   let miseAJour = $state<InfosMiseAJour | null>(null);
@@ -179,13 +183,27 @@
             versPlateau = { prompt, workflow };
             page = 'plateau';
           }}
+          versMontage={(id) => {
+            versMontage = id;
+            page = 'montage';
+          }}
+          recuSequence={versScenario}
+          recuLu={() => (versScenario = null)}
         />
       {:else if page === 'plateau'}
         <Plateau {signaler} recu={versPlateau} recuLu={() => (versPlateau = null)} />
       {:else if page === 'retouche'}
         <Retouche {signaler} />
       {:else if page === 'montage'}
-        <Montage {signaler} />
+        <Montage
+          {signaler}
+          recu={versMontage}
+          recuLu={() => (versMontage = null)}
+          retravailler={(s) => {
+            versScenario = s;
+            page = 'scenario';
+          }}
+        />
       {:else if page === 'modeles'}
         <Modeles {signaler} />
       {:else if page === 'reglages'}

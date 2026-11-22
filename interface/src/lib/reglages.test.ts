@@ -43,6 +43,7 @@ describe('Réglages', () => {
     expect(libelleChoix(moteur, 'auto')).toBe('Automatique');
     expect(libelleChoix(moteur, 'llama')).toBe('llama');
     expect(nomConsigne('retouche')).toBe('Consigne de retouche');
+    expect(nomConsigne('decoupage')).toBe('Découpage d’une séquence');
     expect(nomConsigne('autre')).toBe('autre');
   });
 });

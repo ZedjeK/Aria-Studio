@@ -192,6 +192,7 @@ fn lancer() -> Result<(), String> {
             scenario::assembler_prompt,
             scenario::ecrire_prompt_scenario,
             scenario::traduire_precisions,
+            scenario::decouper_sequence,
             scenario::lire_personnages,
             scenario::enregistrer_personnage,
             scenario::supprimer_personnage,

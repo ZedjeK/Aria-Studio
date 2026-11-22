@@ -17,6 +17,7 @@
     type Commande,
     type Creation,
     type OptionsMontage,
+    type Sequence,
   } from '../lib/api';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import { dureeLisible, estimationClips } from '../lib/montage';
@@ -33,9 +34,14 @@
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
+    /** Une séquence écrite au Scénario, à ouvrir ici. */
+    recu: string | null;
+    recuLu: () => void;
+    /** Une séquence repart au Scénario pour être retravaillée. */
+    retravailler: (s: Sequence) => void;
   }
 
-  let { signaler }: Props = $props();
+  let { signaler, recu, recuLu, retravailler }: Props = $props();
 
   let options = $state<OptionsMontage | null>(null);
   let mode = $state<'animer' | 'texte'>('animer');
@@ -197,6 +203,10 @@
   }
 
   onMount(() => {
+    if (recu) {
+      sequenceAOuvrir = recu;
+      recuLu();
+    }
     void relireOptions();
     void relireCommandes();
     const minuterie = setInterval(() => {
@@ -339,6 +349,7 @@
     enFile={() => void relireCommandes()}
     {rafraichir}
     bind:ouvrir={sequenceAOuvrir}
+    {retravailler}
   />
 {/if}
 
