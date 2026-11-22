@@ -290,6 +290,10 @@ export interface Creation {
   format?: string | null;
   seed?: number | null;
   loras?: ChoixLora[];
+  /** Un clip du Montage : `animer`, `texte`, un plan de `sequence` ou le `film` assemblé. */
+  mode_video?: string | null;
+  /** La séquence d'un plan ou d'un film. */
+  sequence?: string | null;
   duree_s?: number;
   /** Rangement des Rushes : dossier, archive, date de mise à la corbeille. */
   dossier?: string;
@@ -946,26 +950,33 @@ export interface EtatRushes {
   dossiers: { nom: string; nombre: number }[];
 }
 
-/** Les rushes d'une vue, ou d'un dossier (vue « tous »), les plus récents d'abord. */
-export const lireRushes = (vue: VueRushes, dossier: string | null): Promise<Creation[]> =>
-  invoke<Creation[]>('lire_rushes', { vue, dossier });
+/** Rushes du Plateau (images) ou Bobines du Montage (clips) : chacun ses dossiers (aria_coeur::rushes::GENRES). */
+export type GenreRushes = 'images' | 'clips';
 
-export const etatRushes = (): Promise<EtatRushes> => invoke<EtatRushes>('etat_rushes');
+/** Les rushes d'une vue, ou d'un dossier (vue « tous »), les plus récents d'abord. */
+export const lireRushes = (vue: VueRushes, dossier: string | null, genre: GenreRushes = 'images'): Promise<Creation[]> =>
+  invoke<Creation[]>('lire_rushes', { vue, dossier, genre });
+
+export const etatRushes = (genre: GenreRushes = 'images'): Promise<EtatRushes> =>
+  invoke<EtatRushes>('etat_rushes', { genre });
 
 /** Applique une action à une sélection ; rend le nombre de rushes modifiés. `dossier` : pour « ranger » (null : Non rangés). */
 export const agirRushes = (ids: string[], action: ActionRushes, dossier: string | null): Promise<number> =>
   invoke<number>('agir_rushes', { ids, action, dossier });
 
 /** Supprime pour de bon les rushes de la corbeille ; rend leur nombre. */
-export const viderCorbeille = (): Promise<number> => invoke<number>('vider_corbeille');
+export const viderCorbeille = (genre: GenreRushes = 'images'): Promise<number> =>
+  invoke<number>('vider_corbeille', { genre });
 
-export const creerDossier = (nom: string): Promise<string> => invoke<string>('creer_dossier', { nom });
+export const creerDossier = (nom: string, genre: GenreRushes = 'images'): Promise<string> =>
+  invoke<string>('creer_dossier', { nom, genre });
 
-export const renommerDossier = (ancien: string, nouveau: string): Promise<string> =>
-  invoke<string>('renommer_dossier', { ancien, nouveau });
+export const renommerDossier = (ancien: string, nouveau: string, genre: GenreRushes = 'images'): Promise<string> =>
+  invoke<string>('renommer_dossier', { ancien, nouveau, genre });
 
 /** Le dossier disparaît, pas ses images : elles retournent dans « Non rangés ». Rend leur nombre. */
-export const supprimerDossier = (nom: string): Promise<number> => invoke<number>('supprimer_dossier', { nom });
+export const supprimerDossier = (nom: string, genre: GenreRushes = 'images'): Promise<number> =>
+  invoke<number>('supprimer_dossier', { nom, genre });
 
 /** Le PNG d'une création, en octets. */
 export const imageCreation = (id: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('image_creation', { id });

@@ -1,7 +1,7 @@
 <!--
   Montage, comme en v2 : un clip MiniMax H3 avec le son, en animant un rush ou à partir d'un texte. Le prompt est
   tourné tel quel (il s'écrit au Scénario, ou ici). Résolution, durée, format, nombre, seed, checkpoint et LoRA de la
-  famille ; estimation du temps ; file suivie en direct ; derniers clips à regarder. Puis les séquences (plans
+  famille ; estimation du temps ; file suivie en direct ; les Bobines, rangées comme les Rushes. Puis les séquences (plans
   enchaînés et assemblés en un film) et la bibliothèque des voix de référence.
 -->
 <script lang="ts">
@@ -23,10 +23,10 @@
   import Bouton from '../lib/composants/Bouton.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
-  import VideoCreation from '../lib/composants/VideoCreation.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
   import MontageSequences from './MontageSequences.svelte';
   import MontageVoix from './MontageVoix.svelte';
+  import PanneauRushes from './PanneauRushes.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -49,8 +49,6 @@
   /** Change quand la file a enregistré quelque chose : la bibliothèque des voix se relit. */
   let rafraichir = $state(0);
   let envoi = $state(false);
-  /** Le clip montré. */
-  let regarde = $state<string | null>(null);
 
   const proposes = $derived(options ? (mode === 'animer' ? options.animer : options.texte) : null);
   const workflow = $derived(proposes?.workflows.find((w) => w.id === proposes.defaut) ?? proposes?.workflows[0]);
@@ -63,13 +61,6 @@
   /** Le workflow qui anime un rush : celui de tous les plans des séquences. */
   const animer = $derived(
     options?.animer.workflows.find((w) => w.id === options?.animer.defaut) ?? options?.animer.workflows[0],
-  );
-  const derniers = $derived(
-    clips
-      .filter((c) => c.type === 'clip' || c.type === 'sequence')
-      .flatMap((c) => c.images)
-      .slice(-12)
-      .reverse(),
   );
   const peutTourner = $derived(
     !envoi &&
@@ -285,20 +276,7 @@
 
 <MontageVoix {signaler} enFile={() => void relireCommandes()} {rafraichir} />
 
-{#if derniers.length > 0}
-  <Panneau titre="Derniers clips">
-    <div class="pastilles">
-      {#each derniers as id, i (id)}
-        <button type="button" class="pastille" aria-pressed={regarde === id} onclick={() => (regarde = id)}>
-          Clip {derniers.length - i}
-        </button>
-      {/each}
-    </div>
-    {#if regarde}
-      <VideoCreation id={regarde} />
-    {/if}
-  </Panneau>
-{/if}
+<PanneauRushes genre="clips" {signaler} {rafraichir} />
 
 <style>
   .pastilles,

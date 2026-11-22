@@ -1,7 +1,8 @@
 <!--
-  Les Rushes du Plateau, comme en v2 : onglets (Tous, Non rangés, dossiers, Archives, Corbeille), sélection au clic,
-  actions sur la sélection, dossiers créés, renommés ou supprimés. Rien n'est effacé pour de bon sauf « Vider la
-  corbeille », confirmé dans un dialogue. `rafraichir` change quand le Plateau a enregistré de nouvelles images.
+  Les Rushes du Plateau et les Bobines du Montage, comme en v2 (mêmes gestes, dossiers à part) : onglets (Tous, Non
+  rangés, dossiers, Archives, Corbeille), sélection au clic, actions sur la sélection, dossiers créés, renommés ou
+  supprimés. Rien n'est effacé pour de bon sauf « Vider la corbeille », confirmé dans un dialogue. Dans les Bobines,
+  un clip choisi seul se regarde. `rafraichir` change quand le Plateau a enregistré de nouvelles créations.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -18,18 +19,26 @@
     type ActionRushes,
     type Creation,
     type EtatRushes,
+    type GenreRushes,
   } from '../lib/api';
-  import { actions, basculer, compteRendu, images, libelleAction, ongletDe, onglets } from '../lib/rushes';
+  import { accord, actions, basculer, compteRendu, images, libelleAction, ongletDe, onglets } from '../lib/rushes';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Dialogue from '../lib/composants/Dialogue.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import VideoCreation from '../lib/composants/VideoCreation.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
     rafraichir: number;
+    /** `images` : les Rushes du Plateau ; `clips` : les Bobines du Montage. */
+    genre?: GenreRushes;
   }
 
-  let { signaler, rafraichir }: Props = $props();
+  let { signaler, rafraichir, genre = 'images' }: Props = $props();
+
+  const bobines = $derived(genre === 'clips');
+  /** Le clip regardé (Bobines). */
+  let regarde = $state<string | null>(null);
 
   let etat = $state<EtatRushes | null>(null);
   let rushes = $state<Creation[]>([]);
@@ -58,12 +67,13 @@
 
   async function relire() {
     try {
-      etat = await etatRushes();
+      etat = await etatRushes(genre);
       const actif = ongletDe(onglets(etat), cle);
       cle = actif.cle;
-      rushes = await lireRushes(actif.vue, actif.dossier);
+      rushes = await lireRushes(actif.vue, actif.dossier, genre);
       const visibles = new Set(rushes.map((r) => r.id));
       selection = selection.filter((id) => visibles.has(id));
+      if (regarde && !visibles.has(regarde)) regarde = null;
       await Promise.all(rushes.map((r) => chargerVignette(r.id)));
     } catch (e) {
       signaler(messageErreur(e), true);
@@ -82,7 +92,7 @@
     occupe = true;
     try {
       const nombre = await agirRushes(selection, action, dossier);
-      signaler(compteRendu(action, nombre, dossier));
+      signaler(compteRendu(action, nombre, dossier, genre));
       selection = [];
       await relire();
     } catch (e) {
@@ -95,8 +105,8 @@
   async function vider() {
     occupe = true;
     try {
-      const nombre = await viderCorbeille();
-      signaler(`${images(nombre)} supprimée${nombre > 1 ? 's' : ''} définitivement.`);
+      const nombre = await viderCorbeille(genre);
+      signaler(`${images(nombre, genre)} supprimé${accord(nombre, genre)} définitivement.`);
       confirmerVidage = false;
       await relire();
     } catch (e) {
@@ -108,7 +118,7 @@
 
   async function creer() {
     try {
-      const nom = await creerDossier(nouveauDossier);
+      const nom = await creerDossier(nouveauDossier, genre);
       nouveauDossier = '';
       signaler(`Dossier « ${nom} » créé.`);
       await relire();
@@ -121,7 +131,7 @@
     const ancien = onglet.dossier;
     if (!ancien) return;
     try {
-      const nom = await renommerDossier(ancien, nouveauNom);
+      const nom = await renommerDossier(ancien, nouveauNom, genre);
       cle = `dossier:${nom}`;
       signaler(`Dossier renommé en « ${nom} ».`);
       await relire();
@@ -134,9 +144,11 @@
     const nom = onglet.dossier;
     if (!nom) return;
     try {
-      const liberes = await supprimerDossier(nom);
+      const liberes = await supprimerDossier(nom, genre);
       cle = 'tous';
-      signaler(`Dossier « ${nom} » supprimé : ${images(liberes)} retournée${liberes > 1 ? 's' : ''} dans Non rangés.`);
+      signaler(
+        `Dossier « ${nom} » supprimé : ${images(liberes, genre)} retourné${accord(liberes, genre)} dans Non rangés.`,
+      );
       await relire();
     } catch (e) {
       signaler(messageErreur(e), true);
@@ -156,8 +168,8 @@
   });
 </script>
 
-<Panneau titre="Rushes">
-  <div class="onglets" role="tablist" aria-label="Rangement des rushes">
+<Panneau titre={bobines ? 'Bobines' : 'Rushes'}>
+  <div class="onglets" role="tablist" aria-label={bobines ? 'Rangement des clips' : 'Rangement des rushes'}>
     {#each liste as o (o.cle)}
       <button type="button" role="tab" class="onglet" class:actif={o.cle === cle} aria-selected={o.cle === cle} onclick={() => choisirOnglet(o.cle)}>
         {o.titre}
@@ -167,7 +179,12 @@
 
   <div class="barre">
     {#if selection.length > 0}
-      <span class="discret">{images(selection.length)} sélectionnée{selection.length > 1 ? 's' : ''}</span>
+      <span class="discret">{images(selection.length, genre)} sélectionné{accord(selection.length, genre)}</span>
+      {#if bobines && selection.length === 1}
+        <Bouton petit onclick={() => (regarde = regarde === selection[0] ? null : (selection[0] ?? null))}>
+          {regarde === selection[0] ? 'Masquer' : 'Regarder'}
+        </Bouton>
+      {/if}
       {#each proposees as action (action)}
         {#if action === 'ranger'}
           <select bind:value={rangerDans} aria-label="Dossier où ranger">
@@ -181,7 +198,7 @@
       {/each}
       <Bouton genre="discret" petit onclick={() => (selection = [])}>Désélectionner</Bouton>
     {:else if rushes.length > 0}
-      <span class="discret">Clique sur des images pour les sélectionner.</span>
+      <span class="discret">Clique sur des {bobines ? 'clips' : 'images'} pour les sélectionner.</span>
       <Bouton genre="discret" petit onclick={() => (selection = rushes.map((r) => r.id))}>Tout sélectionner</Bouton>
     {/if}
     {#if onglet.vue === 'corbeille' && rushes.length > 0}
@@ -189,8 +206,12 @@
     {/if}
   </div>
 
+  {#if regarde}
+    <VideoCreation id={regarde} />
+  {/if}
+
   {#if rushes.length === 0}
-    <p class="discret">Rien ici pour l'instant.</p>
+    <p class="discret">{bobines && onglet.vue === 'tous' && !onglet.dossier ? "Aucun clip pour l'instant : silence, on tourne !" : "Rien ici pour l'instant."}</p>
   {:else}
     <div class="galerie">
       {#each rushes as rush (rush.id)}
@@ -237,8 +258,9 @@
 {#if confirmerVidage}
   <Dialogue titre="Vider la corbeille" fermer={() => !occupe && (confirmerVidage = false)}>
     <p>
-      {images(etat?.corbeille ?? 0)} de la corbeille {(etat?.corbeille ?? 0) > 1 ? 'vont être supprimées' : 'va être supprimée'}
-      pour de bon : image et fiche. Elles ne pourront pas être récupérées.
+      {images(etat?.corbeille ?? 0, genre)} de la corbeille {(etat?.corbeille ?? 0) > 1 ? 'vont être' : 'va être'}
+      supprimé{accord(etat?.corbeille ?? 0, genre)} pour de bon, avec {bobines ? 'vidéo, vignette' : 'image'} et fiche. Rien ne
+      pourra être récupéré.
     </p>
     {#snippet pied()}
       <Bouton genre="discret" desactive={occupe} onclick={() => (confirmerVidage = false)}>Annuler</Bouton>

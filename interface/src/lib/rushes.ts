@@ -1,6 +1,7 @@
-// Les Rushes du Plateau : onglets, actions proposées et textes, d'après les compteurs du cœur.
+// Les Rushes du Plateau et les Bobines du Montage : onglets, actions proposées et textes, d'après les compteurs du
+// cœur.
 
-import type { ActionRushes, EtatRushes, VueRushes } from './api';
+import type { ActionRushes, EtatRushes, GenreRushes, VueRushes } from './api';
 
 /** Un onglet : une vue, ou un dossier (vue « tous » restreinte à ce dossier). */
 export interface Onglet {
@@ -52,25 +53,37 @@ export function libelleAction(action: ActionRushes): string {
   return LIBELLES[action];
 }
 
-/** « 1 image », « 3 images ». */
-export function images(nombre: number): string {
-  return `${nombre} image${nombre > 1 ? 's' : ''}`;
+/** « 1 image », « 3 images » ; « 2 clips » pour les Bobines. */
+export function images(nombre: number, genre: GenreRushes = 'images'): string {
+  const mot = genre === 'clips' ? 'clip' : 'image';
+  return `${nombre} ${mot}${nombre > 1 ? 's' : ''}`;
+}
+
+/** L'accord d'un participe : une image (féminin), un clip (masculin), au pluriel si besoin. */
+export function accord(nombre: number, genre: GenreRushes = 'images'): string {
+  return `${genre === 'clips' ? '' : 'e'}${nombre > 1 ? 's' : ''}`;
 }
 
 /** Ce que l'action a fait, pour la ligne d'état. */
-export function compteRendu(action: ActionRushes, nombre: number, dossier: string | null): string {
-  const quoi = images(nombre);
+export function compteRendu(
+  action: ActionRushes,
+  nombre: number,
+  dossier: string | null,
+  genre: GenreRushes = 'images',
+): string {
+  const quoi = images(nombre, genre);
+  const e = accord(nombre, genre);
   switch (action) {
     case 'corbeille':
       return `${quoi} à la corbeille.`;
     case 'restaurer':
-      return `${quoi} restaurée${nombre > 1 ? 's' : ''}.`;
+      return `${quoi} restauré${e}.`;
     case 'archiver':
-      return `${quoi} archivée${nombre > 1 ? 's' : ''}.`;
+      return `${quoi} archivé${e}.`;
     case 'desarchiver':
-      return `${quoi} sortie${nombre > 1 ? 's' : ''} des archives.`;
+      return `${quoi} sorti${e} des archives.`;
     case 'ranger':
-      return dossier ? `${quoi} rangée${nombre > 1 ? 's' : ''} dans ${dossier}.` : `${quoi} dans Non rangés.`;
+      return dossier ? `${quoi} rangé${e} dans ${dossier}.` : `${quoi} dans Non rangés.`;
   }
 }
 

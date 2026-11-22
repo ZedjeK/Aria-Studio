@@ -18,8 +18,12 @@ use tauri::ipc::Response;
 
 use crate::moteurs::{Moteurs, PORT_LLAMA};
 
-/// Les Rushes de cette page : les images du Plateau (les clips auront leurs Bobines).
+/// Le genre par défaut : les Rushes du Plateau (images) ; les Bobines du Montage passent `clips`.
 const GENRE: &str = "images";
+
+fn genre(choisi: Option<String>) -> String {
+    choisi.unwrap_or_else(|| GENRE.to_owned())
+}
 
 /// Le Plateau de ce lancement : ComfyUI passe par l'orchestrateur des moteurs.
 pub fn demarrer(emplacements: &Emplacements, moteurs: &Moteurs) -> Arc<Plateau> {
@@ -128,17 +132,23 @@ pub async fn lire_rushes(
     plateau: State<'_, Arc<Plateau>>,
     vue: String,
     dossier: Option<String>,
+    genre: Option<String>,
 ) -> Result<Vec<Value>, String> {
+    let genre = self::genre(genre);
     hors_interface(&plateau, move |p| {
-        rushes::liste(&p.contexte().data, &vue, dossier.as_deref(), GENRE)
+        rushes::liste(&p.contexte().data, &vue, dossier.as_deref(), &genre)
     })
     .await
 }
 
 /// Les compteurs des vues et des dossiers.
 #[tauri::command]
-pub async fn etat_rushes(plateau: State<'_, Arc<Plateau>>) -> Result<EtatRushes, String> {
-    hors_interface(&plateau, |p| rushes::etat(&p.contexte().data, GENRE)).await
+pub async fn etat_rushes(
+    plateau: State<'_, Arc<Plateau>>,
+    genre: Option<String>,
+) -> Result<EtatRushes, String> {
+    let genre = self::genre(genre);
+    hors_interface(&plateau, move |p| rushes::etat(&p.contexte().data, &genre)).await
 }
 
 /// Corbeille, restaurer, archiver, désarchiver ou ranger une sélection ; rend le nombre de rushes modifiés.
@@ -157,19 +167,28 @@ pub async fn agir_rushes(
 
 /// La seule suppression définitive : les rushes de la corbeille. L'interface la fait confirmer.
 #[tauri::command]
-pub async fn vider_corbeille(plateau: State<'_, Arc<Plateau>>) -> Result<usize, String> {
-    hors_interface(&plateau, |p| {
+pub async fn vider_corbeille(
+    plateau: State<'_, Arc<Plateau>>,
+    genre: Option<String>,
+) -> Result<usize, String> {
+    let genre = self::genre(genre);
+    hors_interface(&plateau, move |p| {
         let contexte = p.contexte();
-        rushes::vider_corbeille(&contexte.dossier, &contexte.data, GENRE)
+        rushes::vider_corbeille(&contexte.dossier, &contexte.data, &genre)
     })
     .await
 }
 
 /// Crée un dossier de rushes.
 #[tauri::command]
-pub async fn creer_dossier(plateau: State<'_, Arc<Plateau>>, nom: String) -> Result<String, String> {
+pub async fn creer_dossier(
+    plateau: State<'_, Arc<Plateau>>,
+    nom: String,
+    genre: Option<String>,
+) -> Result<String, String> {
+    let genre = self::genre(genre);
     hors_interface(&plateau, move |p| {
-        rushes::creer_dossier(&p.contexte().data, &nom, GENRE)
+        rushes::creer_dossier(&p.contexte().data, &nom, &genre)
     })
     .await
 }
@@ -180,24 +199,36 @@ pub async fn renommer_dossier(
     plateau: State<'_, Arc<Plateau>>,
     ancien: String,
     nouveau: String,
+    genre: Option<String>,
 ) -> Result<String, String> {
+    let genre = self::genre(genre);
     hors_interface(&plateau, move |p| {
-        rushes::renommer_dossier(&p.contexte().data, &ancien, &nouveau, GENRE)
+        rushes::renommer_dossier(&p.contexte().data, &ancien, &nouveau, &genre)
     })
     .await
 }
 
 /// Supprime un dossier, pas ses images : elles retournent dans « Non rangés ».
 #[tauri::command]
-pub async fn supprimer_dossier(plateau: State<'_, Arc<Plateau>>, nom: String) -> Result<usize, String> {
+pub async fn supprimer_dossier(
+    plateau: State<'_, Arc<Plateau>>,
+    nom: String,
+    genre: Option<String>,
+) -> Result<usize, String> {
+    let genre = self::genre(genre);
     hors_interface(&plateau, move |p| {
-        let liberes = rushes::supprimer_dossier(&p.contexte().data, &nom, GENRE)?;
+        let liberes = rushes::supprimer_dossier(&p.contexte().data, &nom, &genre)?;
+        let (action, quoi) = if genre == "clips" {
+            ("Dossier des Bobines supprimé", "clip(s) retourné(s)")
+        } else {
+            ("Dossier de rushes supprimé", "image(s) retournée(s)")
+        };
         journal::noter(
             &p.contexte().dossier,
-            "Dossier de rushes supprimé",
+            action,
             &nom,
             journal::Resultat::Ok,
-            Some(&format!("{liberes} image(s) retournée(s) dans Non rangés")),
+            Some(&format!("{liberes} {quoi} dans Non rangés")),
         );
         Ok(liberes)
     })

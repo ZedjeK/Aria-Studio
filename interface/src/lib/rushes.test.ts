@@ -47,6 +47,10 @@ describe('Rushes', () => {
     expect(compteRendu('desarchiver', 2, null)).toBe('2 images sorties des archives.');
     expect(compteRendu('ranger', 2, 'Renards')).toBe('2 images rangées dans Renards.');
     expect(compteRendu('ranger', 1, null)).toBe('1 image dans Non rangés.');
+    // Les Bobines : des clips, au masculin.
+    expect(images(2, 'clips')).toBe('2 clips');
+    expect(compteRendu('restaurer', 1, null, 'clips')).toBe('1 clip restauré.');
+    expect(compteRendu('ranger', 3, 'Séquence Forêt', 'clips')).toBe('3 clips rangés dans Séquence Forêt.');
   });
 
   it('bascule la sélection', () => {
