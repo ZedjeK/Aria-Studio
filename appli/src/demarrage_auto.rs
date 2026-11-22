@@ -49,12 +49,12 @@ pub fn lire_demarrage_auto() -> bool {
 #[tauri::command]
 pub fn regler_demarrage_auto(app: AppHandle, etat: State<'_, Etat>, actif: bool) -> Result<bool, String> {
     inscrire(actif).map_err(|e| format!("le démarrage avec Windows n'a pas pu être changé : {e}"))?;
-    let bilan = if actif {
-        "démarrage avec Windows activé"
+    let action = if actif {
+        "Démarrage avec Windows activé"
     } else {
-        "démarrage avec Windows désactivé"
+        "Démarrage avec Windows désactivé"
     };
-    journal::consigner(&etat.dossier, "démarrage auto", bilan);
+    journal::noter(&etat.dossier, action, "", journal::Resultat::Ok, None);
     let _ = app.emit_to(MENU, "etat-icone", ());
     Ok(est_actif())
 }

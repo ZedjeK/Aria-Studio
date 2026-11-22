@@ -44,10 +44,10 @@ pub fn lire_reglages(etat: State<'_, Etat>) -> Reglages {
 #[tauri::command]
 pub fn enregistrer_reglages(etat: State<'_, Etat>, reglages: Reglages) -> Result<Reglages, String> {
     let reglages = reglages.assaini();
+    // L'enregistrement note lui-même au journal les sections qui ont changé.
     reglages
         .enregistrer(&etat.dossier)
         .map_err(|e| format!("réglages non enregistrés : {e}"))?;
-    journal::consigner(&etat.dossier, "réglages", "réglages enregistrés");
     Ok(reglages)
 }
 
@@ -59,10 +59,12 @@ pub fn mesurer_disque(app: AppHandle, etat: State<'_, Etat>) -> Result<Espace, S
     let mesure = disque::espace(etat.dossier.racine());
     icone::changer(&app, |icone| icone.en_cours = None);
     let espace = mesure.map_err(|e| format!("mesure impossible : {e}"))?;
-    journal::consigner(
+    journal::noter(
         &etat.dossier,
-        "mesure",
-        &format!("disque : {} octets libres sur {}", espace.libre, espace.total),
+        "Mesure du disque",
+        &format!("{} octets libres sur {}", espace.libre, espace.total),
+        journal::Resultat::Ok,
+        None,
     );
     Ok(espace)
 }
@@ -70,9 +72,7 @@ pub fn mesurer_disque(app: AppHandle, etat: State<'_, Etat>) -> Result<Espace, S
 /// Les dernières opérations du journal, la plus récente d'abord.
 #[tauri::command]
 pub fn lire_journal(etat: State<'_, Etat>) -> Vec<Operation> {
-    let mut operations = journal::lire(&etat.dossier);
-    operations.reverse();
-    operations
+    journal::lire(&etat.dossier)
 }
 
 /// Quitte l'appli, icône de notification comprise.

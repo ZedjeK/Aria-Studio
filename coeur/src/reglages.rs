@@ -24,6 +24,7 @@ use chrono::{DateTime, Local, TimeDelta};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
+use crate::journal::{self, Resultat};
 use crate::sauvegardes::copier_sans_ecraser;
 use crate::{Dossier, Erreur, donnees};
 
@@ -222,7 +223,21 @@ impl Reglages {
             sauvegarder(dossier, &chemin, Local::now())?;
         }
         let octets = texte(&sections).map_err(|e| Erreur::fichier("préparation de", &chemin, e.into()))?;
-        donnees::ecrire_entier(&chemin, &octets)
+        donnees::ecrire_entier(&chemin, &octets)?;
+        // Comme en v2 : le journal dit quelles sections ont changé.
+        let changees: Vec<&str> = sections
+            .iter()
+            .filter(|(cle, valeur)| avant.as_ref().and_then(|a| a.get(cle.as_str())) != Some(*valeur))
+            .map(|(cle, _)| cle.as_str())
+            .collect();
+        journal::noter(
+            dossier,
+            "Réglages modifiés",
+            &changees.join(", "),
+            Resultat::Ok,
+            None,
+        );
+        Ok(())
     }
 }
 
@@ -523,6 +538,22 @@ mod tests {
         reglages.enregistrer(&dossier).unwrap();
         assert_eq!(fs::read_to_string(dossier.reglages()).unwrap(), FICHIER_V2);
         assert!(sauvegardes(&dossier).is_empty());
+    }
+
+    #[test]
+    fn un_changement_est_note_au_journal_avec_ses_sections() {
+        let (_temp, dossier) = dossier_avec(FICHIER_V2);
+        let reglages = Reglages {
+            chercher_mises_a_jour: true,
+            ..Reglages::charger(&dossier)
+        };
+        reglages.enregistrer(&dossier).unwrap();
+        let ops = journal::lire(&dossier);
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].action, "Réglages modifiés");
+        assert_eq!(ops[0].objet, "mises_a_jour");
+        reglages.enregistrer(&dossier).unwrap();
+        assert_eq!(journal::lire(&dossier).len(), 1, "rien n'a changé : rien de noté");
     }
 
     #[test]

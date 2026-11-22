@@ -46,7 +46,7 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | --- | --- | --- | --- |
 | Réglages | `reglages.json` (sections : emplacements, favoris, assistant, installation, fond, notifications, mises à jour, LoRA, LLM, workflows) | même format ; `fond`, `installation.proposee` et `mises_a_jour.active` lus et écrits, toutes les autres sections et clés gardées telles quelles (`coeur/src/reglages.rs`) ; chaque autre section se coche avec la page qui la gère | [ ] |
 | Sauvegardes des réglages | `sauvegardes\reglages-AAAAMMJJ-HHMMSS-micro.json` (20 dernières), `reglages-illisible-…` | même nom, 20 gardées, fichier illisible mis de côté (`coeur/src/reglages.rs`) ; la restauration attend la page Réglages | [ ] |
-| Journal | `journal.json` (500 dernières opérations) | même format | [ ] |
+| Journal | `journal.json` (500 dernières, la plus récente en premier : `date`, `action`, `objet`, `resultat`, `detail`), `journal-illisible-…` | même format, entrées v2 gardées telles quelles, journal illisible mis de côté, journal verrouillé jamais réécrit (`coeur/src/journal.rs`) ; page Journal de l'interface adaptée | [x] |
 | Créations, rushes, clips, séquences, voix | `data\` | relus | [ ] |
 | Cache | `cache\` (empreintes SHA-256, samplers, chemins ComfyUI) | recalculable | [ ] |
 | Modèles et moteurs | `modeles\`, `moteurs\`, dossier des modèles choisi | relus, rien de déplacé | [ ] |

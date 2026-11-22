@@ -95,7 +95,7 @@ pub fn installer(app: AppHandle, etat: State<'_, Etat>, raccourci: bool) -> Resu
             None => bilan.push_str(", raccourci non créé (Bureau introuvable)"),
         }
     }
-    journal::consigner(&etat.dossier, "installation", &bilan);
+    journal::noter(&etat.dossier, "Installation", &bilan, journal::Resultat::Ok, None);
     relancer(&app, &installe)
 }
 
@@ -129,10 +129,10 @@ pub fn lancer_sans_installer(
             proposer_installation: false,
             ..Reglages::charger(&etat.dossier)
         };
+        // L'enregistrement note lui-même le changement au journal.
         reglages
             .enregistrer(&etat.dossier)
             .map_err(|e| format!("réglages non enregistrés : {e}"))?;
-        journal::consigner(&etat.dossier, "réglages", "proposition d'installation coupée");
     }
     // La fenêtre de l'appli d'abord : fermer la dernière fenêtre arrêterait l'appli.
     ouvrir_principale(&app, true).map_err(|e| e.to_string())?;

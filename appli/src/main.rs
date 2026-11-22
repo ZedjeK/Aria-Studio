@@ -38,10 +38,12 @@ fn main() {
 fn lancer() -> Result<(), String> {
     let dossier = Dossier::du_profil().map_err(|e| e.to_string())?;
     dossier.preparer().map_err(|e| e.to_string())?;
-    journal::consigner(
+    journal::noter(
         &dossier,
-        "lancement",
+        "Aria lancée",
         &format!("{} {}", identite::NOM, identite::VERSION),
+        journal::Resultat::Ok,
+        None,
     );
     // Restes d'un remplacement précédent, maintenant que l'ancienne version est arrêtée.
     aria_coeur::installation::nettoyer(&dossier.programme());
@@ -100,7 +102,13 @@ fn lancer() -> Result<(), String> {
         .map_err(|e| format!("l'interface n'a pas pu démarrer : {e}"))?
         .run(|app, evenement| {
             if let RunEvent::Exit = evenement {
-                journal::consigner(&app.state::<Etat>().dossier, "arrêt", "appli fermée");
+                journal::noter(
+                    &app.state::<Etat>().dossier,
+                    "Aria fermée",
+                    "",
+                    journal::Resultat::Ok,
+                    None,
+                );
             }
         });
     Ok(())

@@ -160,14 +160,16 @@ fn installer(maj: &MiseAJour, dossier: &Dossier, exe: &std::path::Path) -> Resul
         .sauvegardes()
         .join(aria_coeur::installation::DOSSIER_VERSIONS);
     let installe = mises_a_jour::installer_zip(&zip, dossier_exe, &versions, &travail).map_err(|e| e.0)?;
-    journal::consigner(
+    journal::noter(
         dossier,
-        "mise à jour",
+        "Mise à jour installée",
         &format!(
-            "version {} remplacée par la {} ; l'ancienne est gardée dans les sauvegardes",
+            "{} → {}",
             identite::VERSION,
             mises_a_jour::ecrire_version(maj.version)
         ),
+        journal::Resultat::Ok,
+        Some("l'ancienne version est gardée dans les sauvegardes"),
     );
     Ok(installe)
 }
