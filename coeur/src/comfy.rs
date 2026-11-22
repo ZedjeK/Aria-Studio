@@ -277,7 +277,7 @@ pub fn est_orphelin(processus: &Processus, port: u16, dossier: &Path, moi: u32) 
         && processus.nom.to_lowercase().starts_with("python")
         && ligne.iter().any(|a| a == "ComfyUI/main.py")
         && ligne.iter().any(|a| a == "--port")
-        && ligne.iter().any(|a| *a == port)
+        && ligne.contains(&port)
         && processus
             .dossier
             .as_deref()

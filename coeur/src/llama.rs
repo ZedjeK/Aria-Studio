@@ -457,7 +457,7 @@ mod tests {
 
     #[test]
     fn le_contexte_tient_la_reflexion() {
-        assert!(CONTEXTE_REFLEXION >= BUDGET_REFLEXION + 4096);
+        const { assert!(CONTEXTE_REFLEXION >= BUDGET_REFLEXION + 4096) };
     }
 
     #[test]
