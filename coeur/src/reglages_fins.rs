@@ -406,6 +406,13 @@ fn texte_noeud(wf: &Workflow, noeud: &str, entree: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// Les réglages des boutons de résolution du Montage : `resolution_<clé>`.
+const PREFIXE_RESOLUTION: &str = "resolution_";
+
+fn est_video(wf: &Workflow) -> bool {
+    wf.fiche.get("video").is_some_and(|v| v.as_bool() == Some(true))
+}
+
 fn reel_noeud(wf: &Workflow, noeud: &str, entree: &str) -> Option<f64> {
     wf.api.get(noeud)?.get("inputs")?.get(entree)?.as_f64()
 }
@@ -469,7 +476,7 @@ pub fn defs_workflow(
         defs.push(Def::reel("shift", "Shift", shift, (0.0, 20.0, 0.1)));
     }
     if wf.entree("megapixels").is_some() {
-        let montage = if wf.fiche.get("video").is_some_and(|v| v.as_bool() == Some(true)) {
+        let montage = if est_video(wf) {
             " · Montage : la résolution choisie l'emporte"
         } else {
             ""
@@ -485,6 +492,24 @@ pub fn defs_workflow(
                 "Taille de l'image : plus = plus de VRAM et plus lent{montage}"
             )),
         );
+    }
+    if est_video(wf) && wf.entree("megapixels").is_some() {
+        // Les trois boutons de résolution du Montage : un nombre de mégapixels chacun, le même pour les workflows
+        // vidéo de la famille (modifier_workflow les tient d'accord).
+        for (rang, (cle, nom, _, megapixels, _, _)) in crate::montage::QUALITES.iter().enumerate() {
+            defs.push(
+                Def::reel(
+                    &format!("{PREFIXE_RESOLUTION}{cle}"),
+                    &format!("Résolution {} · d'origine {nom}", rang + 1),
+                    *megapixels,
+                    (0.25, 2.0, 0.05),
+                )
+                .aide(
+                    "Mégapixels de ce bouton dans le Montage et les séquences. Plus = plus fin, plus de VRAM et \
+                     nettement plus lent (le temps affiché au Montage suit, à titre indicatif).",
+                ),
+            );
+        }
     }
     if wf.entree("ratio").is_some() {
         let ratio = defauts
@@ -838,6 +863,29 @@ pub fn modifier_workflow(
         changements,
     )?;
     ecrire_workflow(dossier, id, section)?;
+    // Les résolutions vidéo sont celles de la famille : image vers vidéo et texte vers vidéo restent d'accord.
+    let resolutions: Map<String, Value> = changements
+        .iter()
+        .filter(|(cle, _)| cle.starts_with(PREFIXE_RESOLUTION))
+        .map(|(cle, valeur)| (cle.clone(), valeur.clone()))
+        .collect();
+    if !resolutions.is_empty() && est_video(&wf) {
+        for autre in workflows::catalogue().0 {
+            if autre.id != wf.id
+                && autre.famille() == wf.famille()
+                && est_video(&autre)
+                && autre.entree("megapixels").is_some()
+            {
+                let mut section = reglages_workflow(dossier, &autre.id).unwrap_or_default();
+                appliquer(
+                    &mut section,
+                    &defs_workflow(&autre, modeles, dossier, &samplers),
+                    &resolutions,
+                )?;
+                ecrire_workflow(dossier, &autre.id, section)?;
+            }
+        }
+    }
     Ok(etat_workflow(dossier, modeles, &wf, &samplers))
 }
 
@@ -1006,6 +1054,42 @@ mod tests {
             )
             .unwrap_err()
             .starts_with("Consigne trop longue")
+        );
+    }
+
+    #[test]
+    fn resolutions_video_de_la_famille() {
+        let temp = tempfile::tempdir().unwrap();
+        let (dossier, modeles) = lieux(&temp);
+        // Réglées sur l'image vers vidéo, les résolutions valent aussi pour le texte vers vidéo de la famille.
+        let e = modifier_workflow(
+            &dossier,
+            &modeles,
+            "minimax_h3_i2v",
+            &changements(json!({"resolution_compromis": 0.8})),
+        )
+        .unwrap();
+        let r = e.params.iter().find(|p| p.cle == "resolution_compromis").unwrap();
+        assert_eq!((r.valeur.clone(), r.modifie), (json!(0.8), true));
+        assert!(e.params.iter().any(|p| p.cle == "resolution_rapide"));
+        let t2v = reglages_workflow(&dossier, "minimax_h3_t2v").unwrap();
+        assert_eq!(t2v["resolution_compromis"], json!(0.8));
+        assert!(
+            modifier_workflow(
+                &dossier,
+                &modeles,
+                "minimax_h3_i2v",
+                &changements(json!({"resolution_rapide": 3.0}))
+            )
+            .is_err()
+        );
+        // Une image n'a pas de boutons de résolution.
+        let krea = workflows::obtenir("krea2_turbo").unwrap();
+        let samplers = (Vec::new(), Vec::new());
+        assert!(
+            !defs_workflow(&krea, &modeles, &dossier, &samplers)
+                .iter()
+                .any(|d| d.cle.starts_with(PREFIXE_RESOLUTION))
         );
     }
 
