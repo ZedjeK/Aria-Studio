@@ -16,6 +16,7 @@ pub mod fiches;
 pub mod garde;
 pub mod gguf;
 pub mod identite;
+pub mod images;
 pub mod installation;
 pub mod journal;
 pub mod llama;
