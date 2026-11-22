@@ -11,6 +11,9 @@ publish.workspace = true
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 # La clé de llama-server, tirée à chaque lancement (déjà dans l'arbre par Tauri : aucune crate de plus).
 getrandom = "0.4.3"
+# Images des créations (retouche, agrandissement, références, vision du LLM), comme Pillow en v2 : PNG, JPEG et
+# WebP seulement, en Rust pur, sans rayon. png 0.18 est déjà dans l'arbre par Tauri.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 # NVML, la bibliothèque du pilote NVIDIA, chargée à l'exécution : carte, pilote et VRAM (garde VRAM).
 nvml-wrapper = "0.13.0"
 # Le filtre AS-18 : ses motifs (déjà dans l'arbre par Tauri).
