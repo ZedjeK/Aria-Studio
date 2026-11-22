@@ -18,6 +18,7 @@ pub mod gguf;
 pub mod identite;
 pub mod images;
 pub mod installation;
+pub mod installations;
 pub mod journal;
 pub mod llama;
 pub mod llama_serveur;
@@ -38,6 +39,7 @@ pub mod sauvegardes;
 pub mod secrets;
 pub mod securite;
 pub mod securite_reglages;
+pub mod telechargement;
 pub mod workflows;
 
 pub use donnees::Dossier;

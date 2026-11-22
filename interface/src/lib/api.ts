@@ -326,6 +326,78 @@ export const commanderAgrandissement = (demande: DemandeAgrandissement): Promise
 export const importerImage = (image: string, nom: string): Promise<Creation> =>
   invoke<Creation>('importer_image', { image, nom });
 
+/** La licence d'un modèle (aria_coeur::installations::Licence). */
+export interface LicenceModele {
+  nom: string;
+  url: string;
+  resume: string;
+  commercial: boolean;
+}
+
+export interface FichierModele {
+  nom: string;
+  dossier: string;
+  taille: number;
+  present: boolean;
+}
+
+/** Un workflow livré et ce qui lui manque (aria_coeur::installations::EtatWorkflow). */
+export interface WorkflowModeles {
+  id: string;
+  nom: string;
+  tache: string;
+  famille: string;
+  licence: LicenceModele;
+  fichiers: FichierModele[];
+  aTelecharger: number;
+  pret: boolean;
+}
+
+/** Un LLM du catalogue (aria_coeur::installations::EtatLlm). */
+export interface LlmCatalogue {
+  fichier: string;
+  nom: string;
+  page: string;
+  specialiste: 'creation' | 'retouche' | null;
+  vision: boolean;
+  licence: LicenceModele;
+  taille: number;
+  aTelecharger: number;
+  installe: boolean;
+}
+
+/** Un téléchargement (aria_coeur::telechargement::Tache). */
+export interface Telechargement {
+  id: string;
+  nom: string;
+  dossier: string;
+  taille: number;
+  etat: 'attente' | 'en_cours' | 'verification' | 'termine' | 'erreur' | 'annule';
+  recu: number;
+  /** Octets par seconde. */
+  debit: number;
+  erreur: string | null;
+}
+
+export interface EtatModeles {
+  workflows: WorkflowModeles[];
+  llm: LlmCatalogue[];
+  taches: Telechargement[];
+}
+
+export const etatModeles = (): Promise<EtatModeles> => invoke<EtatModeles>('etat_modeles');
+
+export const lireTelechargements = (): Promise<Telechargement[]> => invoke<Telechargement[]>('lire_telechargements');
+
+/** Met en file ce qui manque à un workflow ; rend le nombre de fichiers ajoutés. */
+export const telechargerWorkflow = (id: string): Promise<number> => invoke<number>('telecharger_workflow', { id });
+
+/** Met en file un LLM du catalogue ; rend le nombre de fichiers ajoutés. */
+export const installerLlm = (fichier: string): Promise<number> => invoke<number>('installer_llm', { fichier });
+
+export const annulerTelechargement = (id: string): Promise<Telechargement> =>
+  invoke<Telechargement>('annuler_telechargement', { id });
+
 /** Un dossier d'Aria (aria_coeur::emplacements::DossierConnu). */
 export interface DossierConnu {
   cle: string;
