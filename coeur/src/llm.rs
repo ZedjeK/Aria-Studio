@@ -81,6 +81,20 @@ pub fn nom(modeles: &Path, modele: Option<&str>) -> String {
         .map_or_else(|| defaut(modeles), str::to_owned)
 }
 
+/// Le LLM choisi pour ce workflow (`reglages.json`, `divers.llm_par_workflow.<workflow>`, comme en v2) s'il est
+/// installé, sinon le LLM par défaut.
+pub fn de_workflow(dossier: &Dossier, modeles: &Path, workflow: &str) -> String {
+    reglages::section(dossier, "divers")
+        .and_then(|d| {
+            d.get("llm_par_workflow")?
+                .get(workflow)?
+                .as_str()
+                .map(str::to_owned)
+        })
+        .filter(|choisi| disponibles(modeles).contains(choisi))
+        .unwrap_or_else(|| defaut(modeles))
+}
+
 /// Un nom de fichier seul, qui ne sort pas de `modeles\llm`.
 ///
 /// # Errors
@@ -448,6 +462,18 @@ mod tests {
         assert_eq!(defaut(b.modeles()), LLM_ORIGINE);
         assert_eq!(nom(b.modeles(), Some("mistral.gguf")), "mistral.gguf");
         assert_eq!(nom(b.modeles(), None), LLM_ORIGINE);
+    }
+
+    #[test]
+    fn llm_choisi_pour_un_workflow() {
+        let b = Banc::new();
+        b.poser("mistral.gguf", b"x");
+        b.poser("qwen3.gguf", b"x");
+        let d = &b.lieux.dossier;
+        assert_eq!(de_workflow(d, b.modeles(), "krea2_turbo"), "mistral.gguf");
+        b.regler(r#"{"divers": {"llm_par_workflow": {"krea2_turbo": "qwen3.gguf", "qwen_image_2_1": "absent.gguf"}}}"#);
+        assert_eq!(de_workflow(d, b.modeles(), "krea2_turbo"), "qwen3.gguf");
+        assert_eq!(de_workflow(d, b.modeles(), "qwen_image_2_1"), "mistral.gguf");
     }
 
     #[test]

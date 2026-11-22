@@ -50,6 +50,18 @@ export function modeleInitial(workflow: ChoixWorkflow | undefined): string {
   return workflow.modeles[0] ?? '';
 }
 
+/** Le LLM proposé pour ce workflow : le sien s'il est installé, sinon le premier proposé. */
+export function llmInitial(options: OptionsPlateau, workflowId: string): string {
+  const sien = options.llmParWorkflow[workflowId];
+  if (sien && options.llm.some((l) => l.fichier === sien)) return sien;
+  return options.llm[0]?.fichier ?? '';
+}
+
+/** Ce qu'une commande montre : le prompt, ou l'idée tant que le LLM ne l'a pas réécrite. */
+export function texteCommande(commande: Commande): string {
+  return commande.prompt || commande.idee;
+}
+
 /** Le nom d'un checkpoint sans son extension. */
 export function nomCheckpoint(fichier: string): string {
   return fichier.replace(/\.safetensors$/i, '');

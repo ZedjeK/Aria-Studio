@@ -28,6 +28,7 @@ pub mod moteurs;
 pub mod orchestrateur;
 pub mod plateau;
 pub mod presence;
+pub mod prompt;
 pub mod reglages;
 pub mod sauvegardes;
 pub mod secrets;
