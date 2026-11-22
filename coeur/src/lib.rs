@@ -36,6 +36,7 @@ pub mod prompt;
 pub mod reglages;
 pub mod reglages_fins;
 pub mod retouche;
+pub mod retrouver;
 pub mod rushes;
 pub mod sauvegardes;
 pub mod secrets;

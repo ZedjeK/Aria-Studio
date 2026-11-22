@@ -1,6 +1,6 @@
 // La page Modèles : tâches des workflows, avancement des téléchargements.
 
-import type { StepsDits, Telechargement } from './api';
+import type { IdentificationSources, StepsDits, Telechargement } from './api';
 import { octetsLisibles } from './jauge';
 
 const TACHES: Record<string, string> = {
@@ -96,4 +96,17 @@ export function erreurLora(declencheurs: string, force: number): string | null {
 export function dateLisible(date: string | null): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(date ?? '');
   return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : '';
+}
+
+/** L'avancement de « Retrouver les sources », en une ligne. */
+export function texteIdentification(i: IdentificationSources): string {
+  if (i.etat === 'en_cours') {
+    const phase = i.phase === 'civitai' ? 'recherche sur Civitai' : 'calcul de l’empreinte';
+    return `${i.fait + 1} sur ${i.total}${i.fichier ? ` · ${i.fichier}` : ''} · ${phase}`;
+  }
+  if (i.etat === 'termine') {
+    const erreurs = i.erreurs.length > 0 ? `, ${i.erreurs.length} erreur${i.erreurs.length > 1 ? 's' : ''}` : '';
+    return `${i.trouves.length} retrouvé${i.trouves.length > 1 ? 's' : ''}, ${i.introuvables.length} introuvable${i.introuvables.length > 1 ? 's' : ''}${erreurs}`;
+  }
+  return '';
 }

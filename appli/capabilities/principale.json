@@ -40,6 +40,8 @@
     "allow-preparer-lien",
     "allow-telecharger-lien",
     "allow-vignette-modele",
+    "allow-retrouver-sources",
+    "allow-etat-sources",
     "allow-etat-emplacements",
     "allow-ouvrir-dossier",
     "allow-parcourir-dossier",

@@ -8,16 +8,19 @@
   import {
     collectionModeles,
     corbeilleModeles,
+    etatSources,
     jeterModele,
     messageErreur,
     oublierReglageLora,
     reglerLora,
     restaurerModele,
+    retrouverSources,
     validerStepsModele,
     viderCorbeilleModeles,
     type Collection,
     type CorbeilleModeles,
     type ElementCollection,
+    type IdentificationSources,
   } from '../lib/api';
   import { octetsLisibles } from '../lib/jauge';
   import {
@@ -28,6 +31,7 @@
     erreurSteps,
     libelleOrigine,
     stepsProposes,
+    texteIdentification,
   } from '../lib/modeles';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
@@ -50,6 +54,7 @@
   let aJeter = $state<ElementCollection | null>(null);
   let viderDemande = $state(false);
   let occupe = $state(false);
+  let identification = $state<IdentificationSources | null>(null);
 
   const groupes = $derived(collection?.groupes.filter((g) => g.elements.length > 0) ?? []);
   const erreurReglage = $derived(lora ? erreurLora(lora.declencheurs, lora.force) : null);
@@ -152,8 +157,34 @@
     });
   }
 
+  async function retrouver() {
+    try {
+      identification = await retrouverSources();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
+  async function suivreSources() {
+    if (identification?.etat !== 'en_cours') return;
+    try {
+      identification = await etatSources();
+      if (identification.etat === 'termine') {
+        signaler(`Sources : ${texteIdentification(identification)}.`);
+        await relire();
+      }
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
   onMount(() => {
     void relire();
+    void etatSources()
+      .then((i) => (identification = i))
+      .catch((e: unknown) => signaler(messageErreur(e), true));
+    const minuterie = setInterval(() => void suivreSources(), 1000);
+    return () => clearInterval(minuterie);
   });
 </script>
 
@@ -164,11 +195,28 @@
 </ASavoir>
 
 {#if collection}
-  {#if collection.orphelins > 0}
-    <p class="discret">
-      {collection.orphelins} fichier{collection.orphelins > 1 ? 's' : ''} déposé{collection.orphelins > 1 ? 's' : ''} à
-      la main : Aria les utilise, mais ne les supprime pas.
-    </p>
+  {#if collection.orphelins > 0 || identification?.etat === 'en_cours'}
+    <div class="sources">
+      <p class="discret">
+        {collection.orphelins} fichier{collection.orphelins > 1 ? 's' : ''} déposé{collection.orphelins > 1 ? 's' : ''}
+        à la main : Aria les utilise, mais ne les supprime pas. « Retrouver les sources » calcule leur empreinte et la
+        cherche dans le catalogue d'Aria puis sur Civitai, pour connaître leur page et leur licence.
+      </p>
+      <Bouton petit desactive={identification?.etat === 'en_cours'} onclick={() => void retrouver()}>
+        Retrouver les sources
+      </Bouton>
+    </div>
+  {/if}
+  {#if identification && identification.etat !== 'repos'}
+    <p class="discret">{texteIdentification(identification)}</p>
+    {#if identification.etat === 'termine'}
+      {#each identification.trouves as t (t.nom)}
+        <p class="discret">✓ {t.nom} · {t.ou}</p>
+      {/each}
+      {#each identification.erreurs as e (e.nom)}
+        <p class="alerte">{e.nom} : {e.erreur}</p>
+      {/each}
+    {/if}
   {/if}
   {#each groupes as g (g.id)}
     <Panneau titre={`${g.nom} · ${octetsLisibles(g.taille)}`}>
@@ -378,5 +426,17 @@
 
   .alerte {
     color: var(--orange);
+  }
+
+  .sources {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sources p {
+    flex: 1;
+    min-width: 260px;
   }
 </style>

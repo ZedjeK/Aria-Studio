@@ -131,6 +131,7 @@ fn lancer() -> Result<(), String> {
         .manage(moteurs)
         .manage(plateau)
         .manage(telechargeur)
+        .manage(std::sync::Arc::new(aria_coeur::retrouver::Suivi::default()))
         .manage(std::sync::Arc::new(decouvrir::Sources(
             telechargements::Https::new(),
         )))
@@ -178,6 +179,8 @@ fn lancer() -> Result<(), String> {
             decouvrir::preparer_lien,
             decouvrir::telecharger_lien,
             decouvrir::vignette_modele,
+            decouvrir::retrouver_sources,
+            decouvrir::etat_sources,
             lieux::etat_emplacements,
             lieux::ouvrir_dossier,
             lieux::parcourir_dossier,

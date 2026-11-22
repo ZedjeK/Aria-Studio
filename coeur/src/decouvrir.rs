@@ -45,7 +45,15 @@ pub type EntetesDe<'a> = &'a (dyn Fn(&str) -> Vec<(String, String)> + Send + Syn
 
 // --- réseau ------------------------------------------------------------------------------------------------------
 
-fn lire(reseau: &dyn Reseau, adresse: &str, entetes: &[(String, String)]) -> Result<(u16, String), String> {
+/// Lit une réponse d'API (16 Mio au plus) : son statut et son texte.
+///
+/// # Errors
+/// Réseau indisponible, ou réponse illisible.
+pub fn lire_api(
+    reseau: &dyn Reseau,
+    adresse: &str,
+    entetes: &[(String, String)],
+) -> Result<(u16, String), String> {
     let (statut, corps) = reseau
         .ouvrir(adresse, entetes, 0)
         .map_err(|e| format!("Réseau indisponible : {e}"))?;
@@ -481,7 +489,7 @@ pub fn chercher_civitai(
     if d.adulte {
         params.push(("nsfw", "true".to_owned()));
     }
-    let (statut, corps) = lire(
+    let (statut, corps) = lire_api(
         reseau,
         &adresse(&format!("{CIVITAI}/models"), &params),
         &entetes("civitai"),
@@ -659,7 +667,7 @@ pub fn chercher_hf(reseau: &dyn Reseau, entetes: EntetesDe<'_>, d: &Demande) -> 
             params.push(("search", d.texte.trim().to_owned()));
         }
         params.push(("filter", filtre));
-        let (statut, corps) = lire(
+        let (statut, corps) = lire_api(
             reseau,
             &adresse(&format!("{HF}/api/models"), &params),
             &entetes("huggingface"),
@@ -831,7 +839,7 @@ pub fn fichiers_hf(
         return Err(format!("Dépôt invalide : {depot}"));
     }
     let adresse = format!("{HF}/api/models/{depot}/tree/main?recursive=true");
-    let (statut, corps) = lire(reseau, &adresse, &entetes("huggingface"))?;
+    let (statut, corps) = lire_api(reseau, &adresse, &entetes("huggingface"))?;
     if statut != 200 {
         return Err(format!("Dépôt inaccessible ({statut}) : {depot}"));
     }
@@ -1037,7 +1045,7 @@ fn fiche_civitai(
     let id_version = match (id_version, id_modele) {
         (Some(v), _) => v,
         (None, Some(m)) => {
-            let (statut, corps) = lire(reseau, &format!("{CIVITAI}/models/{m}"), &cles)?;
+            let (statut, corps) = lire_api(reseau, &format!("{CIVITAI}/models/{m}"), &cles)?;
             if statut == 404 {
                 return Err(format!("Modèle Civitai introuvable : {m}"));
             }
@@ -1051,7 +1059,7 @@ fn fiche_civitai(
         }
         (None, None) => return Err(attendu()),
     };
-    let (statut, corps) = lire(reseau, &format!("{CIVITAI}/model-versions/{id_version}"), &cles)?;
+    let (statut, corps) = lire_api(reseau, &format!("{CIVITAI}/model-versions/{id_version}"), &cles)?;
     if statut == 404 {
         return Err(format!("Version Civitai introuvable : {id_version}"));
     }
@@ -1158,7 +1166,7 @@ fn fiche_hf(reseau: &dyn Reseau, entetes: EntetesDe<'_>, chemin: &str) -> Result
     }
     let chemin_fichier = fichier.iter().map(|m| decoder(m)).collect::<Vec<_>>().join("/");
     let cles = entetes("huggingface");
-    let (statut, corps) = lire(reseau, &format!("{HF}/api/models/{depot}"), &cles)?;
+    let (statut, corps) = lire_api(reseau, &format!("{HF}/api/models/{depot}"), &cles)?;
     if statut == 401 || statut == 404 {
         return Err(format!("Dépôt introuvable ou privé : {depot}"));
     }
@@ -1175,7 +1183,7 @@ fn fiche_hf(reseau: &dyn Reseau, entetes: EntetesDe<'_>, chemin: &str) -> Result
             encoder_chemin(dossier_parent)
         )
     };
-    let (statut, corps) = lire(reseau, &arbre, &cles)?;
+    let (statut, corps) = lire_api(reseau, &arbre, &cles)?;
     let entrees = json_de("Hugging Face", statut, &corps)?;
     let f = entrees
         .as_array()
@@ -1192,7 +1200,7 @@ fn fiche_hf(reseau: &dyn Reseau, entetes: EntetesDe<'_>, chemin: &str) -> Result
         .unwrap_or(&chemin_fichier)
         .to_owned();
     // La fiche du dépôt (README) : texte libre, au mieux.
-    let readme = lire(reseau, &format!("{HF}/{depot}/raw/{revision}/README.md"), &cles)
+    let readme = lire_api(reseau, &format!("{HF}/{depot}/raw/{revision}/README.md"), &cles)
         .ok()
         .filter(|(s, _)| *s == 200)
         .map(|(_, t)| t.chars().take(README_MAX).collect::<String>())
