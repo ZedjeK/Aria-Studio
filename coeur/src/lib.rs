@@ -6,6 +6,7 @@
 pub mod catalogue;
 pub mod cles;
 pub mod comfy;
+pub mod comfy_serveur;
 pub mod demarrage;
 pub mod donnees;
 pub mod emplacements;
