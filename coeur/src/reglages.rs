@@ -241,6 +241,19 @@ impl Reglages {
     }
 }
 
+/// Une section de `reglages.json`, telle qu'elle est dans le fichier : pour les réglages que [`Reglages`] ne gère
+/// pas encore (emplacements, favoris…). Rien si le fichier est absent ou illisible, ou si la section n'est pas un
+/// objet.
+pub fn section(dossier: &Dossier, nom: &str) -> Option<Map<String, Value>> {
+    match lire(&dossier.reglages()) {
+        Ok(Contenu::Lisible(mut sections)) => match sections.remove(nom) {
+            Some(Value::Object(section)) => Some(section),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// Ce que contient `reglages.json`.
 enum Contenu {
     Absent,
