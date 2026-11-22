@@ -4,7 +4,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { lireJournal, messageErreur, type Operation } from '../lib/api';
-  import { dateLisible } from '../lib/journal';
+  import { dateLisible, libelleResultat } from '../lib/journal';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -38,13 +38,19 @@
     <p class="discret">Rien pour l'instant.</p>
   {:else}
     <table>
-      <thead><tr><th>Quand</th><th>Quoi</th><th>Bilan</th></tr></thead>
+      <thead><tr><th>Quand</th><th>Quoi</th><th>Sur quoi</th><th>Résultat</th></tr></thead>
       <tbody>
         {#each operations as operation, i (i)}
           <tr>
             <td class="code">{dateLisible(operation.date)}</td>
-            <td>{operation.type}</td>
-            <td>{operation.bilan}</td>
+            <td>{operation.action}</td>
+            <td>
+              {operation.objet}
+              {#if operation.detail}<span class="detail">{operation.detail}</span>{/if}
+            </td>
+            <td class:echec={operation.resultat === 'erreur'} class:partiel={operation.resultat === 'partiel'}>
+              {libelleResultat(operation.resultat)}
+            </td>
           </tr>
         {/each}
       </tbody>
@@ -80,6 +86,20 @@
   td.code {
     color: var(--texte-2);
     white-space: nowrap;
+  }
+
+  .detail {
+    display: block;
+    color: var(--texte-2);
+    font-size: 12px;
+  }
+
+  td.echec {
+    color: var(--rouge);
+  }
+
+  td.partiel {
+    color: var(--ambre);
   }
 
   .actions {

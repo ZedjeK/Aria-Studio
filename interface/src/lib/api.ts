@@ -44,15 +44,23 @@ export const enregistrerReglages = (reglages: Reglages): Promise<Reglages> =>
 
 export const mesurerDisque = (): Promise<Espace> => invoke<Espace>('mesurer_disque');
 
-/** Une opération du journal (journal.json). */
+/** Comment une opération s'est terminée (journal::Resultat). */
+export type Resultat = 'ok' | 'erreur' | 'partiel' | 'annule';
+
+/** Une opération du journal (journal.json), au format de la v2. */
 export interface Operation {
-  /** RFC 3339, heure locale. */
+  /** Heure locale à la seconde, sans décalage : « 2026-11-14T10:12:03 ». */
   date: string;
-  type: string;
-  bilan: string;
+  /** Ce qui a été fait. */
+  action: string;
+  /** Sur quoi ; vide s'il n'y a rien à préciser. */
+  objet: string;
+  resultat: Resultat;
+  /** Une précision, absente le plus souvent. */
+  detail?: string;
 }
 
-/** Les dernières opérations, la plus récente d'abord. */
+/** Les opérations du journal, la plus récente d'abord. */
 export const lireJournal = (): Promise<Operation[]> => invoke<Operation[]>('lire_journal');
 
 /** Quitte l'appli, icône de notification comprise. */
