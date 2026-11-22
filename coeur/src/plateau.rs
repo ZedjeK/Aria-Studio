@@ -938,10 +938,15 @@ mod tests {
 
     /// Un llama-server et un ComfyUI de test : notent les demandes et les graphes reçus, rendent un prompt et un PNG,
     /// ou une erreur.
+    /// Ce que le faux llama-server a reçu.
+    type Ecrits = Arc<Mutex<Vec<(Lancement, llama::Demande)>>>;
+    /// Ce que le faux ComfyUI a reçu en téléversement.
+    type Televerses = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
     struct Faux {
         recus: Arc<Mutex<Vec<Value>>>,
-        ecrits: Arc<Mutex<Vec<(Lancement, llama::Demande)>>>,
-        televerses: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
+        ecrits: Ecrits,
+        televerses: Televerses,
         erreur: Option<String>,
         attente: Duration,
     }
