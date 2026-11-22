@@ -10,6 +10,7 @@ pub mod collection;
 pub mod comfy;
 pub mod comfy_serveur;
 pub mod creations;
+pub mod decouvrir;
 pub mod demarrage;
 pub mod donnees;
 pub mod emplacements;
@@ -40,6 +41,7 @@ pub mod sauvegardes;
 pub mod secrets;
 pub mod securite;
 pub mod securite_reglages;
+pub mod suggestions;
 pub mod telechargement;
 pub mod workflows;
 

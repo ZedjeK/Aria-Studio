@@ -21,10 +21,10 @@ use crate::disque;
 
 /// Hugging Face et Civitai en HTTPS, avec les certificats et le proxy de Windows. Les redirections vers leurs serveurs
 /// de fichiers sont suivies (sans la clé, que ureq ne renvoie pas à un autre hôte) ; l'empreinte SHA-256 fait foi.
-struct Https(Agent);
+pub(crate) struct Https(Agent);
 
 impl Https {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(
             Agent::config_builder()
                 .https_only(true)

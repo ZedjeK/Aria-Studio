@@ -152,6 +152,7 @@ pub fn manquants(modeles: &Path, id: &str) -> Result<Vec<(Fiche, String)>, Strin
                     page: page_de(&url),
                     url,
                     licence: Some(licence.clone()),
+                    ..Fiche::default()
                 },
                 texte(f.get("dossier")),
             )
@@ -230,6 +231,7 @@ pub fn llm_manquant(modeles: &Path, fichier: &str) -> Result<Vec<(Fiche, String)
                     url: texte(f.get("url")),
                     page: page.clone(),
                     licence: Some(licence.clone()),
+                    ..Fiche::default()
                 },
                 DOSSIER_LLM.to_owned(),
             )

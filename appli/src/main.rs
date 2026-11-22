@@ -5,6 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commandes;
+mod decouvrir;
 mod demarrage_auto;
 mod disque;
 mod erreur_fatale;
@@ -130,6 +131,9 @@ fn lancer() -> Result<(), String> {
         .manage(moteurs)
         .manage(plateau)
         .manage(telechargeur)
+        .manage(std::sync::Arc::new(decouvrir::Sources(
+            telechargements::Https::new(),
+        )))
         .invoke_handler(tauri::generate_handler![
             commandes::identite,
             commandes::lire_reglages,
@@ -168,6 +172,12 @@ fn lancer() -> Result<(), String> {
             telechargements::corbeille_modeles,
             telechargements::restaurer_modele,
             telechargements::vider_corbeille_modeles,
+            decouvrir::familles_decouvrir,
+            decouvrir::chercher_modeles,
+            decouvrir::fichiers_depot,
+            decouvrir::preparer_lien,
+            decouvrir::telecharger_lien,
+            decouvrir::vignette_modele,
             lieux::etat_emplacements,
             lieux::ouvrir_dossier,
             lieux::parcourir_dossier,

@@ -479,6 +479,125 @@ export const restaurerModele = (cle: string): Promise<void> => invoke<void>('res
 export const viderCorbeilleModeles = (): Promise<{ effaces: number; liberes: number }> =>
   invoke<{ effaces: number; liberes: number }>('vider_corbeille_modeles');
 
+// --- Modèles : Rechercher (aria_coeur::decouvrir) ---
+
+export type TypeRecherche = 'image' | 'video' | 'lora' | 'llm';
+export type SourceRecherche = 'civitai' | 'huggingface';
+
+export interface FamilleDecouvrir {
+  famille: string;
+  nature: string;
+  bases: string[];
+}
+
+export interface DemandeRecherche {
+  source: SourceRecherche;
+  type: TypeRecherche;
+  texte: string;
+  famille: string | null;
+  tri: string;
+  curseur: string | null;
+  adulte: boolean;
+}
+
+export interface ApercuModele {
+  url: string;
+  nsfw: boolean;
+}
+
+export interface FichierTrouve {
+  nom: string;
+  taille: number;
+  principal: boolean;
+  installe: boolean;
+  lien: string | null;
+  dossier: string | null;
+  vram: 'tient' | 'juste' | 'deborde' | null;
+}
+
+export interface VersionTrouvee {
+  id: number;
+  nom: string | null;
+  base: string | null;
+  famille: string | null;
+  motsDeclencheurs: string[];
+  fichiers: FichierTrouve[];
+  lien: string;
+  dossier: string;
+  apercu: ApercuModele | null;
+}
+
+export interface ModeleTrouve {
+  source: SourceRecherche;
+  id: string;
+  nom: string;
+  auteur: string | null;
+  type: TypeRecherche;
+  famille: string | null;
+  installe: boolean;
+  telechargements: number;
+  appreciations: number;
+  date: string | null;
+  page: string;
+  protege: boolean;
+  apercu: ApercuModele | null;
+  versions: VersionTrouvee[];
+}
+
+export interface Recherche {
+  resultats: ModeleTrouve[];
+  curseur: string | null;
+}
+
+export interface FichiersDepot {
+  fichiers: FichierTrouve[];
+  vramLibreGo: number | null;
+  vramTotaleGo: number | null;
+}
+
+/** La fiche d'un fichier distant (aria_coeur::telechargement::Fiche, champs de la v2). */
+export interface FicheModele {
+  source: string;
+  nom: string;
+  taille: number;
+  sha256: string | null;
+  url: string;
+  page: string;
+  licence: string | null;
+  mots_declencheurs: string[];
+  base: string | null;
+  force_auteur: number | null;
+  images_force: number;
+  prompt_exemple: string | null;
+  steps_suggeres: { statut: string; valeurs: number[] } | null;
+  cfg_suggere: { statut: string; valeurs: number[] } | null;
+}
+
+export interface PropositionLien {
+  fiche: FicheModele;
+  dossier: string | null;
+  jetonRequis: boolean;
+}
+
+export const famillesDecouvrir = (genre: TypeRecherche): Promise<FamilleDecouvrir[]> =>
+  invoke<FamilleDecouvrir[]>('familles_decouvrir', { genre });
+
+export const chercherModeles = (demande: DemandeRecherche): Promise<Recherche> =>
+  invoke<Recherche>('chercher_modeles', { demande });
+
+export const fichiersDepot = (depot: string, genre: TypeRecherche, famille: string | null): Promise<FichiersDepot> =>
+  invoke<FichiersDepot>('fichiers_depot', { depot, genre, famille });
+
+export const preparerLien = (lien: string): Promise<PropositionLien> =>
+  invoke<PropositionLien>('preparer_lien', { lien });
+
+/** Le clic vaut confirmation : la fiche est relue à la source, puis mise en file dans ce dossier. */
+export const telechargerLien = (lien: string, dossier: string): Promise<Telechargement> =>
+  invoke<Telechargement>('telecharger_lien', { lien, dossier });
+
+/** Une vignette de Civitai, en octets (l'interface ne charge rien d'ailleurs). */
+export const vignetteModele = (url: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('vignette_modele', { url });
+
 /** Un dossier d'Aria (aria_coeur::emplacements::DossierConnu). */
 export interface DossierConnu {
   cle: string;
