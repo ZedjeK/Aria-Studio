@@ -41,8 +41,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          # Seule main enregistre le cache ; les PR et les tags le lisent sans pouvoir le remplacer.
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # Seules main et refonte/v3, protégées par le ruleset, enregistrent le cache ; les PR et les tags le lisent
+          # sans pouvoir le remplacer. Une PR vers refonte/v3 relit ainsi le cache de sa base au lieu de tout
+          # recompiler.
+          save-if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/refonte/v3' }}
 
       - name: Tests
         run: ./tools/tester.ps1
