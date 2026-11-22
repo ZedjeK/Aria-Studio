@@ -1,5 +1,6 @@
-//! Le travail du LLM sur les prompts, comme en v2 (`app/prompt.py`) : pour l'instant, la réécriture d'une idée en
-//! prompt d'image. Les références, la retouche, la vidéo, le découpage et la conversation viendront ensuite.
+//! Le travail du LLM sur les prompts, comme en v2 (`app/prompt.py`) : la réécriture d'une idée en prompt d'image, et
+//! la traduction d'une consigne de retouche (le LLM voit l'image s'il a sa vision). Les références, la vidéo, le
+//! découpage et la conversation viendront ensuite.
 //!
 //! La consigne suit le gabarit de la v2 : rôle, priorité de l'utilisateur, sections d'écriture (plan, contenu,
 //! dialogue, texte, interdits) où se rangent les règles du modèle cible (`profil_prompt.consigne` de sa fiche), puis le
@@ -15,6 +16,7 @@ use regex::{Regex, RegexBuilder};
 use serde_json::{Map, Value, json};
 
 use crate::fiches::SECTIONS_CONSIGNE;
+use crate::images;
 use crate::llama::{Demande, Lancement};
 use crate::llm::{self, Lieux};
 use crate::modeles::DOSSIER_LLM;
@@ -45,6 +47,8 @@ pub const MOTS_MAX_REECRITURE: u64 = 120;
 /// Une consigne d'usage, au gabarit de la v2.
 struct Gabarit {
     role: &'static str,
+    /// La priorité de l'utilisateur propre à l'usage ; rien : celle commune aux usages qui écrivent un prompt.
+    priorite: Option<&'static str>,
     /// Les sections que la fiche du modèle cible remplace au lieu de s'y ajouter.
     remplace: &'static [&'static str],
     plan: &'static [&'static str],
@@ -71,6 +75,7 @@ impl Gabarit {
 /// Réécriture d'une idée en prompt d'image.
 const REECRITURE: Gabarit = Gabarit {
     role: "You are an expert prompt writer for text-to-image models.\nThe user describes an image idea, often in French. Rewrite it as ONE English prompt paragraph.",
+    priorite: None,
     remplace: &["plan", "texte"],
     plan: &[
         "One flowing paragraph of full sentences in natural language, in the order that serves the idea; never a comma-separated list of keywords.",
@@ -87,6 +92,26 @@ const REECRITURE: Gabarit = Gabarit {
     format: &[
         "{mots_min} to {mots_max} words, plain prose, no lists, no headings, no markdown (no asterisks), no quotes around the whole prompt.",
         "Output only the prompt: no preamble, no explanation, no translation notes.",
+    ],
+};
+
+/// Retouche : changer franchement ce qui est demandé, garder le reste d'une seule phrase, sans le redécrire (d'après
+/// la consigne du réécrivain de retouche de Qwen-Image 2.1).
+const RETOUCHE: Gabarit = Gabarit {
+    role: "You translate image-editing instructions for an instruction-based image editing model.\nThe user writes an instruction, often in French. Rewrite it as a short English imperative instruction (one or two sentences).",
+    priorite: Some("Edit exactly what the user names. Keep the user's own action, target and details."),
+    remplace: &["plan", "texte"],
+    plan: &[
+        "Lead with the change the user names, and make it clear and unmistakable, never faint.",
+        "Then everything the user did not name stays as it is: say so in one short clause (\"keep everything else unchanged\"), without re-describing it. If the user names something to keep, say so explicitly.",
+    ],
+    contenu: &[],
+    dialogue: &[],
+    texte: &["If the instruction asks for written text, keep that text exactly, in quotes."],
+    interdits: &["Add another change, a style or a clean-up the user did not ask for."],
+    format: &[
+        "One or two sentences.",
+        "Output only the instruction: no preamble, no explanation.",
     ],
 };
 
@@ -197,7 +222,10 @@ fn gabarit(g: &Gabarit, regles: &[(String, Vec<String>)]) -> String {
     let format: Vec<String> = g.format.iter().map(|l| (*l).to_owned()).collect();
     let mut blocs = vec![
         format!("ROLE:\n{}", g.role),
-        format!("USER PRIORITY:\n{}", priorite()),
+        format!(
+            "USER PRIORITY:\n{}",
+            g.priorite.map_or_else(priorite, str::to_owned)
+        ),
     ];
     blocs.extend(sections_usage(g, regles));
     blocs.push(format!("OUTPUT FORMAT:\n{}", puces(&format)));
@@ -233,6 +261,21 @@ pub fn consigne_reecriture(
     mots_max: Option<u64>,
     regles: &[(String, Vec<String>)],
 ) -> String {
+    consigne(&REECRITURE, reecrite, mots_max, regles)
+}
+
+/// La consigne de traduction d'une instruction de retouche pour ce modèle cible, toujours suivie de la clause
+/// verrouillée. `reecrite` : celle de Réglages pour ce GGUF.
+pub fn consigne_retouche(reecrite: Option<&str>, regles: &[(String, Vec<String>)]) -> String {
+    consigne(&RETOUCHE, reecrite, None, regles)
+}
+
+fn consigne(
+    g: &Gabarit,
+    reecrite: Option<&str>,
+    mots_max: Option<u64>,
+    regles: &[(String, Vec<String>)],
+) -> String {
     let texte = match reecrite {
         Some(propre) => {
             let mut t = propre.trim_end().to_owned();
@@ -243,7 +286,7 @@ pub fn consigne_reecriture(
             }
             t
         }
-        None => gabarit(&REECRITURE, regles),
+        None => gabarit(g, regles),
     };
     let texte = texte
         .replace("{mots_max}", &mots_max.unwrap_or(MOTS_MAX_REECRITURE).to_string())
@@ -310,23 +353,28 @@ pub fn garde_cjk(texte: &str, entrees: &[&str]) -> String {
         .join(" ")
 }
 
-/// Le bloc `specialiste` de ce GGUF s'il réécrit les idées pour ce workflow.
-pub fn specialiste_pour(modele: &str, workflow: Option<&Workflow>) -> Option<Value> {
+/// Le bloc `specialiste` de ce GGUF s'il sert cet usage (`creation`, `retouche`) pour ce workflow.
+pub fn specialiste_pour(modele: &str, usage: &str, workflow: Option<&Workflow>) -> Option<Value> {
     let s = crate::fiches::specialiste(modele)?;
     let id = workflow?.id.as_str();
-    let sert = s.get("usage").and_then(Value::as_str) == Some("creation")
+    let sert = s.get("usage").and_then(Value::as_str) == Some(usage)
         && s.get("workflows")
             .and_then(Value::as_array)
             .is_some_and(|w| w.iter().any(|x| x.as_str() == Some(id)));
     sert.then_some(s)
 }
 
-/// Les messages et les paramètres d'un LLM spécialisé : sa consigne livrée (plus la clause verrouillée) et
-/// l'échantillonnage de son entraînement.
+/// Les messages et les paramètres d'un LLM spécialisé : sa consigne livrée (plus la clause verrouillée), l'image à
+/// retoucher s'il la voit, et l'échantillonnage de son entraînement.
 ///
 /// # Errors
 /// Sa consigne n'est pas dans `modeles\llm`, ou son bloc est incomplet.
-pub fn demande_specialiste(modeles: &Path, s: &Value, texte: &str) -> Result<Demande, String> {
+pub fn demande_specialiste(
+    modeles: &Path,
+    s: &Value,
+    texte: &str,
+    image: Option<&[u8]>,
+) -> Result<Demande, String> {
     let nom = s
         .pointer("/consigne/nom")
         .and_then(Value::as_str)
@@ -353,7 +401,10 @@ pub fn demande_specialiste(modeles: &Path, s: &Value, texte: &str) -> Result<Dem
     Ok(Demande {
         messages: json!([
             {"role": "system", "content": systeme},
-            {"role": "user", "content": texte},
+            {"role": "user", "content": match image {
+                Some(png) => json!([image_url(png), {"type": "text", "text": texte}]),
+                None => json!(texte),
+            }},
         ]),
         temperature,
         max_tokens,
@@ -423,9 +474,9 @@ pub fn preparer_reecriture(
     reglages_workflow: Option<&ReglagesWorkflow>,
 ) -> Result<Ecriture, String> {
     let demande_nom = llm::nom(&lieux.modeles, modele);
-    if let Some(s) = specialiste_pour(&demande_nom, workflow) {
+    if let Some(s) = specialiste_pour(&demande_nom, "creation", workflow) {
         let lancement = llm::lancement(lieux, Some(&demande_nom))?;
-        let demande = demande_specialiste(&lieux.modeles, &s, idee)?;
+        let demande = demande_specialiste(&lieux.modeles, &s, idee, None)?;
         return Ok(Ecriture {
             lancement,
             demande,
@@ -452,6 +503,127 @@ pub fn preparer_reecriture(
             temperature,
             max_tokens: regle.max_tokens.max(tokens_pour_mots(mots)),
             echantillonnage,
+            ..Demande::default()
+        },
+        lancement,
+        specialiste: None,
+    })
+}
+
+/// Une image montrée au LLM : ses pixels (il la voit s'il a sa vision), sinon ce qu'en dit sa fiche.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Vue {
+    /// L'image en PNG, réduite à un mégapixel au plus ([`crate::images::pour_la_vision`]).
+    pub png: Vec<u8>,
+    /// Ce que montre l'image d'après sa fiche ; rien pour une image importée.
+    pub texte: Option<String>,
+}
+
+/// Ce que le LLM doit faire de l'image, selon l'usage.
+fn note_vue(usage: &str) -> &'static str {
+    match usage {
+        "retouche" => {
+            "The picture is the image to edit: name what is really in it (subjects and their gender, objects, setting) so that the instruction fits it."
+        }
+        "variation" => {
+            "The picture is the starting image, partly redrawn: keep its subjects (their gender, looks, clothing), setting and visual style unless the idea changes them."
+        }
+        "references" => {
+            "The pictures are the reference pictures, in order (Picture 1, Picture 2…): take from each what the idea asks for, as it really looks."
+        }
+        _ => {
+            "The picture is the first frame of the clip. Open with one short sentence anchoring it as it really is (visual style, subject, setting), then describe what happens from there. Keep the subjects' gender, looks and clothing, the setting and the visual style consistent (a painting stays a painting)."
+        }
+    }
+}
+
+fn image_url(png: &[u8]) -> Value {
+    json!({"type": "image_url", "image_url": {"url": format!("data:image/png;base64,{}", images::base64(png))}})
+}
+
+/// Le message de l'utilisateur, avec les images si le LLM les voit, sinon ce qu'en disent leurs fiches ; tel quel
+/// sans image, ou si aucune n'a de fiche (images importées).
+pub fn montrer(texte: &str, vues: &[Vue], usage: &str, voit: bool) -> Value {
+    if vues.is_empty() {
+        return json!(texte);
+    }
+    let note = note_vue(usage);
+    if voit {
+        let mut contenu: Vec<Value> = vues.iter().map(|v| image_url(&v.png)).collect();
+        contenu.push(json!({"type": "text", "text": format!("{texte}\n\n({note})")}));
+        return Value::Array(contenu);
+    }
+    let connues: Vec<(usize, &str)> = vues
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| v.texte.as_deref().map(|t| (i + 1, t)))
+        .collect();
+    match connues.as_slice() {
+        [] => json!(texte),
+        [(_, seule)] if vues.len() == 1 => json!(format!(
+            "{texte}\n\n(You cannot see the picture; it was created from this prompt: {seule}\n{note})"
+        )),
+        _ => {
+            let lignes: Vec<String> = connues.iter().map(|(i, t)| format!("Picture {i}: {t}")).collect();
+            json!(format!(
+                "{texte}\n\n(You cannot see the pictures; they were created from these prompts:\n{}\n{note})",
+                lignes.join("\n")
+            ))
+        }
+    }
+}
+
+/// Prépare la traduction d'une instruction de retouche (ou d'une précision d'agrandissement, sans image) : le
+/// spécialiste de retouche du workflow s'il est choisi et qu'il y a une image à voir, sinon le LLM demandé (un
+/// spécialiste d'autre chose cède la place au LLM par défaut), qui voit l'image s'il a sa vision. Courte demande :
+/// sans réflexion, 200 tokens.
+///
+/// # Errors
+/// Nom de GGUF invalide, ou consigne du spécialiste absente.
+pub fn preparer_traduction(
+    lieux: &Lieux,
+    instruction: &str,
+    modele: Option<&str>,
+    workflow: Option<&Workflow>,
+    vue: Option<&Vue>,
+) -> Result<Ecriture, String> {
+    let demande_nom = llm::nom(&lieux.modeles, modele);
+    if let Some(v) = vue
+        && let Some(s) = specialiste_pour(&demande_nom, "retouche", workflow)
+    {
+        let lancement = llm::lancement(lieux, Some(&demande_nom))?;
+        let demande = demande_specialiste(&lieux.modeles, &s, instruction, Some(&v.png))?;
+        return Ok(Ecriture {
+            lancement,
+            demande,
+            specialiste: Some(s),
+        });
+    }
+    let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
+        llm::defaut(&lieux.modeles)
+    } else {
+        demande_nom
+    };
+    let lancement = llm::lancement(lieux, Some(&nom))?;
+    let regle = llm::valeurs(&lieux.dossier, &nom);
+    let reecrite = llm::consigne(&lieux.dossier, &nom, "retouche");
+    let systeme = consigne_retouche(reecrite.as_deref(), &sections_prompt(workflow));
+    let contenu = montrer(
+        instruction,
+        vue.map(std::slice::from_ref).unwrap_or_default(),
+        "retouche",
+        lancement.vision.is_some(),
+    );
+    Ok(Ecriture {
+        demande: Demande {
+            messages: json!([
+                {"role": "system", "content": systeme},
+                {"role": "user", "content": contenu},
+            ]),
+            temperature: regle.temperature_retouche,
+            max_tokens: 200,
+            reflechir: false,
+            echantillonnage: regle.echantillonnage(),
             ..Demande::default()
         },
         lancement,
@@ -696,6 +868,129 @@ mod tests {
         // Pour un autre workflow, le spécialiste cède la place au LLM par défaut.
         let krea = workflows::obtenir("krea2_turbo").unwrap();
         let e = preparer_reecriture(&l, "un renard", Some(T2I), Some(&krea), None).unwrap();
+        assert!(e.specialiste.is_none());
+        assert_eq!(e.modele(), "mistral.gguf");
+    }
+
+    #[test]
+    fn la_consigne_de_retouche_suit_son_gabarit() {
+        let c = consigne_retouche(None, &[]);
+        assert!(c.starts_with(
+            "ROLE:
+You translate image-editing instructions"
+        ));
+        assert!(c.contains(
+            "USER PRIORITY:
+Edit exactly what the user names."
+        ));
+        assert!(!c.contains("First sort what the user wrote"));
+        assert!(c.contains(
+            "PROMPT OUTLINE, in this order:
+1. Lead with the change"
+        ));
+        assert!(c.contains(
+            "OUTPUT FORMAT:
+- One or two sentences."
+        ));
+        assert!(c.ends_with(CLAUSE_MINEURS));
+    }
+
+    fn vue(texte: Option<&str>) -> Vue {
+        Vue {
+            png: vec![0x89, b'P', b'N', b'G'],
+            texte: texte.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn images_montrees_ou_decrites() {
+        assert_eq!(
+            montrer("fais-la rire", &[], "retouche", true),
+            json!("fais-la rire")
+        );
+        let vu = montrer("fais-la rire", &[vue(Some("a woman"))], "retouche", true);
+        assert_eq!(vu[0]["type"], json!("image_url"));
+        assert_eq!(vu[0]["image_url"]["url"], json!("data:image/png;base64,iVBORw=="));
+        assert!(vu[1]["text"].as_str().unwrap().starts_with(
+            "fais-la rire
+
+(The picture is the image to edit"
+        ));
+        let decrit = montrer("fais-la rire", &[vue(Some("a woman"))], "retouche", false);
+        assert!(
+            decrit
+                .as_str()
+                .unwrap()
+                .contains("You cannot see the picture; it was created from this prompt: a woman")
+        );
+        // Image importée, sans fiche : à l'aveugle.
+        assert_eq!(
+            montrer("fais-la rire", &[vue(None)], "retouche", false),
+            json!("fais-la rire")
+        );
+        let deux = montrer(
+            "mélange",
+            &[vue(Some("a cat")), vue(Some("a dog"))],
+            "references",
+            false,
+        );
+        assert!(deux.as_str().unwrap().contains(
+            "Picture 1: a cat
+Picture 2: a dog"
+        ));
+    }
+
+    #[test]
+    fn traduction_d_une_retouche() {
+        let temp = tempfile::tempdir().unwrap();
+        let l = lieux(&temp);
+        let llm_dir = l.modeles.join("llm");
+        fs::write(llm_dir.join("mistral.gguf"), essai::gguf(&[12])).unwrap();
+        let edit = workflows::obtenir("qwen_image_2_1_edit").unwrap();
+        // Sans vision : la fiche décrit l'image.
+        let e = preparer_traduction(
+            &l,
+            "fais-la rire",
+            Some("mistral.gguf"),
+            Some(&edit),
+            Some(&vue(Some("a woman"))),
+        )
+        .unwrap();
+        assert!(e.specialiste.is_none());
+        assert!(systeme(&e).starts_with(
+            "ROLE:
+You translate image-editing instructions"
+        ));
+        assert_eq!((e.demande.max_tokens, e.demande.reflechir), (200, false));
+        assert!((e.demande.temperature - 0.2).abs() < f64::EPSILON);
+        assert!(
+            e.demande.messages[1]["content"]
+                .as_str()
+                .unwrap()
+                .contains("a woman")
+        );
+        // Avec son projecteur, le LLM voit l'image.
+        fs::write(llm_dir.join("mistral-mmproj-Q8_0.gguf"), b"x").unwrap();
+        let e = preparer_traduction(
+            &l,
+            "fais-la rire",
+            Some("mistral.gguf"),
+            Some(&edit),
+            Some(&vue(None)),
+        )
+        .unwrap();
+        assert!(e.lancement.vision.is_some());
+        assert_eq!(e.demande.messages[1]["content"][0]["type"], json!("image_url"));
+        // Le spécialiste de retouche du workflow voit l'image avec sa propre consigne.
+        let i2i = "Qwen-Image-2.1-PE-I2I.Q5_K_M.gguf";
+        fs::write(llm_dir.join(i2i), essai::gguf(&[12])).unwrap();
+        fs::write(llm_dir.join("Qwen-Image-2.1-PE-I2I.consigne.txt"), "Edit.").unwrap();
+        let e = preparer_traduction(&l, "fais-la rire", Some(i2i), Some(&edit), Some(&vue(None))).unwrap();
+        assert!(e.specialiste.is_some());
+        assert_eq!(e.demande.messages[1]["content"][0]["type"], json!("image_url"));
+        assert_eq!(e.demande.messages[1]["content"][1]["text"], json!("fais-la rire"));
+        // Une précision d'agrandissement, sans image : jamais le spécialiste.
+        let e = preparer_traduction(&l, "ajoute la mer", Some(i2i), Some(&edit), None).unwrap();
         assert!(e.specialiste.is_none());
         assert_eq!(e.modele(), "mistral.gguf");
     }
