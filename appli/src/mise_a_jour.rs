@@ -27,7 +27,7 @@ impl Disponible {
 }
 
 /// Le client HTTPS : HTTPS seulement, certificats et proxy de Windows, délais bornés.
-fn client(delai: Duration) -> Agent {
+pub(crate) fn client(delai: Duration) -> Agent {
     Agent::config_builder()
         .https_only(true)
         .timeout_global(Some(delai))

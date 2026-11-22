@@ -11,6 +11,8 @@
 
 use std::io;
 
+use serde::Serialize;
+
 use crate::secrets::{Coffre, Protection};
 
 /// La longueur d'une clé, au plus (comme en v2).
@@ -58,6 +60,89 @@ impl Source {
     pub fn cible_v2(self) -> String {
         format!("{PREFIXE_CIBLE_V2}{}", self.nom_secret())
     }
+
+    /// Où créer la clé, comme le dit la v2.
+    pub fn aide(self) -> &'static str {
+        match self {
+            Self::Civitai => "civitai.com → ton avatar → Account settings → API Keys → Add API key",
+            Self::HuggingFace => "huggingface.co → Settings → Access Tokens → Create new token (type Read)",
+        }
+    }
+
+    /// La source d'après son identifiant (`civitai`, `huggingface`).
+    pub fn depuis(id: &str) -> Option<Self> {
+        Self::TOUTES.into_iter().find(|s| s.nom_secret() == id)
+    }
+}
+
+/// D'où vient la clé d'une source : jamais la clé elle-même.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct EtatCle {
+    pub source: String,
+    pub nom: String,
+    pub variable: String,
+    pub aide: String,
+    /// `aria` (dans `secrets\`), `variable` (d'environnement), ou rien.
+    pub origine: Option<String>,
+}
+
+/// L'état des clés de chaque source.
+pub fn etat<P: Protection>(coffre: &Coffre<'_, P>) -> Vec<EtatCle> {
+    etat_avec(coffre, |nom| std::env::var(nom).ok())
+}
+
+fn etat_avec<P: Protection>(
+    coffre: &Coffre<'_, P>,
+    variable: impl Fn(&str) -> Option<String>,
+) -> Vec<EtatCle> {
+    Source::TOUTES
+        .into_iter()
+        .map(|s| {
+            let dans_aria = coffre
+                .lire(s.nom_secret())
+                .ok()
+                .flatten()
+                .is_some_and(|v| !v.trim().is_empty());
+            let en_variable = variable(s.variable()).is_some_and(|v| !v.trim().is_empty());
+            EtatCle {
+                source: s.nom_secret().to_owned(),
+                nom: s.nom().to_owned(),
+                variable: s.variable().to_owned(),
+                aide: s.aide().to_owned(),
+                origine: if dans_aria {
+                    Some("aria".to_owned())
+                } else if en_variable {
+                    Some("variable".to_owned())
+                } else {
+                    None
+                },
+            }
+        })
+        .collect()
+}
+
+/// Enregistre la clé d'une source, chiffrée dans `secrets\`.
+///
+/// # Errors
+/// Clé mal collée (le message ne la cite jamais), ou coffre qui ne s'écrit pas.
+pub fn enregistrer<P: Protection>(
+    coffre: &Coffre<'_, P>,
+    source: Source,
+    valeur: &str,
+) -> Result<(), String> {
+    let propre = valider(valeur)?;
+    coffre
+        .enregistrer(source.nom_secret(), &propre)
+        .map_err(|e| e.to_string())
+}
+
+/// Retire la clé d'une source de `secrets\`. L'entrée de la v2 dans le Gestionnaire d'identification Windows, elle,
+/// reste en place (une v2 restaurée la retrouve).
+///
+/// # Errors
+/// Le fichier ne s'efface pas.
+pub fn supprimer<P: Protection>(coffre: &Coffre<'_, P>, source: Source) -> Result<(), String> {
+    coffre.supprimer(source.nom_secret()).map_err(|e| e.to_string())
 }
 
 /// Une clé telle qu'elle sera enregistrée : sans espace autour, ni vide, ni trop longue, sans espace dedans.
@@ -359,5 +444,49 @@ mod tests {
             assert!(valider(mauvaise).is_err(), "{mauvaise:?}");
         }
         assert!(valider(&"x".repeat(LONGUEUR_MAX)).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod tests_etat {
+    use super::*;
+    use crate::Dossier;
+
+    /// Pas de chiffrement dans ces tests : seul le rangement compte.
+    struct Transparente;
+
+    impl Protection for Transparente {
+        fn proteger(&self, clair: &[u8]) -> io::Result<Vec<u8>> {
+            Ok(clair.to_vec())
+        }
+        fn deproteger(&self, chiffre: &[u8]) -> io::Result<Vec<u8>> {
+            Ok(chiffre.to_vec())
+        }
+    }
+
+    #[test]
+    fn etat_enregistrer_supprimer() {
+        let temp = tempfile::tempdir().unwrap();
+        let dossier = Dossier::a(temp.path());
+        let protection = Transparente;
+        let coffre = Coffre::du_dossier(&dossier, &protection);
+        let sans = |_: &str| None::<String>;
+        assert!(etat_avec(&coffre, sans).iter().all(|e| e.origine.is_none()));
+        let hf = |nom: &str| (nom == "HF_TOKEN").then(|| "hf_variable".to_owned());
+        let e = etat_avec(&coffre, hf);
+        assert_eq!(e[1].origine.as_deref(), Some("variable"));
+        assert_eq!(e[0].aide, Source::Civitai.aide());
+        assert!(enregistrer(&coffre, Source::Civitai, "avec espace").is_err());
+        enregistrer(&coffre, Source::Civitai, "  cle-civitai  ").unwrap();
+        let e = etat_avec(&coffre, sans);
+        assert_eq!(
+            (e[0].source.as_str(), e[0].origine.as_deref()),
+            ("civitai", Some("aria"))
+        );
+        assert_eq!(coffre.lire("civitai").unwrap().as_deref(), Some("cle-civitai"));
+        supprimer(&coffre, Source::Civitai).unwrap();
+        assert!(etat_avec(&coffre, sans)[0].origine.is_none());
+        assert_eq!(Source::depuis("huggingface"), Some(Source::HuggingFace));
+        assert_eq!(Source::depuis("github"), None);
     }
 }

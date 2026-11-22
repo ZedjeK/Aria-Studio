@@ -52,7 +52,7 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | Créations, rushes, clips, séquences, voix | `data\` | `data\creations\<id>.png` et `<id>.json` au format de la v2 (identifiant `AAAAMMJJ-HHMMSS-xxxxxx`, fiche indentée de quatre espaces, clés de la v2), écrits par le Plateau et relus tels quels (`coeur/src/creations.rs`) ; clips, séquences et voix attendent le Montage | [ ] |
 | Cache | `cache\` (empreintes SHA-256, samplers, chemins ComfyUI) | recalculable | [ ] |
 | Modèles et moteurs | `modeles\`, `moteurs\`, dossier des modèles choisi | mêmes chemins décidés au lancement, rien de déplacé (`coeur/src/emplacements.rs`) ; leur contenu se lit avec les lots des moteurs et des modèles | [ ] |
-| Clés Civitai et Hugging Face | Gestionnaire d'identification Windows (`Aria-Studio/civitai`, `Aria-Studio/huggingface`), repli `CIVITAI_TOKEN` et `HF_TOKEN` | recopiées au lancement, chiffrées (DPAPI), dans `secrets\` si elles n'y sont pas déjà ; l'entrée du coffre reste en place pour une v2 restaurée et ne sera retirée qu'avec l'accord de l'utilisateur (`coeur/src/cles.rs`, `appli/src/main.rs`) ; saisie, test et retrait attendent la page Réglages | [ ] |
+| Clés Civitai et Hugging Face | Gestionnaire d'identification Windows (`Aria-Studio/civitai`, `Aria-Studio/huggingface`), repli `CIVITAI_TOKEN` et `HF_TOKEN` | recopiées au lancement, chiffrées (DPAPI), dans `secrets\` si elles n'y sont pas déjà ; l'entrée du coffre reste en place pour une v2 restaurée et ne sera retirée qu'avec l'accord de l'utilisateur (`coeur/src/cles.rs`, `appli/src/main.rs`) ; saisie, test et retrait faits dans Réglages → Emplacements et clés | [x] |
 | Démarrage avec Windows | valeur `Run` « Aria Studio » (HKCU) | même valeur, nouvelle cible | [ ] |
 | Raccourci du Bureau | `Aria Studio.lnk` | proposé en mise à jour, jamais remplacé en silence | [ ] |
 | Mode portable | `data\` à côté du code, sauf code dans `.Aria-Studio` ; moteurs dans `services\` ; pas de proposition d'installation | même règle (`coeur/src/emplacements.rs`, `appli/src/main.rs`) | [x] |
@@ -100,13 +100,13 @@ La v2 expose 138 routes HTTP. En v3, l'interface appelle des commandes Tauri : p
 | --- | --- | --- | --- |
 | Assistant | `/api/assistant*` (6) | | [ ] |
 | Casting | `/api/bancs*` (10) | | [ ] |
-| Clés | `/api/cles*` (4) | | [ ] |
+| Clés | `/api/cles*` (4) | `etat_cles`, `enregistrer_cle`, `supprimer_cle`, `tester_cle` ; rangées par DPAPI dans `secrets\` (l'entrée de la v2 dans le Gestionnaire d'identification reste) | [x] |
 | Collection et LoRA | `/api/collection*` (6) | | [ ] |
 | Commandes en cours | `/api/commandes*` (2) | `lire_commandes`, `annuler_commande` (images du Plateau) | [ ] |
 | Créations | `/api/creations*`, `/api/agrandissements`, `/api/retouches` (9) | `commander_image`, `commander_retouche`, `commander_agrandissement`, `importer_image`, `options_retouche`, `lire_rushes`, `image_creation` | [ ] |
 | Découvrir et télécharger | `/api/decouvrir*`, `/api/telechargements*`, `/api/workflows/*/telecharger`, `/api/llm/*/installer` (9) | | [ ] |
 | Démarrage, installation, mise à jour | `/api/demarrage`, `/api/installation`, `/api/mise-a-jour*` (9) | squelette | [ ] |
-| Emplacements | `/api/emplacements*` (4) | | [ ] |
+| Emplacements | `/api/emplacements*` (4) | `etat_emplacements`, `ouvrir_dossier`, `parcourir_dossier` (sélecteur natif par `rfd`), `choisir_dossier_modeles` | [x] |
 | État, santé, quitter, journal, jetons, usages | `/api/etat`, `/api/sante`, `/api/quitter`, `/api/journal`, `/api/jetons`, `/api/usages*` (8) | | [ ] |
 | Fond, notifications, sauvegardes | `/api/fond`, `/api/notifications`, `/api/sauvegardes*` (6) | squelette en partie | [ ] |
 | Garde | `/api/garde*` (2) | | [ ] |

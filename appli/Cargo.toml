@@ -26,6 +26,8 @@ tauri-plugin-single-instance = "2.5.5"
 ureq = { version = "3.5.2", default-features = false, features = ["native-tls", "win-system-proxy"] }
 
 [target.'cfg(windows)'.dependencies]
+# Le sélecteur de dossier natif (dossier des modèles, « J'ai déjà ComfyUI ») : IFileDialog de Windows, sans greffon.
+rfd = { version = "0.18.0", default-features = false }
 windows = { version = "0.62.2", features = [
   "Win32_Foundation",
   "Win32_Storage_FileSystem",
