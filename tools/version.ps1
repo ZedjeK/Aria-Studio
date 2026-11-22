@@ -1,11 +1,22 @@
-﻿# Affiche la version d'Aria Studio : celle de app/__init__.py, l'unique endroit où elle vit.
-# Le tag d'une release (vX.Y.Z) doit lui correspondre.
+﻿# Affiche la version sur sa dernière ligne, sans le « v ». Elle vit dans [workspace.package] de Cargo.toml, et nulle
+# part ailleurs.
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$fichier = Join-Path (Split-Path $PSScriptRoot -Parent) 'app\__init__.py'
-$ligne = Select-String -Path $fichier -Pattern '^VERSION\s*=\s*"([^"]+)"' | Select-Object -First 1
-if (-not $ligne) {
-    Write-Error "VERSION est introuvable dans $fichier"
-    exit 1
+$cargo = Join-Path (Split-Path -Parent $PSScriptRoot) 'Cargo.toml'
+$dansLaSection = $false
+$version = $null
+foreach ($ligne in Get-Content -LiteralPath $cargo -Encoding UTF8) {
+    if ($ligne -match '^\s*\[([^\]]+)\]\s*$') {
+        $dansLaSection = ($Matches[1].Trim() -eq 'workspace.package')
+        continue
+    }
+    if ($dansLaSection -and $ligne -match '^\s*version\s*=\s*"([^"]*)"') {
+        $version = $Matches[1]
+        break
+    }
 }
-$ligne.Matches[0].Groups[1].Value
+if (-not $version -or $version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Version introuvable ou mal formée dans [workspace.package] de Cargo.toml (attendu : X.Y.Z)."
+}
+$version

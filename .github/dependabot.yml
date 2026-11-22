@@ -1,4 +1,6 @@
-# Mises à jour automatiques : une PR par semaine et par écosystème, les petites montées groupées.
+# Mises à jour automatiques : une PR par semaine et par écosystème, 5 ouvertes au plus, les petites montées groupées.
+# Une nouvelle version d'action n'est proposée qu'après 7 jours : le temps qu'une version piégée soit repérée et
+# retirée. Les correctifs de sécurité ne sont pas concernés par ce délai.
 # Désactivable en supprimant ce fichier.
 version: 2
 updates:
@@ -6,15 +8,29 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       mises-a-jour-mineures:
         update-types: ["minor", "patch"]
-  - package-ecosystem: "pip"
+  - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
-      mises-a-jour-mineures:
+      cargo-mineures:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "npm"
+    directory: "/interface"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      npm-mineures:
         update-types: ["minor", "patch"]

@@ -4,14 +4,24 @@
 *.md   text
 *.json text
 *.yml  text
-*.yaml text
-*.py   text
-*.js   text
-*.css  text
-*.html text
-*.svg  text
+# Fichiers lus tels quels par l'appli : toujours LF
+*.tmpl text eol=lf
 # Binaires embarqués : jamais de conversion
 *.png   binary
 *.ico   binary
+*.gz    binary
+*.dll   binary
+*.ttf   binary
 *.woff2 binary
 *.zip   binary
+
+# Rust, Svelte et TypeScript : fins de ligne LF, comme les écrivent leurs outils
+*.rs              text eol=lf
+*.toml            text eol=lf
+*.svelte          text eol=lf
+*.ts              text eol=lf
+*.js              text eol=lf
+*.css             text eol=lf
+*.html            text eol=lf
+Cargo.lock        text eol=lf
+package-lock.json text eol=lf

@@ -1,0 +1,21 @@
+name: "Idée"
+description: "Proposer une amélioration d'Aria Studio."
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: besoin
+    attributes:
+      label: "Le besoin"
+      description: "Ce que tu veux pouvoir faire, et pourquoi l'appli ne le permet pas aujourd'hui."
+    validations:
+      required: true
+  - type: textarea
+    id: proposition
+    attributes:
+      label: "Ce que tu proposes"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Ce que tu fais en attendant (facultatif)"

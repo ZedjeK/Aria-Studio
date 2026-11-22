@@ -1,62 +1,65 @@
 Aria Studio : composants tiers
-=============================
+==============================
 
-Le code d'Aria Studio est sous licence MIT (fichier LICENSE). Ce fichier liste ce
-que le zip embarque et ce qu'Aria télécharge à ta demande, avec la licence de
-chaque composant. Relevé le 2026-11-15 sur les versions de requirements.txt et
-de catalogue/moteurs.yaml ; à tenir à jour quand l'un des deux change.
+Ce fichier liste tout ce que l'exe embarque et qui n'a pas été écrit pour
+Aria Studio, puis ce qu'Aria télécharge à ta demande. Il est mis à jour à
+chaque version et joint au zip.
 
-Les textes complets des licences des paquets Python sont livrés avec eux, dans
-python\Lib\site-packages\<paquet>-<version>.dist-info\licenses\. Celui de CPython
-est python\LICENSE.txt.
+Pour chaque composant embarqué : nom, version, source officielle, licence, et
+la façon dont il a été vérifié (empreinte SHA-256 publiée, signature, ou
+compilation depuis le code source).
 
-1. Embarqué dans le zip
------------------------
+Version 3 en cours de construction (branche refonte/v3) : les lignes « à
+renseigner » se complètent avant sa première version publiée.
 
-Interpréteur
-  CPython 3.11, build python-build-standalone (astral-sh) ..... PSF-2.0
-    Le fichier python\LICENSE.txt rassemble la licence de CPython et celles des
-    bibliothèques qu'il embarque (par exemple bzip2 et Tcl/Tk, qu'il cite).
-  pip (livré avec CPython, dépendances incluses) ............... MIT, avec les
-    licences de ses composants dans son dossier .dist-info
+1. Embarqué dans l'exe
+----------------------
 
-Dépendances directes (requirements.txt)
-  fastapi 0.162.5 ............................................... MIT
-  uvicorn 0.54.0 ................................................ BSD-3-Clause
-  PyYAML 6.0.3 .................................................. MIT
-  httpx 0.28.1 .................................................. BSD-3-Clause
-  websockets 17.4 ............................................... BSD-3-Clause
-  nvidia-ml-py 13.615.71 ........................................ BSD (d'après
-    ses métadonnées ; le paquet ne livre pas de fichier de licence)
-  psutil 7.2.2 .................................................. BSD-3-Clause
-  Pillow 13.0.0 ................................................. MIT-CMU
+Polices
+-------
 
-Dépendances de ces paquets (versions du .venv au 2026-11-13)
-  annotated-doc 0.0.5 ........................................... MIT
-  annotated-types 0.8.0 ......................................... MIT
-  anyio 4.15.1 .................................................. MIT
-  certifi 2026.10.18 ............................................ MPL-2.0
-  click 8.5.0 ................................................... BSD-3-Clause
-  h11 0.16.0 .................................................... MIT
-  httpcore 1.0.9 ................................................ BSD-3-Clause
-  idna 3.20 ..................................................... BSD-3-Clause
-  opentelemetry-api 1.45.1 ...................................... Apache-2.0
-  pydantic 2.14.1 ............................................... MIT
-  pydantic-core 2.50.1 .......................................... MIT
-  starlette 1.9.0 ............................................... BSD-3-Clause
-  typing-extensions 4.16.0 ...................................... PSF-2.0
-  typing-inspection 0.4.4 ....................................... MIT
+Space Grotesk : Medium, SemiBold et Bold (latin), embarquées dans l'exe
+  Version      : paquet npm @fontsource/space-grotesk 5.3.0 (interface\package.json)
+  Source       : https://github.com/floriankarsten/space-grotesk, via https://fontsource.org
+  Licence      : SIL Open Font License 1.1
+  Vérification : à renseigner
 
-certifi est sous MPL-2.0 : son code source est public sur
-https://github.com/certifi/python-certifi, et Aria ne le modifie pas.
+IBM Plex Mono : Regular et Bold (latin), embarquées dans l'exe
+  Version      : paquet npm @fontsource/ibm-plex-mono 5.3.0 (interface\package.json)
+  Source       : https://github.com/IBM/plex, via https://fontsource.org
+  Licence      : SIL Open Font License 1.1
+  Vérification : à renseigner
 
-Polices (web\polices\, avec leur texte de licence)
-  Space Grotesk ................................................. SIL OFL 1.1
-  IBM Plex Mono ................................................. SIL OFL 1.1
+Runtime et bibliothèques
+------------------------
 
-Lanceur
-  Aria-Studio.exe est écrit pour Aria (tools\launcher\Launcher.cs, licence MIT)
-  et compilé avec le compilateur C# fourni par Windows ; aucun code tiers.
+WebView2 : non embarqué. L'exe utilise le moteur WebView2 installé dans Windows.
+  Source       : https://developer.microsoft.com/microsoft-edge/webview2
+  Licence      : celle de Microsoft Edge WebView2, installé avec Windows
+
+Bibliothèque standard de Rust, compilée dans l'exe
+  Version      : à renseigner : celle de rust-toolchain.toml au moment de la version
+  Source       : https://github.com/rust-lang/rust
+  Licence      : MIT ou Apache-2.0
+  Vérification : à renseigner
+
+Tauri (crates tauri, tauri-runtime, tauri-utils, wry, tao…), compilé dans l'exe
+  Version      : à renseigner : celle de Cargo.lock au moment de la version
+  Source       : https://github.com/tauri-apps/tauri
+  Licence      : MIT ou Apache-2.0
+  Vérification : à renseigner
+
+Autres crates compilées dans l'exe (Cargo.lock)
+  Version      : à renseigner : un bloc par crate, d'après Cargo.lock du build (cargo about peut les lister)
+  Source       : à renseigner
+  Licence      : à renseigner
+  Vérification : à renseigner
+
+Paquets npm embarqués dans l'interface (@tauri-apps/api, Svelte)
+  Version      : à renseigner : celles de interface\package-lock.json au moment de la version
+  Source       : https://github.com/tauri-apps/tauri et https://github.com/sveltejs/svelte
+  Licence      : MIT ou Apache-2.0 (@tauri-apps/api), MIT (Svelte)
+  Vérification : à renseigner
 
 2. Téléchargé à ta demande (jamais embarqué)
 --------------------------------------------

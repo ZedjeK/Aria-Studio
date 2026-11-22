@@ -1,0 +1,25 @@
+{
+  "identifier": "principale",
+  "description": "La fenêtre principale : les commandes de l'appli, une par une, l'écoute des événements de l'appli et les gestes de sa barre de titre (déplacer, réduire, agrandir, fermer).",
+  "windows": ["principale"],
+  "permissions": [
+    "allow-identite",
+    "allow-lire-reglages",
+    "allow-enregistrer-reglages",
+    "allow-mesurer-disque",
+    "allow-lire-journal",
+    "allow-quitter",
+    "allow-lire-demarrage-auto",
+    "allow-regler-demarrage-auto",
+    "allow-mise-a-jour-disponible",
+    "allow-voir-notes",
+    "allow-installer-mise-a-jour",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-close"
+  ]
+}

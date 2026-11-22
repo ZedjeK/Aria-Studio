@@ -7,7 +7,7 @@ onglet **Security** du dépôt, puis **Report a vulnerability**. Le message n'es
 que par l'auteur.
 
 Dis ce que tu as observé, comment le reproduire, et la version concernée
-(elle est affichée dans le menu de gauche de l'appli).
+(elle est affichée dans l'appli).
 
 ## Ce qui est couvert
 

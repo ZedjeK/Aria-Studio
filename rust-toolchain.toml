@@ -1,0 +1,6 @@
+# Version de Rust du projet : rustup l'installe tout seul au premier appel de cargo, en local comme en CI.
+# À monter à la main, par une PR, après lecture des notes de version.
+[toolchain]
+channel = "1.100.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
