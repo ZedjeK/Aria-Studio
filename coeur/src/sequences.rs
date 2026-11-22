@@ -183,8 +183,8 @@ pub fn a_tourner(s: &Sequence, demandes: &[usize]) -> Vec<usize> {
             && p.get("a_jour").and_then(Value::as_bool) == Some(true);
         (!a_jour).then_some(k)
     }));
-    for k in 1..tous.len() {
-        let enchainement = texte(&tous[k], "enchainement");
+    for (k, plan) in tous.iter().enumerate().skip(1) {
+        let enchainement = texte(plan, "enchainement");
         if choisis.contains(&(k - 1)) && (enchainement == "prolonger" || enchainement == "transition") {
             choisis.push(k);
         }
@@ -802,7 +802,7 @@ pub fn corbeille(data: &Path) -> Vec<Value> {
             }))
         })
         .collect();
-    sortie.sort_by(|a, b| texte(b, "date").cmp(&texte(a, "date")));
+    sortie.sort_by_key(|s| std::cmp::Reverse(texte(s, "date")));
     sortie
 }
 
