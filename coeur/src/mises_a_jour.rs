@@ -193,7 +193,7 @@ pub fn recevoir(mut flux: impl Read, paquet: &Paquet, cible: &Path) -> io::Resul
 }
 
 /// Extrait le zip dans `vers`, sans rien laisser sortir de ce dossier.
-fn extraire(zip: &Path, vers: &Path) -> io::Result<()> {
+pub(crate) fn extraire(zip: &Path, vers: &Path) -> io::Result<()> {
     let mut archive = zip::ZipArchive::new(File::open(zip)?).map_err(io::Error::other)?;
     for i in 0..archive.len() {
         let mut entree = archive.by_index(i).map_err(io::Error::other)?;
