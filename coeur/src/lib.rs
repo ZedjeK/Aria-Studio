@@ -9,6 +9,7 @@ pub mod cles;
 pub mod collection;
 pub mod comfy;
 pub mod comfy_serveur;
+pub mod conversation;
 pub mod creations;
 pub mod decouvrir;
 pub mod demarrage;

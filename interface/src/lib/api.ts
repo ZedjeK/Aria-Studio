@@ -1190,3 +1190,42 @@ export const enregistrerPersonnage = (nom: string, choix: Record<string, string>
   invoke<Personnage>('enregistrer_personnage', { nom, choix, age });
 
 export const supprimerPersonnage = (nom: string): Promise<void> => invoke<void>('supprimer_personnage', { nom });
+
+// --- Scénario : « 💬 M'aider à préciser » (aria_coeur::conversation) ---
+
+export interface EchangeConversation {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface QuestionConversation {
+  question: string;
+  choix: string[];
+  /** Une rubrique du guide : sa liste complète peut s'ouvrir. */
+  liste?: string;
+}
+
+export interface TourConversation {
+  message: string;
+  /** « Ce que j'ai compris ». */
+  fiche: { nom: string; valeur: string }[];
+  questions: QuestionConversation[];
+  prompt: string | null;
+  /** Le tour tel qu'il repart au LLM. */
+  brut: string;
+  modele: string;
+  dureeS: number;
+}
+
+export interface DemandeConversation {
+  echanges: EchangeConversation[];
+  forme: 'image';
+  workflow: string | null;
+  contexte: string;
+  llm: string | null;
+  format: string | null;
+  sujet: string | null;
+}
+
+export const conversationScenario = (demande: DemandeConversation): Promise<TourConversation> =>
+  invoke<TourConversation>('conversation_scenario', { demande });

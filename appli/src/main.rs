@@ -195,6 +195,7 @@ fn lancer() -> Result<(), String> {
             scenario::lire_personnages,
             scenario::enregistrer_personnage,
             scenario::supprimer_personnage,
+            scenario::conversation_scenario,
             lieux::etat_emplacements,
             lieux::ouvrir_dossier,
             lieux::parcourir_dossier,

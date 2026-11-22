@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use aria_coeur::conversation::{self, DemandeConversation, Tour};
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::listes::{self, Assemblage, DemandeAssemblage, Structure, Sujet};
 use aria_coeur::personnages::{self, Personnage};
@@ -92,4 +93,18 @@ pub fn enregistrer_personnage(
 #[tauri::command]
 pub fn supprimer_personnage(lieux: State<'_, Emplacements>, nom: String) -> Result<(), String> {
     personnages::supprimer(&lieux.data, &nom)
+}
+
+/// « 💬 M'aider à préciser » : un tour de conversation (questions, fiche « Ce que j'ai compris », prompt).
+#[tauri::command]
+pub async fn conversation_scenario(
+    plateau: State<'_, Arc<Plateau>>,
+    moteurs: State<'_, Moteurs>,
+    demande: DemandeConversation,
+) -> Result<Tour, String> {
+    let contexte = plateau.contexte().clone();
+    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    tauri::async_runtime::spawn_blocking(move || conversation::tour(&contexte, &mut orchestrateur, &demande))
+        .await
+        .map_err(|e| format!("Scénario indisponible : {e}"))?
 }

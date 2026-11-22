@@ -41,6 +41,7 @@
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
+  import ScenarioConversation from './ScenarioConversation.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -67,6 +68,12 @@
   /** Le LLM choisi ; vide : celui du modèle cible. */
   let llmChoisi = $state('');
   let idee = $state('');
+  /** « ✨ Écrire le prompt » d'après l'idée, ou « 💬 M'aider à préciser » en conversation. */
+  let modeIdee = $state('ecrire');
+  const ongletsIdee = [
+    { id: 'ecrire', titre: '✨ Écrire' },
+    { id: 'preciser', titre: "💬 M'aider à préciser" },
+  ];
   let precisions = $state('');
   /** La traduction des précisions, et le texte qu'elle traduit (elle ne vaut plus s'il change). */
   let traduction = $state<{ de: string; en: string } | null>(null);
@@ -344,6 +351,22 @@
 </Panneau>
 
 <Panneau titre="Ton idée">
+  <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
+  {#if modeIdee === 'preciser'}
+    <ScenarioConversation
+      workflow={workflowId}
+      llm={llmChoisi || null}
+      contexte={complements}
+      {sujet}
+      disponible={llms.length > 0}
+      {signaler}
+      utiliser={(p) => {
+        final = p;
+        finalRetouche = true;
+        signaler('Prompt de la conversation posé dans le prompt final.');
+      }}
+    />
+  {:else}
   <textarea
     rows="3"
     maxlength="2000"
@@ -375,6 +398,7 @@
       Le LLM écrit le prompt pour le modèle cible, d'après ton idée et les compléments, qu'il garde tels quels. Il
       prend la carte graphique le temps d'écrire.
     </p>
+  {/if}
   {/if}
 </Panneau>
 

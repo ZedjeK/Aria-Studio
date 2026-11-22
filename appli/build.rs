@@ -57,6 +57,7 @@ fn main() {
         "lire_personnages",
         "enregistrer_personnage",
         "supprimer_personnage",
+        "conversation_scenario",
         "usages_modeles",
         "definir_favori",
         "definir_llm_workflow",

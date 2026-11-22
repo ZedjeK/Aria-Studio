@@ -52,6 +52,7 @@
     "allow-lire-personnages",
     "allow-enregistrer-personnage",
     "allow-supprimer-personnage",
+    "allow-conversation-scenario",
     "allow-usages-modeles",
     "allow-definir-favori",
     "allow-definir-llm-workflow",
