@@ -10,15 +10,19 @@
   import {
     assemblerPrompt,
     ecrirePromptScenario,
+    enregistrerPersonnage,
+    lirePersonnages,
     messageErreur,
     optionsPlateau,
     structureScenario,
     sujetsScenario,
+    supprimerPersonnage,
     traduirePrecisions,
     type Assemblage,
     type ChoixLlm,
     type ChoixListes,
     type ChoixWorkflow,
+    type Personnage,
     type OngletScenario,
     type StructureScenario,
     type SujetScenario,
@@ -68,6 +72,9 @@
   let traduction = $state<{ de: string; en: string } | null>(null);
   /** Le LLM travaille (écriture ou traduction). */
   let ecriture = $state<'ecrire' | 'traduire' | null>(null);
+  let personnages = $state<Personnage[]>([]);
+  /** Le nom sous lequel enregistrer le personnage en cours. */
+  let nomPersonnage = $state('');
   let assemblage = $state<Assemblage | null>(null);
   let erreurAssemblage = $state<string | null>(null);
   let final = $state('');
@@ -143,6 +150,46 @@
     if (!structure) return;
     choixParSujet = { ...choixParSujet, [sujet]: poserChoix(structure, choix, bloc, sousListe, valeur) };
     planifier();
+  }
+
+  async function relirePersonnages() {
+    try {
+      personnages = await lirePersonnages();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
+  /** Rappelle un personnage : ses choix remplacent ceux du bloc « personnage », son âge l'âge précis. */
+  function rappeler(nom: string) {
+    const p = personnages.find((x) => x.nom === nom);
+    if (!p) return;
+    choixParSujet = { ...choixParSujet, personnage: { ...(choixParSujet['personnage'] ?? {}), personnage: { ...p.choix } } };
+    age = p.age;
+    nomPersonnage = p.nom;
+    planifier();
+  }
+
+  async function enregistrer() {
+    try {
+      const p = await enregistrerPersonnage(nomPersonnage, choix['personnage'] ?? {}, age);
+      signaler(`${p.nom} enregistré.`);
+      await relirePersonnages();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
+  async function supprimer() {
+    const nom = nomPersonnage.trim();
+    if (!personnages.some((p) => p.nom === nom)) return;
+    try {
+      await supprimerPersonnage(nom);
+      signaler(`${nom} supprimé.`);
+      await relirePersonnages();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
   }
 
   function toutEffacer() {
@@ -250,6 +297,7 @@
         workflows = options.workflows;
         llms = options.llm;
         llmParWorkflow = options.llmParWorkflow;
+        await relirePersonnages();
         if (!workflows.some((w) => w.id === workflowId)) workflowId = options.defaut;
       } catch (e) {
         signaler(messageErreur(e), true);
@@ -334,6 +382,25 @@
   <Panneau titre="Compléments">
     <SousOnglets onglets={ongletsAvecCompte} bind:actif={ongletChoisi} />
     {#if onglet === 'sujet' && sujet === 'personnage'}
+      <div class="ligne personnages">
+        <label>
+          <span class="etiquette">Personnage enregistré</span>
+          <select value="" onchange={(e) => rappeler(e.currentTarget.value)} disabled={personnages.length === 0}>
+            <option value="">{personnages.length === 0 ? 'Aucun pour l’instant' : 'Rappeler…'}</option>
+            {#each personnages as p (p.nom)}
+              <option value={p.nom}>{p.nom}{p.age !== null ? ` · ${p.age} ans` : ''}</option>
+            {/each}
+          </select>
+        </label>
+        <label>
+          <span class="etiquette">Nom</span>
+          <input type="text" maxlength="40" bind:value={nomPersonnage} placeholder="Léa" />
+        </label>
+        <Bouton petit desactive={nomPersonnage.trim() === ''} onclick={() => void enregistrer()}>Enregistrer</Bouton>
+        {#if personnages.some((p) => p.nom === nomPersonnage.trim())}
+          <Bouton genre="discret" petit onclick={() => void supprimer()}>Supprimer</Bouton>
+        {/if}
+      </div>
       <div class="ligne">
         <label>
           <span class="etiquette">Âge précis</span>

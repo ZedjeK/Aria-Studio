@@ -31,6 +31,7 @@ pub mod mises_a_jour;
 pub mod modeles;
 pub mod moteurs;
 pub mod orchestrateur;
+pub mod personnages;
 pub mod plateau;
 pub mod presence;
 pub mod prompt;
