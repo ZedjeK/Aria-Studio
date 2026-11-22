@@ -41,7 +41,7 @@ const REPONSE_MAX: u64 = 16 << 20;
 const README_MAX: usize = 30_000;
 
 /// Les en-têtes d'une source (sa clé, s'il y en a une).
-pub type EntetesDe<'a> = &'a dyn Fn(&str) -> Vec<(String, String)>;
+pub type EntetesDe<'a> = &'a (dyn Fn(&str) -> Vec<(String, String)> + Send + Sync);
 
 // --- réseau ------------------------------------------------------------------------------------------------------
 

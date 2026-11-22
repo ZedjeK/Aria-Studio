@@ -50,7 +50,7 @@ pub async fn chercher_modeles(
     hors_interface(&file, &sources, move |f, https| {
         let c = f.contexte();
         let installes = decouvrir::installes(c);
-        decouvrir::chercher(https, &*c.entetes, &installes, &demande)
+        decouvrir::chercher(https, &c.entetes, &installes, &demande)
     })
     .await
 }
@@ -77,7 +77,7 @@ pub async fn fichiers_depot(
         let vram = if genre == "llm" { vram() } else { None };
         decouvrir::fichiers_hf(
             https,
-            &*c.entetes,
+            &c.entetes,
             &installes,
             &depot,
             &genre,
@@ -96,7 +96,7 @@ pub async fn preparer_lien(
     lien: String,
 ) -> Result<Proposition, String> {
     hors_interface(&file, &sources, move |f, https| {
-        decouvrir::fiche_depuis_lien(https, &*f.contexte().entetes, &lien)
+        decouvrir::fiche_depuis_lien(https, &f.contexte().entetes, &lien)
     })
     .await
 }
@@ -111,7 +111,7 @@ pub async fn telecharger_lien(
     dossier: String,
 ) -> Result<Tache, String> {
     hors_interface(&file, &sources, move |f, https| {
-        let proposition = decouvrir::fiche_depuis_lien(https, &*f.contexte().entetes, &lien)?;
+        let proposition = decouvrir::fiche_depuis_lien(https, &f.contexte().entetes, &lien)?;
         f.ajouter(proposition.fiche, &dossier)
     })
     .await

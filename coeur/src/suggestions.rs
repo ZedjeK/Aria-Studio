@@ -88,7 +88,7 @@ fn chercher<T: PartialEq + Copy>(
     for (origine, brut) in textes {
         let texte = nettoyer(brut);
         for r in motifs {
-            let Some(r) = motif(*r) else { continue };
+            let Some(r) = motif(r) else { continue };
             for prise in r.captures_iter(&texte) {
                 let (Some(tout), Some(nombre)) = (prise.get(0), prise.get(1)) else {
                     continue;
