@@ -5,7 +5,9 @@
 use std::sync::Arc;
 
 use aria_coeur::emplacements::Emplacements;
+use aria_coeur::images;
 use aria_coeur::plateau::{Commande, Contexte, Demande, Options, Plateau};
+use aria_coeur::retouche::{self, DemandeAgrandissement, DemandeRetouche};
 use aria_coeur::rushes::{self, EtatRushes};
 use aria_coeur::{creations, journal};
 use serde_json::Value;
@@ -45,6 +47,45 @@ async fn hors_interface<T: Send + 'static>(
 #[tauri::command]
 pub async fn options_plateau(plateau: State<'_, Arc<Plateau>>) -> Result<Options, String> {
     hors_interface(&plateau, |p| Ok(p.options())).await
+}
+
+/// Les workflows de retouche, les formats et les LLM.
+#[tauri::command]
+pub async fn options_retouche(plateau: State<'_, Arc<Plateau>>) -> Result<Options, String> {
+    hors_interface(&plateau, |p| Ok(retouche::options(p.contexte()))).await
+}
+
+/// Contrôle une demande de retouche et la met en file.
+#[tauri::command]
+pub async fn commander_retouche(
+    plateau: State<'_, Arc<Plateau>>,
+    demande: DemandeRetouche,
+) -> Result<Commande, String> {
+    hors_interface(&plateau, move |p| p.commander_retouche(&demande)).await
+}
+
+/// Contrôle une demande d'agrandissement et la met en file.
+#[tauri::command]
+pub async fn commander_agrandissement(
+    plateau: State<'_, Arc<Plateau>>,
+    demande: DemandeAgrandissement,
+) -> Result<Commande, String> {
+    hors_interface(&plateau, move |p| p.commander_agrandissement(&demande)).await
+}
+
+/// Ajoute une image personnelle (data URL) aux créations ; rend sa fiche.
+#[tauri::command]
+pub async fn importer_image(
+    plateau: State<'_, Arc<Plateau>>,
+    image: String,
+    nom: String,
+) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| {
+        let octets = images::depuis_data_url(&image)?;
+        let id = p.importer(&octets, &nom)?;
+        creations::fiche(&p.contexte().data, &id)
+    })
+    .await
 }
 
 /// Contrôle la demande et la met en file.

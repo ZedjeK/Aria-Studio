@@ -301,12 +301,17 @@ pub fn workflow_defaut(dossier: &Dossier) -> String {
 
 /// Ce que le Plateau propose.
 pub fn options(contexte: &Contexte) -> Options {
+    options_pour(contexte, TACHE, workflow_defaut(&contexte.dossier))
+}
+
+/// Les workflows d'une tâche (prêts, et incomplets par leur nom), les formats et les LLM, avec ce défaut.
+pub fn options_pour(contexte: &Contexte, tache: &str, defaut: String) -> Options {
     let mut prets = Vec::new();
     let mut incomplets = Vec::new();
     for wf in workflows::catalogue()
         .0
         .into_iter()
-        .filter(|w| w.tache() == TACHE)
+        .filter(|w| w.tache() == tache)
     {
         let nom = nom_de(&wf);
         if !wf.manquants(&contexte.modeles).is_empty() {
@@ -343,7 +348,7 @@ pub fn options(contexte: &Contexte) -> Options {
     Options {
         formats: FORMATS.iter().map(|f| (*f).to_owned()).collect(),
         nombre_max: NOMBRE_MAX,
-        defaut: workflow_defaut(&contexte.dossier),
+        defaut,
         workflows: prets,
         incomplets,
         llm: llm_au_choix(&contexte.modeles),
@@ -936,13 +941,13 @@ mod tests {
         }
     }
 
-    /// Un llama-server et un ComfyUI de test : notent les demandes et les graphes reçus, rendent un prompt et un PNG,
-    /// ou une erreur.
     /// Ce que le faux llama-server a reçu.
     type Ecrits = Arc<Mutex<Vec<(Lancement, llama::Demande)>>>;
     /// Ce que le faux ComfyUI a reçu en téléversement.
     type Televerses = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
+    /// Un llama-server et un ComfyUI de test : notent les demandes et les graphes reçus, rendent un prompt et un PNG,
+    /// ou une erreur.
     struct Faux {
         recus: Arc<Mutex<Vec<Value>>>,
         ecrits: Ecrits,

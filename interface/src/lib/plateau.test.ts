@@ -41,6 +41,7 @@ const options: OptionsPlateau = {
 function commande(changements: Partial<Commande>): Commande {
   return {
     id: 'a1',
+    type: 'creation',
     idee: 'un renard',
     prompt: 'a fox',
     reecrire: false,
@@ -56,6 +57,13 @@ function commande(changements: Partial<Commande>): Commande {
     progression: 0,
     images: [],
     erreur: null,
+    parent: null,
+    masque: false,
+    fondu: 0,
+    largeur: null,
+    hauteur: null,
+    ancrage: null,
+    cadrage: null,
     ...changements,
   };
 }
