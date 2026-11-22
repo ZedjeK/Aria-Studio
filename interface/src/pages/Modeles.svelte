@@ -28,6 +28,8 @@
   import Bouton from '../lib/composants/Bouton.svelte';
   import Dialogue from '../lib/composants/Dialogue.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import SousOnglets from '../lib/composants/SousOnglets.svelte';
+  import ModelesCollection from './ModelesCollection.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -35,6 +37,11 @@
 
   let { signaler }: Props = $props();
 
+  const onglets = [
+    { id: 'telecharger', titre: 'Workflows et LLM' },
+    { id: 'collection', titre: 'Ma collection' },
+  ];
+  let onglet = $state('telecharger');
   let etat = $state<EtatModeles | null>(null);
   /** Ce qu'on demande de confirmer : un workflow ou un LLM, sa licence et ce qu'il faut télécharger. */
   let demande = $state<{ genre: 'workflow' | 'llm'; id: string; nom: string; licence: LicenceModele; taille: number } | null>(
@@ -99,93 +106,98 @@
 
 <h1>Modèles</h1>
 <p class="sous-titre">Les modèles des workflows livrés et les LLM, téléchargés depuis leur source officielle.</p>
-<ASavoir>
-  Chaque fichier a une adresse, une taille et une empreinte SHA-256 fixées dans la fiche de son workflow : un fichier
-  qui ne correspond pas est rejeté. Un téléchargement interrompu reprend où il s'était arrêté. Les modèles déjà
-  téléchargés par la version 2 sont repris tels quels.
-</ASavoir>
+<SousOnglets {onglets} bind:actif={onglet} />
+{#if onglet === 'collection'}
+  <ModelesCollection {signaler} />
+{:else}
+  <ASavoir>
+    Chaque fichier a une adresse, une taille et une empreinte SHA-256 fixées dans la fiche de son workflow : un fichier
+    qui ne correspond pas est rejeté. Un téléchargement interrompu reprend où il s'était arrêté. Les modèles déjà
+    téléchargés par la version 2 sont repris tels quels.
+  </ASavoir>
 
-{#if etat && etat.taches.length > 0}
-  <Panneau titre="Téléchargements">
-    <ul class="file">
-      {#each [...etat.taches].reverse() as t (t.id)}
-        <li class:ko={t.etat === 'erreur'}>
-          <div class="texte">
-            <span>{t.nom} <span class="discret">· {t.dossier}</span></span>
-            <span class="discret">{texteTelechargement(t)}</span>
-            {#if t.etat === 'en_cours'}
-              <progress max="1" value={fractionTelechargement(t) ?? 0}></progress>
+  {#if etat && etat.taches.length > 0}
+    <Panneau titre="Téléchargements">
+      <ul class="file">
+        {#each [...etat.taches].reverse() as t (t.id)}
+          <li class:ko={t.etat === 'erreur'}>
+            <div class="texte">
+              <span>{t.nom} <span class="discret">· {t.dossier}</span></span>
+              <span class="discret">{texteTelechargement(t)}</span>
+              {#if t.etat === 'en_cours'}
+                <progress max="1" value={fractionTelechargement(t) ?? 0}></progress>
+              {/if}
+            </div>
+            {#if telechargementActif(t)}
+              <Bouton genre="discret" petit onclick={() => void annuler(t.id)}>✕ Annuler</Bouton>
             {/if}
-          </div>
-          {#if telechargementActif(t)}
-            <Bouton genre="discret" petit onclick={() => void annuler(t.id)}>✕ Annuler</Bouton>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-  </Panneau>
-{/if}
-
-{#if etat}
-  {#each parTache as w (w.id)}
-    <Panneau titre={`${libelleTache(w.tache)} · ${w.nom}`}>
-      <p class="discret">
-        {w.famille} · licence {w.licence.nom}{w.licence.commercial ? '' : ' · usage commercial non permis'}
-      </p>
-      <p class="discret">{w.licence.resume}</p>
-      <ul class="fichiers">
-        {#each w.fichiers as f (f.dossier + f.nom)}
-          <li class:present={f.present}>
-            <span>{f.present ? '✓' : '·'}</span>
-            <span class="code">{f.dossier}/{f.nom}</span>
-            <span class="discret">{octetsLisibles(f.taille)}</span>
           </li>
         {/each}
       </ul>
-      <div class="actions">
-        {#if w.pret}
-          <span class="bon">Prêt</span>
-        {:else}
-          <Bouton
-            petit
-            onclick={() =>
-              (demande = { genre: 'workflow', id: w.id, nom: w.nom, licence: w.licence, taille: w.aTelecharger })}
-          >
-            Télécharger ce qui manque ({octetsLisibles(w.aTelecharger)})
-          </Bouton>
-        {/if}
-        <Bouton genre="discret" petit onclick={() => void ouvrirDossier('modeles')}>Ouvrir le dossier des modèles</Bouton>
-      </div>
     </Panneau>
-  {/each}
+  {/if}
 
-  <Panneau titre="LLM">
-    <ul class="llm">
-      {#each etat.llm as l (l.fichier)}
-        <li>
-          <div class="texte">
-            <strong>{l.nom}</strong>
-            <span class="discret">
-              {l.specialiste ? `spécialiste (${l.specialiste === 'creation' ? 'réécriture' : 'retouche'})` : 'généraliste'}
-              {l.vision ? ' · voit les images' : ''} · licence {l.licence.nom} · {octetsLisibles(l.taille)}
-            </span>
-          </div>
-          {#if l.installe}
-            <span class="bon">Installé</span>
+  {#if etat}
+    {#each parTache as w (w.id)}
+      <Panneau titre={`${libelleTache(w.tache)} · ${w.nom}`}>
+        <p class="discret">
+          {w.famille} · licence {w.licence.nom}{w.licence.commercial ? '' : ' · usage commercial non permis'}
+        </p>
+        <p class="discret">{w.licence.resume}</p>
+        <ul class="fichiers">
+          {#each w.fichiers as f (f.dossier + f.nom)}
+            <li class:present={f.present}>
+              <span>{f.present ? '✓' : '·'}</span>
+              <span class="code">{f.dossier}/{f.nom}</span>
+              <span class="discret">{octetsLisibles(f.taille)}</span>
+            </li>
+          {/each}
+        </ul>
+        <div class="actions">
+          {#if w.pret}
+            <span class="bon">Prêt</span>
           {:else}
             <Bouton
               petit
-              onclick={() => (demande = { genre: 'llm', id: l.fichier, nom: l.nom, licence: l.licence, taille: l.aTelecharger })}
+              onclick={() =>
+                (demande = { genre: 'workflow', id: w.id, nom: w.nom, licence: w.licence, taille: w.aTelecharger })}
             >
-              Installer ({octetsLisibles(l.aTelecharger)})
+              Télécharger ce qui manque ({octetsLisibles(w.aTelecharger)})
             </Bouton>
           {/if}
-        </li>
-      {/each}
-    </ul>
-  </Panneau>
-{:else}
-  <p class="discret">Lecture…</p>
+          <Bouton genre="discret" petit onclick={() => void ouvrirDossier('modeles')}>Ouvrir le dossier des modèles</Bouton>
+        </div>
+      </Panneau>
+    {/each}
+
+    <Panneau titre="LLM">
+      <ul class="llm">
+        {#each etat.llm as l (l.fichier)}
+          <li>
+            <div class="texte">
+              <strong>{l.nom}</strong>
+              <span class="discret">
+                {l.specialiste ? `spécialiste (${l.specialiste === 'creation' ? 'réécriture' : 'retouche'})` : 'généraliste'}
+                {l.vision ? ' · voit les images' : ''} · licence {l.licence.nom} · {octetsLisibles(l.taille)}
+              </span>
+            </div>
+            {#if l.installe}
+              <span class="bon">Installé</span>
+            {:else}
+              <Bouton
+                petit
+                onclick={() => (demande = { genre: 'llm', id: l.fichier, nom: l.nom, licence: l.licence, taille: l.aTelecharger })}
+              >
+                Installer ({octetsLisibles(l.aTelecharger)})
+              </Bouton>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </Panneau>
+  {:else}
+    <p class="discret">Lecture…</p>
+  {/if}
 {/if}
 
 {#if demande}
