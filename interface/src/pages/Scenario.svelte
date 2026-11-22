@@ -1,18 +1,22 @@
 <!--
-  Scénario, comme en v2 (premier lot : l'atelier Image et ses listes guidées) : un sujet, des listes à cliquer
-  rangées en trois onglets (Sujet, Décor et ambiance, Mise en scène), un âge précis et un texte dans l'image ; le
-  prompt assemblé en direct par le cœur (règles des listes et filtre AS-18), modifiable, puis envoyé tel quel au
-  Plateau. Les règles sont appliquées ici pour guider ; c'est le cœur qui fait foi.
+  Scénario, comme en v2 (l'atelier Image) : ton idée, que le LLM écrit en prompt pour le modèle cible (✨ Écrire le
+  prompt), et des compléments : listes à cliquer rangées en trois onglets (Sujet, Décor et ambiance, Mise en scène),
+  âge précis, texte dans l'image et précisions traduites par le LLM. Le prompt assemblé suit les compléments en
+  direct (règles des listes et filtre AS-18) ; le prompt final, modifiable, part tel quel au Plateau. Les règles sont
+  appliquées ici pour guider ; c'est le cœur qui fait foi.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
     assemblerPrompt,
+    ecrirePromptScenario,
     messageErreur,
     optionsPlateau,
     structureScenario,
     sujetsScenario,
+    traduirePrecisions,
     type Assemblage,
+    type ChoixLlm,
     type ChoixListes,
     type ChoixWorkflow,
     type OngletScenario,
@@ -54,6 +58,16 @@
   let toutes = $state(false);
   let workflows = $state<ChoixWorkflow[]>([]);
   let workflowId = $state<string | null>(null);
+  let llms = $state<ChoixLlm[]>([]);
+  let llmParWorkflow = $state<Record<string, string>>({});
+  /** Le LLM choisi ; vide : celui du modèle cible. */
+  let llmChoisi = $state('');
+  let idee = $state('');
+  let precisions = $state('');
+  /** La traduction des précisions, et le texte qu'elle traduit (elle ne vaut plus s'il change). */
+  let traduction = $state<{ de: string; en: string } | null>(null);
+  /** Le LLM travaille (écriture ou traduction). */
+  let ecriture = $state<'ecrire' | 'traduire' | null>(null);
   let assemblage = $state<Assemblage | null>(null);
   let erreurAssemblage = $state<string | null>(null);
   let final = $state('');
@@ -76,7 +90,10 @@
 
   function garder() {
     try {
-      localStorage.setItem(BROUILLON, JSON.stringify({ sujet, choixParSujet, age, texte, toutes, workflowId }));
+      localStorage.setItem(
+        BROUILLON,
+        JSON.stringify({ sujet, choixParSujet, age, texte, toutes, workflowId, idee, precisions, traduction }),
+      );
     } catch {
       // stockage indisponible : le brouillon vaut pour cette fois
     }
@@ -94,6 +111,19 @@
       if ('texte' in d && typeof d.texte === 'string') texte = d.texte;
       if ('toutes' in d && typeof d.toutes === 'boolean') toutes = d.toutes;
       if ('workflowId' in d && typeof d.workflowId === 'string') workflowId = d.workflowId;
+      if ('idee' in d && typeof d.idee === 'string') idee = d.idee;
+      if ('precisions' in d && typeof d.precisions === 'string') precisions = d.precisions;
+      if (
+        'traduction' in d &&
+        typeof d.traduction === 'object' &&
+        d.traduction !== null &&
+        'de' in d.traduction &&
+        'en' in d.traduction &&
+        typeof d.traduction.de === 'string' &&
+        typeof d.traduction.en === 'string'
+      ) {
+        traduction = { de: d.traduction.de, en: d.traduction.en };
+      }
     } catch {
       // brouillon illisible ou stockage indisponible : on repart de zéro
     }
@@ -119,6 +149,8 @@
     choixParSujet = { ...choixParSujet, [sujet]: {} };
     age = null;
     texte = '';
+    precisions = '';
+    traduction = null;
     finalRetouche = false;
     planifier();
   }
@@ -137,7 +169,7 @@
         choix,
         age,
         texte,
-        precisions: '',
+        precisions: traductionValide ? (traduction?.en ?? '') : '',
         workflow: workflowId,
         action: '',
         replique: '',
@@ -151,6 +183,51 @@
       if (!finalRetouche) final = r.prompt;
     } catch (e) {
       erreurAssemblage = messageErreur(e);
+    }
+  }
+
+  /** Le LLM de l'atelier : celui choisi, sinon celui du modèle cible. */
+  const llmEffectif = $derived(llmChoisi || (workflowId ? (llmParWorkflow[workflowId] ?? null) : null));
+  const traductionValide = $derived(traduction !== null && traduction.de === precisions.trim());
+  /** Ce que les compléments imposent : le prompt assemblé, s'il y a un choix. */
+  const complements = $derived(
+    Object.values(choix).some((b) => Object.keys(b).length > 0) || age !== null || texte.trim() !== '' || traductionValide
+      ? (assemblage?.prompt ?? '')
+      : '',
+  );
+
+  async function traduire() {
+    const de = precisions.trim();
+    if (de === '' || ecriture) return;
+    ecriture = 'traduire';
+    try {
+      traduction = { de, en: await traduirePrecisions(de, llmEffectif) };
+      planifier();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      ecriture = null;
+    }
+  }
+
+  async function ecrire() {
+    if (ecriture) return;
+    ecriture = 'ecrire';
+    try {
+      const r = await ecrirePromptScenario({
+        atelier: 'image',
+        idee,
+        complements,
+        workflow: workflowId,
+        llm: llmChoisi || null,
+      });
+      final = r.prompt;
+      finalRetouche = true;
+      signaler(`Prompt écrit par ${r.llm} en ${r.dureeS} s.`);
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      ecriture = null;
     }
   }
 
@@ -171,6 +248,8 @@
         sujets = await sujetsScenario();
         const options = await optionsPlateau();
         workflows = options.workflows;
+        llms = options.llm;
+        llmParWorkflow = options.llmParWorkflow;
         if (!workflows.some((w) => w.id === workflowId)) workflowId = options.defaut;
       } catch (e) {
         signaler(messageErreur(e), true);
@@ -214,6 +293,41 @@
       </select>
     </label>
   </div>
+</Panneau>
+
+<Panneau titre="Ton idée">
+  <textarea
+    rows="3"
+    maxlength="2000"
+    placeholder="Un renard roux assis dans la neige fraîche, lumière dorée du soir"
+    bind:value={idee}
+    oninput={garder}
+  ></textarea>
+  <div class="ligne">
+    <label>
+      <span class="etiquette">LLM</span>
+      <select bind:value={llmChoisi} disabled={llms.length === 0}>
+        <option value="">Celui du modèle cible</option>
+        {#each llms as l (l.fichier)}
+          <option value={l.fichier}>{l.specialiste ? '🎯 ' : ''}{l.nom}{l.favori ? ' ★' : ''}</option>
+        {/each}
+      </select>
+    </label>
+    <Bouton
+      desactive={ecriture !== null || llms.length === 0 || (idee.trim() === '' && complements === '')}
+      onclick={() => void ecrire()}
+    >
+      {ecriture === 'ecrire' ? 'Le LLM écrit…' : '✨ Écrire le prompt'}
+    </Bouton>
+  </div>
+  {#if llms.length === 0}
+    <p class="discret">Aucun LLM dans modeles\llm : compose le prompt avec les compléments, il part tel quel.</p>
+  {:else}
+    <p class="discret">
+      Le LLM écrit le prompt pour le modèle cible, d'après ton idée et les compléments, qu'il garde tels quels. Il
+      prend la carte graphique le temps d'écrire.
+    </p>
+  {/if}
 </Panneau>
 
 {#if structure && ctx}
@@ -281,6 +395,21 @@
         <span class="etiquette">Texte dans l'image</span>
         <input type="text" maxlength="200" bind:value={texte} oninput={planifier} placeholder="facultatif, mot pour mot" />
       </label>
+      <label class="texte">
+        <span class="etiquette">Précisions (traduites par le LLM, puis ajoutées au prompt)</span>
+        <textarea rows="2" maxlength="500" bind:value={precisions} oninput={planifier}></textarea>
+      </label>
+      {#if precisions.trim() !== ''}
+        <div class="ligne">
+          {#if traductionValide}
+            <span class="discret">→ {traduction?.en}</span>
+          {:else}
+            <Bouton petit desactive={ecriture !== null || llms.length === 0} onclick={() => void traduire()}>
+              {ecriture === 'traduire' ? 'Traduction…' : 'Traduire et ajouter'}
+            </Bouton>
+          {/if}
+        </div>
+      {/if}
     {/if}
     <div class="actions">
       <Bouton genre="discret" petit onclick={toutEffacer}>Tout réinitialiser</Bouton>

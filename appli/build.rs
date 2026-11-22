@@ -52,6 +52,8 @@ fn main() {
         "sujets_scenario",
         "structure_scenario",
         "assembler_prompt",
+        "ecrire_prompt_scenario",
+        "traduire_precisions",
         "usages_modeles",
         "definir_favori",
         "definir_llm_workflow",

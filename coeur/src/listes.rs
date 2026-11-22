@@ -207,7 +207,8 @@ const STYLE: (&str, &str) = ("commun", "Style");
 /// L'âge précis, de 3 à 120 ans.
 pub const AGE_PRECIS: (u32, u32) = (3, 120);
 const LONGUEUR_TEXTE: usize = 200;
-const LONGUEUR_PRECISIONS: usize = 500;
+/// Les précisions, au plus.
+pub const LONGUEUR_PRECISIONS: usize = 500;
 pub const LONGUEUR_ACTION: usize = 500;
 /// Plusieurs répliques, une par ligne.
 pub const LONGUEUR_REPLIQUE: usize = 600;

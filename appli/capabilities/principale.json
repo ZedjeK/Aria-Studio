@@ -47,6 +47,8 @@
     "allow-sujets-scenario",
     "allow-structure-scenario",
     "allow-assembler-prompt",
+    "allow-ecrire-prompt-scenario",
+    "allow-traduire-precisions",
     "allow-usages-modeles",
     "allow-definir-favori",
     "allow-definir-llm-workflow",

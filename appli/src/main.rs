@@ -190,6 +190,8 @@ fn lancer() -> Result<(), String> {
             scenario::sujets_scenario,
             scenario::structure_scenario,
             scenario::assembler_prompt,
+            scenario::ecrire_prompt_scenario,
+            scenario::traduire_precisions,
             lieux::etat_emplacements,
             lieux::ouvrir_dossier,
             lieux::parcourir_dossier,
