@@ -146,7 +146,8 @@
   async function relireVoix() {
     try {
       [voixGardees] = await lireVoix(false);
-      clipsVoix = (await lireRushes('tous', null)).filter((c) => c.type === 'clip').slice(0, 60);
+      // Le son d'un clip tourné (pas d'un film assemblé), parmi les Bobines.
+      clipsVoix = (await lireRushes('tous', null, 'clips')).filter((c) => c.mode_video !== 'film').slice(0, 60);
     } catch (e) {
       signaler(messageErreur(e), true);
     }
