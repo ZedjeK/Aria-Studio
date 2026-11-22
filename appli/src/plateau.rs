@@ -4,17 +4,18 @@
 
 use std::sync::Arc;
 
-use aria_coeur::creations;
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::plateau::{Commande, Contexte, Demande, Options, Plateau};
+use aria_coeur::rushes::{self, EtatRushes};
+use aria_coeur::{creations, journal};
 use serde_json::Value;
 use tauri::State;
 use tauri::ipc::Response;
 
 use crate::moteurs::{Moteurs, PORT_LLAMA};
 
-/// Les créations montrées par la page, au plus.
-const CREATIONS_MAX: usize = 60;
+/// Les Rushes de cette page : les images du Plateau (les clips auront leurs Bobines).
+const GENRE: &str = "images";
 
 /// Le Plateau de ce lancement : ComfyUI passe par l'orchestrateur des moteurs.
 pub fn demarrer(emplacements: &Emplacements, moteurs: &Moteurs) -> Arc<Plateau> {
@@ -78,11 +79,84 @@ pub async fn valider_checkpoint(
     .await
 }
 
-/// Les fiches des dernières créations, la plus récente en premier.
+/// Les rushes d'une vue (`tous`, `non_ranges`, `archives`, `corbeille`) ou d'un dossier, les plus récents d'abord.
 #[tauri::command]
-pub async fn lire_creations(plateau: State<'_, Arc<Plateau>>) -> Result<Vec<Value>, String> {
+pub async fn lire_rushes(
+    plateau: State<'_, Arc<Plateau>>,
+    vue: String,
+    dossier: Option<String>,
+) -> Result<Vec<Value>, String> {
+    hors_interface(&plateau, move |p| {
+        rushes::liste(&p.contexte().data, &vue, dossier.as_deref(), GENRE)
+    })
+    .await
+}
+
+/// Les compteurs des vues et des dossiers.
+#[tauri::command]
+pub async fn etat_rushes(plateau: State<'_, Arc<Plateau>>) -> Result<EtatRushes, String> {
+    hors_interface(&plateau, |p| rushes::etat(&p.contexte().data, GENRE)).await
+}
+
+/// Corbeille, restaurer, archiver, désarchiver ou ranger une sélection ; rend le nombre de rushes modifiés.
+#[tauri::command]
+pub async fn agir_rushes(
+    plateau: State<'_, Arc<Plateau>>,
+    ids: Vec<String>,
+    action: String,
+    dossier: Option<String>,
+) -> Result<usize, String> {
+    hors_interface(&plateau, move |p| {
+        rushes::agir(&p.contexte().data, &ids, &action, dossier.as_deref())
+    })
+    .await
+}
+
+/// La seule suppression définitive : les rushes de la corbeille. L'interface la fait confirmer.
+#[tauri::command]
+pub async fn vider_corbeille(plateau: State<'_, Arc<Plateau>>) -> Result<usize, String> {
     hors_interface(&plateau, |p| {
-        Ok(creations::liste(&p.contexte().data, CREATIONS_MAX))
+        let contexte = p.contexte();
+        rushes::vider_corbeille(&contexte.dossier, &contexte.data, GENRE)
+    })
+    .await
+}
+
+/// Crée un dossier de rushes.
+#[tauri::command]
+pub async fn creer_dossier(plateau: State<'_, Arc<Plateau>>, nom: String) -> Result<String, String> {
+    hors_interface(&plateau, move |p| {
+        rushes::creer_dossier(&p.contexte().data, &nom, GENRE)
+    })
+    .await
+}
+
+/// Renomme un dossier de rushes, et ses rushes avec lui.
+#[tauri::command]
+pub async fn renommer_dossier(
+    plateau: State<'_, Arc<Plateau>>,
+    ancien: String,
+    nouveau: String,
+) -> Result<String, String> {
+    hors_interface(&plateau, move |p| {
+        rushes::renommer_dossier(&p.contexte().data, &ancien, &nouveau, GENRE)
+    })
+    .await
+}
+
+/// Supprime un dossier, pas ses images : elles retournent dans « Non rangés ».
+#[tauri::command]
+pub async fn supprimer_dossier(plateau: State<'_, Arc<Plateau>>, nom: String) -> Result<usize, String> {
+    hors_interface(&plateau, move |p| {
+        let liberes = rushes::supprimer_dossier(&p.contexte().data, &nom, GENRE)?;
+        journal::noter(
+            &p.contexte().dossier,
+            "Dossier de rushes supprimé",
+            &nom,
+            journal::Resultat::Ok,
+            Some(&format!("{liberes} image(s) retournée(s) dans Non rangés")),
+        );
+        Ok(liberes)
     })
     .await
 }

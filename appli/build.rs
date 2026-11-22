@@ -29,7 +29,13 @@ fn main() {
         "lire_commandes",
         "annuler_commande",
         "valider_checkpoint",
-        "lire_creations",
+        "lire_rushes",
+        "etat_rushes",
+        "agir_rushes",
+        "vider_corbeille",
+        "creer_dossier",
+        "renommer_dossier",
+        "supprimer_dossier",
         "image_creation",
     ]);
     let attributs = tauri_build::Attributes::new().app_manifest(commandes);

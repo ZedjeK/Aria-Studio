@@ -151,7 +151,13 @@ fn lancer() -> Result<(), String> {
             plateau::lire_commandes,
             plateau::annuler_commande,
             plateau::valider_checkpoint,
-            plateau::lire_creations,
+            plateau::lire_rushes,
+            plateau::etat_rushes,
+            plateau::agir_rushes,
+            plateau::vider_corbeille,
+            plateau::creer_dossier,
+            plateau::renommer_dossier,
+            plateau::supprimer_dossier,
             plateau::image_creation,
         ])
         .setup(move |app| {

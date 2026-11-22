@@ -224,6 +224,10 @@ export interface Creation {
   format?: string | null;
   seed?: number | null;
   duree_s?: number;
+  /** Rangement des Rushes : dossier, archive, date de mise à la corbeille. */
+  dossier?: string;
+  archive?: boolean;
+  corbeille?: string;
 }
 
 export const optionsPlateau = (): Promise<OptionsPlateau> => invoke<OptionsPlateau>('options_plateau');
@@ -241,8 +245,41 @@ export const annulerCommande = (id: string): Promise<Commande> => invoke<Command
 export const validerCheckpoint = (workflow: string, checkpoint: string, steps: number): Promise<void> =>
   invoke<void>('valider_checkpoint', { workflow, checkpoint, steps });
 
-/** Les dernières créations, la plus récente en premier. */
-export const lireCreations = (): Promise<Creation[]> => invoke<Creation[]>('lire_creations');
+/** Une vue des Rushes (aria_coeur::rushes::VUES). */
+export type VueRushes = 'tous' | 'non_ranges' | 'archives' | 'corbeille';
+
+/** Une action sur une sélection de rushes (aria_coeur::rushes::ACTIONS). */
+export type ActionRushes = 'corbeille' | 'restaurer' | 'archiver' | 'desarchiver' | 'ranger';
+
+/** Les compteurs des Rushes (aria_coeur::rushes::EtatRushes). */
+export interface EtatRushes {
+  tous: number;
+  nonRanges: number;
+  archives: number;
+  corbeille: number;
+  dossiers: { nom: string; nombre: number }[];
+}
+
+/** Les rushes d'une vue, ou d'un dossier (vue « tous »), les plus récents d'abord. */
+export const lireRushes = (vue: VueRushes, dossier: string | null): Promise<Creation[]> =>
+  invoke<Creation[]>('lire_rushes', { vue, dossier });
+
+export const etatRushes = (): Promise<EtatRushes> => invoke<EtatRushes>('etat_rushes');
+
+/** Applique une action à une sélection ; rend le nombre de rushes modifiés. `dossier` : pour « ranger » (null : Non rangés). */
+export const agirRushes = (ids: string[], action: ActionRushes, dossier: string | null): Promise<number> =>
+  invoke<number>('agir_rushes', { ids, action, dossier });
+
+/** Supprime pour de bon les rushes de la corbeille ; rend leur nombre. */
+export const viderCorbeille = (): Promise<number> => invoke<number>('vider_corbeille');
+
+export const creerDossier = (nom: string): Promise<string> => invoke<string>('creer_dossier', { nom });
+
+export const renommerDossier = (ancien: string, nouveau: string): Promise<string> =>
+  invoke<string>('renommer_dossier', { ancien, nouveau });
+
+/** Le dossier disparaît, pas ses images : elles retournent dans « Non rangés ». Rend leur nombre. */
+export const supprimerDossier = (nom: string): Promise<number> => invoke<number>('supprimer_dossier', { nom });
 
 /** Le PNG d'une création, en octets. */
 export const imageCreation = (id: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('image_creation', { id });

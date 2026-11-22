@@ -30,6 +30,7 @@ pub mod plateau;
 pub mod presence;
 pub mod prompt;
 pub mod reglages;
+pub mod rushes;
 pub mod sauvegardes;
 pub mod secrets;
 pub mod securite;
