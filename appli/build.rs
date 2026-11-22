@@ -24,6 +24,7 @@ fn main() {
         "annuler_installation_moteur",
         "revenir_moteur",
         "liberer_carte",
+        "choisir_comfyui",
         "options_plateau",
         "commander_image",
         "etat_modeles",

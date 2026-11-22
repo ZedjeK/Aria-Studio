@@ -46,6 +46,35 @@ const ENCODEURS_REFERENCES: [(&str, &str, usize, &str); 2] = [
     ("TextEncodeQwenImage21", "images.image_{}", 16, "EmptyLatentImage"),
 ];
 
+/// Les nœuds que le code ajoute aux graphes livrés (références, variation, LoRA) : un ComfyUI doit les connaître.
+pub const NOEUDS_AJOUTES: [&str; 8] = [
+    "LoadImage",
+    "ResolutionSelector",
+    "EmptyLatentImage",
+    "EmptySD3LatentImage",
+    "ImageScale",
+    "ImageScaleToTotalPixels",
+    "VAEEncode",
+    NOEUD_LORA,
+];
+
+/// Les nœuds ComfyUI dont Aria se sert : ceux des workflows livrés, et ceux que le code ajoute.
+pub fn noeuds_utilises() -> std::collections::BTreeSet<String> {
+    let mut noeuds: std::collections::BTreeSet<String> =
+        NOEUDS_AJOUTES.iter().map(|n| (*n).to_owned()).collect();
+    for wf in catalogue().0 {
+        noeuds.extend(
+            wf.api
+                .as_object()
+                .into_iter()
+                .flat_map(|g| g.values())
+                .filter_map(|n| n.get("class_type").and_then(Value::as_str))
+                .map(str::to_owned),
+        );
+    }
+    noeuds
+}
+
 fn encodeur(type_: &str) -> Option<(&'static str, usize, &'static str)> {
     ENCODEURS_REFERENCES
         .iter()
@@ -1232,5 +1261,26 @@ mod tests {
             .unwrap_err()
             .starts_with("Liberté entre 0,05 et 1")
         );
+    }
+
+    #[test]
+    fn noeuds_ajoutes_par_le_code_tous_declares() {
+        // Chaque « class_type » écrit dans ce fichier (hors tests) doit figurer dans NOEUDS_AJOUTES : sinon,
+        // « J'ai déjà ComfyUI » ne vérifierait pas ce nœud.
+        let source = include_str!("workflows.rs");
+        let code = source.split("#[cfg(test)]").next().unwrap();
+        let motif = regex::Regex::new(r#""class_type":\s*"(\w+)""#).unwrap();
+        for prise in motif.captures_iter(code) {
+            assert!(
+                NOEUDS_AJOUTES.contains(&&prise[1]),
+                "nœud ajouté non déclaré : {}",
+                &prise[1]
+            );
+        }
+        for (_, _, _, latent) in ENCODEURS_REFERENCES {
+            assert!(NOEUDS_AJOUTES.contains(&latent), "latent non déclaré : {latent}");
+        }
+        let utilises = noeuds_utilises();
+        assert!(utilises.contains("KSampler") && utilises.contains(NOEUD_LORA));
     }
 }

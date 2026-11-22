@@ -117,6 +117,9 @@ export interface EtatMoteurs {
 
 export const lireMoteurs = (): Promise<EtatMoteurs> => invoke<EtatMoteurs>('lire_moteurs');
 
+/** « J'ai déjà ComfyUI » : ce dossier portable, vérifié par un lancement d'essai ; null : revenir à celui d'Aria. */
+export const choisirComfyui = (chemin: string | null): Promise<void> => invoke<void>('choisir_comfyui', { chemin });
+
 /** Lance l'installation en arrière-plan ; son avancement se lit avec lireMoteurs. */
 export const installerMoteur = (id: string): Promise<void> => invoke<void>('installer_moteur', { id });
 

@@ -158,6 +158,7 @@ fn lancer() -> Result<(), String> {
             moteurs::annuler_installation_moteur,
             moteurs::revenir_moteur,
             moteurs::liberer_carte,
+            moteurs::choisir_comfyui,
             plateau::options_plateau,
             plateau::commander_image,
             telechargements::etat_modeles,

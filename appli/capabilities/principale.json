@@ -19,6 +19,7 @@
     "allow-annuler-installation-moteur",
     "allow-revenir-moteur",
     "allow-liberer-carte",
+    "allow-choisir-comfyui",
     "allow-options-plateau",
     "allow-commander-image",
     "allow-etat-modeles",
