@@ -85,6 +85,9 @@ function commande(changements: Partial<Commande>): Commande {
     ancrage: null,
     cadrage: null,
     loras: [],
+    modeVideo: null,
+    qualite: null,
+    duree: null,
     ...changements,
   };
 }

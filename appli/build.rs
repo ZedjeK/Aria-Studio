@@ -94,6 +94,9 @@ fn main() {
         "renommer_dossier",
         "supprimer_dossier",
         "image_creation",
+        "options_montage",
+        "commander_clip",
+        "video_creation",
     ]);
     let attributs = tauri_build::Attributes::new().app_manifest(commandes);
     if let Err(erreur) = tauri_build::try_build(attributs) {

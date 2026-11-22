@@ -30,6 +30,7 @@ pub mod llm;
 pub mod local;
 pub mod mises_a_jour;
 pub mod modeles;
+pub mod montage;
 pub mod moteurs;
 pub mod orchestrateur;
 pub mod personnages;
