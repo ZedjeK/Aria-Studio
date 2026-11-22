@@ -77,7 +77,8 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | Catalogue des moteurs | `catalogue/moteurs.yaml` lu par `app/moteurs.py` | [x] même fichier, embarqué dans l'exe et contrôlé à la lecture (`coeur/src/catalogue.rs`) ; YAML lu par `serde-saphyr` |
 | ComfyUI portable | téléchargé (`catalogue/moteurs.yaml`, SHA-256), lancé sur `127.0.0.1:8195`, piloté en HTTP et WebSocket (`comfy.py`) ; mode externe « J'ai déjà ComfyUI » | [ ] |
 | llama-server | téléchargé, lancé sur `127.0.0.1:8095` avec une clé neuve à chaque démarrage (`llm.py`) ; fork PrismML | [ ] |
-| Retour à la version précédente d'un moteur | `moteurs.py` | [ ] |
+| Installation d'un moteur | `moteurs.py` : état (absent, manuel, différent, à jour, externe), archives dans `_archives\` avec reprise et SHA-256, zip et 7z (tar de Windows puis 7-Zip), `.new` puis échange sous verrou, place nécessaire | [ ] `coeur/src/moteurs.rs` fait ; branchement réseau, verrou et commandes avec l'onglet Moteurs |
+| Retour à la version précédente d'un moteur | `moteurs.py` | [ ] `coeur/src/moteurs.rs::revenir` fait ; commande avec l'onglet Moteurs |
 | Libérer la mémoire vidéo | `moteurs.py`, `mesures.py` | [ ] |
 
 ## 5. API v2 et son équivalent v3

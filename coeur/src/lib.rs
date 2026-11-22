@@ -12,6 +12,7 @@ pub mod identite;
 pub mod installation;
 pub mod journal;
 pub mod mises_a_jour;
+pub mod moteurs;
 pub mod presence;
 pub mod reglages;
 pub mod sauvegardes;
