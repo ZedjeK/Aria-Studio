@@ -1,4 +1,5 @@
-// Les commandes Rust que l'interface peut appeler (appli\src\commandes.rs, demarrage_auto.rs, icone.rs), avec
+// Les commandes Rust que l'interface peut appeler (appli\src\commandes.rs, demarrage_auto.rs, icone.rs, moteurs.rs,
+// plateau.rs), avec
 // leurs types. Une commande ajoutée ici doit aussi l'être dans appli\build.rs et dans la capacité de la fenêtre
 // qui l'appelle (appli\capabilities\principale.json, menu.json ou installation.json).
 import { invoke } from '@tauri-apps/api/core';
@@ -127,6 +128,100 @@ export const revenirMoteur = (id: string): Promise<string | null> => invoke<stri
 
 /** ComfyUI vide sa VRAM, llama-server s'arrête. */
 export const libererCarte = (): Promise<void> => invoke<void>('liberer_carte');
+
+/** Un workflow texte → image prêt (aria_coeur::plateau::ChoixWorkflow). */
+export interface ChoixWorkflow {
+  id: string;
+  nom: string;
+  famille: string;
+  origine: string | null;
+  /** Les checkpoints prêts à tourner. */
+  modeles: string[];
+  modeleDefaut: string | null;
+  format: string | null;
+  /** Les checkpoints présents dont les steps attendent d'être validés. */
+  aValider: string[];
+  stepsSuggeres: number[];
+}
+
+/** Ce que le Plateau propose (aria_coeur::plateau::Options). */
+export interface OptionsPlateau {
+  formats: string[];
+  nombreMax: number;
+  defaut: string;
+  workflows: ChoixWorkflow[];
+  /** Les workflows auxquels il manque des fichiers, par leur nom. */
+  incomplets: string[];
+}
+
+/** Une demande de création (aria_coeur::plateau::Demande). */
+export interface DemandeImage {
+  prompt: string;
+  workflow: string | null;
+  format: string;
+  seed: number | null;
+  nombre: number;
+  modele: string | null;
+}
+
+/** Où en est une commande (aria_coeur::plateau::EtatCommande). */
+export type EtatCommande = 'attente' | 'en_cours' | 'termine' | 'erreur' | 'annule';
+
+/** Une commande du Plateau (aria_coeur::plateau::Commande). */
+export interface Commande {
+  id: string;
+  prompt: string;
+  workflow: string;
+  format: string;
+  seed: number | null;
+  nombre: number;
+  modele: string | null;
+  etat: EtatCommande;
+  annulee: boolean;
+  etape: string;
+  /** Avancement de l'image en cours, de 0 à 1. */
+  progression: number;
+  /** Les créations enregistrées. */
+  images: string[];
+  erreur: string | null;
+}
+
+/** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */
+export interface Creation {
+  id: string;
+  /** Heure locale à la seconde : « 2026-11-22T14:03:05 ». */
+  date: string;
+  largeur: number;
+  hauteur: number;
+  type?: string;
+  prompt?: string | null;
+  workflow?: string | null;
+  modele?: string | null;
+  format?: string | null;
+  seed?: number | null;
+  duree_s?: number;
+}
+
+export const optionsPlateau = (): Promise<OptionsPlateau> => invoke<OptionsPlateau>('options_plateau');
+
+/** Contrôle la demande (AS-18 compris) et la met en file. */
+export const commanderImage = (demande: DemandeImage): Promise<Commande> =>
+  invoke<Commande>('commander_image', { demande });
+
+/** Les commandes de ce lancement, la plus récente en premier. */
+export const lireCommandes = (): Promise<Commande[]> => invoke<Commande[]>('lire_commandes');
+
+export const annulerCommande = (id: string): Promise<Commande> => invoke<Commande>('annuler_commande', { id });
+
+/** Valide les steps d'un checkpoint : il devient utilisable dans les workflows de sa famille. */
+export const validerCheckpoint = (workflow: string, checkpoint: string, steps: number): Promise<void> =>
+  invoke<void>('valider_checkpoint', { workflow, checkpoint, steps });
+
+/** Les dernières créations, la plus récente en premier. */
+export const lireCreations = (): Promise<Creation[]> => invoke<Creation[]>('lire_creations');
+
+/** Le PNG d'une création, en octets. */
+export const imageCreation = (id: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('image_creation', { id });
 
 /** Les opérations du journal, la plus récente d'abord. */
 export const lireJournal = (): Promise<Operation[]> => invoke<Operation[]>('lire_journal');

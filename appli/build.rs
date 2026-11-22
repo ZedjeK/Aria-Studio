@@ -24,6 +24,13 @@ fn main() {
         "annuler_installation_moteur",
         "revenir_moteur",
         "liberer_carte",
+        "options_plateau",
+        "commander_image",
+        "lire_commandes",
+        "annuler_commande",
+        "valider_checkpoint",
+        "lire_creations",
+        "image_creation",
     ]);
     let attributs = tauri_build::Attributes::new().app_manifest(commandes);
     if let Err(erreur) = tauri_build::try_build(attributs) {
