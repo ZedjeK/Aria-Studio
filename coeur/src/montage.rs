@@ -26,7 +26,7 @@ pub struct Qualite {
 }
 
 /// (clé, nom, aide, mégapixels, steps de la mesure, secondes mesurées).
-const QUALITES: [(&str, &str, &str, f64, u32, f64); 3] = [
+pub const QUALITES: [(&str, &str, &str, f64, u32, f64); 3] = [
     ("rapide", "0,4 MP", "rapide", 0.4, 8, 80.0),
     ("compromis", "0,6 MP", "compromis", 0.6, 12, 170.0),
     (
