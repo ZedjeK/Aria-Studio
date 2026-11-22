@@ -295,7 +295,7 @@ pub fn bloc_usage(usage: &str, regles: &[(String, Vec<String>)]) -> String {
 
 /// Les règles du modèle cible en un bloc, pour une consigne réécrite dans Réglages : l'en-tête, puis les sections.
 /// Vide sans règle.
-fn bloc_modele(regles: &[(String, Vec<String>)]) -> String {
+pub fn bloc_modele(regles: &[(String, Vec<String>)]) -> String {
     if regles.is_empty() {
         return String::new();
     }
@@ -322,6 +322,7 @@ pub fn consigne_d_origine(usage: &str) -> Option<String> {
         "reecriture" => Some(gabarit(&REECRITURE, &[])),
         "retouche" => Some(gabarit(&RETOUCHE, &[])),
         "references" => Some(gabarit(&REFERENCES, &[])),
+        "decoupage" => Some(crate::decoupage::CONSIGNE_DECOUPAGE.to_owned()),
         _ => None,
     }
 }

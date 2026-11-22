@@ -54,6 +54,7 @@ fn main() {
         "assembler_prompt",
         "ecrire_prompt_scenario",
         "traduire_precisions",
+        "decouper_sequence",
         "lire_personnages",
         "enregistrer_personnage",
         "supprimer_personnage",

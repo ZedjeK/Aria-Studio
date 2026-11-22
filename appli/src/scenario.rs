@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aria_coeur::conversation::{self, DemandeConversation, Tour};
+use aria_coeur::decoupage::{self, Decoupe, DemandeDecoupage};
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::listes::{self, Assemblage, DemandeAssemblage, Structure, Sujet};
 use aria_coeur::personnages::{self, Personnage};
@@ -70,6 +71,21 @@ pub async fn traduire_precisions(
     })
     .await
     .map_err(|e| format!("Scénario indisponible : {e}"))?
+}
+
+/// Atelier Séquence : le LLM écrit les prompts de tous les plans (✨ Tout écrire), ou d'un seul (✨ d'un plan), puis
+/// les garde-fous du cœur les contrôlent.
+#[tauri::command]
+pub async fn decouper_sequence(
+    plateau: State<'_, Arc<Plateau>>,
+    moteurs: State<'_, Moteurs>,
+    demande: DemandeDecoupage,
+) -> Result<Decoupe, String> {
+    let contexte = plateau.contexte().clone();
+    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    tauri::async_runtime::spawn_blocking(move || decoupage::decouper(&contexte, &mut orchestrateur, &demande))
+        .await
+        .map_err(|e| format!("Scénario indisponible : {e}"))?
 }
 
 /// Les personnages enregistrés.

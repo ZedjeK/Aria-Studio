@@ -39,6 +39,7 @@ export function nomConsigne(cle: string): string {
     reecriture: 'Réécriture d’une idée',
     retouche: 'Consigne de retouche',
     references: 'Images de référence',
+    decoupage: 'Découpage d’une séquence',
   };
   return noms[cle] ?? cle;
 }

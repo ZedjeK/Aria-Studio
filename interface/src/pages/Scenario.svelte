@@ -1,9 +1,10 @@
 <!--
-  Scénario, comme en v2 (l'atelier Image) : ton idée, que le LLM écrit en prompt pour le modèle cible (✨ Écrire le
+  Scénario, comme en v2. L'atelier Image : ton idée, que le LLM écrit en prompt pour le modèle cible (✨ Écrire le
   prompt), et des compléments : listes à cliquer rangées en trois onglets (Sujet, Décor et ambiance, Mise en scène),
   âge précis, texte dans l'image et précisions traduites par le LLM. Le prompt assemblé suit les compléments en
-  direct (règles des listes et filtre AS-18) ; le prompt final, modifiable, part tel quel au Plateau. Les règles sont
-  appliquées ici pour guider ; c'est le cœur qui fait foi.
+  direct (règles des listes et filtre AS-18) ; le prompt final, modifiable, part tel quel au Plateau. L'atelier
+  Séquence (ScenarioSequence) découpe une histoire en plans, le personnage et le décor tirés des mêmes compléments, et
+  l'envoie au Montage. Les règles sont appliquées ici pour guider ; c'est le cœur qui fait foi.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -23,6 +24,7 @@
     type ChoixListes,
     type ChoixWorkflow,
     type Personnage,
+    type Sequence,
     type OngletScenario,
     type StructureScenario,
     type SujetScenario,
@@ -42,14 +44,27 @@
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
+  import ScenarioSequence from './ScenarioSequence.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
     /** Envoie le prompt final au Plateau, avec le modèle cible. */
     envoyer: (prompt: string, workflow: string | null) => void;
+    /** Ouvre une séquence dans le Montage (atelier Séquence). */
+    versMontage: (id: string) => void;
+    /** Une séquence du Montage à retravailler ici. */
+    recuSequence: Sequence | null;
+    recuLu: () => void;
   }
 
-  let { signaler, envoyer }: Props = $props();
+  let { signaler, envoyer, versMontage, recuSequence, recuLu }: Props = $props();
+
+  /** L'atelier : une image (Plateau), ou une séquence découpée en plans (Montage). */
+  let atelier = $state<'image' | 'sequence'>('image');
+  const ateliers: { id: 'image' | 'sequence'; titre: string }[] = [
+    { id: 'image', titre: 'Image' },
+    { id: 'sequence', titre: 'Séquence' },
+  ];
 
   const BROUILLON = 'aria-scenario';
 
@@ -90,6 +105,10 @@
   let minuteur: ReturnType<typeof setTimeout> | undefined;
 
   const choix = $derived(choixParSujet[sujet] ?? {});
+  /** Les choix pour une séquence : sans le Plan d'un clip seul. */
+  const choixSequence = $derived(
+    Object.fromEntries(Object.entries(choix).filter(([bloc]) => !structure?.blocs.find((b) => b.id === bloc)?.video)),
+  );
   const ctx = $derived(structure ? contexteListes(structure, choix, age, toutes) : null);
   const ongletsAvecCompte = $derived(
     ONGLETS.map((o) => {
@@ -106,7 +125,7 @@
     try {
       localStorage.setItem(
         BROUILLON,
-        JSON.stringify({ sujet, choixParSujet, age, texte, toutes, workflowId, idee, precisions, traduction }),
+        JSON.stringify({ sujet, choixParSujet, age, texte, toutes, workflowId, idee, precisions, traduction, atelier }),
       );
     } catch {
       // stockage indisponible : le brouillon vaut pour cette fois
@@ -120,6 +139,7 @@
       const d: unknown = JSON.parse(brut);
       if (typeof d !== 'object' || d === null) return;
       if ('sujet' in d && typeof d.sujet === 'string') sujet = d.sujet;
+      if ('atelier' in d && (d.atelier === 'image' || d.atelier === 'sequence')) atelier = d.atelier;
       if ('choixParSujet' in d) choixParSujet = choixDuBrouillon(d.choixParSujet);
       if ('age' in d && typeof d.age === 'number') age = d.age;
       if ('texte' in d && typeof d.texte === 'string') texte = d.texte;
@@ -297,6 +317,7 @@
 
   onMount(() => {
     relireBrouillon();
+    if (recuSequence) atelier = 'sequence';
     void (async () => {
       try {
         sujets = await sujetsScenario();
@@ -320,11 +341,26 @@
 <ASavoir>
   Chaque liste ajoute sa traduction anglaise au prompt. Les règles (genre, âge, tenues qui se remplacent,
   incompatibilités) guident le choix ici ; le prompt est contrôlé par le filtre AS-18 avant d'être proposé.
-  L'écriture par le LLM, l'aide à préciser et les ateliers Retouche, Clip et Séquence viennent avec la suite du
-  portage.
+  L'atelier Séquence découpe une histoire en plans pour le Montage. Les ateliers Retouche et Clip viennent avec la
+  suite du portage.
 </ASavoir>
 
 <Panneau titre="Sujet et modèle">
+  <div class="pastilles" role="group" aria-label="Atelier">
+    {#each ateliers as a (a.id)}
+      <button
+        type="button"
+        class="pastille"
+        aria-pressed={atelier === a.id}
+        onclick={() => {
+          atelier = a.id;
+          garder();
+        }}
+      >
+        {a.titre}
+      </button>
+    {/each}
+  </div>
   <div class="ligne">
     <div class="pastilles" role="group" aria-label="Sujet">
       {#each sujets as s (s.id)}
@@ -333,6 +369,7 @@
         </button>
       {/each}
     </div>
+    {#if atelier === 'image'}
     <label>
       <span class="etiquette">Modèle cible</span>
       <select
@@ -347,9 +384,23 @@
         {/each}
       </select>
     </label>
+    {/if}
   </div>
 </Panneau>
 
+{#if atelier === 'sequence'}
+  <ScenarioSequence
+    {signaler}
+    {sujet}
+    choix={choixSequence}
+    {age}
+    {llms}
+    bind:llmChoisi
+    recu={recuSequence}
+    {recuLu}
+    {versMontage}
+  />
+{:else}
 <Panneau titre="Ton idée">
   <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
   {#if modeIdee === 'preciser'}
@@ -401,6 +452,7 @@
   {/if}
   {/if}
 </Panneau>
+{/if}
 
 {#if structure && ctx}
   <Panneau titre="Compléments">
@@ -510,6 +562,7 @@
   <p class="discret">Lecture…</p>
 {/if}
 
+{#if atelier === 'image'}
 <Panneau titre="Prompt final" accentue>
   {#if erreurAssemblage}
     <p class="alerte">{erreurAssemblage}</p>
@@ -538,6 +591,7 @@
     </Bouton>
   </div>
 </Panneau>
+{/if}
 
 <style>
   .ligne,
