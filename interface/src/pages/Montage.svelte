@@ -13,7 +13,9 @@
     lireCommandes,
     messageErreur,
     optionsMontage,
+    type ActionClip,
     type Commande,
+    type Creation,
     type OptionsMontage,
   } from '../lib/api';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
@@ -49,6 +51,9 @@
   let commandes = $state<Commande[]>([]);
   /** Change quand la file a enregistré quelque chose : la bibliothèque des voix se relit. */
   let rafraichir = $state(0);
+  /** La séquence à ouvrir, demandée depuis un plan ou un film des Bobines. */
+  let sequenceAOuvrir = $state<string | null>(null);
+  let formulaire = $state<HTMLElement | null>(null);
   let envoi = $state(false);
   /** « Ranger dans » : le dossier des prochaines créations. */
   let dossier = $state<string | null>(null);
@@ -132,6 +137,56 @@
     }
   }
 
+  /** Le format d'un clip pour le retourner : celui du texte, ou le recadrage de son rush (sinon celui de l'image). */
+  function formatDe(clip: Creation, m: 'animer' | 'texte'): string {
+    if (m === 'texte') return clip.format ?? options?.formats[0] ?? '';
+    return clip.cadrage ?? FORMAT_IMAGE;
+  }
+
+  /** Bobines : Variante (le même clip, une autre seed), Réutiliser le prompt (ses réglages ici), Ouvrir la séquence. */
+  async function agirClip(clip: Creation, action: ActionClip) {
+    if (action === 'sequence') {
+      sequenceAOuvrir = clip.sequence ?? null;
+      return;
+    }
+    const m = clip.mode_video === 'texte' ? 'texte' : 'animer';
+    if (action === 'variante') {
+      try {
+        await commanderClip({
+          idee: clip.idee ?? '',
+          prompt: clip.prompt ?? '',
+          mode: m,
+          source: m === 'animer' ? (clip.parent ?? null) : null,
+          qualite: clip.qualite ?? qualite,
+          duree: clip.duree ?? duree,
+          format: formatDe(clip, m),
+          seed: null,
+          nombre: 1,
+          modele: clip.modele ?? null,
+          loras: clip.loras ?? [],
+          ecritPar: clip.llm ?? null,
+          dossier: clip.dossier ?? null,
+        });
+        signaler('Variante en file.');
+        await relireCommandes();
+      } catch (e) {
+        signaler(messageErreur(e), true);
+      }
+      return;
+    }
+    choisirMode(m);
+    prompt = clip.prompt ?? '';
+    if (m === 'animer' && clip.parent) source = [clip.parent];
+    if (clip.qualite) qualite = clip.qualite;
+    if (clip.duree) duree = clip.duree;
+    format = formatDe(clip, m);
+    if (clip.modele && workflow?.modeles.includes(clip.modele)) modele = clip.modele;
+    const avant: Record<string, LigneLora> = {};
+    for (const l of clip.loras ?? []) avant[l.fichier] = { actif: true, force: l.force, declencheurs: l.declencheurs };
+    lignesLoras = lignesPour(workflow?.loras ?? [], avant);
+    formulaire?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   async function annuler(id: string) {
     try {
       await annulerCommande(id);
@@ -167,6 +222,7 @@
     {/if}
   </Panneau>
 {:else if options && workflow}
+  <div bind:this={formulaire}></div>
   <Panneau titre="Tourner un clip" accentue>
     <div class="pastilles" role="group" aria-label="Départ">
       <button type="button" class="pastille" aria-pressed={mode === 'animer'} onclick={() => choisirMode('animer')}>
@@ -276,12 +332,19 @@
 {/if}
 
 {#if options && animer}
-  <MontageSequences {signaler} {options} workflow={animer} enFile={() => void relireCommandes()} {rafraichir} />
+  <MontageSequences
+    {signaler}
+    {options}
+    workflow={animer}
+    enFile={() => void relireCommandes()}
+    {rafraichir}
+    bind:ouvrir={sequenceAOuvrir}
+  />
 {/if}
 
 <MontageVoix {signaler} enFile={() => void relireCommandes()} {rafraichir} />
 
-<PanneauRushes genre="clips" {signaler} {rafraichir} />
+<PanneauRushes genre="clips" {signaler} {rafraichir} agirClip={(clip, action) => void agirClip(clip, action)} />
 
 <style>
   .pastilles,

@@ -5,7 +5,7 @@
   plus « à jour » : il sera retourné, avec ceux qui partent de lui.
 -->
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import {
     creerSequence,
     lireRushes,
@@ -60,9 +60,12 @@
     enFile: () => void;
     /** Change quand la file a fini quelque chose : la séquence ouverte se relit (ses plans tournés). */
     rafraichir: number;
+    /** Une séquence à ouvrir (depuis un plan ou un film des Bobines) ; remis à null une fois pris en compte. */
+    ouvrir?: string | null;
   }
 
-  let { signaler, options, workflow, enFile, rafraichir }: Props = $props();
+  let { signaler, options, workflow, enFile, rafraichir, ouvrir = $bindable(null) }: Props = $props();
+  let cadre = $state<HTMLElement | null>(null);
 
   /** Une question avant d'agir (abandon de modifications, corbeille, vidage). */
   interface Question {
@@ -334,6 +337,21 @@
     }
   }
 
+  // Une séquence demandée depuis les Bobines : ouverte (après confirmation s'il y a des changements), et montrée.
+  $effect(() => {
+    const id = ouvrir;
+    if (!id || !etat) return;
+    ouvrir = null;
+    untrack(() => {
+      if (etat?.sequences.some((s) => s.id === id)) {
+        choisirSequence(id);
+        cadre?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        signaler('Séquence introuvable : elle est peut-être à la corbeille des séquences.', true);
+      }
+    });
+  });
+
   // La file a fini quelque chose : plans tournés, film assemblé, ou voix gardée.
   $effect(() => {
     if (rafraichir > 0) {
@@ -348,6 +366,7 @@
   });
 </script>
 
+<div bind:this={cadre}></div>
 <Panneau titre="Séquences">
   {#if !etat || !courante || !opts}
     <p class="discret">Lecture…</p>

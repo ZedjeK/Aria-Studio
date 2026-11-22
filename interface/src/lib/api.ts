@@ -298,6 +298,12 @@ export interface Creation {
   mode_video?: string | null;
   /** La séquence d'un plan ou d'un film. */
   sequence?: string | null;
+  /** La source d'une retouche, ou le rush animé d'un clip. */
+  parent?: string | null;
+  /** Un clip : sa résolution, sa durée en secondes, et le format auquel son rush a été recadré. */
+  qualite?: string | null;
+  duree?: number | null;
+  cadrage?: string | null;
   duree_s?: number;
   /** Rangement des Rushes : dossier, archive, date de mise à la corbeille. */
   dossier?: string;
@@ -960,6 +966,9 @@ export interface EtatRushes {
 
 /** Rushes du Plateau (images) ou Bobines du Montage (clips) : chacun ses dossiers (aria_coeur::rushes::GENRES). */
 export type GenreRushes = 'images' | 'clips';
+
+/** Ce qu'on fait d'un clip des Bobines : le retourner (Variante), reprendre ses réglages, ou ouvrir sa séquence. */
+export type ActionClip = 'variante' | 'reutiliser' | 'sequence';
 
 /** Les rushes d'une vue, ou d'un dossier (vue « tous »), les plus récents d'abord. */
 export const lireRushes = (vue: VueRushes, dossier: string | null, genre: GenreRushes = 'images'): Promise<Creation[]> =>
