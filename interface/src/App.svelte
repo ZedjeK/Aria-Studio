@@ -28,13 +28,14 @@
   import Accueil from './pages/Accueil.svelte';
   import Journal from './pages/Journal.svelte';
   import Modeles from './pages/Modeles.svelte';
+  import Montage from './pages/Montage.svelte';
   import Parametres from './pages/Parametres.svelte';
   import Plateau from './pages/Plateau.svelte';
   import Retouche from './pages/Retouche.svelte';
   import Scenario from './pages/Scenario.svelte';
   import PageReglages from './pages/Reglages.svelte';
 
-  type Page = 'accueil' | 'scenario' | 'plateau' | 'retouche' | 'modeles' | 'reglages' | 'journal' | 'parametres';
+  type Page = 'accueil' | 'scenario' | 'plateau' | 'retouche' | 'montage' | 'modeles' | 'reglages' | 'journal' | 'parametres';
 
   // Les familles de pages : le travail de l'appli d'abord, puis l'appli elle-même. À adapter.
   const familles: { titre: string; pages: { id: Page; titre: string }[] }[] = [
@@ -45,6 +46,7 @@
         { id: 'scenario', titre: 'Scénario' },
         { id: 'plateau', titre: 'Plateau' },
         { id: 'retouche', titre: 'Retouche' },
+        { id: 'montage', titre: 'Montage' },
       ],
     },
     {
@@ -182,6 +184,8 @@
         <Plateau {signaler} recu={versPlateau} recuLu={() => (versPlateau = null)} />
       {:else if page === 'retouche'}
         <Retouche {signaler} />
+      {:else if page === 'montage'}
+        <Montage {signaler} />
       {:else if page === 'modeles'}
         <Modeles {signaler} />
       {:else if page === 'reglages'}

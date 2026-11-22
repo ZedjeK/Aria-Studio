@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::images;
+use aria_coeur::montage::{self, DemandeClip, OptionsMontage};
 use aria_coeur::plateau::{Commande, Contexte, Demande, Options, Plateau};
 use aria_coeur::retouche::{self, DemandeAgrandissement, DemandeRetouche};
 use aria_coeur::rushes::{self, EtatRushes};
@@ -210,6 +211,33 @@ pub async fn image_creation(plateau: State<'_, Arc<Plateau>>, id: String) -> Res
         std::fs::read(&chemin)
             .map(Response::new)
             .map_err(|e| format!("image de {id} illisible : {e}"))
+    })
+    .await
+}
+
+/// Ce que propose le Montage : résolutions, durées, workflows prêts pour animer et pour partir d'un texte.
+#[tauri::command]
+pub async fn options_montage(plateau: State<'_, Arc<Plateau>>) -> Result<OptionsMontage, String> {
+    hors_interface(&plateau, |p| Ok(montage::options(p.contexte()))).await
+}
+
+/// Contrôle une demande de clip et la met en file.
+#[tauri::command]
+pub async fn commander_clip(
+    plateau: State<'_, Arc<Plateau>>,
+    demande: DemandeClip,
+) -> Result<Commande, String> {
+    hors_interface(&plateau, move |p| p.commander_clip(&demande)).await
+}
+
+/// La vidéo d'un clip, en octets.
+#[tauri::command]
+pub async fn video_creation(plateau: State<'_, Arc<Plateau>>, id: String) -> Result<Response, String> {
+    hors_interface(&plateau, move |p| {
+        let chemin = creations::chemin_video(&p.contexte().data, &id)?;
+        std::fs::read(&chemin)
+            .map(Response::new)
+            .map_err(|e| format!("vidéo de {id} illisible : {e}"))
     })
     .await
 }

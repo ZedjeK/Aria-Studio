@@ -203,6 +203,39 @@ pub fn ecrire_fiche(data: &Path, fiche: &Value) -> Result<(), String> {
     ecrit
 }
 
+/// Un clip : sa vidéo, sa première image (vignette) et sa fiche, sous le même identifiant. Rend l'identifiant.
+///
+/// # Errors
+/// Vignette illisible, ou dossier qui ne s'écrit pas.
+pub fn enregistrer_clip(
+    data: &Path,
+    mp4: &[u8],
+    affiche: &[u8],
+    infos: &Map<String, Value>,
+) -> Result<String, String> {
+    let id = enregistrer(data, affiche, infos)?;
+    let chemin = dossier(data).join(format!("{id}.mp4"));
+    if let Err(e) = fs::write(&chemin, mp4) {
+        let _ = supprimer(data, &id);
+        return Err(format!("vidéo du clip : {e}"));
+    }
+    Ok(id)
+}
+
+/// Le chemin de la vidéo d'un clip.
+///
+/// # Errors
+/// Identifiant mal formé ou inconnu, ou création sans vidéo.
+pub fn chemin_video(data: &Path, id: &str) -> Result<PathBuf, String> {
+    verifier_id(data, id)?;
+    let chemin = dossier(data).join(format!("{id}.mp4"));
+    if chemin.is_file() {
+        Ok(chemin)
+    } else {
+        Err(format!("{id} n'est pas un clip"))
+    }
+}
+
 /// Le chemin du PNG d'une création.
 ///
 /// # Errors

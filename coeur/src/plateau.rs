@@ -167,6 +167,10 @@ pub struct Commande {
     pub liberte: f64,
     /// Les LoRA branchées, et leurs mots déclencheurs en tête du prompt.
     pub loras: Vec<ChoixLora>,
+    /// Montage : `animer` (un rush) ou `texte`, la résolution et la durée en secondes.
+    pub mode_video: Option<String>,
+    pub qualite: Option<String>,
+    pub duree: Option<u32>,
 }
 
 impl Commande {
@@ -202,6 +206,9 @@ impl Commande {
             mode_reference: None,
             liberte: LIBERTE_DEFAUT,
             loras: Vec::new(),
+            mode_video: None,
+            qualite: None,
+            duree: None,
         }
     }
 }
@@ -795,7 +802,7 @@ struct File {
 }
 
 #[derive(Debug, Default)]
-struct Partage {
+pub(crate) struct Partage {
     file: Mutex<File>,
     /// ✕ Annuler sur la commande en cours.
     annule: AtomicBool,
@@ -812,6 +819,18 @@ impl Partage {
             modification(c);
         }
     }
+
+    /// Pose une commande dans la file, sans la lancer (pour les tests des modules qui exécutent).
+    #[cfg(test)]
+    pub(crate) fn ajouter(&self, commande: Commande) {
+        self.file().commandes.push(commande);
+    }
+
+    /// Une copie d'une commande de la file (pour les tests).
+    #[cfg(test)]
+    pub(crate) fn commande(&self, id: &str) -> Option<Commande> {
+        self.file().commandes.iter().find(|c| c.id == id).cloned()
+    }
 }
 
 /// Le suivi d'une commande en cours, pour ce qui l'exécute : étape, avancement, prompt écrit, images enregistrées,
@@ -819,6 +838,14 @@ impl Partage {
 pub struct Suivi<'a> {
     partage: &'a Partage,
     id: &'a str,
+}
+
+#[cfg(test)]
+impl<'a> Suivi<'a> {
+    /// Le suivi de la commande `id` (pour les tests des modules qui exécutent).
+    pub(crate) fn de(partage: &'a Partage, id: &'a str) -> Self {
+        Self { partage, id }
+    }
 }
 
 impl Suivi<'_> {
@@ -959,6 +986,15 @@ impl Plateau {
         self.mettre_en_file(commande)
     }
 
+    /// Contrôle une demande de clip (Montage) et la met en file.
+    ///
+    /// # Errors
+    /// Voir [`crate::montage::commande_clip`] ; ou le fil du Plateau est arrêté.
+    pub fn commander_clip(&self, demande: &crate::montage::DemandeClip) -> Result<Commande, String> {
+        let commande = crate::montage::commande_clip(&self.contexte, demande, nouvel_id()?)?;
+        self.mettre_en_file(commande)
+    }
+
     /// Ajoute une image personnelle aux créations ; rend son identifiant.
     ///
     /// # Errors
@@ -1046,6 +1082,10 @@ fn executer(
     partage: &Partage,
     c: &Commande,
 ) -> Result<(), String> {
+    if c.genre == "clip" {
+        let suivi = Suivi { partage, id: &c.id };
+        return crate::montage::executer(contexte, generateur, &suivi, c);
+    }
     if c.genre != "creation" {
         let suivi = Suivi { partage, id: &c.id };
         return retouche::executer(contexte, generateur, &suivi, c);

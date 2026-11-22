@@ -229,6 +229,9 @@ fn lancer() -> Result<(), String> {
             plateau::renommer_dossier,
             plateau::supprimer_dossier,
             plateau::image_creation,
+            plateau::options_montage,
+            plateau::commander_clip,
+            plateau::video_creation,
         ])
         .setup(move |app| {
             if proposer {

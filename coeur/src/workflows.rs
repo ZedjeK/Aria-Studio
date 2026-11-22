@@ -47,7 +47,9 @@ const ENCODEURS_REFERENCES: [(&str, &str, usize, &str); 2] = [
 ];
 
 /// Les nœuds que le code ajoute aux graphes livrés (références, variation, LoRA) : un ComfyUI doit les connaître.
-pub const NOEUDS_AJOUTES: [&str; 8] = [
+pub const NOEUDS_AJOUTES: [&str; 10] = [
+    "ImageFromBatch",
+    "SaveImage",
     "LoadImage",
     "ResolutionSelector",
     "EmptyLatentImage",
@@ -516,6 +518,32 @@ fn sortir(map: &mut Map<String, Value>, cle: &str) -> Map<String, Value> {
 }
 
 impl Workflow {
+    /// Vidéo : enregistre aussi la première image, qui sert de vignette dans les Rushes.
+    ///
+    /// # Errors
+    /// Le workflow ne produit pas de vidéo (pas de nœud `CreateVideo` unique).
+    pub fn ajouter_affiche(&self, api: &mut Value, prefixe: &str) -> Result<(), String> {
+        let cv =
+            noeud_unique(api, "CreateVideo").ok_or_else(|| format!("{} ne produit pas de vidéo", self.id))?;
+        let images = api
+            .pointer(&format!("/{cv}/inputs/images"))
+            .cloned()
+            .ok_or_else(|| format!("{} : vidéo sans images", self.id))?;
+        let graphe = api
+            .as_object_mut()
+            .ok_or_else(|| format!("{} : graphe illisible", self.id))?;
+        graphe.insert(
+            "aria_affiche_lot".to_owned(),
+            json!({"class_type": "ImageFromBatch", "inputs": {"image": images, "batch_index": 0, "length": 1}}),
+        );
+        graphe.insert(
+            "aria_affiche".to_owned(),
+            json!({"class_type": "SaveImage",
+                   "inputs": {"images": ["aria_affiche_lot", 0], "filename_prefix": format!("{prefixe}_affiche")}}),
+        );
+        Ok(())
+    }
+
     /// Le nombre d'images de référence que ce workflow sait recevoir (0 : aucune) : il faut une entrée « image »
     /// pour la première, et un encodeur d'édition qui en accepte plusieurs.
     pub fn accepte_references(&self) -> usize {

@@ -227,7 +227,7 @@ export type EtatCommande = 'attente' | 'en_cours' | 'termine' | 'erreur' | 'annu
 
 /** Une commande du Plateau (aria_coeur::plateau::Commande). */
 /** Ce que fait une commande du Plateau. */
-export type GenreCommande = 'creation' | 'retouche' | 'agrandissement';
+export type GenreCommande = 'creation' | 'retouche' | 'agrandissement' | 'clip';
 
 export interface Commande {
   id: string;
@@ -263,6 +263,10 @@ export interface Commande {
   modeReference: ModeReference | null;
   liberte: number;
   loras: ChoixLora[];
+  /** Montage : animer (un rush) ou texte, la résolution et la durée. */
+  modeVideo: 'animer' | 'texte' | null;
+  qualite: string | null;
+  duree: number | null;
 }
 
 /** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */
@@ -1229,3 +1233,49 @@ export interface DemandeConversation {
 
 export const conversationScenario = (demande: DemandeConversation): Promise<TourConversation> =>
   invoke<TourConversation>('conversation_scenario', { demande });
+
+// --- Montage : tourner un clip (aria_coeur::montage) ---
+
+export interface QualiteVideo {
+  cle: string;
+  nom: string;
+  aide: string;
+  megapixels: number;
+  steps: number;
+  /** Secondes mesurées pour 5 s, à ces steps (RTX 4080 de l'auteur de la v2). */
+  estimationS: number;
+}
+
+export interface OptionsMontage {
+  qualites: QualiteVideo[];
+  defautQualite: string;
+  durees: number[];
+  nombreMax: number;
+  exposantDuree: number;
+  formats: string[];
+  animer: OptionsPlateau;
+  texte: OptionsPlateau;
+}
+
+export interface DemandeClip {
+  idee: string;
+  prompt: string;
+  mode: 'animer' | 'texte';
+  source: string | null;
+  qualite: string;
+  duree: number;
+  format: string;
+  seed: number | null;
+  nombre: number;
+  modele: string | null;
+  loras: ChoixLora[];
+  ecritPar: string | null;
+}
+
+export const optionsMontage = (): Promise<OptionsMontage> => invoke<OptionsMontage>('options_montage');
+
+/** Contrôle la demande (AS-18 compris) et la met en file. */
+export const commanderClip = (demande: DemandeClip): Promise<Commande> => invoke<Commande>('commander_clip', { demande });
+
+/** La vidéo d'un clip, en octets. */
+export const videoCreation = (id: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('video_creation', { id });
