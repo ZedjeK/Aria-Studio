@@ -480,14 +480,19 @@ mod tests {
         assert!(liste(d, "autre", None, "images").is_err());
         assert!(liste(d, "tous", None, "sons").is_err());
 
-        let etat = etat(d, "images").unwrap();
+        let compteurs = etat(d, "images").unwrap();
         assert_eq!(
-            (etat.tous, etat.non_ranges, etat.archives, etat.corbeille),
+            (
+                compteurs.tous,
+                compteurs.non_ranges,
+                compteurs.archives,
+                compteurs.corbeille
+            ),
             (2, 1, 1, 1)
         );
         // Le dossier noté dans une fiche réapparaît même absent de dossiers.json.
         assert_eq!(
-            etat.dossiers,
+            compteurs.dossiers,
             vec![CompteDossier {
                 nom: "Renards".to_owned(),
                 nombre: 1
