@@ -40,6 +40,7 @@ pub mod retouche;
 pub mod retrouver;
 pub mod rushes;
 pub mod sauvegardes;
+pub mod scenario;
 pub mod secrets;
 pub mod securite;
 pub mod securite_reglages;
