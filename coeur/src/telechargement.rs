@@ -89,15 +89,20 @@ pub trait Reseau: Send + Sync + 'static {
     ) -> io::Result<(u16, Box<dyn Read>)>;
 }
 
+/// Les en-têtes HTTP d'une source.
+pub type Entetes = Box<dyn Fn(&str) -> Vec<(String, String)> + Send + Sync>;
+/// La place libre sur le disque d'un dossier, en octets.
+pub type EspaceLibre = Box<dyn Fn(&Path) -> Option<u64> + Send + Sync>;
+
 /// Ce dont la file a besoin autour d'elle.
 pub struct Contexte {
     pub dossier: Dossier,
     pub data: PathBuf,
     pub modeles: PathBuf,
     /// Les en-têtes d'une source (`Authorization` avec sa clé, s'il y en a une).
-    pub entetes: Box<dyn Fn(&str) -> Vec<(String, String)> + Send + Sync>,
+    pub entetes: Entetes,
     /// La place libre sur le disque d'un dossier, en octets (rien : inconnue).
-    pub espace_libre: Box<dyn Fn(&Path) -> Option<u64> + Send + Sync>,
+    pub espace_libre: EspaceLibre,
 }
 
 /// Le registre des modèles téléchargés par Aria (`data\modeles.json`, au format de la v2).
@@ -317,7 +322,7 @@ impl Telechargeur {
         Ok(tache.clone())
     }
 
-    /// Vrai tant qu'un fichier est en cours (pour les tests).
+    /// Vrai tant qu'un fichier est en cours de téléchargement.
     pub fn occupe(&self) -> bool {
         self.partage.occupe.load(Ordering::Relaxed)
     }
@@ -560,13 +565,16 @@ mod tests {
     use std::collections::HashMap;
     use std::io::Cursor;
 
+    /// Une demande reçue par le faux serveur : adresse, octet de départ, en-têtes.
+    type Demande = (String, u64, Vec<(String, String)>);
+
     /// Un serveur de test : des fichiers par adresse, qui sait reprendre, couper ou refuser.
     #[derive(Default, Clone)]
     struct Faux {
         fichiers: Arc<Mutex<HashMap<String, Vec<u8>>>>,
         refuses: Arc<Mutex<HashSet<String>>>,
         coupures: Arc<Mutex<u32>>,
-        demandes: Arc<Mutex<Vec<(String, u64, Vec<(String, String)>)>>>,
+        demandes: Arc<Mutex<Vec<Demande>>>,
     }
 
     impl Reseau for Faux {
