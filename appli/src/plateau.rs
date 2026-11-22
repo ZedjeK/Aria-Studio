@@ -10,8 +10,8 @@ use aria_coeur::montage::{self, DemandeClip, OptionsMontage};
 use aria_coeur::plateau::{Commande, Contexte, Demande, Options, Plateau};
 use aria_coeur::retouche::{self, DemandeAgrandissement, DemandeRetouche};
 use aria_coeur::rushes::{self, EtatRushes};
-use aria_coeur::voix;
 use aria_coeur::{creations, journal};
+use aria_coeur::{sequences, voix};
 use serde_json::Value;
 use tauri::State;
 use tauri::ipc::Response;
@@ -309,4 +309,74 @@ pub async fn son_voix(plateau: State<'_, Arc<Plateau>>, id: String) -> Result<Re
             .map_err(|e| format!("son de la voix {id} illisible : {e}"))
     })
     .await
+}
+
+/// Refuse de toucher à une séquence pendant son tournage : le tournage la réécrit plan après plan.
+fn hors_tournage(p: &Plateau, id: &str) -> Result<(), String> {
+    if p.sequences_en_tournage().iter().any(|s| s == id) {
+        Err("Cette séquence est en tournage : attends la fin, ou annule-le dans la file".to_owned())
+    } else {
+        Ok(())
+    }
+}
+
+/// Les séquences, celles de la corbeille, celles en tournage, et les options de l'écran.
+#[tauri::command]
+pub async fn lire_sequences(plateau: State<'_, Arc<Plateau>>) -> Result<sequences::EtatSequences, String> {
+    hors_interface(&plateau, move |p| {
+        Ok(sequences::etat(p.contexte(), p.sequences_en_tournage()))
+    })
+    .await
+}
+
+/// Crée une séquence (au format de la v2).
+#[tauri::command]
+pub async fn creer_sequence(plateau: State<'_, Arc<Plateau>>, donnees: Value) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| sequences::creer(p.contexte(), &donnees)).await
+}
+
+/// Enregistre les changements d'une séquence ; les plans touchés seront retournés.
+#[tauri::command]
+pub async fn modifier_sequence(
+    plateau: State<'_, Arc<Plateau>>,
+    id: String,
+    donnees: Value,
+) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| {
+        hors_tournage(p, &id)?;
+        sequences::modifier(p.contexte(), &id, &donnees)
+    })
+    .await
+}
+
+/// Met une séquence à la corbeille (ses clips restent dans les Bobines).
+#[tauri::command]
+pub async fn supprimer_sequence(plateau: State<'_, Arc<Plateau>>, id: String) -> Result<(), String> {
+    hors_interface(&plateau, move |p| {
+        hors_tournage(p, &id)?;
+        sequences::supprimer(p.contexte(), &id)
+    })
+    .await
+}
+
+/// Ramène une séquence de la corbeille.
+#[tauri::command]
+pub async fn restaurer_sequence(plateau: State<'_, Arc<Plateau>>, id: String) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| sequences::restaurer(p.contexte(), &id)).await
+}
+
+/// Vide la corbeille des séquences ; rend le nombre de séquences effacées.
+#[tauri::command]
+pub async fn vider_corbeille_sequences(plateau: State<'_, Arc<Plateau>>) -> Result<usize, String> {
+    hors_interface(&plateau, move |p| sequences::vider_corbeille(p.contexte())).await
+}
+
+/// Tourne les plans demandés (et ceux qui en dépendent), puis assemble le film.
+#[tauri::command]
+pub async fn tourner_sequence(
+    plateau: State<'_, Arc<Plateau>>,
+    id: String,
+    plans: Vec<usize>,
+) -> Result<Commande, String> {
+    hors_interface(&plateau, move |p| p.commander_sequence(&id, &plans)).await
 }

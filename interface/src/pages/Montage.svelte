@@ -1,8 +1,8 @@
 <!--
-  Montage, comme en v2 (premier lot : tourner un clip) : un clip MiniMax H3 avec le son, en animant un rush ou à partir
-  d'un texte. Le prompt est tourné tel quel (il s'écrit au Scénario, ou ici). Résolution, durée, format, nombre, seed,
-  checkpoint et LoRA de la famille ; estimation du temps ; file suivie en direct ; derniers clips à regarder. Les
-  séquences et les voix viennent avec la suite du portage.
+  Montage, comme en v2 : un clip MiniMax H3 avec le son, en animant un rush ou à partir d'un texte. Le prompt est
+  tourné tel quel (il s'écrit au Scénario, ou ici). Résolution, durée, format, nombre, seed, checkpoint et LoRA de la
+  famille ; estimation du temps ; file suivie en direct ; derniers clips à regarder. Puis les séquences (plans
+  enchaînés et assemblés en un film) et la bibliothèque des voix de référence.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -25,6 +25,7 @@
   import Panneau from '../lib/composants/Panneau.svelte';
   import VideoCreation from '../lib/composants/VideoCreation.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
+  import MontageSequences from './MontageSequences.svelte';
   import MontageVoix from './MontageVoix.svelte';
 
   interface Props {
@@ -58,10 +59,14 @@
   const estimation = $derived(
     options && choisie ? dureeLisible(estimationClips(choisie, duree, nombre, options.exposantDuree)) : '',
   );
-  const clips = $derived(commandes.filter((c) => c.type === 'clip' || c.type === 'voix'));
+  const clips = $derived(commandes.filter((c) => c.type === 'clip' || c.type === 'voix' || c.type === 'sequence'));
+  /** Le workflow qui anime un rush : celui de tous les plans des séquences. */
+  const animer = $derived(
+    options?.animer.workflows.find((w) => w.id === options?.animer.defaut) ?? options?.animer.workflows[0],
+  );
   const derniers = $derived(
     clips
-      .filter((c) => c.type === 'clip')
+      .filter((c) => c.type === 'clip' || c.type === 'sequence')
       .flatMap((c) => c.images)
       .slice(-12)
       .reverse(),
@@ -155,8 +160,8 @@
 <p class="sous-titre">Tourne des clips avec le son, en animant un rush ou à partir d'un texte.</p>
 <ASavoir>
   Le prompt est tourné tel quel : écris-le au Scénario pour qu'un LLM le prépare, ou directement ici. Un clip prend la
-  carte graphique plusieurs minutes ; l'estimation vient des mesures de la version 2, sur une RTX 4080. Les voix
-  gardées serviront de référence aux séquences.
+  carte graphique plusieurs minutes ; l'estimation vient des mesures de la version 2, sur une RTX 4080. Une séquence
+  enchaîne plusieurs plans et les assemble en un film ; les voix gardées lui servent de référence.
 </ASavoir>
 
 {#if options && !workflow}
@@ -272,6 +277,10 @@
       {/each}
     </ul>
   </Panneau>
+{/if}
+
+{#if options && animer}
+  <MontageSequences {signaler} {options} workflow={animer} enFile={() => void relireCommandes()} {rafraichir} />
 {/if}
 
 <MontageVoix {signaler} enFile={() => void relireCommandes()} {rafraichir} />

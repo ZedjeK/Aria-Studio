@@ -47,7 +47,7 @@ const ENCODEURS_REFERENCES: [(&str, &str, usize, &str); 2] = [
 ];
 
 /// Les nœuds que le code ajoute aux graphes livrés (références, variation, LoRA) : un ComfyUI doit les connaître.
-pub const NOEUDS_AJOUTES: [&str; 10] = [
+pub const NOEUDS_AJOUTES: [&str; 20] = [
     "ImageFromBatch",
     "SaveImage",
     "LoadImage",
@@ -58,6 +58,17 @@ pub const NOEUDS_AJOUTES: [&str; 10] = [
     "ImageScaleToTotalPixels",
     "VAEEncode",
     NOEUD_LORA,
+    // MiniMax H3 : essai de voix et séquences du Montage (voix.rs, sequences.rs).
+    "MiniMaxH3ReferenceToVideo",
+    "MiniMaxH3AddGuide",
+    "SaveAudio",
+    "LoadAudio",
+    "TrimAudioDuration",
+    "LoadVideo",
+    "GetVideoComponents",
+    "Video Slice",
+    "ConcatenateVideo",
+    "SaveVideo",
 ];
 
 /// Les nœuds ComfyUI dont Aria se sert : ceux des workflows livrés, et ceux que le code ajoute.
@@ -1293,17 +1304,23 @@ mod tests {
 
     #[test]
     fn noeuds_ajoutes_par_le_code_tous_declares() {
-        // Chaque « class_type » écrit dans ce fichier (hors tests) doit figurer dans NOEUDS_AJOUTES : sinon,
+        // Chaque « class_type » écrit par le code (hors tests) doit figurer dans NOEUDS_AJOUTES : sinon,
         // « J'ai déjà ComfyUI » ne vérifierait pas ce nœud.
-        let source = include_str!("workflows.rs");
-        let code = source.split("#[cfg(test)]").next().unwrap();
-        let motif = regex::Regex::new(r#""class_type":\s*"(\w+)""#).unwrap();
-        for prise in motif.captures_iter(code) {
-            assert!(
-                NOEUDS_AJOUTES.contains(&&prise[1]),
-                "nœud ajouté non déclaré : {}",
-                &prise[1]
-            );
+        let motif = regex::Regex::new(r#""class_type":\s*"([^"]+)""#).unwrap();
+        for source in [
+            include_str!("workflows.rs"),
+            include_str!("voix.rs"),
+            include_str!("sequences.rs"),
+            include_str!("h3.rs"),
+        ] {
+            let code = source.split("#[cfg(test)]").next().unwrap();
+            for prise in motif.captures_iter(code) {
+                assert!(
+                    NOEUDS_AJOUTES.contains(&&prise[1]),
+                    "nœud ajouté non déclaré : {}",
+                    &prise[1]
+                );
+            }
         }
         for (_, _, _, latent) in ENCODEURS_REFERENCES {
             assert!(NOEUDS_AJOUTES.contains(&latent), "latent non déclaré : {latent}");

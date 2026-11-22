@@ -89,6 +89,8 @@ function commande(changements: Partial<Commande>): Commande {
     qualite: null,
     duree: null,
     description: '',
+    sequence: null,
+    plans: [],
     ...changements,
   };
 }

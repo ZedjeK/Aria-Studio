@@ -1,7 +1,11 @@
 //! Ce que les séquences et les essais de voix partagent pour MiniMax H3, comme en v2 (`app/sequences.py`,
 //! `app/repliques.py`, `app/decoupage.py`) : le nombre d'images d'un clip, ses dimensions, les deux VAE du graphe,
-//! l'élagage des branches débranchées, la langue d'une réplique et sa balise.
+//! l'élagage des branches débranchées, la langue d'une réplique et sa balise, les répliques d'un texte, et les champs
+//! d'un prompt H3 (trois champs, ou les six du mode référence).
 
+use std::sync::LazyLock;
+
+use regex::Regex;
 use serde_json::{Map, Value};
 
 /// Images par seconde des clips de H3.
@@ -122,6 +126,257 @@ pub fn langue(replique: &str) -> &'static str {
 /// La balise d'une réplique (guide de H3) : `<d>[Langue] réplique</d>`, la langue lue dans la réplique.
 pub fn balise(replique: &str) -> String {
     crate::listes::balise(replique, langue(replique))
+}
+
+// --- répliques ------------------------------------------------------------------------------------------------------
+
+/// Une réplique : la balise `<d>[Langue] …</d>`, ou « », "", “” (ce que tu écris, les anciens prompts). Bornées : un
+/// « <d> » ou un « « » sans fermeture ne relit qu'au plus 1 000 caractères.
+static REPLIQUES: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?is)<d>\s{0,20}(?:\[[^\]]{0,40}\]\s{0,20})?(.{1,1000}?)\s{0,20}</d>|«\s{0,20}([^»]{1,1000}?)\s{0,20}»|"([^"]{1,1000})"|“([^”]{1,1000})”"#,
+    )
+    .ok()
+});
+
+fn motif(r: &'static LazyLock<Option<Regex>>) -> Option<&'static Regex> {
+    let r: &Option<Regex> = r;
+    r.as_ref()
+}
+
+/// Le texte contient-il une réplique (une balise ou un guillemet) ?
+pub fn parle(texte: &str) -> bool {
+    texte.to_lowercase().contains("<d>") || texte.contains(['«', '"', '“'])
+}
+
+/// Les répliques d'un texte, sans leurs guillemets ni leur balise.
+pub fn repliques(texte: &str) -> Vec<String> {
+    motif(&REPLIQUES).map_or_else(Vec::new, |r| {
+        r.captures_iter(texte)
+            .filter_map(|c| {
+                (1..=4)
+                    .find_map(|i| c.get(i))
+                    .map(|m| m.as_str().trim().to_owned())
+            })
+            .collect()
+    })
+}
+
+// --- champs d'un prompt H3 -------------------------------------------------------------------------------------------
+
+pub const CHAMP_DESCRIPTION: &str = "integrated_multimodal_description";
+static CHAMPS: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(r"(?i)(integrated_multimodal_description|overall_soundscape|non_diegetic_music)\s*:").ok()
+});
+/// Le libellé du personnage de référence (guide du mode référence de H3).
+pub const SUJET: &str = "<Subject 1>";
+static SIX_CHAMPS: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"(?i)^\s*subject_definitions\s*:").ok());
+static LE_PERSONNAGE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"(?i)\bthe (?:main )?character\b").ok());
+static PLAN: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"(?i)\[Shot (\d+)\]").ok());
+static SHOT_1: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"(?i)^\[Shot 1\]\s*").ok());
+
+fn espaces(texte: &str) -> String {
+    texte.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// (description, ambiance, musique) d'un prompt H3 en trois champs. Un champ absent vaut rien ; le `[Shot 1]` de tête
+/// de la description est retiré ([`assembler_champs`] le remet). Sans aucun champ, tout est la description.
+pub fn separer_champs(texte: &str) -> (String, Option<String>, Option<String>) {
+    let reperes: Vec<(usize, usize, String)> = motif(&CHAMPS).map_or_else(Vec::new, |r| {
+        r.captures_iter(texte)
+            .filter_map(|c| {
+                let tout = c.get(0)?;
+                Some((tout.start(), tout.end(), c.get(1)?.as_str().to_lowercase()))
+            })
+            .collect()
+    });
+    let mut morceaux: Vec<(String, String)> = Vec::new();
+    let mut ajouter = |nom: &str, valeur: &str| match morceaux.iter_mut().find(|(n, _)| n == nom) {
+        Some((_, v)) => {
+            v.push(' ');
+            v.push_str(valeur);
+        }
+        None => morceaux.push((nom.to_owned(), valeur.to_owned())),
+    };
+    match reperes.first() {
+        None => ajouter(CHAMP_DESCRIPTION, texte),
+        Some((debut, _, _)) if !texte[..*debut].trim().is_empty() => {
+            ajouter(CHAMP_DESCRIPTION, &texte[..*debut])
+        }
+        Some(_) => {}
+    }
+    for (i, (_, fin, nom)) in reperes.iter().enumerate() {
+        let suite = reperes.get(i + 1).map_or(texte.len(), |r| r.0);
+        ajouter(nom, &texte[*fin..suite]);
+    }
+    let propre = |nom: &str| {
+        morceaux
+            .iter()
+            .find(|(n, _)| n == nom)
+            .map(|(_, v)| espaces(v))
+            .filter(|v| !v.is_empty())
+    };
+    let description = propre(CHAMP_DESCRIPTION).unwrap_or_default();
+    let description = motif(&SHOT_1).map_or_else(
+        || description.clone(),
+        |r| r.replace(&description, "").into_owned(),
+    );
+    (
+        description,
+        propre("overall_soundscape"),
+        propre("non_diegetic_music"),
+    )
+}
+
+/// Les trois champs d'un prompt H3, un par paragraphe.
+pub fn assembler_champs(description: &str, ambiance: Option<&str>, musique: Option<&str>) -> String {
+    let mut champs = vec![
+        format!("{CHAMP_DESCRIPTION}: [Shot 1] {description}")
+            .trim_end()
+            .to_owned(),
+    ];
+    if let Some(a) = ambiance.filter(|a| !a.is_empty()) {
+        champs.push(format!("overall_soundscape: {a}"));
+    }
+    if let Some(m) = musique.filter(|m| !m.is_empty()) {
+        champs.push(format!("non_diegetic_music: {m}"));
+    }
+    champs.join("\n\n")
+}
+
+/// Ajoute une phrase (contrainte, mots déclencheurs) à la description d'un prompt en champs, sans toucher aux autres
+/// champs ; rien si le prompt n'est pas en champs.
+pub fn dans_la_description(texte: &str, ajout: &str, debut: bool) -> Option<String> {
+    let c = motif(&CHAMPS)?.captures(texte)?;
+    let repere = c.get(0)?;
+    if c.get(1)?.as_str().to_lowercase() != CHAMP_DESCRIPTION {
+        return None;
+    }
+    let (description, ambiance, musique) = separer_champs(&texte[repere.start()..]);
+    let description = if debut {
+        format!("{ajout} {description}")
+    } else {
+        format!("{description} {ajout}")
+    };
+    Some(format!(
+        "{}{}",
+        &texte[..repere.start()],
+        assembler_champs(description.trim(), ambiance.as_deref(), musique.as_deref())
+    ))
+}
+
+/// Le prompt d'un plan (trois champs ou prose) mis aux six champs du mode référence de H3 : le personnage de
+/// <Picture 1> devient <Subject 1>, la voix de <Audio 1> est déclarée, et chaque « the character » de la description
+/// est remplacé par le libellé. Sans référence, ou déjà en six champs, le texte ne change pas.
+pub fn en_reference(texte: &str, personnage: bool, voix: bool) -> String {
+    if !(personnage || voix) || motif(&SIX_CHAMPS).is_some_and(|r| r.is_match(texte)) {
+        return texte.trim_end().to_owned();
+    }
+    let (mut description, ambiance, musique) = separer_champs(texte.trim());
+    let qui = if personnage { SUJET } else { "the main speaker" };
+    let (mut definitions, mut conservation, mut taches) = (Vec::new(), Vec::new(), Vec::new());
+    if personnage {
+        match motif(&LE_PERSONNAGE) {
+            Some(r) if r.is_match(&description) => {
+                description = r.replace_all(&description, SUJET).into_owned()
+            }
+            _ => description = format!("{SUJET} is the main character of this shot. {description}"),
+        }
+        let mut plans: Vec<u32> = vec![1];
+        if let Some(r) = motif(&PLAN) {
+            plans.extend(
+                r.captures_iter(&description)
+                    .filter_map(|c| c.get(1)?.as_str().parse::<u32>().ok()),
+            );
+        }
+        plans.sort_unstable();
+        plans.dedup();
+        let liste: Vec<String> = plans.iter().map(|n| format!("[Shot {n}]")).collect();
+        definitions.push(format!("{SUJET} is the main character shown in <Picture 1>."));
+        conservation.push(format!(
+            "{SUJET} (appears in {}): fully_preserved - the character's identity, face, hair, body and outfit are retained.",
+            liste.join(", ")
+        ));
+        taches.push("reference generation");
+    }
+    if voix {
+        definitions.push(format!("<Audio 1> is the voice-timbre reference for {qui} (S1)."));
+        conservation.push(format!(
+            "<Audio 1>: reference - its vocal timbre guides the dialogue delivery of {qui} without copying the original signal."
+        ));
+        taches.push("audio reference");
+    }
+    let resume = if voix {
+        format!(
+            "The target video shows {qui} in the scene described below, speaking with the voice timbre of <Audio 1>."
+        )
+    } else {
+        format!("The target video shows {qui} in the scene described below.")
+    };
+    let mut champs = vec![
+        ("subject_definitions", definitions.join("\n")),
+        ("summary", format!("[{}] {resume}", taches.join(" + "))),
+        ("retention_analysis", conservation.join("\n")),
+        (
+            "detailed_description",
+            format!("[Shot 1] {description}").trim_end().to_owned(),
+        ),
+    ];
+    if let Some(a) = ambiance {
+        champs.push(("overall_soundscape", a));
+    }
+    champs.push(("non_diegetic_music", musique.unwrap_or_else(|| "N/A".to_owned())));
+    champs
+        .iter()
+        .map(|(nom, valeur)| format!("{nom}:\n{valeur}"))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+#[cfg(test)]
+mod tests_champs {
+    use super::*;
+
+    #[test]
+    fn repliques_lues() {
+        assert!(parle("She says: <d>[French] Salut.</d>") && parle("« Salut »") && !parle("A quiet street."));
+        assert_eq!(
+            repliques("Il dit « Bonjour » puis <d>[French] Au revoir.</d> et \"OK\""),
+            ["Bonjour", "Au revoir.", "OK"]
+        );
+    }
+
+    #[test]
+    fn champs_separes_et_reassembles() {
+        let t = "integrated_multimodal_description: [Shot 1] The character walks.\n\noverall_soundscape: rain\n\nnon_diegetic_music: piano";
+        let (d, a, m) = separer_champs(t);
+        assert_eq!(
+            (d.as_str(), a.as_deref(), m.as_deref()),
+            ("The character walks.", Some("rain"), Some("piano"))
+        );
+        assert_eq!(assembler_champs(&d, a.as_deref(), m.as_deref()), t);
+        assert_eq!(separer_champs("A cat sleeps.").0, "A cat sleeps.");
+        let ajoute = dans_la_description(t, "Keep the red coat.", false).unwrap();
+        assert!(ajoute.contains("The character walks. Keep the red coat."));
+        assert!(dans_la_description("A cat sleeps.", "x", false).is_none());
+    }
+
+    #[test]
+    fn mode_reference() {
+        assert_eq!(en_reference("A cat sleeps. ", false, false), "A cat sleeps.");
+        let r = en_reference("The character walks in the rain.", true, true);
+        assert!(
+            r.starts_with("subject_definitions:\n<Subject 1> is the main character shown in <Picture 1>.")
+        );
+        assert!(r.contains("[Shot 1] <Subject 1> walks in the rain."));
+        assert!(r.contains("[reference generation + audio reference]"));
+        assert!(r.ends_with("non_diegetic_music:\nN/A"));
+        let sans = en_reference("A dog barks.", true, false);
+        assert!(sans.contains("[Shot 1] <Subject 1> is the main character of this shot. A dog barks."));
+        assert_eq!(en_reference(&r, true, true), r.trim_end());
+    }
 }
 
 #[cfg(test)]

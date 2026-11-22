@@ -238,6 +238,9 @@ pub fn supprimer(data: &Path, id: &str) -> Result<Voix, String> {
             fs::rename(f, corbeille.join(nom)).map_err(|e| format!("voix {id} : {e}"))?;
         }
     }
+    // Les séquences qui la prenaient pour référence repassent en Auto, et le disent.
+    let nom = v.get("nom").and_then(Value::as_str).unwrap_or(id).to_owned();
+    crate::sequences::oublier_voix(data, id, &nom)?;
     Ok(v)
 }
 

@@ -173,6 +173,9 @@ pub struct Commande {
     pub duree: Option<u32>,
     /// Essai de voix : qui parle, et comment (la phrase est dans `idee`, le personnage dans `parent`).
     pub description: String,
+    /// Séquence du Montage : son identifiant, et les plans à tourner (indices, dans l'ordre).
+    pub sequence: Option<String>,
+    pub plans: Vec<usize>,
 }
 
 impl Commande {
@@ -212,6 +215,8 @@ impl Commande {
             qualite: None,
             duree: None,
             description: String::new(),
+            sequence: None,
+            plans: Vec::new(),
         }
     }
 }
@@ -1007,6 +1012,33 @@ impl Plateau {
         self.mettre_en_file(commande)
     }
 
+    /// Contrôle une demande de tournage de séquence et la met en file ; refusée si la séquence est déjà en tournage.
+    ///
+    /// # Errors
+    /// Voir [`crate::sequences::commande_sequence`] ; séquence déjà en file ; ou le fil du Plateau est arrêté.
+    pub fn commander_sequence(&self, id: &str, plans: &[usize]) -> Result<Commande, String> {
+        let en_tournage = self.partage.file().commandes.iter().any(|c| {
+            c.sequence.as_deref() == Some(id)
+                && matches!(c.etat, EtatCommande::Attente | EtatCommande::EnCours)
+        });
+        if en_tournage {
+            return Err("Cette séquence est déjà en tournage".to_owned());
+        }
+        let commande = crate::sequences::commande_sequence(&self.contexte, id, plans, nouvel_id()?)?;
+        self.mettre_en_file(commande)
+    }
+
+    /// Les plans en cours de tournage, par séquence (pour l'interface).
+    pub fn sequences_en_tournage(&self) -> Vec<String> {
+        self.partage
+            .file()
+            .commandes
+            .iter()
+            .filter(|c| matches!(c.etat, EtatCommande::Attente | EtatCommande::EnCours))
+            .filter_map(|c| c.sequence.clone())
+            .collect()
+    }
+
     /// Ajoute une image personnelle aux créations ; rend son identifiant.
     ///
     /// # Errors
@@ -1101,6 +1133,10 @@ fn executer(
     if c.genre == "voix" {
         let suivi = Suivi { partage, id: &c.id };
         return crate::voix::executer(contexte, generateur, &suivi, c);
+    }
+    if c.genre == "sequence" {
+        let suivi = Suivi { partage, id: &c.id };
+        return crate::sequences::executer(contexte, generateur, &suivi, c);
     }
     if c.genre != "creation" {
         let suivi = Suivi { partage, id: &c.id };
