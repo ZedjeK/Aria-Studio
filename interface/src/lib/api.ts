@@ -185,8 +185,12 @@ export interface DemandeImage {
 export type EtatCommande = 'attente' | 'en_cours' | 'termine' | 'erreur' | 'annule';
 
 /** Une commande du Plateau (aria_coeur::plateau::Commande). */
+/** Ce que fait une commande du Plateau. */
+export type GenreCommande = 'creation' | 'retouche' | 'agrandissement';
+
 export interface Commande {
   id: string;
+  type: GenreCommande;
   /** Ce que l'utilisateur a écrit. */
   idee: string;
   /** Le prompt envoyé au modèle ; vide tant que le LLM ne l'a pas réécrit. */
@@ -206,6 +210,14 @@ export interface Commande {
   /** Les créations enregistrées. */
   images: string[];
   erreur: string | null;
+  /** L'image de départ d'une retouche ou d'un agrandissement. */
+  parent: string | null;
+  masque: boolean;
+  fondu: number;
+  largeur: number | null;
+  hauteur: number | null;
+  ancrage: string | null;
+  cadrage: string | null;
 }
 
 /** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */
@@ -244,6 +256,55 @@ export const annulerCommande = (id: string): Promise<Commande> => invoke<Command
 /** Valide les steps d'un checkpoint : il devient utilisable dans les workflows de sa famille. */
 export const validerCheckpoint = (workflow: string, checkpoint: string, steps: number): Promise<void> =>
   invoke<void>('valider_checkpoint', { workflow, checkpoint, steps });
+
+/** « Celui de l'image » : la source d'une retouche garde son format (aria_coeur::retouche::FORMAT_IMAGE). */
+export const FORMAT_IMAGE = 'image source';
+
+/** Une demande de retouche (aria_coeur::retouche::DemandeRetouche). */
+export interface DemandeRetouche {
+  source: string;
+  instruction: string;
+  reecrire: boolean;
+  llm: string | null;
+  workflow: string | null;
+  /** Le masque peint, en data URL PNG ; null : toute l'image. */
+  masque: string | null;
+  fondu: number;
+  seed: number | null;
+  modele: string | null;
+  nombre: number;
+  /** Un format, qui recadre la source au centre ; null : celui de l'image. */
+  format: string | null;
+}
+
+/** Une demande d'agrandissement (aria_coeur::retouche::DemandeAgrandissement). */
+export interface DemandeAgrandissement {
+  source: string;
+  largeur: number;
+  hauteur: number;
+  ancrage: string;
+  precision: string;
+  reecrire: boolean;
+  llm: string | null;
+  workflow: string | null;
+  fondu: number;
+  seed: number | null;
+  modele: string | null;
+  nombre: number;
+}
+
+/** Les workflows de retouche, les formats et les LLM. */
+export const optionsRetouche = (): Promise<OptionsPlateau> => invoke<OptionsPlateau>('options_retouche');
+
+export const commanderRetouche = (demande: DemandeRetouche): Promise<Commande> =>
+  invoke<Commande>('commander_retouche', { demande });
+
+export const commanderAgrandissement = (demande: DemandeAgrandissement): Promise<Commande> =>
+  invoke<Commande>('commander_agrandissement', { demande });
+
+/** Ajoute une image personnelle (data URL) aux créations ; rend sa fiche. */
+export const importerImage = (image: string, nom: string): Promise<Creation> =>
+  invoke<Creation>('importer_image', { image, nom });
 
 /** Une vue des Rushes (aria_coeur::rushes::VUES). */
 export type VueRushes = 'tous' | 'non_ranges' | 'archives' | 'corbeille';

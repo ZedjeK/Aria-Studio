@@ -29,9 +29,10 @@
   import Journal from './pages/Journal.svelte';
   import Parametres from './pages/Parametres.svelte';
   import Plateau from './pages/Plateau.svelte';
+  import Retouche from './pages/Retouche.svelte';
   import PageReglages from './pages/Reglages.svelte';
 
-  type Page = 'accueil' | 'plateau' | 'reglages' | 'journal' | 'parametres';
+  type Page = 'accueil' | 'plateau' | 'retouche' | 'reglages' | 'journal' | 'parametres';
 
   // Les familles de pages : le travail de l'appli d'abord, puis l'appli elle-même. À adapter.
   const familles: { titre: string; pages: { id: Page; titre: string }[] }[] = [
@@ -40,6 +41,7 @@
       pages: [
         { id: 'accueil', titre: 'Accueil' },
         { id: 'plateau', titre: 'Plateau' },
+        { id: 'retouche', titre: 'Retouche' },
       ],
     },
     { titre: 'Préparation', pages: [{ id: 'reglages', titre: 'Réglages' }] },
@@ -159,6 +161,8 @@
         <Accueil {identite} bind:fraction bind:mesure {signaler} />
       {:else if page === 'plateau'}
         <Plateau {signaler} />
+      {:else if page === 'retouche'}
+        <Retouche {signaler} />
       {:else if page === 'reglages'}
         <PageReglages {signaler} />
       {:else if page === 'journal'}

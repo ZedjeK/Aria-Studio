@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use crate::images::{self, ANCRAGES, TAILLE_MAX};
-use crate::plateau::{Commande, Contexte, Generateur, NOMBRE_MAX, PREFIXE, Suivi};
+use crate::plateau::{Commande, Contexte, Generateur, NOMBRE_MAX, Options, PREFIXE, Suivi};
 use crate::prompt::{self, Vue};
 use crate::workflows::{self, FORMATS, Workflow};
 use crate::{creations, llm, reglages, securite};
@@ -106,20 +106,26 @@ pub struct DemandeAgrandissement {
     pub nombre: u32,
 }
 
-/// Le workflow de retouche demandé, sinon le favori de l'utilisateur, sinon celui de la v2 ; prêt à tourner.
+/// Le workflow de retouche par défaut : le favori de l'utilisateur (`favoris.generation.retouche`) s'il est encore
+/// livré, sinon celui de la v2.
+pub fn workflow_defaut(contexte: &Contexte) -> String {
+    reglages::section(&contexte.dossier, "favoris")
+        .and_then(|f| f.get("generation")?.get(TACHE)?.as_str().map(str::to_owned))
+        .filter(|id| workflows::obtenir(id).is_ok())
+        .unwrap_or_else(|| WORKFLOW_RETOUCHE.to_owned())
+}
+
+/// Ce que la page Retouche propose : ses workflows, les formats et les LLM.
+pub fn options(contexte: &Contexte) -> Options {
+    crate::plateau::options_pour(contexte, TACHE, workflow_defaut(contexte))
+}
+
+/// Le workflow de retouche demandé, sinon celui par défaut ; prêt à tourner.
 ///
 /// # Errors
 /// Workflow inconnu, d'une autre tâche, ou incomplet.
 pub fn workflow_retouche(contexte: &Contexte, demande: Option<&str>) -> Result<Workflow, String> {
-    let id = demande.map_or_else(
-        || {
-            reglages::section(&contexte.dossier, "favoris")
-                .and_then(|f| f.get("generation")?.get(TACHE)?.as_str().map(str::to_owned))
-                .filter(|id| workflows::obtenir(id).is_ok())
-                .unwrap_or_else(|| WORKFLOW_RETOUCHE.to_owned())
-        },
-        str::to_owned,
-    );
+    let id = demande.map_or_else(|| workflow_defaut(contexte), str::to_owned);
     let indisponible = || format!("Workflow indisponible pour retoucher : {id}");
     let wf = workflows::obtenir(&id).map_err(|_| indisponible())?;
     if wf.tache() != TACHE || !wf.manquants(&contexte.modeles).is_empty() {
@@ -659,6 +665,17 @@ mod tests {
             commande_agrandissement(&ctx, &d, id()).unwrap_err(),
             "Ancrage inconnu : nulle-part"
         );
+    }
+
+    #[test]
+    fn options_de_la_retouche() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let o = options(&ctx);
+        assert_eq!(o.defaut, WORKFLOW_RETOUCHE);
+        assert_eq!(o.workflows.len(), 1);
+        assert_eq!(o.workflows[0].id, WORKFLOW_RETOUCHE);
+        assert!(!o.workflows[0].modeles.is_empty());
     }
 
     #[test]
