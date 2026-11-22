@@ -208,6 +208,97 @@ pub fn version_comfyui(dossier: &Path) -> Option<String> {
     })
 }
 
+/// Les nombres d'une version (« v0.42.1 » → [0, 42, 1]), pour les comparer.
+fn numero(version: &str) -> Vec<u64> {
+    version
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|n| !n.is_empty())
+        .filter_map(|n| n.parse().ok())
+        .collect()
+}
+
+/// Un chemin réseau d'après son seul texte (`\\hôte\partage`, `//hôte`, `\\?\UNC\…`) : rien n'est lu sur le disque.
+pub fn chemin_unc(chemin: &Path) -> bool {
+    let texte = chemin.to_string_lossy();
+    texte.starts_with("\\\\") || texte.starts_with("//")
+}
+
+/// « J'ai déjà ComfyUI », comme en v2 : un ComfyUI portable (`python_embeded` et `ComfyUI\main.py`), sur un disque de
+/// ce PC, au moins aussi récent que celui du catalogue. Aria lance le python.exe de ce dossier : jamais un programme
+/// posé sur le réseau. `sur_le_reseau` dit si un chemin mène à un lecteur réseau (lu après le texte du chemin).
+///
+/// # Errors
+/// Chemin relatif, sur le réseau, pas un ComfyUI portable, celui d'Aria, ou trop ancien.
+pub fn examiner_comfyui(
+    chemin: &str,
+    celui_d_aria: &Path,
+    version_min: &str,
+    sur_le_reseau: impl Fn(&Path) -> bool,
+) -> Result<std::path::PathBuf, String> {
+    let mut dossier = std::path::PathBuf::from(chemin.trim());
+    if !dossier.is_absolute() {
+        return Err("Donne le chemin complet du dossier de ComfyUI".to_owned());
+    }
+    let reseau = |d: &Path| {
+        format!(
+            "{} est sur le réseau : Aria lance le python.exe de ce dossier, il doit être sur un disque de ce PC",
+            d.display()
+        )
+    };
+    // Le texte d'abord : refuser ne touche jamais au réseau.
+    if chemin_unc(&dossier) || sur_le_reseau(&dossier) {
+        return Err(reseau(&dossier));
+    }
+    if let Ok(reel) = fs::canonicalize(&dossier) {
+        let texte = reel.to_string_lossy().into_owned();
+        if texte.starts_with("\\\\?\\UNC\\") || sur_le_reseau(Path::new(texte.trim_start_matches("\\\\?\\")))
+        {
+            return Err(reseau(&dossier));
+        }
+    }
+    if dossier.file_name().is_some_and(|n| n == "ComfyUI")
+        && dossier
+            .parent()
+            .is_some_and(|p| p.join("python_embeded").is_dir())
+        && let Some(parent) = dossier.parent()
+    {
+        dossier = parent.to_path_buf(); // le sous-dossier ComfyUI a été choisi : on remonte au dossier portable
+    }
+    if !dossier.join("python_embeded").join("python.exe").is_file()
+        || !dossier.join("ComfyUI").join("main.py").is_file()
+    {
+        return Err(format!(
+            "{} n'est pas un ComfyUI portable (il faut python_embeded et ComfyUI\\main.py) ; ComfyUI Desktop et les \
+             installations manuelles ne sont pas pris en charge",
+            dossier.display()
+        ));
+    }
+    let meme = |a: &Path, b: &Path| match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => a == b,
+    };
+    if meme(&dossier, celui_d_aria) {
+        return Err("C'est déjà le ComfyUI d'Aria".to_owned());
+    }
+    let version = version_comfyui(&dossier);
+    if numero(version.as_deref().unwrap_or_default()) < numero(version_min) {
+        return Err(format!(
+            "ComfyUI {} : Aria a besoin de la {} au moins",
+            version.as_deref().unwrap_or("de version inconnue"),
+            version_min.trim_start_matches('v')
+        ));
+    }
+    Ok(dossier)
+}
+
+/// Les nœuds dont Aria se sert et que ce ComfyUI ne connaît pas.
+pub fn noeuds_manquants(connus: &[String]) -> Vec<String> {
+    crate::workflows::noeuds_utilises()
+        .into_iter()
+        .filter(|n| !connus.contains(n))
+        .collect()
+}
+
 /// L'état de chaque moteur du catalogue, dans l'ordre du catalogue.
 ///
 /// `externe` : le ComfyUI de l'utilisateur, s'il en a choisi un. `occupe` dit si un programme écoute sur un port
@@ -1293,5 +1384,67 @@ moteurs:
     fn le_statut_s_ecrit_comme_en_v2() {
         assert_eq!(serde_json::to_string(&Statut::AJour).unwrap(), "\"a_jour\"");
         assert_eq!(serde_json::to_string(&Statut::Externe).unwrap(), "\"externe\"");
+    }
+
+    #[test]
+    fn j_ai_deja_comfyui() {
+        let temp = tempfile::tempdir().unwrap();
+        let portable = temp.path().join("ComfyUI_windows_portable");
+        let aria = temp.path().join("aria_comfyui");
+        let poser = |d: &Path, version: &str| {
+            fs::create_dir_all(d.join("python_embeded")).unwrap();
+            fs::create_dir_all(d.join("ComfyUI")).unwrap();
+            fs::write(d.join("python_embeded/python.exe"), b"x").unwrap();
+            fs::write(d.join("ComfyUI/main.py"), b"x").unwrap();
+            fs::write(
+                d.join("ComfyUI/comfyui_version.py"),
+                format!("__version__ = \"{version}\"\n"),
+            )
+            .unwrap();
+        };
+        poser(&portable, "0.43.0");
+        poser(&aria, "0.42.1");
+        let local = |_: &Path| false;
+        let chemin = portable.to_string_lossy().into_owned();
+        assert_eq!(
+            examiner_comfyui(&chemin, &aria, "v0.42.1", local).unwrap(),
+            portable
+        );
+        // Le sous-dossier ComfyUI ramène au dossier portable.
+        let sous = portable.join("ComfyUI").to_string_lossy().into_owned();
+        assert_eq!(
+            examiner_comfyui(&sous, &aria, "v0.42.1", local).unwrap(),
+            portable
+        );
+        assert!(
+            examiner_comfyui(&chemin, &aria, "v0.44", local)
+                .unwrap_err()
+                .contains("0.44 au moins")
+        );
+        assert!(
+            examiner_comfyui(&chemin, &portable, "v0.42.1", local)
+                .unwrap_err()
+                .contains("déjà le ComfyUI d'Aria")
+        );
+        assert!(examiner_comfyui("relatif", &aria, "v0.42.1", local).is_err());
+        assert!(
+            examiner_comfyui(&chemin, &aria, "v0.42.1", |_| true)
+                .unwrap_err()
+                .contains("réseau")
+        );
+        let vide = temp.path().join("vide");
+        fs::create_dir_all(&vide).unwrap();
+        assert!(
+            examiner_comfyui(&vide.to_string_lossy(), &aria, "v0.42.1", local)
+                .unwrap_err()
+                .contains("portable")
+        );
+        assert!(chemin_unc(Path::new("\\\\serveur\\partage")) && !chemin_unc(Path::new("C:\\ComfyUI")));
+        assert!(numero("v0.42.1") < numero("0.43") && numero("1.0") > numero("0.99.9"));
+        let manquants = noeuds_manquants(&["KSampler".to_owned()]);
+        assert!(
+            manquants.contains(&"LoraLoaderModelOnly".to_owned())
+                && !manquants.contains(&"KSampler".to_owned())
+        );
     }
 }

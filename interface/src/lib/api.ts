@@ -117,6 +117,9 @@ export interface EtatMoteurs {
 
 export const lireMoteurs = (): Promise<EtatMoteurs> => invoke<EtatMoteurs>('lire_moteurs');
 
+/** « J'ai déjà ComfyUI » : ce dossier portable, vérifié par un lancement d'essai ; null : revenir à celui d'Aria. */
+export const choisirComfyui = (chemin: string | null): Promise<void> => invoke<void>('choisir_comfyui', { chemin });
+
 /** Lance l'installation en arrière-plan ; son avancement se lit avec lireMoteurs. */
 export const installerMoteur = (id: string): Promise<void> => invoke<void>('installer_moteur', { id });
 
@@ -494,6 +497,9 @@ export const reglerLora = (cle: string, declencheurs: string, force: number): Pr
 
 export const oublierReglageLora = (cle: string): Promise<ReglageLora> =>
   invoke<ReglageLora>('oublier_reglage_lora', { cle });
+
+/** Relit sur Civitai les mots déclarés et la force d'une LoRA qui en vient. */
+export const relireLora = (cle: string): Promise<ReglageLora> => invoke<ReglageLora>('relire_lora', { cle });
 
 export const jeterModele = (cle: string): Promise<void> => invoke<void>('jeter_modele', { cle });
 

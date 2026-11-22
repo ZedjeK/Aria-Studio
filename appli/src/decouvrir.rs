@@ -145,6 +145,20 @@ pub async fn vignette_modele(
     .await
 }
 
+/// Relit sur Civitai les mots et la force d'une LoRA qui en vient.
+#[tauri::command]
+pub async fn relire_lora(
+    file: State<'_, Arc<Telechargeur>>,
+    sources: State<'_, Arc<Sources>>,
+    cle: String,
+) -> Result<aria_coeur::collection::ReglageLora, String> {
+    hors_interface(&file, &sources, move |f, https| {
+        let c = f.contexte();
+        aria_coeur::collection::relire_lora(&c.dossier, &c.data, &c.modeles, https, &c.entetes, &cle)
+    })
+    .await
+}
+
 /// Lance « Retrouver les sources » des fichiers déposés à la main, dans un fil à part ; l'interface suit
 /// `etat_sources`.
 #[tauri::command]

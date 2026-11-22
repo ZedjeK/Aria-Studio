@@ -375,6 +375,122 @@ pub async fn revenir_moteur(moteurs: State<'_, Moteurs>, id: String) -> Result<O
     .map_err(|e| format!("retour impossible : {e}"))?
 }
 
+/// Ce chemin mène-t-il à un lecteur réseau (ou à un partage UNC) ? Demandé à Windows, lettre du lecteur seulement.
+#[cfg(windows)]
+fn lecteur_reseau(chemin: &Path) -> bool {
+    use std::path::{Component, Prefix};
+    use windows::Win32::Storage::FileSystem::GetDriveTypeW;
+    use windows::core::PCWSTR;
+
+    /// `GetDriveType` : un lecteur réseau.
+    const DRIVE_REMOTE: u32 = 4;
+    let Some(Component::Prefix(prefixe)) = chemin.components().next() else {
+        return false;
+    };
+    let lettre = match prefixe.kind() {
+        Prefix::Disk(l) | Prefix::VerbatimDisk(l) => l,
+        Prefix::UNC(..) | Prefix::VerbatimUNC(..) => return true,
+        _ => return false,
+    };
+    let racine: Vec<u16> = format!("{}:\\", char::from(lettre))
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+    // SAFETY : `racine` se termine par un zéro et vit jusqu'à la fin de l'appel ; Windows ne fait que la lire.
+    #[allow(unsafe_code)]
+    let genre = unsafe { GetDriveTypeW(PCWSTR(racine.as_ptr())) };
+    genre == DRIVE_REMOTE
+}
+
+/// Hors de Windows, pas de lecteur réseau à lettre.
+#[cfg(not(windows))]
+fn lecteur_reseau(_chemin: &Path) -> bool {
+    false
+}
+
+/// « J'ai déjà ComfyUI », comme en v2 : un ComfyUI portable de ce PC, vérifié en le lançant une fois (jusqu'à une
+/// minute) pour lire ses nœuds, puis utilisé tout de suite (`emplacements.comfyui` de `reglages.json`). Rien :
+/// revenir au ComfyUI d'Aria.
+#[tauri::command]
+pub async fn choisir_comfyui(moteurs: State<'_, Moteurs>, chemin: Option<String>) -> Result<(), String> {
+    let catalogue = moteurs.catalogue.clone();
+    let dossier_moteurs = moteurs.dossier_moteurs.clone();
+    let dossier = moteurs.dossier.clone();
+    let orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    if moteurs
+        .tache
+        .lock()
+        .map_err(|_| "suivi des installations indisponible".to_owned())?
+        .as_ref()
+        .is_some_and(|t| !t.fini)
+    {
+        return Err("Une installation est en cours : attends qu'elle finisse".to_owned());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let moteur = catalogue
+            .moteur("comfyui")
+            .ok_or_else(|| "ComfyUI absent du catalogue".to_owned())?;
+        let celui_d_aria = dossier_moteurs.join(&moteur.dossier);
+        let choisi = chemin
+            .filter(|c| !c.trim().is_empty())
+            .map(|c| moteurs::examiner_comfyui(&c, &celui_d_aria, &moteur.version, lecteur_reseau))
+            .transpose()?;
+        let mut orchestrateur = orchestrateur
+            .lock()
+            .map_err(|_| "orchestrateur des moteurs indisponible".to_owned())?;
+        orchestrateur.sans_moteur("comfyui");
+        if let Some(choisi) = &choisi {
+            if orchestrateur.comfy.est_pret() {
+                return Err(
+                    "Un ComfyUI tourne déjà sur le port d'Aria : arrête-le avant la vérification".to_owned(),
+                );
+            }
+            let ancien = orchestrateur.comfy.lancement().dossier.clone();
+            orchestrateur.comfy.changer_de_dossier(choisi.clone());
+            let connus = orchestrateur.comfyui().and_then(|c| c.noeuds());
+            orchestrateur.sans_moteur("comfyui");
+            let probleme = match connus {
+                Ok(connus) => {
+                    let manquants = moteurs::noeuds_manquants(&connus);
+                    (!manquants.is_empty()).then(|| {
+                        format!(
+                            "Il manque à ce ComfyUI des nœuds dont Aria se sert : {}",
+                            manquants.join(", ")
+                        )
+                    })
+                }
+                Err(e) => Some(format!("Ce ComfyUI ne démarre pas : {e}")),
+            };
+            if let Some(probleme) = probleme {
+                orchestrateur.comfy.changer_de_dossier(ancien);
+                return Err(probleme);
+            }
+        }
+        reglages::modifier_section(&dossier, "emplacements", |s| match &choisi {
+            Some(d) => {
+                s.insert(
+                    "comfyui".to_owned(),
+                    serde_json::Value::String(d.display().to_string()),
+                );
+            }
+            None => {
+                s.remove("comfyui");
+            }
+        })
+        .map_err(|e| e.to_string())?;
+        let objet = choisi
+            .as_ref()
+            .map_or_else(|| "celui d'Aria".to_owned(), |d| d.display().to_string());
+        orchestrateur
+            .comfy
+            .changer_de_dossier(choisi.unwrap_or(celui_d_aria));
+        journal::noter(&dossier, "ComfyUI choisi", &objet, journal::Resultat::Ok, None);
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("choix de ComfyUI impossible : {e}"))?
+}
+
 /// Rend la carte graphique : ComfyUI vide sa VRAM, llama-server s'arrête.
 #[tauri::command]
 pub async fn liberer_carte(moteurs: State<'_, Moteurs>) -> Result<(), String> {

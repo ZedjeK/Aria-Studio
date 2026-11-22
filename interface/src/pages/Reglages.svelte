@@ -8,10 +8,12 @@
   import { onMount } from 'svelte';
   import {
     annulerInstallationMoteur,
+    choisirComfyui,
     installerMoteur,
     libererCarte,
     lireMoteurs,
     messageErreur,
+    parcourirDossier,
     revenirMoteur,
     type EtatMoteur,
     type EtatMoteurs,
@@ -54,6 +56,8 @@
   /** Ce qu'on demande de confirmer : installer ou revenir, pour un moteur. */
   let demande = $state<{ action: 'installer' | 'revenir'; moteur: EtatMoteur } | null>(null);
   let minuteur: ReturnType<typeof setTimeout> | undefined;
+  /** « J'ai déjà ComfyUI » : le lancement d'essai en cours. */
+  let verification = $state(false);
 
   const enCours = $derived(etat?.tache != null && !etat.tache.fini);
   const absents = $derived(etat ? manquants(etat.moteurs) : []);
@@ -91,6 +95,21 @@
       await annulerInstallationMoteur();
     } catch (e) {
       signaler(messageErreur(e), true);
+    }
+    await relire();
+  }
+
+  async function changerComfyui(autre: boolean) {
+    try {
+      const chemin = autre ? await parcourirDossier('Dossier de ton ComfyUI portable', null) : null;
+      if (autre && !chemin) return;
+      verification = true;
+      await choisirComfyui(chemin);
+      signaler(chemin ? `Aria utilise désormais ton ComfyUI : ${chemin}.` : "Aria utilise de nouveau son ComfyUI.");
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      verification = false;
     }
     await relire();
   }
@@ -160,6 +179,11 @@
               : ''}
           </p>
           {#if m.externe}<p class="discret">Dossier : <code>{m.chemin}</code></p>{/if}
+          {#if m.id === 'comfyui' && verification}
+            <p class="discret" role="status">
+              Vérification de ce ComfyUI : lancement d'essai pour lire ses nœuds (jusqu'à une minute)…
+            </p>
+          {/if}
           {#if m.prerequis}<p class="ko">{m.prerequis}</p>{/if}
           {#if tache}
             <div class="suivi">
@@ -177,6 +201,16 @@
                 desactive={enCours || m.prerequis !== null}
                 onclick={() => (demande = { action: 'installer', moteur: m })}>{installer}</Bouton
               >
+            {/if}
+            {#if m.id === 'comfyui'}
+              <Bouton genre="discret" petit desactive={enCours || verification} onclick={() => void changerComfyui(true)}>
+                J'ai déjà ComfyUI…
+              </Bouton>
+              {#if m.externe}
+                <Bouton genre="discret" petit desactive={enCours || verification} onclick={() => void changerComfyui(false)}>
+                  Revenir au ComfyUI d'Aria
+                </Bouton>
+              {/if}
             {/if}
             {#if m.precedente && !m.externe}
               <Bouton petit desactive={enCours} onclick={() => (demande = { action: 'revenir', moteur: m })}

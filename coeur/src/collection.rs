@@ -18,8 +18,9 @@ use chrono::Local;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
+use crate::decouvrir::{self, EntetesDe};
 use crate::modeles::{self, DOSSIER_LLM};
-use crate::telechargement::{modifier_registre, registre};
+use crate::telechargement::{Reseau, modifier_registre, registre};
 use crate::{Dossier, fiches, journal, llm, reglages, workflows};
 
 /// Le dossier de la corbeille, dans le dossier des modèles.
@@ -439,6 +440,62 @@ pub fn oublier_reglage_lora(
         s.remove(cle);
     })
     .map_err(|e| e.to_string())?;
+    Ok(reglage_lora(cle, &registre(data), &memoire_loras(dossier)))
+}
+
+/// Relit la version Civitai d'une LoRA, comme en v2 : les mots déclarés, la force et un prompt de ses images
+/// d'exemple remplacent ceux du registre (le reste est gardé). Rend son réglage.
+///
+/// # Errors
+/// LoRA inconnue, qui ne vient pas de Civitai, ou Civitai qui ne répond pas.
+pub fn relire_lora(
+    dossier: &Dossier,
+    data: &Path,
+    modeles_dir: &Path,
+    reseau: &dyn Reseau,
+    entetes: EntetesDe<'_>,
+    cle: &str,
+) -> Result<ReglageLora, String> {
+    exiger_lora(modeles_dir, cle)?;
+    let infos = registre(data).get(cle).cloned().unwrap_or(Value::Null);
+    let id_version = (infos.get("source").and_then(Value::as_str) == Some("civitai"))
+        .then(|| infos.get("page").and_then(Value::as_str))
+        .flatten()
+        .and_then(|page| page.split_once("modelVersionId="))
+        .map(|(_, v)| v.chars().take_while(char::is_ascii_digit).collect::<String>())
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| "Cette LoRA ne vient pas de Civitai (ou sa page est inconnue)".to_owned())?;
+    let (statut, corps) = decouvrir::lire_api(
+        reseau,
+        &format!("{}/model-versions/{id_version}", decouvrir::CIVITAI),
+        &entetes("civitai"),
+    )?;
+    if statut != 200 {
+        return Err(format!("Civitai n'a pas répondu : {statut}"));
+    }
+    let version: Value =
+        serde_json::from_str(&corps).map_err(|e| format!("Civitai : réponse illisible ({e})"))?;
+    let mots: Vec<String> = version
+        .get("trainedWords")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .map(str::to_owned)
+        .collect();
+    let fichier = cle.rsplit('/').next().unwrap_or(cle);
+    let (force, images, prompt) = decouvrir::usage_auteur(&version, Some(fichier));
+    modifier_registre(data, |r| {
+        if let Some(entree) = r.get_mut(cle).and_then(Value::as_object_mut) {
+            entree.insert("mots_declencheurs".to_owned(), json!(mots));
+            entree.insert("force_auteur".to_owned(), json!(force));
+            entree.insert("images_force".to_owned(), json!(images));
+            entree.insert("prompt_exemple".to_owned(), json!(prompt));
+        }
+    })
+    .map_err(|e| format!("registre des modèles : {e}"))?;
     Ok(reglage_lora(cle, &registre(data), &memoire_loras(dossier)))
 }
 
@@ -894,5 +951,42 @@ mod tests {
         assert_eq!(vider_corbeille(&b.dossier, &b.data, &b.modeles).unwrap(), (1, 5));
         assert!(corbeille(&b.data, &b.modeles).modeles.is_empty());
         assert_eq!(journal::lire(&b.dossier)[0].action, "Corbeille des modèles vidée");
+    }
+
+    #[test]
+    fn relire_une_lora_sur_civitai() {
+        use std::io::{self, Cursor, Read};
+
+        struct Faux;
+        impl Reseau for Faux {
+            fn ouvrir(
+                &self,
+                adresse: &str,
+                _: &[(String, String)],
+                _: u64,
+            ) -> io::Result<(u16, Box<dyn Read>)> {
+                assert!(adresse.ends_with("/model-versions/70"));
+                let version = json!({"trainedWords": [" neon ", "glow"],
+                    "images": [{"meta": {"prompt": "a neon city", "additionalResources": [{"type": "lora", "strength": 0.7}]}}]});
+                Ok((200, Box::new(Cursor::new(version.to_string().into_bytes()))))
+            }
+        }
+        let b = banc();
+        let wf = workflows::obtenir("krea2_turbo").unwrap();
+        let cle = format!("{}/neon.safetensors", wf.dossier_loras());
+        poser(&b, &cle, b"x", true);
+        let sans_cle = |_: &str| Vec::new();
+        // Une LoRA de Hugging Face ne se relit pas sur Civitai.
+        assert!(relire_lora(&b.dossier, &b.data, &b.modeles, &Faux, &sans_cle, &cle).is_err());
+        let mut r = registre(&b.data);
+        r[&cle]["source"] = json!("civitai");
+        r[&cle]["page"] = json!("https://civitai.com/models/7?modelVersionId=70");
+        ecrire_json(&b.data.join("modeles.json"), &Value::Object(r), 4).unwrap();
+        let reglage = relire_lora(&b.dossier, &b.data, &b.modeles, &Faux, &sans_cle, &cle).unwrap();
+        assert_eq!(
+            (reglage.declencheurs.as_str(), reglage.force),
+            ("neon, glow", 0.7)
+        );
+        assert_eq!(registre(&b.data)[&cle]["prompt_exemple"], json!("a neon city"));
     }
 }
