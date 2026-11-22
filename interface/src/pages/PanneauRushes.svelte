@@ -18,6 +18,7 @@
     viderCorbeille,
     type ActionRushes,
     type Creation,
+    type ActionClip,
     type EtatRushes,
     type GenreRushes,
   } from '../lib/api';
@@ -32,9 +33,11 @@
     rafraichir: number;
     /** `images` : les Rushes du Plateau ; `clips` : les Bobines du Montage. */
     genre?: GenreRushes;
+    /** Bobines : Variante, Réutiliser le prompt, ou Ouvrir la séquence d'un clip choisi seul. */
+    agirClip?: (clip: Creation, action: ActionClip) => void;
   }
 
-  let { signaler, rafraichir, genre = 'images' }: Props = $props();
+  let { signaler, rafraichir, genre = 'images', agirClip }: Props = $props();
 
   const bobines = $derived(genre === 'clips');
   /** Le clip regardé (Bobines). */
@@ -54,6 +57,8 @@
   const liste = $derived(etat ? onglets(etat) : []);
   const onglet = $derived(ongletDe(liste, cle));
   const proposees = $derived(actions(onglet.vue));
+  /** Le clip choisi seul, s'il y en a un. */
+  const seul = $derived(selection.length === 1 ? rushes.find((r) => r.id === selection[0]) : undefined);
 
   async function chargerVignette(id: string) {
     if (vignettes[id]) return;
@@ -184,6 +189,15 @@
         <Bouton petit onclick={() => (regarde = regarde === selection[0] ? null : (selection[0] ?? null))}>
           {regarde === selection[0] ? 'Masquer' : 'Regarder'}
         </Bouton>
+        {#if seul && agirClip && onglet.vue !== 'corbeille'}
+          {@const clip = seul}
+          {#if clip.sequence}
+            <Bouton petit onclick={() => agirClip(clip, 'sequence')}>Ouvrir la séquence</Bouton>
+          {:else}
+            <Bouton petit onclick={() => agirClip(clip, 'variante')}>Variante</Bouton>
+            <Bouton petit onclick={() => agirClip(clip, 'reutiliser')}>Réutiliser le prompt</Bouton>
+          {/if}
+        {/if}
       {/if}
       {#each proposees as action (action)}
         {#if action === 'ranger'}
