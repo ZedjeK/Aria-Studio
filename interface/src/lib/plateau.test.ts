@@ -28,6 +28,7 @@ const krea: ChoixWorkflow = {
   references: 0,
   variation: true,
   reserveRetouche: false,
+  loras: [],
 };
 
 const edit: ChoixWorkflow = {
@@ -51,6 +52,7 @@ const options: OptionsPlateau = {
   llmParWorkflow: { krea2_turbo: 'mistral.gguf', qwen_image_2_1: 'retire.gguf' },
   defautReferences: 'qwen_image_2_1_edit',
   referencesMax: 10,
+  loraForceMax: 2,
 };
 
 function commande(changements: Partial<Commande>): Commande {
@@ -82,6 +84,7 @@ function commande(changements: Partial<Commande>): Commande {
     hauteur: null,
     ancrage: null,
     cadrage: null,
+    loras: [],
     ...changements,
   };
 }

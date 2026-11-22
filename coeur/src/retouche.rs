@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use crate::images::{self, ANCRAGES, TAILLE_MAX};
-use crate::plateau::{Commande, Contexte, Generateur, NOMBRE_MAX, Options, PREFIXE, Suivi};
+use crate::plateau::{self, ChoixLora, Commande, Contexte, Generateur, NOMBRE_MAX, Options, PREFIXE, Suivi};
 use crate::prompt::{self, Vue};
 use crate::workflows::{self, FORMATS, Workflow};
 use crate::{creations, llm, reglages, securite};
@@ -50,7 +50,7 @@ fn centre() -> String {
 }
 
 /// Une demande de retouche, comme celle de la v2.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DemandeRetouche {
     pub source: String,
@@ -76,10 +76,13 @@ pub struct DemandeRetouche {
     /// Recadre la source au centre à ce format avant la retouche ; absent ou « image source » : son format.
     #[serde(default)]
     pub format: Option<String>,
+    /// Les LoRA de la famille du workflow.
+    #[serde(default)]
+    pub loras: Vec<ChoixLora>,
 }
 
 /// Une demande d'agrandissement, comme celle de la v2.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DemandeAgrandissement {
     pub source: String,
@@ -104,6 +107,9 @@ pub struct DemandeAgrandissement {
     pub modele: Option<String>,
     #[serde(default = "un")]
     pub nombre: u32,
+    /// Les LoRA de la famille du workflow.
+    #[serde(default)]
+    pub loras: Vec<ChoixLora>,
 }
 
 /// Le workflow de retouche par défaut : le favori de l'utilisateur (`favoris.generation.retouche`) s'il est encore
@@ -177,6 +183,26 @@ fn valider_nombre(nombre: u32) -> Result<(), String> {
     }
 }
 
+/// Les LoRA d'une demande, contrôlées ; leurs mots déclencheurs passent au filtre AS-18 avec la consigne, puis sont
+/// retenus pour la prochaine fois.
+fn loras_de(
+    contexte: &Contexte,
+    wf: &Workflow,
+    loras: &[ChoixLora],
+    texte: &str,
+    origine: &[String],
+) -> Result<Vec<ChoixLora>, String> {
+    let loras = plateau::valider_loras(contexte, wf, loras)?;
+    if !loras.is_empty() {
+        let mut textes: Vec<&str> = vec![texte];
+        textes.extend(origine.iter().map(String::as_str));
+        textes.extend(plateau::textes_loras(&loras));
+        securite::verifier(&contexte.dossier, &textes).map_err(|e| e.to_string())?;
+        plateau::memoriser_loras(contexte, wf, &loras)?;
+    }
+    Ok(loras)
+}
+
 fn verifier(contexte: &Contexte, texte: &str, origine: &[String]) -> Result<(), String> {
     let mut textes: Vec<&str> = vec![texte];
     textes.extend(origine.iter().map(String::as_str));
@@ -210,6 +236,7 @@ pub fn commande_retouche(contexte: &Contexte, d: &DemandeRetouche, id: String) -
     verifier(contexte, &instruction, &origine)?;
     let wf = workflow_retouche(contexte, d.workflow.as_deref())?;
     valider_modele(contexte, &wf, d.modele.as_deref())?;
+    let loras = loras_de(contexte, &wf, &d.loras, &instruction, &origine)?;
     let llm = if d.reecrire {
         Some(valider_llm(contexte, &wf, d.llm.as_deref())?)
     } else {
@@ -228,6 +255,7 @@ pub fn commande_retouche(contexte: &Contexte, d: &DemandeRetouche, id: String) -
     c.masque_png = masque;
     c.fondu = d.fondu.min(FONDU_MAX);
     c.cadrage = format;
+    c.loras = loras;
     Ok(c)
 }
 
@@ -272,6 +300,7 @@ pub fn commande_agrandissement(
     };
     let wf = workflow_retouche(contexte, d.workflow.as_deref())?;
     valider_modele(contexte, &wf, d.modele.as_deref())?;
+    let loras = loras_de(contexte, &wf, &d.loras, &precision, &origine)?;
     let llm = if consigne.is_none() {
         Some(valider_llm(contexte, &wf, d.llm.as_deref())?)
     } else {
@@ -289,6 +318,7 @@ pub fn commande_agrandissement(
     c.largeur = Some(d.largeur);
     c.hauteur = Some(d.hauteur);
     c.ancrage = Some(d.ancrage.clone());
+    c.loras = loras;
     Ok(c)
 }
 
@@ -431,11 +461,17 @@ pub fn executer(
         suivi.progression(0.0);
         let debut_image = Instant::now();
         let mut valeurs = Map::new();
-        valeurs.insert("prompt".to_owned(), json!(consigne));
+        valeurs.insert(
+            "prompt".to_owned(),
+            json!(plateau::avec_declencheurs(&consigne, &c.loras)),
+        );
         valeurs.insert("image".to_owned(), json!(nom));
         valeurs.insert("seed".to_owned(), json!(seed));
         valeurs.insert("modele".to_owned(), json!(c.modele));
         valeurs.insert("prefixe".to_owned(), json!(PREFIXE));
+        if !c.loras.is_empty() {
+            valeurs.insert("loras".to_owned(), json!(c.loras));
+        }
         let api = wf.preparer(&valeurs, &contexte.modeles, reglages.as_ref(), &filtre)?;
         let fichiers = generateur.generer(&api, &mut |v, m| suivi.progression_de(v, m), suivi.drapeau())?;
         let brut = fichiers
@@ -465,7 +501,7 @@ pub fn executer(
             "llm": llm_utilise,
             "workflow": c.workflow,
             "modele": modele,
-            "loras": [],
+            "loras": c.loras,
             "format": c.format,
             "seed": seed,
             "parent": parent,
@@ -554,6 +590,7 @@ mod tests {
             modele: None,
             nombre: 1,
             format: None,
+            loras: Vec::new(),
         }
     }
 
@@ -571,6 +608,7 @@ mod tests {
             seed: Some(3),
             modele: None,
             nombre: 1,
+            loras: Vec::new(),
         }
     }
 

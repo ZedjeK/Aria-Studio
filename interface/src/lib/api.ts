@@ -148,6 +148,24 @@ export interface ChoixWorkflow {
   variation: boolean;
   /** Réservé à la Retouche. */
   reserveRetouche: boolean;
+  /** Les LoRA de sa famille. */
+  loras: LoraProposee[];
+}
+
+/** Une LoRA de la famille d'un workflow, avec ses mots et sa force retenus (aria_coeur::plateau::LoraProposee). */
+export interface LoraProposee {
+  fichier: string;
+  nom: string;
+  declencheurs: string;
+  force: number;
+  page: string | null;
+}
+
+/** Une LoRA cochée (aria_coeur::plateau::ChoixLora) : ses mots déclencheurs vont en tête du prompt. */
+export interface ChoixLora {
+  fichier: string;
+  force: number;
+  declencheurs: string;
 }
 
 /** Un LLM proposé pour réécrire (aria_coeur::plateau::ChoixLlm). */
@@ -174,6 +192,8 @@ export interface OptionsPlateau {
   /** Le workflow de « S'inspirer » par défaut. */
   defautReferences: string;
   referencesMax: number;
+  /** La force d'une LoRA, au plus. */
+  loraForceMax: number;
 }
 
 /** Une demande de création (aria_coeur::plateau::Demande). */
@@ -193,6 +213,7 @@ export interface DemandeImage {
   seed: number | null;
   nombre: number;
   modele: string | null;
+  loras: ChoixLora[];
 }
 
 /** Partir de rushes : s'en inspirer, ou en redessiner un. */
@@ -238,6 +259,7 @@ export interface Commande {
   references: string[];
   modeReference: ModeReference | null;
   liberte: number;
+  loras: ChoixLora[];
 }
 
 /** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */
@@ -255,6 +277,7 @@ export interface Creation {
   modele?: string | null;
   format?: string | null;
   seed?: number | null;
+  loras?: ChoixLora[];
   duree_s?: number;
   /** Rangement des Rushes : dossier, archive, date de mise à la corbeille. */
   dossier?: string;
@@ -295,6 +318,7 @@ export interface DemandeRetouche {
   nombre: number;
   /** Un format, qui recadre la source au centre ; null : celui de l'image. */
   format: string | null;
+  loras: ChoixLora[];
 }
 
 /** Une demande d'agrandissement (aria_coeur::retouche::DemandeAgrandissement). */
@@ -311,6 +335,7 @@ export interface DemandeAgrandissement {
   seed: number | null;
   modele: string | null;
   nombre: number;
+  loras: ChoixLora[];
 }
 
 /** Les workflows de retouche, les formats et les LLM. */
