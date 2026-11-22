@@ -1176,3 +1176,56 @@ export const ecrirePromptScenario = (demande: DemandeEcriture): Promise<PromptEc
 /** Traduit les précisions en anglais. */
 export const traduirePrecisions = (texte: string, llm: string | null): Promise<string> =>
   invoke<string>('traduire_precisions', { texte, llm });
+
+/** Un personnage enregistré (aria_coeur::personnages::Personnage) : ses choix du bloc « personnage » et son âge. */
+export interface Personnage {
+  nom: string;
+  choix: Record<string, string>;
+  age: number | null;
+}
+
+export const lirePersonnages = (): Promise<Personnage[]> => invoke<Personnage[]>('lire_personnages');
+
+export const enregistrerPersonnage = (nom: string, choix: Record<string, string>, age: number | null): Promise<Personnage> =>
+  invoke<Personnage>('enregistrer_personnage', { nom, choix, age });
+
+export const supprimerPersonnage = (nom: string): Promise<void> => invoke<void>('supprimer_personnage', { nom });
+
+// --- Scénario : « 💬 M'aider à préciser » (aria_coeur::conversation) ---
+
+export interface EchangeConversation {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface QuestionConversation {
+  question: string;
+  choix: string[];
+  /** Une rubrique du guide : sa liste complète peut s'ouvrir. */
+  liste?: string;
+}
+
+export interface TourConversation {
+  message: string;
+  /** « Ce que j'ai compris ». */
+  fiche: { nom: string; valeur: string }[];
+  questions: QuestionConversation[];
+  prompt: string | null;
+  /** Le tour tel qu'il repart au LLM. */
+  brut: string;
+  modele: string;
+  dureeS: number;
+}
+
+export interface DemandeConversation {
+  echanges: EchangeConversation[];
+  forme: 'image';
+  workflow: string | null;
+  contexte: string;
+  llm: string | null;
+  format: string | null;
+  sujet: string | null;
+}
+
+export const conversationScenario = (demande: DemandeConversation): Promise<TourConversation> =>
+  invoke<TourConversation>('conversation_scenario', { demande });

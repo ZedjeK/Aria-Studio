@@ -277,6 +277,22 @@ fn gabarit(g: &Gabarit, regles: &[(String, Vec<String>)]) -> String {
     blocs.join("\n\n")
 }
 
+/// L'en-tête des règles d'écriture d'un usage, pour la conversation.
+const ENTETE_USAGE: &str = "Rules for writing the prompt. They shape the OPEN parts only: whenever one clashes with what the user fixed or asked, the user wins.";
+
+/// Les règles d'écriture d'un usage en un bloc, pour la conversation (💬 M'aider à préciser) : l'en-tête, puis les
+/// mêmes sections que le gabarit de ✨ Écrire le prompt, celles du modèle cible rangées dedans.
+pub fn bloc_usage(usage: &str, regles: &[(String, Vec<String>)]) -> String {
+    let g = match usage {
+        "retouche" => &RETOUCHE,
+        "references" => &REFERENCES,
+        _ => &REECRITURE,
+    };
+    let mut blocs = vec![ENTETE_USAGE.to_owned()];
+    blocs.extend(sections_usage(g, regles));
+    blocs.join("\n\n")
+}
+
 /// Les règles du modèle cible en un bloc, pour une consigne réécrite dans Réglages : l'en-tête, puis les sections.
 /// Vide sans règle.
 fn bloc_modele(regles: &[(String, Vec<String>)]) -> String {

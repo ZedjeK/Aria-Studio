@@ -1,10 +1,13 @@
 //! Le Scénario : les listes guidées et l'assemblage du prompt (`aria_coeur::listes`), l'écriture du prompt et la
 //! traduction des précisions par le LLM (`aria_coeur::scenario`). Le travail est dans le cœur ; ici, les commandes.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use aria_coeur::conversation::{self, DemandeConversation, Tour};
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::listes::{self, Assemblage, DemandeAssemblage, Structure, Sujet};
+use aria_coeur::personnages::{self, Personnage};
 use aria_coeur::plateau::Plateau;
 use aria_coeur::scenario::{self, DemandeEcriture, Ecrit};
 use tauri::State;
@@ -67,4 +70,41 @@ pub async fn traduire_precisions(
     })
     .await
     .map_err(|e| format!("Scénario indisponible : {e}"))?
+}
+
+/// Les personnages enregistrés.
+#[tauri::command]
+pub fn lire_personnages(lieux: State<'_, Emplacements>) -> Result<Vec<Personnage>, String> {
+    personnages::liste(&lieux.data)
+}
+
+/// Enregistre un personnage (ses choix du bloc « personnage » et son âge précis).
+#[tauri::command]
+pub fn enregistrer_personnage(
+    lieux: State<'_, Emplacements>,
+    nom: String,
+    choix: BTreeMap<String, String>,
+    age: Option<u32>,
+) -> Result<Personnage, String> {
+    personnages::enregistrer(&lieux.dossier, &lieux.data, &nom, &choix, age)
+}
+
+/// Supprime un personnage.
+#[tauri::command]
+pub fn supprimer_personnage(lieux: State<'_, Emplacements>, nom: String) -> Result<(), String> {
+    personnages::supprimer(&lieux.data, &nom)
+}
+
+/// « 💬 M'aider à préciser » : un tour de conversation (questions, fiche « Ce que j'ai compris », prompt).
+#[tauri::command]
+pub async fn conversation_scenario(
+    plateau: State<'_, Arc<Plateau>>,
+    moteurs: State<'_, Moteurs>,
+    demande: DemandeConversation,
+) -> Result<Tour, String> {
+    let contexte = plateau.contexte().clone();
+    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    tauri::async_runtime::spawn_blocking(move || conversation::tour(&contexte, &mut orchestrateur, &demande))
+        .await
+        .map_err(|e| format!("Scénario indisponible : {e}"))?
 }
