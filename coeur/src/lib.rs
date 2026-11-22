@@ -31,6 +31,7 @@ pub mod plateau;
 pub mod presence;
 pub mod prompt;
 pub mod reglages;
+pub mod reglages_fins;
 pub mod retouche;
 pub mod rushes;
 pub mod sauvegardes;

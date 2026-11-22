@@ -299,6 +299,17 @@ fn bloc_modele(regles: &[(String, Vec<String>)]) -> String {
     blocs.join("\n\n")
 }
 
+/// La consigne d'origine d'un usage, telle que Réglages la montre : le gabarit sans modèle cible, longueurs en repères
+/// (`{mots_min}`, `{mots_max}`), sans la clause verrouillée ajoutée ensuite. Rien pour un usage pas encore porté.
+pub fn consigne_d_origine(usage: &str) -> Option<String> {
+    match usage {
+        "reecriture" => Some(gabarit(&REECRITURE, &[])),
+        "retouche" => Some(gabarit(&RETOUCHE, &[])),
+        "references" => Some(gabarit(&REFERENCES, &[])),
+        _ => None,
+    }
+}
+
 /// La consigne de réécriture d'une idée pour ce modèle cible, toujours suivie de la clause verrouillée. `reecrite` :
 /// celle de Réglages pour ce GGUF, qui garde son texte (les règles du modèle cible s'y ajoutent).
 pub fn consigne_reecriture(

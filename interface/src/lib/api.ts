@@ -326,6 +326,81 @@ export const commanderAgrandissement = (demande: DemandeAgrandissement): Promise
 export const importerImage = (image: string, nom: string): Promise<Creation> =>
   invoke<Creation>('importer_image', { image, nom });
 
+/** Un réglage fin (aria_coeur::reglages_fins::Param). */
+export interface ParamReglage {
+  cle: string;
+  libelle: string;
+  type: 'entier' | 'reel' | 'booleen' | 'choix';
+  defaut: number | boolean | string;
+  valeur: number | boolean | string;
+  modifie: boolean;
+  min: number | null;
+  max: number | null;
+  pas: number | null;
+  choix: (string | number)[];
+  aide: string;
+  /** Les libellés des choix qui ne parlent pas d'eux-mêmes. */
+  libelles: Record<string, string>;
+}
+
+/** Une consigne d'usage d'un LLM : celle d'origine, celle en vigueur. */
+export interface ConsigneLlm {
+  cle: string;
+  defaut: string;
+  valeur: string;
+  modifie: boolean;
+}
+
+export interface EtatLlm {
+  fichier: string;
+  nom: string;
+  params: ParamReglage[];
+  consignes: ConsigneLlm[];
+}
+
+export interface EtatVariante {
+  fichier: string;
+  origine: boolean;
+  params: ParamReglage[];
+}
+
+export interface EtatWorkflow {
+  id: string;
+  nom: string;
+  tache: string;
+  famille: string;
+  dossierModeles: string;
+  params: ParamReglage[];
+  variantes: EtatVariante[];
+}
+
+/** Réglages → LLM et workflows (aria_coeur::reglages_fins::EtatReglages). */
+export interface EtatReglages {
+  llm: EtatLlm[];
+  defautLlm: string;
+  noteDefaut: string | null;
+  clauseMineurs: string;
+  workflows: EtatWorkflow[];
+  samplersDeComfyui: boolean;
+}
+
+/** Une valeur à enregistrer ; null revient à celle d'origine. */
+export type Changements = Record<string, number | boolean | string | null>;
+
+export const etatReglages = (): Promise<EtatReglages> => invoke<EtatReglages>('etat_reglages');
+
+export const modifierReglagesLlm = (
+  fichier: string,
+  changements: Changements,
+  consignes: Record<string, string | null>,
+): Promise<EtatLlm> => invoke<EtatLlm>('modifier_reglages_llm', { fichier, changements, consignes });
+
+export const modifierReglagesWorkflow = (id: string, changements: Changements): Promise<EtatWorkflow> =>
+  invoke<EtatWorkflow>('modifier_reglages_workflow', { id, changements });
+
+export const modifierReglagesVariante = (id: string, fichier: string, changements: Changements): Promise<EtatWorkflow> =>
+  invoke<EtatWorkflow>('modifier_reglages_variante', { id, fichier, changements });
+
 /** Un terme qui a fait bloquer, et d'où il vient (aria_coeur::securite::Terme). */
 export interface TermeBloque {
   terme: string;

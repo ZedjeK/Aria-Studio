@@ -648,7 +648,7 @@ fn entier(valeur: &Value) -> Option<u64> {
 }
 
 /// Le seul nœud d'un type dans le graphe ; rien s'il y en a zéro ou plusieurs.
-fn noeud_unique(api: &Value, type_: &str) -> Option<String> {
+pub fn noeud_unique(api: &Value, type_: &str) -> Option<String> {
     let trouves: Vec<&String> = api
         .as_object()?
         .iter()

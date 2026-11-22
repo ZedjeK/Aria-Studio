@@ -117,6 +117,12 @@ impl Orchestrateur {
             if self.samplers.is_none() {
                 // Sans eux, les réglages proposent les valeurs du workflow : pas une raison d'échouer.
                 self.samplers = self.comfy.options_sampler().ok();
+                // Retenus à côté du fichier de chemins (cache\), pour Réglages quand ComfyUI est arrêté, comme en v2.
+                if let (Some((samplers, schedulers)), Some(cache)) =
+                    (&self.samplers, self.comfy.lancement().chemins_modeles.parent())
+                {
+                    let _ = crate::reglages_fins::memoriser_samplers_dans(cache, samplers, schedulers);
+                }
             }
         }
         Ok(&mut self.comfy)

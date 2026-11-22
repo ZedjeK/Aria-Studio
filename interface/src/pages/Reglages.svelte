@@ -31,7 +31,9 @@
   import Jauge from '../lib/composants/Jauge.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
+  import ReglagesLlm from './ReglagesLlm.svelte';
   import ReglagesSecurite from './ReglagesSecurite.svelte';
+  import ReglagesWorkflows from './ReglagesWorkflows.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -41,6 +43,8 @@
 
   const onglets = [
     { id: 'moteurs', titre: 'Moteurs' },
+    { id: 'llm', titre: 'LLM' },
+    { id: 'workflows', titre: 'Modèles image et vidéo' },
     { id: 'securite', titre: 'Sécurité' },
   ];
   let onglet = $state('moteurs');
@@ -110,6 +114,10 @@
 <SousOnglets {onglets} bind:actif={onglet} />
 {#if onglet === 'securite'}
   <ReglagesSecurite {signaler} />
+{:else if onglet === 'llm'}
+  <ReglagesLlm {signaler} />
+{:else if onglet === 'workflows'}
+  <ReglagesWorkflows {signaler} />
 {:else}
 <ASavoir>
   Versions épinglées et testées ensemble : téléchargées depuis leur release GitHub officielle, empreinte SHA-256
