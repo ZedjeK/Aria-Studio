@@ -326,6 +326,71 @@ export const commanderAgrandissement = (demande: DemandeAgrandissement): Promise
 export const importerImage = (image: string, nom: string): Promise<Creation> =>
   invoke<Creation>('importer_image', { image, nom });
 
+/** Un terme qui a fait bloquer, et d'où il vient (aria_coeur::securite::Terme). */
+export interface TermeBloque {
+  terme: string;
+  liste: string;
+  /** `socle`, `ajouts`, ou `age` pour un âge reconnu. */
+  etage: string;
+}
+
+/** Une phrase témoin rejouée (aria_coeur::securite::EtatTemoin). */
+export interface TemoinSecurite {
+  texte: string;
+  attendu: 'bloque' | 'passe';
+  /** Livrée avec Aria (sinon, ajoutée par l'utilisateur). */
+  livre: boolean;
+  obtenu: 'bloque' | 'passe';
+  ok: boolean;
+  termes: TermeBloque[];
+}
+
+/** Une liste du filtre AS-18 (aria_coeur::securite_reglages::ListeSecurite). */
+export interface ListeSecurite {
+  cle: string;
+  nom: string;
+  socle: string[];
+  ajouts: string[];
+}
+
+/** Réglages → Sécurité (aria_coeur::securite_reglages::EtatSecurite). */
+export interface EtatSecurite {
+  fichierAjouts: string;
+  erreur: string | null;
+  listes: ListeSecurite[];
+  temoins: TemoinSecurite[];
+  longueurMin: number;
+}
+
+export interface EssaiSecurite {
+  bloque: boolean;
+  message: string | null;
+  termes: TermeBloque[];
+}
+
+/** Un ajout fait (`etat`), ou à confirmer parce qu'il ferait bloquer des phrases témoins qui doivent passer. */
+export interface AjoutSecurite {
+  etat: EtatSecurite | null;
+  aConfirmer: string | null;
+}
+
+export const etatSecurite = (): Promise<EtatSecurite> => invoke<EtatSecurite>('etat_securite');
+
+export const essayerSecurite = (texte: string): Promise<EssaiSecurite> =>
+  invoke<EssaiSecurite>('essayer_securite', { texte });
+
+export const ajouterTermeSecurite = (liste: string, terme: string, forcer: boolean): Promise<AjoutSecurite> =>
+  invoke<AjoutSecurite>('ajouter_terme_securite', { liste, terme, forcer });
+
+export const retirerTermeSecurite = (liste: string, terme: string): Promise<EtatSecurite> =>
+  invoke<EtatSecurite>('retirer_terme_securite', { liste, terme });
+
+export const ajouterTemoinSecurite = (texte: string, attendu: 'bloque' | 'passe'): Promise<EtatSecurite> =>
+  invoke<EtatSecurite>('ajouter_temoin_securite', { texte, attendu });
+
+export const retirerTemoinSecurite = (texte: string): Promise<EtatSecurite> =>
+  invoke<EtatSecurite>('retirer_temoin_securite', { texte });
+
 /** Une vue des Rushes (aria_coeur::rushes::VUES). */
 export type VueRushes = 'tous' | 'non_ranges' | 'archives' | 'corbeille';
 

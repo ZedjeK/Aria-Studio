@@ -36,6 +36,7 @@ pub mod rushes;
 pub mod sauvegardes;
 pub mod secrets;
 pub mod securite;
+pub mod securite_reglages;
 pub mod workflows;
 
 pub use donnees::Dossier;
