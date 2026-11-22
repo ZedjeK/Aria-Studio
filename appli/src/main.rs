@@ -16,6 +16,7 @@ mod moteurs;
 mod plateau;
 mod reglages_fins;
 mod securite;
+mod telechargements;
 
 use std::path::{Path, PathBuf};
 
@@ -109,6 +110,7 @@ fn lancer() -> Result<(), String> {
     let moteurs = moteurs::Moteurs::new(&emplacements)?;
     moteurs::reprendre(&moteurs);
     let plateau = plateau::demarrer(&emplacements, &moteurs);
+    let telechargeur = telechargements::demarrer(&emplacements);
 
     tauri::Builder::default()
         // Toujours le premier greffon : relancer l'exe ramène la fenêtre existante au lieu d'en ouvrir une autre.
@@ -127,6 +129,7 @@ fn lancer() -> Result<(), String> {
         .manage(mise_a_jour::Disponible::default())
         .manage(moteurs)
         .manage(plateau)
+        .manage(telechargeur)
         .invoke_handler(tauri::generate_handler![
             commandes::identite,
             commandes::lire_reglages,
@@ -152,6 +155,11 @@ fn lancer() -> Result<(), String> {
             moteurs::liberer_carte,
             plateau::options_plateau,
             plateau::commander_image,
+            telechargements::etat_modeles,
+            telechargements::lire_telechargements,
+            telechargements::telecharger_workflow,
+            telechargements::installer_llm,
+            telechargements::annuler_telechargement,
             lieux::etat_emplacements,
             lieux::ouvrir_dossier,
             lieux::parcourir_dossier,
