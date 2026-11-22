@@ -18,6 +18,7 @@ pub mod emplacements;
 pub mod fiches;
 pub mod garde;
 pub mod gguf;
+pub mod h3;
 pub mod identite;
 pub mod images;
 pub mod installation;
@@ -50,6 +51,7 @@ pub mod securite_reglages;
 pub mod suggestions;
 pub mod telechargement;
 pub mod usages;
+pub mod voix;
 pub mod workflows;
 
 pub use donnees::Dossier;

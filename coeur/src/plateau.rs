@@ -171,6 +171,8 @@ pub struct Commande {
     pub mode_video: Option<String>,
     pub qualite: Option<String>,
     pub duree: Option<u32>,
+    /// Essai de voix : qui parle, et comment (la phrase est dans `idee`, le personnage dans `parent`).
+    pub description: String,
 }
 
 impl Commande {
@@ -209,6 +211,7 @@ impl Commande {
             mode_video: None,
             qualite: None,
             duree: None,
+            description: String::new(),
         }
     }
 }
@@ -995,6 +998,15 @@ impl Plateau {
         self.mettre_en_file(commande)
     }
 
+    /// Contrôle une demande d'essai de voix et la met en file.
+    ///
+    /// # Errors
+    /// Voir [`crate::voix::commande_essai`] ; ou le fil du Plateau est arrêté.
+    pub fn commander_voix(&self, demande: &crate::voix::DemandeEssai) -> Result<Commande, String> {
+        let commande = crate::voix::commande_essai(&self.contexte, demande, nouvel_id()?)?;
+        self.mettre_en_file(commande)
+    }
+
     /// Ajoute une image personnelle aux créations ; rend son identifiant.
     ///
     /// # Errors
@@ -1085,6 +1097,10 @@ fn executer(
     if c.genre == "clip" {
         let suivi = Suivi { partage, id: &c.id };
         return crate::montage::executer(contexte, generateur, &suivi, c);
+    }
+    if c.genre == "voix" {
+        let suivi = Suivi { partage, id: &c.id };
+        return crate::voix::executer(contexte, generateur, &suivi, c);
     }
     if c.genre != "creation" {
         let suivi = Suivi { partage, id: &c.id };

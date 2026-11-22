@@ -227,7 +227,7 @@ export type EtatCommande = 'attente' | 'en_cours' | 'termine' | 'erreur' | 'annu
 
 /** Une commande du Plateau (aria_coeur::plateau::Commande). */
 /** Ce que fait une commande du Plateau. */
-export type GenreCommande = 'creation' | 'retouche' | 'agrandissement' | 'clip';
+export type GenreCommande = 'creation' | 'retouche' | 'agrandissement' | 'clip' | 'voix';
 
 export interface Commande {
   id: string;
@@ -267,6 +267,8 @@ export interface Commande {
   modeVideo: 'animer' | 'texte' | null;
   qualite: string | null;
   duree: number | null;
+  /** Essai de voix : qui parle, et comment. */
+  description: string;
 }
 
 /** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */
@@ -1279,3 +1281,55 @@ export const commanderClip = (demande: DemandeClip): Promise<Commande> => invoke
 
 /** La vidéo d'un clip, en octets. */
 export const videoCreation = (id: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('video_creation', { id });
+
+// --- Montage : voix de référence (aria_coeur::voix, au format de la v2) ---
+
+export interface VoixBibliotheque {
+  id: string;
+  date: string;
+  nom: string | null;
+  gardee: boolean;
+  source: 'essai' | 'fichier';
+  fichier: string;
+  duree_son: number | null;
+  phrase: string | null;
+  description: string | null;
+  personnage: string | null;
+}
+
+export interface OptionsVoix {
+  phraseDefaut: string;
+  longueurPhrase: number;
+  motsMax: number;
+  longueurDescription: number;
+  longueurNom: number;
+  formats: string[];
+  dureeMin: number;
+  dureeMax: number;
+  estimationS: number;
+}
+
+export interface DemandeEssaiVoix {
+  phrase: string;
+  description: string;
+  personnage: string | null;
+  seed: number | null;
+}
+
+/** Les voix (brouillons compris si demandé) et ce que l'interface doit savoir d'elles. */
+export const lireVoix = (brouillons: boolean): Promise<[VoixBibliotheque[], OptionsVoix]> =>
+  invoke<[VoixBibliotheque[], OptionsVoix]>('lire_voix', { brouillons });
+
+export const essayerVoix = (demande: DemandeEssaiVoix): Promise<Commande> => invoke<Commande>('essayer_voix', { demande });
+
+export const garderVoix = (id: string, nom: string): Promise<VoixBibliotheque> =>
+  invoke<VoixBibliotheque>('garder_voix', { id, nom });
+
+export const supprimerVoix = (id: string): Promise<void> => invoke<void>('supprimer_voix', { id });
+
+/** Un fichier audio (data URL), gardé aussitôt dans la bibliothèque. */
+export const importerVoix = (son: string, nom: string, nomOrigine: string): Promise<VoixBibliotheque> =>
+  invoke<VoixBibliotheque>('importer_voix', { son, nom, nomOrigine });
+
+/** Le son d'une voix, en octets. */
+export const sonVoix = (id: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('son_voix', { id });

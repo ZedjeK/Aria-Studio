@@ -232,6 +232,12 @@ fn lancer() -> Result<(), String> {
             plateau::options_montage,
             plateau::commander_clip,
             plateau::video_creation,
+            plateau::lire_voix,
+            plateau::essayer_voix,
+            plateau::garder_voix,
+            plateau::supprimer_voix,
+            plateau::importer_voix,
+            plateau::son_voix,
         ])
         .setup(move |app| {
             if proposer {
