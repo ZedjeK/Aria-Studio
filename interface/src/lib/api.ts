@@ -615,6 +615,82 @@ export const retrouverSources = (): Promise<IdentificationSources> =>
 
 export const etatSources = (): Promise<IdentificationSources> => invoke<IdentificationSources>('etat_sources');
 
+// --- Modèles : onglets d'usage (aria_coeur::usages) ---
+
+export interface SpecialisteUsage {
+  fichier: string;
+  nom: string;
+  page: string;
+  usage: string;
+  taille: number;
+  aTelecharger: number;
+  installe: boolean;
+  choisi: boolean;
+  vision: boolean;
+  licence: LicenceModele;
+}
+
+export interface ReecritureUsage {
+  llm: string | null;
+  effectif: string;
+  style: string;
+  langue: string;
+  motsMax: number | null;
+  regles: number;
+  specialistes: SpecialisteUsage[];
+  aVenir: { nom: string; page: string; raison: string }[];
+  ailleurs: string[] | null;
+}
+
+export interface WorkflowUsage {
+  id: string;
+  nom: string;
+  tache: string;
+  famille: string;
+  dossierModeles: string;
+  dossierLoras: string;
+  licence: LicenceModele;
+  vramEstimeeGo: number | null;
+  vramMinGo: number | null;
+  taille: number;
+  pret: boolean;
+  manquants: { dossier: string; nom: string }[];
+  aTelecharger: number;
+  modeles: string[];
+  aValider: string[];
+  origine: string | null;
+  modeleDefaut: string | null;
+  loras: { nom: string; declencheurs: string; force: number }[];
+  possibles: string[];
+  favoriPour: string[];
+  references: number;
+  variation: boolean;
+  reecriture: ReecritureUsage;
+}
+
+export interface UsageModeles {
+  id: string;
+  nom: string;
+  workflows: WorkflowUsage[];
+  favoris: { cle: string; libelle: string; valeur: string | null }[];
+  variation: string[];
+}
+
+export interface Usages {
+  llmDefaut: string;
+  llmChoix: ChoixLlm[];
+  usages: UsageModeles[];
+}
+
+export const usagesModeles = (): Promise<Usages> => invoke<Usages>('usages_modeles');
+
+export const definirFavori = (cle: string, workflow: string): Promise<void> =>
+  invoke<void>('definir_favori', { cle, workflow });
+
+/** Le LLM qui réécrit pour ce workflow ; null : le LLM par défaut. */
+export const definirLlmWorkflow = (workflow: string, llm: string | null): Promise<void> =>
+  invoke<void>('definir_llm_workflow', { workflow, llm });
+
 /** Un dossier d'Aria (aria_coeur::emplacements::DossierConnu). */
 export interface DossierConnu {
   cle: string;

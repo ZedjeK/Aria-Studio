@@ -32,9 +32,11 @@
     signaler: (texte: string, erreur?: boolean) => void;
     /** Un fichier vient d'entrer dans la file. */
     ajoute: () => void;
+    /** Ouvert depuis un onglet d'usage : le type et la famille à chercher. */
+    depart?: { type: TypeRecherche; famille: string } | null;
   }
 
-  let { signaler, ajoute }: Props = $props();
+  let { signaler, ajoute, depart = null }: Props = $props();
 
   function lireChoix(cle: string): boolean {
     try {
@@ -78,14 +80,14 @@
     toutes.flatMap((f) => [dossierDeFamille(f, 'image'), dossierDeFamille(f, 'lora')]).sort(),
   );
 
-  async function changerType(t: TypeRecherche) {
+  async function changerType(t: TypeRecherche, voulue = famille) {
     type = t;
     if (!sources(t).includes(source)) source = 'huggingface';
     resultats = [];
     curseur = null;
     try {
       familles = await famillesDecouvrir(t);
-      if (!familles.some((f) => f.famille === famille)) famille = '';
+      famille = familles.some((f) => f.famille === voulue) ? voulue : '';
     } catch (e) {
       signaler(messageErreur(e), true);
     }
@@ -174,7 +176,13 @@
   }
 
   onMount(() => {
-    void changerType('image');
+    if (depart) {
+      const d = depart;
+      source = 'civitai';
+      void changerType(d.type, d.famille).then(() => chercher());
+    } else {
+      void changerType('image');
+    }
     void famillesDecouvrir('lora')
       .then((f) => (toutes = f))
       .catch((e: unknown) => signaler(messageErreur(e), true));

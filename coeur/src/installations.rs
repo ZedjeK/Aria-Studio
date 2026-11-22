@@ -65,7 +65,8 @@ fn texte(v: Option<&Value>) -> String {
     v.and_then(Value::as_str).unwrap_or_default().to_owned()
 }
 
-fn licence(v: Option<&Value>) -> Licence {
+/// La licence telle que la résume une fiche (bloc `licence`).
+pub fn licence(v: Option<&Value>) -> Licence {
     Licence {
         nom: texte(v.and_then(|l| l.get("nom"))),
         url: texte(v.and_then(|l| l.get("url"))),

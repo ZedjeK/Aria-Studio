@@ -11,6 +11,7 @@ use aria_coeur::collection::{self, Collection, Corbeille, ReglageLora};
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::installations::{self, EtatLlm, EtatWorkflow};
 use aria_coeur::telechargement::{Contexte, Reseau, Tache, Telechargeur};
+use aria_coeur::usages::{self, Usages};
 use aria_coeur::{Dossier, identite};
 use serde::Serialize;
 use tauri::State;
@@ -286,6 +287,51 @@ pub async fn vider_corbeille_modeles(file: State<'_, Arc<Telechargeur>>) -> Resu
         let c = f.contexte();
         let (effaces, liberes) = collection::vider_corbeille(&c.dossier, &c.data, &c.modeles)?;
         Ok(Vidage { effaces, liberes })
+    })
+    .await
+}
+
+// --- Onglets d'usage ------------------------------------------------------------------------------------------
+
+/// Les onglets d'usage (Texte → image, Image → image, Vidéo).
+#[tauri::command]
+pub async fn usages_modeles(file: State<'_, Arc<Telechargeur>>) -> Result<Usages, String> {
+    hors_interface(&file, |f| {
+        let c = f.contexte();
+        Ok(usages::usages(&c.dossier, &c.data, &c.modeles))
+    })
+    .await
+}
+
+/// Le workflow par défaut d'un usage.
+#[tauri::command]
+pub async fn definir_favori(
+    file: State<'_, Arc<Telechargeur>>,
+    cle: String,
+    workflow: String,
+) -> Result<(), String> {
+    hors_interface(&file, move |f| {
+        let c = f.contexte();
+        usages::definir_favori(&c.dossier, &c.modeles, &cle, &workflow)
+    })
+    .await
+}
+
+/// Le LLM qui réécrit pour un workflow ; rien : le LLM par défaut.
+#[tauri::command]
+pub async fn definir_llm_workflow(
+    file: State<'_, Arc<Telechargeur>>,
+    workflow: String,
+    llm: Option<String>,
+) -> Result<(), String> {
+    hors_interface(&file, move |f| {
+        let c = f.contexte();
+        usages::definir_llm(
+            &c.dossier,
+            &c.modeles,
+            &workflow,
+            llm.as_deref().filter(|l| !l.is_empty()),
+        )
     })
     .await
 }
