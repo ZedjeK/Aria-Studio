@@ -288,7 +288,7 @@ pub fn en_reference(texte: &str, personnage: bool, voix: bool) -> String {
         if let Some(r) = motif(&PLAN) {
             plans.extend(
                 r.captures_iter(&description)
-                    .filter_map(|c| c.get(1)?.as_str().parse().ok()),
+                    .filter_map(|c| c.get(1)?.as_str().parse::<u32>().ok()),
             );
         }
         plans.sort_unstable();
