@@ -142,6 +142,12 @@ export interface ChoixWorkflow {
   /** Les checkpoints présents dont les steps attendent d'être validés. */
   aValider: string[];
   stepsSuggeres: number[];
+  /** Le nombre d'images de référence qu'il reçoit (S'inspirer ; 0 : aucune). */
+  references: number;
+  /** Il sait redessiner une image. */
+  variation: boolean;
+  /** Réservé à la Retouche. */
+  reserveRetouche: boolean;
 }
 
 /** Un LLM proposé pour réécrire (aria_coeur::plateau::ChoixLlm). */
@@ -165,6 +171,9 @@ export interface OptionsPlateau {
   llm: ChoixLlm[];
   /** Le LLM de chaque workflow prêt. */
   llmParWorkflow: Record<string, string>;
+  /** Le workflow de « S'inspirer » par défaut. */
+  defautReferences: string;
+  referencesMax: number;
 }
 
 /** Une demande de création (aria_coeur::plateau::Demande). */
@@ -174,12 +183,20 @@ export interface DemandeImage {
   reecrire: boolean;
   /** Le GGUF qui réécrit ; null : celui du workflow. */
   llm: string | null;
+  /** Des rushes de départ : à mélanger (S'inspirer) ou à redessiner (un seul). */
+  references: string[];
+  modeReference: ModeReference | null;
+  /** Redessiner : la liberté, de 0,05 (copie) à 1 (libre). */
+  liberte: number;
   workflow: string | null;
   format: string;
   seed: number | null;
   nombre: number;
   modele: string | null;
 }
+
+/** Partir de rushes : s'en inspirer, ou en redessiner un. */
+export type ModeReference = 'inspirer' | 'variation';
 
 /** Où en est une commande (aria_coeur::plateau::EtatCommande). */
 export type EtatCommande = 'attente' | 'en_cours' | 'termine' | 'erreur' | 'annule';
@@ -218,6 +235,9 @@ export interface Commande {
   hauteur: number | null;
   ancrage: string | null;
   cadrage: string | null;
+  references: string[];
+  modeReference: ModeReference | null;
+  liberte: number;
 }
 
 /** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */

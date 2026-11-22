@@ -11,8 +11,11 @@
     lireCommandes,
     messageErreur,
     optionsPlateau,
+    optionsRetouche,
+    FORMAT_IMAGE,
     validerCheckpoint,
     type Commande,
+    type ModeReference,
     type OptionsPlateau,
   } from '../lib/api';
   import {
@@ -20,6 +23,9 @@
     formatInitial,
     lireSeed,
     llmInitial,
+    LIBERTE,
+    rushesMax,
+    workflowsPour,
     modeleInitial,
     nomCheckpoint,
     texteAvancement,
@@ -29,6 +35,7 @@
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import ChoixRushes from './ChoixRushes.svelte';
   import PanneauRushes from './PanneauRushes.svelte';
 
   interface Props {
@@ -51,10 +58,17 @@
   let reecrire = $state(true);
   let llmChoisi = $state('');
   let premiereLecture = true;
+  // Partir de rushes : s'en inspirer (workflows de retouche à références), ou en redessiner un.
+  let modeReference = $state<ModeReference | null>(null);
+  let references = $state<string[]>([]);
+  let liberte = $state(LIBERTE.defaut);
+  let optionsInspirer = $state<OptionsPlateau | null>(null);
   let stepsSaisis = $state<Record<string, number>>({});
   let envoi = $state(false);
 
-  const workflow = $derived(options?.workflows.find((w) => w.id === workflowId));
+  const proposes = $derived(options ? workflowsPour(modeReference, options, optionsInspirer) : []);
+  const workflow = $derived(proposes.find((w) => w.id === workflowId));
+  const maxRushes = $derived(rushesMax(modeReference, workflow));
   const seed = $derived(lireSeed(seedTexte));
   const nombreValide = $derived(Number.isInteger(nombre) && nombre >= 1 && nombre <= (options?.nombreMax ?? 1));
   const peutCreer = $derived(
@@ -64,16 +78,17 @@
       prompt.trim() !== '' &&
       seed !== undefined &&
       nombreValide &&
-      (!reecrire || llmChoisi !== ''),
+      (!reecrire || llmChoisi !== '') &&
+      (modeReference === null || (references.length >= 1 && references.length <= maxRushes)),
   );
 
   function choisirWorkflow(id: string) {
     workflowId = id;
-    const choisi = options?.workflows.find((w) => w.id === id);
+    const choisi = proposes.find((w) => w.id === id);
     modele = modeleInitial(choisi);
     if (options) {
-      format = formatInitial(options, choisi);
-      llmChoisi = llmInitial(options, id);
+      format = modeReference === 'variation' ? FORMAT_IMAGE : formatInitial(options, choisi);
+      llmChoisi = llmInitial(modeReference === 'inspirer' && optionsInspirer ? optionsInspirer : options, id);
     }
     for (const checkpoint of choisi?.aValider ?? []) {
       stepsSaisis[checkpoint] ??= choisi?.stepsSuggeres[0] ?? 20;
@@ -86,12 +101,23 @@
       // Sans LLM installé, la case part décochée : le prompt est alors envoyé tel quel.
       if (premiereLecture) reecrire = options.llm.length > 0;
       premiereLecture = false;
-      const garde = options.workflows.some((w) => w.id === workflowId);
-      const defaut = options.workflows.find((w) => w.id === options?.defaut) ?? options.workflows[0];
+      optionsInspirer = await optionsRetouche();
+      const liste = workflowsPour(modeReference, options, optionsInspirer);
+      const garde = liste.some((w) => w.id === workflowId);
+      const voulu = modeReference === 'inspirer' ? options.defautReferences : options.defaut;
+      const defaut = liste.find((w) => w.id === voulu) ?? liste[0];
       choisirWorkflow(garde ? workflowId : (defaut?.id ?? ''));
     } catch (e) {
       signaler(messageErreur(e), true);
     }
+  }
+
+  function changerDepart(mode: ModeReference | null) {
+    modeReference = mode;
+    if (!options) return;
+    const liste = workflowsPour(mode, options, optionsInspirer);
+    const voulu = mode === 'inspirer' ? options.defautReferences : options.defaut;
+    choisirWorkflow((liste.find((w) => w.id === voulu) ?? liste[0])?.id ?? '');
   }
 
   async function relireCommandes() {
@@ -118,6 +144,9 @@
         seed,
         nombre,
         modele: modele || null,
+        references: modeReference ? references : [],
+        modeReference,
+        liberte,
       });
       signaler(nombre > 1 ? `${nombre} images en file.` : 'Image en file.');
       await relireCommandes();
@@ -185,11 +214,45 @@
   </Panneau>
 {:else}
   <Panneau titre="Créer" accentue>
+    <div class="depart" role="radiogroup" aria-label="Point de départ">
+      <button type="button" role="radio" aria-checked={modeReference === null} class:actif={modeReference === null} onclick={() => changerDepart(null)}>
+        Depuis une idée
+      </button>
+      <button type="button" role="radio" aria-checked={modeReference === 'inspirer'} class:actif={modeReference === 'inspirer'} onclick={() => changerDepart('inspirer')}>
+        S'inspirer de rushes
+      </button>
+      <button type="button" role="radio" aria-checked={modeReference === 'variation'} class:actif={modeReference === 'variation'} onclick={() => changerDepart('variation')}>
+        Redessiner un rush
+      </button>
+    </div>
+    {#if modeReference}
+      {#if proposes.length === 0}
+        <p class="discret">
+          {modeReference === 'inspirer'
+            ? "Aucun modèle prêt ne reçoit d'images de référence : il faut Qwen-Image 2.1 Edit."
+            : 'Aucun modèle prêt ne sait redessiner une image.'}
+        </p>
+      {:else}
+        <p class="discret">
+          {modeReference === 'inspirer'
+            ? `Choisis de 1 à ${maxRushes} rushes, dans l'ordre : le premier est l'image 1. Écris ce qui est nouveau (« le chat de l'image 1 sur le canapé de l'image 2 »).`
+            : 'Choisis le rush à redessiner, puis dis ce qui change.'}
+        </p>
+        <ChoixRushes max={maxRushes} bind:selection={references} {signaler} />
+        {#if modeReference === 'variation'}
+          <label class="ligne">
+            Liberté <input type="range" min={LIBERTE.min} max={LIBERTE.max} step="0.05" bind:value={liberte} />
+            <span class="code">{liberte.toFixed(2)}</span>
+            <span class="discret">0 : copie ; 1 : libre</span>
+          </label>
+        {/if}
+      {/if}
+    {/if}
     <div class="grille">
       <label>
         <span class="etiquette">Modèle</span>
         <select value={workflowId} onchange={(e) => choisirWorkflow(e.currentTarget.value)}>
-          {#each options.workflows as choix (choix.id)}
+          {#each proposes as choix (choix.id)}
             <option value={choix.id}>{choix.nom}</option>
           {/each}
         </select>
@@ -205,6 +268,9 @@
       <label>
         <span class="etiquette">Format</span>
         <select bind:value={format}>
+          {#if modeReference === 'variation'}
+            <option value={FORMAT_IMAGE}>Celui de l'image</option>
+          {/if}
           {#each options.formats as f (f)}
             <option value={f}>{f}</option>
           {/each}
@@ -323,6 +389,27 @@
 
   .reecriture {
     margin-top: 14px;
+  }
+
+  .depart {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .depart button {
+    font: inherit;
+    color: var(--texte-2);
+    background: transparent;
+    border: 1px solid var(--ligne);
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+
+  .depart button.actif {
+    color: var(--cyan);
+    border-color: var(--cyan);
   }
 
   textarea {

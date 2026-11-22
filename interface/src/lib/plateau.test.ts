@@ -4,6 +4,8 @@ import {
   estActive,
   formatInitial,
   llmInitial,
+  rushesMax,
+  workflowsPour,
   libelleEtat,
   lireSeed,
   modeleInitial,
@@ -23,6 +25,17 @@ const krea: ChoixWorkflow = {
   format: '16:9 (Widescreen)',
   aValider: [],
   stepsSuggeres: [8],
+  references: 0,
+  variation: true,
+  reserveRetouche: false,
+};
+
+const edit: ChoixWorkflow = {
+  ...krea,
+  id: 'qwen_image_2_1_edit',
+  nom: 'Qwen-Image 2.1 Edit',
+  references: 10,
+  variation: false,
 };
 
 const options: OptionsPlateau = {
@@ -36,6 +49,8 @@ const options: OptionsPlateau = {
     { fichier: 'mistral.gguf', nom: 'mistral', favori: false, specialiste: false },
   ],
   llmParWorkflow: { krea2_turbo: 'mistral.gguf', qwen_image_2_1: 'retire.gguf' },
+  defautReferences: 'qwen_image_2_1_edit',
+  referencesMax: 10,
 };
 
 function commande(changements: Partial<Commande>): Commande {
@@ -57,6 +72,9 @@ function commande(changements: Partial<Commande>): Commande {
     progression: 0,
     images: [],
     erreur: null,
+    references: [],
+    modeReference: null,
+    liberte: 0.6,
     parent: null,
     masque: false,
     fondu: 0,
@@ -99,6 +117,17 @@ describe('Plateau', () => {
     expect(modeleInitial({ ...krea, modeleDefaut: 'retire.safetensors' })).toBe('krea2_turbo.safetensors');
     expect(modeleInitial({ ...krea, modeles: [] })).toBe('');
     expect(modeleInitial(undefined)).toBe('');
+  });
+
+  it('propose les workflows selon le départ', () => {
+    const retouche = { ...options, workflows: [edit, { ...edit, id: 'reserve', reserveRetouche: true }] };
+    expect(workflowsPour(null, options, retouche).map((w) => w.id)).toEqual(['krea2_turbo']);
+    expect(workflowsPour('inspirer', options, retouche).map((w) => w.id)).toEqual(['qwen_image_2_1_edit']);
+    expect(workflowsPour('inspirer', options, null)).toEqual([]);
+    expect(workflowsPour('variation', options, retouche).map((w) => w.id)).toEqual(['krea2_turbo']);
+    expect(rushesMax('variation', krea)).toBe(1);
+    expect(rushesMax('inspirer', edit)).toBe(10);
+    expect(rushesMax(null, krea)).toBe(0);
   });
 
   it('propose le LLM du workflow', () => {

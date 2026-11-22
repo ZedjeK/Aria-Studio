@@ -115,6 +115,51 @@ const RETOUCHE: Gabarit = Gabarit {
     ],
 };
 
+/// Images de référence (« S'inspirer ») : une nouvelle scène, les références citées par leur numéro.
+const REFERENCES: Gabarit = Gabarit {
+    role: "You write instructions for an image model that receives reference pictures, numbered Picture 1, Picture 2, Picture 3.\nThe user describes, often in French, a new image to create from those references (« image 1 » means Picture 1). Rewrite it as ONE English instruction.",
+    priorite: None,
+    remplace: &["texte"],
+    plan: &[
+        "Describe what is new, as the user asks: scene, pose, action, setting, lighting, framing, style.",
+    ],
+    contenu: &[
+        "Refer to the references by their number: \"the woman from Picture 1\", \"the dragon from Picture 2\". Do not re-describe what the references already show (face, hair, clothes, colors): the model sees them.",
+        "Ask explicitly to keep the identity (face, hair) and outfit of the characters from the references, unless the user asks to change them, but NOT their pose, seat, props or background: the characters take the new pose and place described by the user.",
+    ],
+    dialogue: &[],
+    texte: &["If the user asks for written text in the image, keep that text exactly, in quotes."],
+    interdits: &[],
+    format: &[
+        "1 to 4 sentences, at most 90 words, plain prose, no markdown.",
+        "Output only the instruction: no preamble, no explanation.",
+    ],
+};
+
+/// Le nom que le modèle cible donne à ses images de référence (`profil_prompt.nom_image` de sa fiche, `<image{n}>`
+/// pour Qwen-Image 2.1) ; rien : « Picture N », le nom d'origine.
+pub fn nom_image(workflow: Option<&Workflow>) -> Option<String> {
+    workflow?
+        .fiche
+        .pointer("/profil_prompt/nom_image")
+        .and_then(Value::as_str)
+        .filter(|n| *n != "Picture {n}" && n.contains("{n}"))
+        .map(str::to_owned)
+}
+
+/// Les « Picture 1, Picture 2… » d'un texte dans le nom que le modèle cible leur donne.
+pub fn avec_noms_images(texte: &str, nom_image: Option<&str>) -> String {
+    let Some(nom) = nom_image else {
+        return texte.to_owned();
+    };
+    match Regex::new(r"Picture (\d+)") {
+        Ok(motif) => motif
+            .replace_all(texte, |c: &regex::Captures<'_>| nom.replace("{n}", &c[1]))
+            .into_owned(),
+        Err(_) => texte.to_owned(),
+    }
+}
+
 fn titre(cle: &str) -> &str {
     match cle {
         "plan" => "PROMPT OUTLINE",
@@ -262,6 +307,16 @@ pub fn consigne_reecriture(
     regles: &[(String, Vec<String>)],
 ) -> String {
     consigne(&REECRITURE, reecrite, mots_max, regles)
+}
+
+/// La consigne d'une création à partir d'images de référence, les images nommées comme le modèle cible les nomme,
+/// toujours suivie de la clause verrouillée. `reecrite` : celle de Réglages pour ce GGUF.
+pub fn consigne_references(
+    reecrite: Option<&str>,
+    regles: &[(String, Vec<String>)],
+    nom_image: Option<&str>,
+) -> String {
+    avec_noms_images(&consigne(&REFERENCES, reecrite, None, regles), nom_image)
 }
 
 /// La consigne de traduction d'une instruction de retouche pour ce modèle cible, toujours suivie de la clause
@@ -441,6 +496,14 @@ pub fn lire_specialiste(texte: &str, s: &Value) -> Result<String, String> {
         .ok_or_else(illisible)
 }
 
+/// Les images d'une réécriture : le nombre d'images de référence (S'inspirer ; 0 sinon) et les images montrées au LLM
+/// (les références, ou l'image de départ d'une variation).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Images<'a> {
+    pub references: usize,
+    pub vues: &'a [Vue],
+}
+
 /// Ce qu'il faut pour réécrire une idée : le LLM à lancer, la demande, et comment lire sa réponse.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ecriture {
@@ -472,9 +535,13 @@ pub fn preparer_reecriture(
     modele: Option<&str>,
     workflow: Option<&Workflow>,
     reglages_workflow: Option<&ReglagesWorkflow>,
+    images: &Images<'_>,
 ) -> Result<Ecriture, String> {
     let demande_nom = llm::nom(&lieux.modeles, modele);
-    if let Some(s) = specialiste_pour(&demande_nom, "creation", workflow) {
+    // Le spécialiste ne réécrit qu'une idée seule (ni références, ni vidéo), comme en v2.
+    if images.references == 0
+        && let Some(s) = specialiste_pour(&demande_nom, "creation", workflow)
+    {
         let lancement = llm::lancement(lieux, Some(&demande_nom))?;
         let demande = demande_specialiste(&lieux.modeles, &s, idee, None)?;
         return Ok(Ecriture {
@@ -490,15 +557,26 @@ pub fn preparer_reecriture(
     };
     let lancement = llm::lancement(lieux, Some(&nom))?;
     let regle = llm::valeurs(&lieux.dossier, &nom);
-    let mots = mots_max_de(workflow, reglages_workflow);
-    let reecrite = llm::consigne(&lieux.dossier, &nom, "reecriture");
-    let systeme = consigne_reecriture(reecrite.as_deref(), mots, &sections_prompt(workflow));
+    let noms = nom_image(workflow);
+    let voit = lancement.vision.is_some();
+    let (systeme, contenu, mots) = if images.references > 0 {
+        let reecrite = llm::consigne(&lieux.dossier, &nom, "references");
+        let systeme = consigne_references(reecrite.as_deref(), &sections_prompt(workflow), noms.as_deref());
+        let texte = format!("{idee}\n\n(Reference pictures: {})", images.references);
+        let contenu = montrer(&texte, images.vues, "references", voit, noms.as_deref());
+        (systeme, contenu, None)
+    } else {
+        let mots = mots_max_de(workflow, reglages_workflow);
+        let reecrite = llm::consigne(&lieux.dossier, &nom, "reecriture");
+        let systeme = consigne_reecriture(reecrite.as_deref(), mots, &sections_prompt(workflow));
+        (systeme, montrer(idee, images.vues, "variation", voit, None), mots)
+    };
     let (temperature, echantillonnage) = regle.ecriture(lancement.reflexion);
     Ok(Ecriture {
         demande: Demande {
             messages: json!([
                 {"role": "system", "content": systeme},
-                {"role": "user", "content": idee},
+                {"role": "user", "content": contenu},
             ]),
             temperature,
             max_tokens: regle.max_tokens.max(tokens_pour_mots(mots)),
@@ -543,11 +621,11 @@ fn image_url(png: &[u8]) -> Value {
 
 /// Le message de l'utilisateur, avec les images si le LLM les voit, sinon ce qu'en disent leurs fiches ; tel quel
 /// sans image, ou si aucune n'a de fiche (images importées).
-pub fn montrer(texte: &str, vues: &[Vue], usage: &str, voit: bool) -> Value {
+pub fn montrer(texte: &str, vues: &[Vue], usage: &str, voit: bool, nom_image: Option<&str>) -> Value {
     if vues.is_empty() {
         return json!(texte);
     }
-    let note = note_vue(usage);
+    let note = avec_noms_images(note_vue(usage), nom_image);
     if voit {
         let mut contenu: Vec<Value> = vues.iter().map(|v| image_url(&v.png)).collect();
         contenu.push(json!({"type": "text", "text": format!("{texte}\n\n({note})")}));
@@ -564,7 +642,10 @@ pub fn montrer(texte: &str, vues: &[Vue], usage: &str, voit: bool) -> Value {
             "{texte}\n\n(You cannot see the picture; it was created from this prompt: {seule}\n{note})"
         )),
         _ => {
-            let lignes: Vec<String> = connues.iter().map(|(i, t)| format!("Picture {i}: {t}")).collect();
+            let lignes: Vec<String> = connues
+                .iter()
+                .map(|(i, t)| format!("{}: {t}", avec_noms_images(&format!("Picture {i}"), nom_image)))
+                .collect();
             json!(format!(
                 "{texte}\n\n(You cannot see the pictures; they were created from these prompts:\n{}\n{note})",
                 lignes.join("\n")
@@ -613,6 +694,7 @@ pub fn preparer_traduction(
         vue.map(std::slice::from_ref).unwrap_or_default(),
         "retouche",
         lancement.vision.is_some(),
+        None,
     );
     Ok(Ecriture {
         demande: Demande {
@@ -807,6 +889,7 @@ mod tests {
             Some("mistral.gguf"),
             Some(&krea),
             None,
+            &Images::default(),
         )
         .unwrap();
         assert!(e.specialiste.is_none());
@@ -840,14 +923,16 @@ mod tests {
         fs::write(llm_dir.join("mistral.gguf"), essai::gguf(&[12])).unwrap();
         let qwen = workflows::obtenir("qwen_image_2_1").unwrap();
         // Sans sa consigne, il ne peut pas écrire.
-        let absente = preparer_reecriture(&l, "un renard", Some(T2I), Some(&qwen), None).unwrap_err();
+        let absente = preparer_reecriture(&l, "un renard", Some(T2I), Some(&qwen), None, &Images::default())
+            .unwrap_err();
         assert!(absente.starts_with("Consigne du LLM spécialisé absente"));
         fs::write(
             llm_dir.join("Qwen-Image-2.1-PE-T2I.consigne.txt"),
             "  Rewrite the prompt.\n",
         )
         .unwrap();
-        let e = preparer_reecriture(&l, "un renard", Some(T2I), Some(&qwen), None).unwrap();
+        let e =
+            preparer_reecriture(&l, "un renard", Some(T2I), Some(&qwen), None, &Images::default()).unwrap();
         assert!(e.specialiste.is_some());
         assert_eq!(systeme(&e), format!("Rewrite the prompt.\n\n{CLAUSE_MINEURS}"));
         assert_eq!((e.demande.max_tokens, e.demande.budget_reflexion), (8192, 0));
@@ -867,7 +952,8 @@ mod tests {
         );
         // Pour un autre workflow, le spécialiste cède la place au LLM par défaut.
         let krea = workflows::obtenir("krea2_turbo").unwrap();
-        let e = preparer_reecriture(&l, "un renard", Some(T2I), Some(&krea), None).unwrap();
+        let e =
+            preparer_reecriture(&l, "un renard", Some(T2I), Some(&krea), None, &Images::default()).unwrap();
         assert!(e.specialiste.is_none());
         assert_eq!(e.modele(), "mistral.gguf");
     }
@@ -905,10 +991,10 @@ Edit exactly what the user names."
     #[test]
     fn images_montrees_ou_decrites() {
         assert_eq!(
-            montrer("fais-la rire", &[], "retouche", true),
+            montrer("fais-la rire", &[], "retouche", true, None),
             json!("fais-la rire")
         );
-        let vu = montrer("fais-la rire", &[vue(Some("a woman"))], "retouche", true);
+        let vu = montrer("fais-la rire", &[vue(Some("a woman"))], "retouche", true, None);
         assert_eq!(vu[0]["type"], json!("image_url"));
         assert_eq!(vu[0]["image_url"]["url"], json!("data:image/png;base64,iVBORw=="));
         assert!(vu[1]["text"].as_str().unwrap().starts_with(
@@ -916,7 +1002,7 @@ Edit exactly what the user names."
 
 (The picture is the image to edit"
         ));
-        let decrit = montrer("fais-la rire", &[vue(Some("a woman"))], "retouche", false);
+        let decrit = montrer("fais-la rire", &[vue(Some("a woman"))], "retouche", false, None);
         assert!(
             decrit
                 .as_str()
@@ -925,7 +1011,7 @@ Edit exactly what the user names."
         );
         // Image importée, sans fiche : à l'aveugle.
         assert_eq!(
-            montrer("fais-la rire", &[vue(None)], "retouche", false),
+            montrer("fais-la rire", &[vue(None)], "retouche", false, None),
             json!("fais-la rire")
         );
         let deux = montrer(
@@ -933,11 +1019,25 @@ Edit exactly what the user names."
             &[vue(Some("a cat")), vue(Some("a dog"))],
             "references",
             false,
+            None,
         );
         assert!(deux.as_str().unwrap().contains(
             "Picture 1: a cat
 Picture 2: a dog"
         ));
+        // Les images nommées comme le modèle cible les nomme.
+        let qwen = montrer(
+            "mélange",
+            &[vue(Some("a cat")), vue(Some("a dog"))],
+            "references",
+            false,
+            Some("<image{n}>"),
+        );
+        assert!(qwen.as_str().unwrap().contains(
+            "<image1>: a cat
+<image2>: a dog"
+        ));
+        assert!(qwen.as_str().unwrap().contains("in order (<image1>, <image2>…)"));
     }
 
     #[test]
@@ -993,5 +1093,85 @@ You translate image-editing instructions"
         let e = preparer_traduction(&l, "ajoute la mer", Some(i2i), Some(&edit), None).unwrap();
         assert!(e.specialiste.is_none());
         assert_eq!(e.modele(), "mistral.gguf");
+    }
+
+    #[test]
+    fn reecriture_a_partir_de_references() {
+        let temp = tempfile::tempdir().unwrap();
+        let l = lieux(&temp);
+        let llm_dir = l.modeles.join("llm");
+        fs::write(llm_dir.join("mistral.gguf"), essai::gguf(&[12])).unwrap();
+        fs::write(
+            llm_dir.join("Qwen-Image-2.1-PE-T2I.Q5_K_M.gguf"),
+            essai::gguf(&[12]),
+        )
+        .unwrap();
+        fs::write(llm_dir.join("Qwen-Image-2.1-PE-T2I.consigne.txt"), "Rewrite.").unwrap();
+        let edit = workflows::obtenir("qwen_image_2_1_edit").unwrap();
+        assert_eq!(nom_image(Some(&edit)).as_deref(), Some("<image{n}>"));
+        let vues = [vue(Some("a cat")), vue(Some("a dog"))];
+        let images = Images {
+            references: 2,
+            vues: &vues,
+        };
+        let e = preparer_reecriture(
+            &l,
+            "le chat de l'image 1 et le chien",
+            Some("mistral.gguf"),
+            Some(&edit),
+            None,
+            &images,
+        )
+        .unwrap();
+        let consigne = systeme(&e);
+        assert!(consigne.starts_with("ROLE:
+You write instructions for an image model that receives reference pictures, numbered <image1>, <image2>, <image3>."));
+        assert!(consigne.contains("\"the woman from <image1>\""));
+        assert!(consigne.ends_with(CLAUSE_MINEURS));
+        let message = e.demande.messages[1]["content"].as_str().unwrap();
+        assert!(message.starts_with(
+            "le chat de l'image 1 et le chien
+
+(Reference pictures: 2)"
+        ));
+        assert!(message.contains("<image1>: a cat"));
+        // Avec des références, jamais le spécialiste de la réécriture.
+        let qwen = workflows::obtenir("qwen_image_2_1").unwrap();
+        let e = preparer_reecriture(
+            &l,
+            "x",
+            Some("Qwen-Image-2.1-PE-T2I.Q5_K_M.gguf"),
+            Some(&qwen),
+            None,
+            &images,
+        )
+        .unwrap();
+        assert!(e.specialiste.is_none());
+        // Une variation : la consigne de réécriture, l'image de départ décrite.
+        let depart = [vue(Some("a red fox"))];
+        let variation = Images {
+            references: 0,
+            vues: &depart,
+        };
+        let krea = workflows::obtenir("krea2_turbo").unwrap();
+        let e = preparer_reecriture(
+            &l,
+            "en hiver",
+            Some("mistral.gguf"),
+            Some(&krea),
+            None,
+            &variation,
+        )
+        .unwrap();
+        assert!(systeme(&e).starts_with(
+            "ROLE:
+You are an expert prompt writer"
+        ));
+        assert!(
+            e.demande.messages[1]["content"]
+                .as_str()
+                .unwrap()
+                .contains("it was created from this prompt: a red fox")
+        );
     }
 }
