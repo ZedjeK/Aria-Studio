@@ -1,7 +1,8 @@
 <!--
-  Modèles, comme en v2 (première partie) : les workflows livrés, rangés par tâche, avec leurs fichiers et leur licence,
-  et les LLM du catalogue ; « Télécharger ce qui manque » met en file des fichiers aux adresses, tailles et empreintes
-  figées. Rien ne part sans confirmation : le clic, après lecture de la licence, vaut accord. La file suit en direct.
+  Modèles, comme en v2 : les workflows livrés et les LLM du catalogue, les onglets d'usage (Texte → image, Image →
+  image, Vidéo) avec leurs favoris, Ma collection et Rechercher. « Télécharger ce qui manque » met en file des fichiers
+  aux adresses, tailles et empreintes figées. Rien ne part sans confirmation : le clic, après lecture de la licence,
+  vaut accord. La file suit en direct, au-dessus des onglets.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -13,8 +14,11 @@
     messageErreur,
     ouvrirDossier,
     telechargerWorkflow,
+    usagesModeles,
     type EtatModeles,
     type LicenceModele,
+    type TypeRecherche,
+    type Usages,
   } from '../lib/api';
   import { octetsLisibles } from '../lib/jauge';
   import {
@@ -31,6 +35,7 @@
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import ModelesCollection from './ModelesCollection.svelte';
   import ModelesRechercher from './ModelesRechercher.svelte';
+  import ModelesUsage from './ModelesUsage.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -40,11 +45,19 @@
 
   const onglets = [
     { id: 'telecharger', titre: 'Workflows et LLM' },
+    { id: 'texte_vers_image', titre: 'Texte → image' },
+    { id: 'image_vers_image', titre: 'Image → image' },
+    { id: 'video', titre: 'Vidéo' },
     { id: 'collection', titre: 'Ma collection' },
     { id: 'rechercher', titre: 'Rechercher' },
   ];
   let onglet = $state('telecharger');
   let etat = $state<EtatModeles | null>(null);
+  let usages = $state<Usages | null>(null);
+  /** Rechercher ouvert depuis un onglet d'usage : son type et sa famille. */
+  let depart = $state<{ type: TypeRecherche; famille: string } | null>(null);
+
+  const usageOuvert = $derived(usages?.usages.find((u) => u.id === onglet) ?? null);
   /** Ce qu'on demande de confirmer : un workflow ou un LLM, sa licence et ce qu'il faut télécharger. */
   let demande = $state<{ genre: 'workflow' | 'llm'; id: string; nom: string; licence: LicenceModele; taille: number } | null>(
     null,
@@ -57,10 +70,19 @@
 
   async function relire() {
     try {
-      etat = await etatModeles();
+      [etat, usages] = await Promise.all([etatModeles(), usagesModeles()]);
     } catch (e) {
       signaler(messageErreur(e), true);
     }
+  }
+
+  function demander(genre: 'workflow' | 'llm', id: string, nom: string, licence: LicenceModele, taille: number) {
+    demande = { genre, id, nom, licence, taille };
+  }
+
+  function chercher(type: TypeRecherche, famille: string) {
+    depart = { type, famille };
+    onglet = 'rechercher';
   }
 
   async function suivre() {
@@ -133,7 +155,21 @@
 {#if onglet === 'collection'}
   <ModelesCollection {signaler} />
 {:else if onglet === 'rechercher'}
-  <ModelesRechercher {signaler} ajoute={() => void relire()} />
+  <ModelesRechercher {signaler} {depart} ajoute={() => void relire()} />
+{:else if onglet !== 'telecharger'}
+  {#if usages && usageOuvert}
+    <ModelesUsage
+      usage={usageOuvert}
+      llmDefaut={usages.llmDefaut}
+      llmChoix={usages.llmChoix}
+      {signaler}
+      {relire}
+      {demander}
+      {chercher}
+    />
+  {:else}
+    <p class="discret">Lecture…</p>
+  {/if}
 {:else}
   <ASavoir>
     Chaque fichier a une adresse, une taille et une empreinte SHA-256 fixées dans la fiche de son workflow : un fichier

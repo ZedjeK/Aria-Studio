@@ -44,6 +44,7 @@ pub mod securite;
 pub mod securite_reglages;
 pub mod suggestions;
 pub mod telechargement;
+pub mod usages;
 pub mod workflows;
 
 pub use donnees::Dossier;

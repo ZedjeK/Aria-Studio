@@ -390,6 +390,14 @@ pub fn catalogue_llm() -> Result<Vec<Value>, String> {
     Ok(fiches)
 }
 
+/// Les spécialistes connus mais pas encore utilisables (pas de GGUF pour llama.cpp) : `a_venir` du catalogue.
+pub fn a_venir() -> Vec<Value> {
+    lire(CATALOGUE_LLM)
+        .ok()
+        .and_then(|d| d.get("a_venir").and_then(Value::as_array).cloned())
+        .unwrap_or_default()
+}
+
 /// La fiche livrée d'un GGUF ; rien s'il n'est pas au catalogue (ou si le catalogue ne se lit pas).
 pub fn fiche_llm(fichier: &str) -> Option<Value> {
     catalogue_llm()

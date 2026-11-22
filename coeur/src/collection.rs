@@ -8,7 +8,7 @@
 //! restauration. Seul « Vider la corbeille » efface pour de bon. Seuls les modèles téléchargés par Aria se
 //! suppriment : un fichier déposé à la main reste à l'utilisateur.
 //!
-//! « Retrouver les sources » est dans `retrouver`. Pas encore portés : les favoris des usages.
+//! « Retrouver les sources » est dans `retrouver`, les onglets d'usage et leurs favoris dans `usages`.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -244,6 +244,24 @@ fn reglage_lora(cle: &str, registre: &Map<String, Value>, memoire: &Map<String, 
         declencheurs_source: source,
         civitai: infos.and_then(|i| i.get("source")).and_then(Value::as_str) == Some("civitai"),
     }
+}
+
+/// Les LoRA d'un dossier de famille, avec leurs mots déclencheurs et leur force.
+pub fn loras(
+    dossier: &Dossier,
+    data: &Path,
+    modeles_dir: &Path,
+    dossier_loras: &str,
+) -> Vec<(String, ReglageLora)> {
+    let registre = registre(data);
+    let memoire = memoire_loras(dossier);
+    modeles::fichiers(modeles_dir, dossier_loras, &modeles::EXTENSIONS_IMAGE)
+        .into_iter()
+        .map(|nom| {
+            let reglage = reglage_lora(&format!("{dossier_loras}/{nom}"), &registre, &memoire);
+            (nom, reglage)
+        })
+        .collect()
 }
 
 /// Ce que montre Ma collection.
