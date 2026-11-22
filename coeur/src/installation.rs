@@ -43,7 +43,7 @@ pub enum Place {
 }
 
 /// Les deux dossiers sont-ils le même ? Sans tenir compte de la casse, comme Windows.
-fn meme_dossier(a: &Path, b: &Path) -> bool {
+pub(crate) fn meme_dossier(a: &Path, b: &Path) -> bool {
     let normal = |p: &Path| {
         let complet = fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
         complet

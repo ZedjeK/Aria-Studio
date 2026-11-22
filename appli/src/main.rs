@@ -12,8 +12,9 @@ mod icone;
 mod installation;
 mod mise_a_jour;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use aria_coeur::emplacements::Emplacements;
 use aria_coeur::{Dossier, Reglages, demarrage, identite, journal};
 use tauri::window::Color;
 use tauri::{AppHandle, Manager, RunEvent, Theme, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -36,12 +37,20 @@ fn main() {
 }
 
 fn lancer() -> Result<(), String> {
-    let dossier = Dossier::du_profil().map_err(|e| e.to_string())?;
+    let profil = Dossier::du_profil().map_err(|e| e.to_string())?;
+    // Comme en v2 : un data\ à côté de l'exe (clé USB…) garde tout à côté de lui (mode portable).
+    let dossier_exe = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| profil.racine().to_path_buf());
+    let emplacements = Emplacements::decider(&dossier_exe, &profil);
+    let dossier = emplacements.dossier.clone();
     dossier.preparer().map_err(|e| e.to_string())?;
+    let portable = if emplacements.portable { " (portable)" } else { "" };
     journal::noter(
         &dossier,
         "Aria lancée",
-        &format!("{} {}", identite::NOM, identite::VERSION),
+        &format!("{} {}{portable}", identite::NOM, identite::VERSION),
         journal::Resultat::Ok,
         None,
     );
@@ -51,7 +60,9 @@ fn lancer() -> Result<(), String> {
     // Lancé à l'ouverture de session : l'icône seule, la fenêtre reste rangée jusqu'à ce qu'on l'ouvre.
     let silencieux = identite::EN_FOND && demarrage::est_silencieux(&arguments);
     // Exe lancé hors de programme\ (zip décompressé) : proposition de s'installer, avant la fenêtre de l'appli.
+    // Jamais en mode portable, comme en v2.
     let proposer = !silencieux
+        && !emplacements.portable
         && std::env::current_exe().is_ok_and(|exe| {
             aria_coeur::installation::doit_proposer(&exe, &dossier, &Reglages::charger(&dossier), &arguments)
         });

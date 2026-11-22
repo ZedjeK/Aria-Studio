@@ -49,11 +49,11 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | Journal | `journal.json` (500 dernières, la plus récente en premier : `date`, `action`, `objet`, `resultat`, `detail`), `journal-illisible-…` | même format, entrées v2 gardées telles quelles, journal illisible mis de côté, journal verrouillé jamais réécrit (`coeur/src/journal.rs`) ; page Journal de l'interface adaptée | [x] |
 | Créations, rushes, clips, séquences, voix | `data\` | relus | [ ] |
 | Cache | `cache\` (empreintes SHA-256, samplers, chemins ComfyUI) | recalculable | [ ] |
-| Modèles et moteurs | `modeles\`, `moteurs\`, dossier des modèles choisi | relus, rien de déplacé | [ ] |
+| Modèles et moteurs | `modeles\`, `moteurs\`, dossier des modèles choisi | mêmes chemins décidés au lancement, rien de déplacé (`coeur/src/emplacements.rs`) ; leur contenu se lit avec les lots des moteurs et des modèles | [ ] |
 | Clés Civitai et Hugging Face | Gestionnaire d'identification Windows (`Aria-Studio/civitai`, `Aria-Studio/huggingface`) | lues, puis rangées chiffrées (DPAPI) dans `secrets\` ; l'entrée du coffre n'est retirée qu'avec l'accord de l'utilisateur | [ ] |
 | Démarrage avec Windows | valeur `Run` « Aria Studio » (HKCU) | même valeur, nouvelle cible | [ ] |
 | Raccourci du Bureau | `Aria Studio.lnk` | proposé en mise à jour, jamais remplacé en silence | [ ] |
-| Mode portable | `data\` à côté du code | même règle | [ ] |
+| Mode portable | `data\` à côté du code, sauf code dans `.Aria-Studio` ; moteurs dans `services\` ; pas de proposition d'installation | même règle (`coeur/src/emplacements.rs`, `appli/src/main.rs`) | [x] |
 | Anciens fichiers de réglages (`aria.yaml`, `data\*.json`…) | versés dans `reglages.json` une fois (clé `migration`), laissés en place | laissés en place, pas relus : la v3 n'arrive que par la mise à jour d'une v2, qui a déjà fait cette migration à son lancement | [x] |
 
 ## 3. Pages

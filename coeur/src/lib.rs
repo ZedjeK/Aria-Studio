@@ -5,6 +5,7 @@
 
 pub mod demarrage;
 pub mod donnees;
+pub mod emplacements;
 pub mod identite;
 pub mod installation;
 pub mod journal;
