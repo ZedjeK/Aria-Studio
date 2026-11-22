@@ -48,6 +48,7 @@ fn main() {
         "vignette_modele",
         "retrouver_sources",
         "etat_sources",
+        "relire_lora",
         "usages_modeles",
         "definir_favori",
         "definir_llm_workflow",

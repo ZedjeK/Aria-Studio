@@ -498,6 +498,9 @@ export const reglerLora = (cle: string, declencheurs: string, force: number): Pr
 export const oublierReglageLora = (cle: string): Promise<ReglageLora> =>
   invoke<ReglageLora>('oublier_reglage_lora', { cle });
 
+/** Relit sur Civitai les mots déclarés et la force d'une LoRA qui en vient. */
+export const relireLora = (cle: string): Promise<ReglageLora> => invoke<ReglageLora>('relire_lora', { cle });
+
 export const jeterModele = (cle: string): Promise<void> => invoke<void>('jeter_modele', { cle });
 
 export const corbeilleModeles = (): Promise<CorbeilleModeles> => invoke<CorbeilleModeles>('corbeille_modeles');

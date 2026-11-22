@@ -13,6 +13,7 @@
     messageErreur,
     oublierReglageLora,
     reglerLora,
+    relireLora,
     restaurerModele,
     retrouverSources,
     validerStepsModele,
@@ -129,6 +130,13 @@
     void agir(async () => {
       await oublierReglageLora(l.cle);
       return `${l.nom} : mots et force de la source.`;
+    });
+  }
+
+  function relireSurCivitai(e: ElementCollection) {
+    void agir(async () => {
+      await relireLora(e.cle);
+      return `${e.nom} : mots et force relus sur Civitai.`;
     });
   }
 
@@ -266,6 +274,9 @@
             <div class="actions">
               {#if e.lora}
                 <Bouton genre="discret" petit desactive={occupe} onclick={() => regler(e)}>Régler</Bouton>
+                {#if e.lora.civitai}
+                  <Bouton genre="discret" petit desactive={occupe} onclick={() => relireSurCivitai(e)}>Relire sur Civitai</Bouton>
+                {/if}
               {/if}
               {#if e.supprimable}
                 <Bouton genre="discret" petit desactive={occupe} onclick={() => (aJeter = e)}>Corbeille</Bouton>

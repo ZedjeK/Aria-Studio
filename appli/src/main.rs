@@ -185,6 +185,7 @@ fn lancer() -> Result<(), String> {
             decouvrir::vignette_modele,
             decouvrir::retrouver_sources,
             decouvrir::etat_sources,
+            decouvrir::relire_lora,
             lieux::etat_emplacements,
             lieux::ouvrir_dossier,
             lieux::parcourir_dossier,
