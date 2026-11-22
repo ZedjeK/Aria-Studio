@@ -14,6 +14,7 @@ use serde_json::{Map, Value, json};
 use crate::fiches::{self, LIVRES};
 use crate::modeles::{self, EXTENSIONS_IMAGE};
 use crate::securite::Filtre;
+use crate::{Dossier, reglages};
 
 /// Les formats d'image proposés (entrée `ratio`).
 pub const FORMATS: [&str; 8] = [
@@ -26,6 +27,8 @@ pub const FORMATS: [&str; 8] = [
     "16:9 (Widescreen)",
     "21:9 (Ultrawide)",
 ];
+/// Les steps qu'un utilisateur peut valider pour un checkpoint, au plus (comme en v2).
+pub const STEPS_MAX: u64 = 150;
 /// La force d'une LoRA, au plus.
 pub const FORCE_LORA_MAX: f64 = 2.0;
 /// Le type de nœud d'une LoRA sur le modèle.
@@ -157,6 +160,27 @@ impl Workflow {
             })
             .cloned()
             .collect()
+    }
+
+    /// Les steps que dit la fiche, à proposer quand un checkpoint est à valider : le défaut, puis les
+    /// recommandations, sans doublon.
+    pub fn steps_suggeres(&self) -> Vec<u64> {
+        let mut suggeres: Vec<u64> = Vec::new();
+        let defaut = self.fiche.pointer("/defauts/steps").and_then(entier);
+        let recommandes = self
+            .fiche
+            .pointer("/recommandations/valeurs")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|r| r.get("cle").and_then(Value::as_str) == Some("steps"))
+            .filter_map(|r| r.get("valeur").and_then(entier));
+        for steps in defaut.into_iter().chain(recommandes) {
+            if steps > 0 && !suggeres.contains(&steps) {
+                suggeres.push(steps);
+            }
+        }
+        suggeres
     }
 
     /// Les steps que la fiche fixe sans ambiguïté (défaut et recommandations d'accord) ; 0 sinon.
@@ -361,6 +385,58 @@ impl Workflow {
             inserer_loras(&mut api, &chargeur, &choix, &disponibles, &self.dossier_loras())?;
         }
         Ok(api)
+    }
+}
+
+/// Met en service un checkpoint de la famille de ce workflow avec les steps validés par l'utilisateur : ils
+/// deviennent ses steps dans tous les workflows de la famille qui en ont (`reglages.json`,
+/// `workflows.<id>.variantes.<checkpoint>.steps`), comme en v2.
+///
+/// # Errors
+/// Steps hors de 1 à 150, workflow inconnu, checkpoint absent, ou `reglages.json` qui ne s'écrit pas.
+pub fn valider_checkpoint(
+    dossier: &Dossier,
+    dossier_modeles: &Path,
+    workflow: &str,
+    checkpoint: &str,
+    steps: u64,
+) -> Result<(), String> {
+    if !(1..=STEPS_MAX).contains(&steps) {
+        return Err(format!("Steps : un entier entre 1 et {STEPS_MAX}"));
+    }
+    let wf = obtenir(workflow)?;
+    let concernes: Vec<String> = catalogue()
+        .0
+        .into_iter()
+        .filter(|w| w.famille() == wf.famille() && w.a_l_entree("steps"))
+        .filter(|w| w.presents(dossier_modeles).iter().any(|p| p == checkpoint))
+        .map(|w| w.id)
+        .collect();
+    if concernes.is_empty() {
+        return Err(format!(
+            "Checkpoint absent, ou sans workflow qui règle ses steps : {}/{checkpoint}",
+            wf.dossier_modeles()
+        ));
+    }
+    reglages::modifier_section(dossier, "workflows", |section| {
+        for id in &concernes {
+            let mut reglage = sortir(section, id);
+            let mut variantes = sortir(&mut reglage, "variantes");
+            let mut variante = sortir(&mut variantes, checkpoint);
+            variante.insert("steps".to_owned(), json!(steps));
+            variantes.insert(checkpoint.to_owned(), Value::Object(variante));
+            reglage.insert("variantes".to_owned(), Value::Object(variantes));
+            section.insert(id.clone(), Value::Object(reglage));
+        }
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// L'objet rangé sous `cle`, retiré de `map` ; un objet vide s'il n'y est pas ou n'est pas un objet.
+fn sortir(map: &mut Map<String, Value>, cle: &str) -> Map<String, Value> {
+    match map.remove(cle) {
+        Some(Value::Object(objet)) => objet,
+        _ => Map::new(),
     }
 }
 
@@ -781,5 +857,60 @@ mod tests {
         retirer_loras_workflow(&mut api);
         assert!(api.get("2").is_none());
         assert_eq!(api["3"]["inputs"]["model"], json!(["1", 0]));
+    }
+
+    #[test]
+    fn steps_suggeres_par_la_fiche() {
+        assert_eq!(obtenir("qwen_image_2_1").unwrap().steps_suggeres(), vec![25, 40]);
+        assert_eq!(obtenir("krea2_turbo").unwrap().steps_suggeres(), vec![8]);
+    }
+
+    #[test]
+    fn valider_un_checkpoint_le_met_en_service_dans_sa_famille() {
+        let temp = tempfile::tempdir().unwrap();
+        let modeles = temp.path().join("modeles");
+        let dossier = Dossier::a(temp.path());
+        let wf = obtenir("qwen_image_2_1").unwrap();
+        let origine = wf.modele_origine().unwrap();
+        deposer(&modeles, &wf.dossier_modeles(), &origine);
+        assert!(wf.variantes(&modeles, None).is_empty());
+        // Le reste du fichier est gardé.
+        fs::write(
+            dossier.reglages(),
+            r#"{"securite": {"ajouts": []}, "workflows": {"qwen_image_2_1": {"cfg": 2.5}}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            valider_checkpoint(&dossier, &modeles, "qwen_image_2_1", &origine, 0).unwrap_err(),
+            "Steps : un entier entre 1 et 150"
+        );
+        assert!(valider_checkpoint(&dossier, &modeles, "qwen_image_2_1", &origine, 151).is_err());
+        assert!(
+            valider_checkpoint(&dossier, &modeles, "qwen_image_2_1", "absent.safetensors", 25)
+                .unwrap_err()
+                .starts_with("Checkpoint absent, ou sans workflow qui règle ses steps : ")
+        );
+        valider_checkpoint(&dossier, &modeles, "qwen_image_2_1", &origine, 25).unwrap();
+
+        let section = reglages::section(&dossier, "workflows").unwrap();
+        let famille: Vec<Workflow> = catalogue()
+            .0
+            .into_iter()
+            .filter(|w| w.famille() == wf.famille() && w.a_l_entree("steps"))
+            .collect();
+        assert!(!famille.is_empty());
+        for w in &famille {
+            let reglage = section[w.id.as_str()].as_object().unwrap();
+            assert_eq!(
+                reglage["variantes"][origine.as_str()]["steps"],
+                json!(25),
+                "{}",
+                w.id
+            );
+            assert_eq!(w.variantes(&modeles, Some(reglage)), vec![origine.clone()]);
+        }
+        assert_eq!(section["qwen_image_2_1"]["cfg"], json!(2.5));
+        assert!(reglages::section(&dossier, "securite").is_some());
     }
 }

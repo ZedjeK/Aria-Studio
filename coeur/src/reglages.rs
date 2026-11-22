@@ -205,40 +205,71 @@ impl Reglages {
     /// # Errors
     /// [`Erreur::Fichier`] si la lecture, la sauvegarde ou l'écriture échoue ; l'ancien fichier reste alors intact.
     pub fn enregistrer(&self, dossier: &Dossier) -> Result<(), Erreur> {
-        let chemin = dossier.reglages();
-        let (mut sections, avant) = match lire(&chemin)? {
-            Contenu::Absent => (Sections::new(), None),
-            Contenu::Lisible(sections) => (sections.clone(), Some(sections)),
-            Contenu::Illisible => {
-                mettre_de_cote(dossier, &chemin, Local::now())?;
-                (Sections::new(), None)
-            }
-        };
-        self.appliquer(&mut sections)
-            .map_err(|e| Erreur::fichier("préparation de", &chemin, e.into()))?;
-        if avant.as_ref() == Some(&sections) {
-            return Ok(());
-        }
-        if avant.is_some() {
-            sauvegarder(dossier, &chemin, Local::now())?;
-        }
-        let octets = texte(&sections).map_err(|e| Erreur::fichier("préparation de", &chemin, e.into()))?;
-        donnees::ecrire_entier(&chemin, &octets)?;
-        // Comme en v2 : le journal dit quelles sections ont changé.
-        let changees: Vec<&str> = sections
-            .iter()
-            .filter(|(cle, valeur)| avant.as_ref().and_then(|a| a.get(cle.as_str())) != Some(*valeur))
-            .map(|(cle, _)| cle.as_str())
-            .collect();
-        journal::noter(
-            dossier,
-            "Réglages modifiés",
-            &changees.join(", "),
-            Resultat::Ok,
-            None,
-        );
-        Ok(())
+        ecrire_sections(dossier, |sections| self.appliquer(sections))
     }
+}
+
+/// Lit `reglages.json`, applique la modification et l'écrit en gardant tout le reste. Rien n'est écrit si rien ne
+/// change ; sinon l'ancien fichier est sauvegardé d'abord, le nouveau n'est jamais laissé à moitié écrit, et le
+/// journal dit quelles sections ont changé (comme en v2). Un fichier illisible est mis de côté, jamais écrasé.
+fn ecrire_sections(
+    dossier: &Dossier,
+    modification: impl FnOnce(&mut Sections) -> Result<(), serde_json::Error>,
+) -> Result<(), Erreur> {
+    let chemin = dossier.reglages();
+    let (mut sections, avant) = match lire(&chemin)? {
+        Contenu::Absent => (Sections::new(), None),
+        Contenu::Lisible(sections) => (sections.clone(), Some(sections)),
+        Contenu::Illisible => {
+            mettre_de_cote(dossier, &chemin, Local::now())?;
+            (Sections::new(), None)
+        }
+    };
+    modification(&mut sections).map_err(|e| Erreur::fichier("préparation de", &chemin, e.into()))?;
+    if avant.as_ref() == Some(&sections) {
+        return Ok(());
+    }
+    if avant.is_some() {
+        sauvegarder(dossier, &chemin, Local::now())?;
+    }
+    let octets = texte(&sections).map_err(|e| Erreur::fichier("préparation de", &chemin, e.into()))?;
+    donnees::ecrire_entier(&chemin, &octets)?;
+    let changees: Vec<&str> = sections
+        .iter()
+        .filter(|(cle, valeur)| avant.as_ref().and_then(|a| a.get(cle.as_str())) != Some(*valeur))
+        .map(|(cle, _)| cle.as_str())
+        .collect();
+    journal::noter(
+        dossier,
+        "Réglages modifiés",
+        &changees.join(", "),
+        Resultat::Ok,
+        None,
+    );
+    Ok(())
+}
+
+/// Modifie une section de `reglages.json` que [`Reglages`] ne gère pas (`workflows`…), avec les mêmes garanties que
+/// [`Reglages::enregistrer`]. Une section qui n'est pas un objet repart vide ; une section vidée est retirée.
+///
+/// # Errors
+/// [`Erreur::Fichier`] si la lecture, la sauvegarde ou l'écriture échoue ; l'ancien fichier reste alors intact.
+pub fn modifier_section(
+    dossier: &Dossier,
+    nom: &str,
+    modification: impl FnOnce(&mut Map<String, Value>),
+) -> Result<(), Erreur> {
+    ecrire_sections(dossier, |sections| {
+        let mut section = match sections.remove(nom) {
+            Some(Value::Object(section)) => section,
+            _ => Map::new(),
+        };
+        modification(&mut section);
+        if !section.is_empty() {
+            sections.insert(nom.to_owned(), Value::Object(section));
+        }
+        Ok(())
+    })
 }
 
 /// Une section de `reglages.json`, telle qu'elle est dans le fichier : pour les réglages que [`Reglages`] ne gère
@@ -650,5 +681,28 @@ mod tests {
         let r = Reglages::depuis_json(r#"{ "installation": { "proposee": "non" }, "mises_a_jour": 3 }"#);
         assert!(r.proposer_installation);
         assert!(r.chercher_mises_a_jour);
+    }
+
+    #[test]
+    fn modifier_une_section_garde_le_reste() {
+        let temp = tempfile::tempdir().unwrap();
+        let dossier = Dossier::a(temp.path());
+        fs::write(
+            dossier.reglages(),
+            r#"{"favoris": {"generation": {"texte_vers_image": "krea2_turbo"}}, "workflows": "abîmé"}"#,
+        )
+        .unwrap();
+        modifier_section(&dossier, "workflows", |s| {
+            s.insert("krea2_turbo".to_owned(), serde_json::json!({"cfg": 1.0}));
+        })
+        .unwrap();
+        assert_eq!(
+            section(&dossier, "workflows").unwrap()["krea2_turbo"]["cfg"],
+            serde_json::json!(1.0)
+        );
+        assert!(section(&dossier, "favoris").is_some());
+        // Une section vidée est retirée.
+        modifier_section(&dossier, "workflows", Map::clear).unwrap();
+        assert!(section(&dossier, "workflows").is_none());
     }
 }

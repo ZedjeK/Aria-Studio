@@ -12,6 +12,7 @@ mod icone;
 mod installation;
 mod mise_a_jour;
 mod moteurs;
+mod plateau;
 
 use std::path::{Path, PathBuf};
 
@@ -104,6 +105,7 @@ fn lancer() -> Result<(), String> {
     let cache_webview = dossier.cache_webview();
     let moteurs = moteurs::Moteurs::new(&emplacements)?;
     moteurs::reprendre(&moteurs);
+    let plateau = plateau::demarrer(&emplacements, &moteurs);
 
     tauri::Builder::default()
         // Toujours le premier greffon : relancer l'exe ramène la fenêtre existante au lieu d'en ouvrir une autre.
@@ -120,6 +122,7 @@ fn lancer() -> Result<(), String> {
         .manage(icone::Presence::default())
         .manage(mise_a_jour::Disponible::default())
         .manage(moteurs)
+        .manage(plateau)
         .invoke_handler(tauri::generate_handler![
             commandes::identite,
             commandes::lire_reglages,
@@ -143,6 +146,13 @@ fn lancer() -> Result<(), String> {
             moteurs::annuler_installation_moteur,
             moteurs::revenir_moteur,
             moteurs::liberer_carte,
+            plateau::options_plateau,
+            plateau::commander_image,
+            plateau::lire_commandes,
+            plateau::annuler_commande,
+            plateau::valider_checkpoint,
+            plateau::lire_creations,
+            plateau::image_creation,
         ])
         .setup(move |app| {
             if proposer {
