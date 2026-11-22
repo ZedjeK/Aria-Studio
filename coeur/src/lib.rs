@@ -11,6 +11,7 @@ pub mod emplacements;
 pub mod identite;
 pub mod installation;
 pub mod journal;
+pub mod llama;
 pub mod mises_a_jour;
 pub mod moteurs;
 pub mod presence;

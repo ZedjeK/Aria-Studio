@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+# La clé de llama-server, tirée à chaque lancement (déjà dans l'arbre par Tauri : aucune crate de plus).
+getrandom = "0.4.3"
 serde = { version = "1.0.229", features = ["derive"] }
 # Les données d'Aria Studio sont en YAML commenté (catalogue\, workflows\, securite\, casting\) : lecteur en Rust pur,
 # sans libyaml (serde_yaml n'est plus maintenu). Épinglé sur 2.1.1 par Cargo.lock.

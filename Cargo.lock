@@ -82,6 +82,7 @@ name = "aria-coeur"
 version = "3.0.0"
 dependencies = [
  "chrono",
+ "getrandom 0.4.3",
  "serde",
  "serde-saphyr",
  "serde_json",
