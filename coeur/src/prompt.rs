@@ -724,6 +724,52 @@ pub fn preparer_traduction(
     })
 }
 
+/// La consigne des précisions du Scénario, comme en v2 : une courte traduction à ajouter au prompt.
+pub const PRECISIONS: &str = "You translate short details for a text-to-image prompt.
+The user writes a detail, often in French. Translate it into a short English phrase that can be appended to an image prompt.
+
+Rules:
+1. Keep exactly the meaning: same elements, same details. Add nothing, remove nothing.
+2. If the detail is already in English, return it unchanged.
+3. If it contains text in quotes, keep that text exactly, in quotes.
+4. Output only the translation: no preamble, no explanation.";
+
+/// La demande de traduction des précisions du Scénario : un généraliste (un spécialiste cède la place au LLM par
+/// défaut), courte demande sans réflexion, 200 tokens, à la température de traduction.
+///
+/// # Errors
+/// Nom de GGUF invalide.
+pub fn preparer_precisions(
+    lieux: &Lieux,
+    precisions: &str,
+    modele: Option<&str>,
+) -> Result<Ecriture, String> {
+    let demande_nom = llm::nom(&lieux.modeles, modele);
+    let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
+        llm::defaut(&lieux.modeles)
+    } else {
+        demande_nom
+    };
+    let lancement = llm::lancement(lieux, Some(&nom))?;
+    let regle = llm::valeurs(&lieux.dossier, &nom);
+    let systeme = format!("{PRECISIONS}\n\n{CLAUSE_MINEURS}");
+    Ok(Ecriture {
+        demande: Demande {
+            messages: json!([
+                {"role": "system", "content": systeme},
+                {"role": "user", "content": precisions},
+            ]),
+            temperature: regle.temperature_traduction,
+            max_tokens: 200,
+            reflechir: false,
+            echantillonnage: regle.echantillonnage(),
+            ..Demande::default()
+        },
+        lancement,
+        specialiste: None,
+    })
+}
+
 /// Le prompt tiré de la réponse : sortie du spécialiste lue, ou texte nettoyé (markdown, CJK ajouté), puis l'idée et
 /// le prompt relus ensemble par le filtre AS-18 (le LLM peut avoir ajouté un terme sensible à une idée avec un
 /// mineur).

@@ -1151,3 +1151,28 @@ export const structureScenario = (sujet: string): Promise<StructureScenario> =>
 /** Contrôle les règles des listes et le filtre AS-18, puis assemble le prompt. */
 export const assemblerPrompt = (demande: DemandeAssemblage): Promise<Assemblage> =>
   invoke<Assemblage>('assembler_prompt', { demande });
+
+/** « ✨ Écrire le prompt » (aria_coeur::scenario::DemandeEcriture). */
+export interface DemandeEcriture {
+  atelier: 'image';
+  idee: string;
+  /** Ce que les compléments imposent (le prompt assemblé des listes), déjà fixé. */
+  complements: string;
+  workflow: string | null;
+  llm: string | null;
+}
+
+export interface PromptEcrit {
+  prompt: string;
+  mots: number;
+  dureeS: number;
+  llm: string;
+}
+
+/** Le LLM écrit le prompt pour le modèle cible (il prend la carte, comme au Plateau). */
+export const ecrirePromptScenario = (demande: DemandeEcriture): Promise<PromptEcrit> =>
+  invoke<PromptEcrit>('ecrire_prompt_scenario', { demande });
+
+/** Traduit les précisions en anglais. */
+export const traduirePrecisions = (texte: string, llm: string | null): Promise<string> =>
+  invoke<string>('traduire_precisions', { texte, llm });

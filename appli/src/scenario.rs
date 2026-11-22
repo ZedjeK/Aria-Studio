@@ -1,9 +1,15 @@
-//! Le Scénario : les listes guidées et l'assemblage du prompt (`aria_coeur::listes`). Le travail est dans le cœur ;
-//! ici, les commandes.
+//! Le Scénario : les listes guidées et l'assemblage du prompt (`aria_coeur::listes`), l'écriture du prompt et la
+//! traduction des précisions par le LLM (`aria_coeur::scenario`). Le travail est dans le cœur ; ici, les commandes.
+
+use std::sync::Arc;
 
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::listes::{self, Assemblage, DemandeAssemblage, Structure, Sujet};
+use aria_coeur::plateau::Plateau;
+use aria_coeur::scenario::{self, DemandeEcriture, Ecrit};
 use tauri::State;
+
+use crate::moteurs::Moteurs;
 
 /// Les sujets du Scénario.
 #[tauri::command]
@@ -27,4 +33,38 @@ pub async fn assembler_prompt(
     tauri::async_runtime::spawn_blocking(move || listes::assembler(&dossier, &demande))
         .await
         .map_err(|e| format!("Scénario indisponible : {e}"))?
+}
+
+/// « ✨ Écrire le prompt » : le LLM écrit le prompt d'un atelier pour le modèle cible (il prend la carte, comme au
+/// Plateau).
+#[tauri::command]
+pub async fn ecrire_prompt_scenario(
+    plateau: State<'_, Arc<Plateau>>,
+    moteurs: State<'_, Moteurs>,
+    demande: DemandeEcriture,
+) -> Result<Ecrit, String> {
+    let contexte = plateau.contexte().clone();
+    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    tauri::async_runtime::spawn_blocking(move || {
+        scenario::ecrire_prompt(&contexte, &mut orchestrateur, &demande)
+    })
+    .await
+    .map_err(|e| format!("Scénario indisponible : {e}"))?
+}
+
+/// Traduit les précisions du Scénario en anglais.
+#[tauri::command]
+pub async fn traduire_precisions(
+    plateau: State<'_, Arc<Plateau>>,
+    moteurs: State<'_, Moteurs>,
+    texte: String,
+    llm: Option<String>,
+) -> Result<String, String> {
+    let contexte = plateau.contexte().clone();
+    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    tauri::async_runtime::spawn_blocking(move || {
+        scenario::traduire_precisions(&contexte, &mut orchestrateur, &texte, llm.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Scénario indisponible : {e}"))?
 }
