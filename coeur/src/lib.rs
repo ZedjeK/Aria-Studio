@@ -6,6 +6,7 @@
 pub mod carte;
 pub mod catalogue;
 pub mod cles;
+pub mod collection;
 pub mod comfy;
 pub mod comfy_serveur;
 pub mod creations;

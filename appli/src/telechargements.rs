@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aria_coeur::cles::{self, Source};
+use aria_coeur::collection::{self, Collection, Corbeille, ReglageLora};
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::installations::{self, EtatLlm, EtatWorkflow};
 use aria_coeur::telechargement::{Contexte, Reseau, Tache, Telechargeur};
@@ -179,4 +180,112 @@ pub async fn installer_llm(file: State<'_, Arc<Telechargeur>>, fichier: String) 
 #[tauri::command]
 pub fn annuler_telechargement(file: State<'_, Arc<Telechargeur>>, id: String) -> Result<Tache, String> {
     file.annuler(&id)
+}
+
+// --- Ma collection et la corbeille des modèles --------------------------------------------------------------------
+
+/// Ce qui est installé, rangé comme en v2.
+#[tauri::command]
+pub async fn collection_modeles(file: State<'_, Arc<Telechargeur>>) -> Result<Collection, String> {
+    hors_interface(&file, |f| {
+        let c = f.contexte();
+        Ok(collection::collection(&c.dossier, &c.data, &c.modeles))
+    })
+    .await
+}
+
+/// Valide les steps d'un checkpoint de famille par sa clé (`<dossier>/<fichier>`).
+#[tauri::command]
+pub async fn valider_steps_modele(
+    file: State<'_, Arc<Telechargeur>>,
+    cle: String,
+    steps: u64,
+) -> Result<(), String> {
+    hors_interface(&file, move |f| {
+        let c = f.contexte();
+        collection::valider_checkpoint(&c.dossier, &c.data, &c.modeles, &cle, steps)
+    })
+    .await
+}
+
+/// Règle les mots déclencheurs et la force d'une LoRA.
+#[tauri::command]
+pub async fn regler_lora(
+    file: State<'_, Arc<Telechargeur>>,
+    cle: String,
+    declencheurs: String,
+    force: f64,
+) -> Result<ReglageLora, String> {
+    hors_interface(&file, move |f| {
+        let c = f.contexte();
+        collection::regler_lora(&c.dossier, &c.data, &c.modeles, &cle, &declencheurs, force)
+    })
+    .await
+}
+
+/// Revient aux mots et à la force de la source d'une LoRA.
+#[tauri::command]
+pub async fn oublier_reglage_lora(
+    file: State<'_, Arc<Telechargeur>>,
+    cle: String,
+) -> Result<ReglageLora, String> {
+    hors_interface(&file, move |f| {
+        let c = f.contexte();
+        collection::oublier_reglage_lora(&c.dossier, &c.data, &c.modeles, &cle)
+    })
+    .await
+}
+
+/// Met un modèle téléchargé par Aria à la corbeille (un fichier en cours de téléchargement n'y va pas).
+#[tauri::command]
+pub async fn jeter_modele(file: State<'_, Arc<Telechargeur>>, cle: String) -> Result<(), String> {
+    hors_interface(&file, move |f| {
+        if f.occupe() {
+            return Err("Des téléchargements sont en cours : attends qu'ils finissent".to_owned());
+        }
+        let c = f.contexte();
+        collection::mettre_a_la_corbeille(&c.dossier, &c.data, &c.modeles, &cle)
+    })
+    .await
+}
+
+/// La corbeille des modèles.
+#[tauri::command]
+pub async fn corbeille_modeles(file: State<'_, Arc<Telechargeur>>) -> Result<Corbeille, String> {
+    hors_interface(&file, |f| {
+        let c = f.contexte();
+        Ok(collection::corbeille(&c.data, &c.modeles))
+    })
+    .await
+}
+
+/// Remet un modèle de la corbeille à sa place.
+#[tauri::command]
+pub async fn restaurer_modele(file: State<'_, Arc<Telechargeur>>, cle: String) -> Result<(), String> {
+    hors_interface(&file, move |f| {
+        if f.occupe() {
+            return Err("Des téléchargements sont en cours : attends qu'ils finissent".to_owned());
+        }
+        let c = f.contexte();
+        collection::restaurer(&c.dossier, &c.data, &c.modeles, &cle)
+    })
+    .await
+}
+
+/// Ce que « Vider la corbeille » a effacé.
+#[derive(Debug, Clone, Serialize)]
+pub struct Vidage {
+    pub effaces: usize,
+    pub liberes: u64,
+}
+
+/// Efface pour de bon les modèles de la corbeille.
+#[tauri::command]
+pub async fn vider_corbeille_modeles(file: State<'_, Arc<Telechargeur>>) -> Result<Vidage, String> {
+    hors_interface(&file, |f| {
+        let c = f.contexte();
+        let (effaces, liberes) = collection::vider_corbeille(&c.dossier, &c.data, &c.modeles)?;
+        Ok(Vidage { effaces, liberes })
+    })
+    .await
 }

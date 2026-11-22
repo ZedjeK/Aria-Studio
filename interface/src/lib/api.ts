@@ -398,6 +398,87 @@ export const installerLlm = (fichier: string): Promise<number> => invoke<number>
 export const annulerTelechargement = (id: string): Promise<Telechargement> =>
   invoke<Telechargement>('annuler_telechargement', { id });
 
+// --- Modèles : Ma collection et la corbeille ---
+
+export interface ReglageLora {
+  declencheurs: string;
+  force: number;
+  regle: boolean;
+  declencheursSource: string;
+  civitai: boolean;
+}
+
+export interface StepsDits {
+  valeur: unknown;
+  origine: string;
+  source: string | null;
+}
+
+export interface ElementCollection {
+  cle: string;
+  nom: string;
+  dossier: string;
+  famille: string | null;
+  taille: number;
+  origine: 'aria' | 'retrouve' | 'main';
+  source: string | null;
+  page: string | null;
+  licence: string | null;
+  declencheurs: string[];
+  utilisePar: string[];
+  supprimable: boolean;
+  steps: number | null;
+  aValider: StepsDits[] | null;
+  lora: ReglageLora | null;
+}
+
+export interface GroupeCollection {
+  id: string;
+  nom: string;
+  elements: ElementCollection[];
+  taille: number;
+}
+
+export interface Collection {
+  groupes: GroupeCollection[];
+  orphelins: number;
+}
+
+export interface ModeleALaCorbeille {
+  cle: string;
+  nom: string;
+  taille: number;
+  present: boolean;
+  date: string | null;
+  dossierModeles: string;
+  ailleurs: boolean;
+}
+
+export interface CorbeilleModeles {
+  modeles: ModeleALaCorbeille[];
+  taille: number;
+}
+
+export const collectionModeles = (): Promise<Collection> => invoke<Collection>('collection_modeles');
+
+export const validerStepsModele = (cle: string, steps: number): Promise<void> =>
+  invoke<void>('valider_steps_modele', { cle, steps });
+
+export const reglerLora = (cle: string, declencheurs: string, force: number): Promise<ReglageLora> =>
+  invoke<ReglageLora>('regler_lora', { cle, declencheurs, force });
+
+export const oublierReglageLora = (cle: string): Promise<ReglageLora> =>
+  invoke<ReglageLora>('oublier_reglage_lora', { cle });
+
+export const jeterModele = (cle: string): Promise<void> => invoke<void>('jeter_modele', { cle });
+
+export const corbeilleModeles = (): Promise<CorbeilleModeles> => invoke<CorbeilleModeles>('corbeille_modeles');
+
+export const restaurerModele = (cle: string): Promise<void> => invoke<void>('restaurer_modele', { cle });
+
+export const viderCorbeilleModeles = (): Promise<{ effaces: number; liberes: number }> =>
+  invoke<{ effaces: number; liberes: number }>('vider_corbeille_modeles');
+
 /** Un dossier d'Aria (aria_coeur::emplacements::DossierConnu). */
 export interface DossierConnu {
   cle: string;
