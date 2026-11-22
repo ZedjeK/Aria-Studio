@@ -44,8 +44,8 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 
 | Donnée | v2 | v3 | Fait |
 | --- | --- | --- | --- |
-| Réglages | `reglages.json` (sections : emplacements, favoris, assistant, installation, fond, notifications, mises à jour, LoRA, LLM, workflows) | relus tels quels | [ ] |
-| Sauvegardes des réglages | `sauvegardes\` (20 dernières) | gardées, restaurables | [ ] |
+| Réglages | `reglages.json` (sections : emplacements, favoris, assistant, installation, fond, notifications, mises à jour, LoRA, LLM, workflows) | même format ; `fond`, `installation.proposee` et `mises_a_jour.active` lus et écrits, toutes les autres sections et clés gardées telles quelles (`coeur/src/reglages.rs`) ; chaque autre section se coche avec la page qui la gère | [ ] |
+| Sauvegardes des réglages | `sauvegardes\reglages-AAAAMMJJ-HHMMSS-micro.json` (20 dernières), `reglages-illisible-…` | même nom, 20 gardées, fichier illisible mis de côté (`coeur/src/reglages.rs`) ; la restauration attend la page Réglages | [ ] |
 | Journal | `journal.json` (500 dernières opérations) | même format | [ ] |
 | Créations, rushes, clips, séquences, voix | `data\` | relus | [ ] |
 | Cache | `cache\` (empreintes SHA-256, samplers, chemins ComfyUI) | recalculable | [ ] |
@@ -54,7 +54,7 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | Démarrage avec Windows | valeur `Run` « Aria Studio » (HKCU) | même valeur, nouvelle cible | [ ] |
 | Raccourci du Bureau | `Aria Studio.lnk` | proposé en mise à jour, jamais remplacé en silence | [ ] |
 | Mode portable | `data\` à côté du code | même règle | [ ] |
-| Anciens fichiers de réglages (`aria.yaml`, `data\*.json`…) | laissés en place | laissés en place | [ ] |
+| Anciens fichiers de réglages (`aria.yaml`, `data\*.json`…) | versés dans `reglages.json` une fois (clé `migration`), laissés en place | laissés en place, pas relus : la v3 n'arrive que par la mise à jour d'une v2, qui a déjà fait cette migration à son lancement | [x] |
 
 ## 3. Pages
 

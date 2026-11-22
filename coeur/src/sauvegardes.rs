@@ -49,7 +49,7 @@ pub fn sauvegarder_a(dossier: &Path, fichier: &Path, quand: DateTime<Local>) -> 
 }
 
 /// Copie seulement si la cible n'existe pas encore, sans course possible entre le test et la création.
-fn copier_sans_ecraser(source: &Path, cible: &Path) -> io::Result<()> {
+pub(crate) fn copier_sans_ecraser(source: &Path, cible: &Path) -> io::Result<()> {
     let mut sortie = OpenOptions::new().write(true).create_new(true).open(cible)?;
     let mut entree = fs::File::open(source)?;
     io::copy(&mut entree, &mut sortie)?;
