@@ -6,6 +6,8 @@ Il vit sur la branche d'intégration et se coche PR par PR. Relevé sur `main` l
 
 Une ligne n'est cochée que si la fonction marche dans la v3 **et** que ses tests y sont portés.
 
+Pour essayer la v3 sur un PC qui fait tourner les moteurs, sans toucher à une v2 installée : [ESSAI-V3.md](ESSAI-V3.md).
+
 ## Règles du chantier
 
 - La branche par défaut reste la v2 en service : correctifs seulement, aucune fonction nouvelle.
