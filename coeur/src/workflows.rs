@@ -33,6 +33,25 @@ pub const STEPS_MAX: u64 = 150;
 pub const FORCE_LORA_MAX: f64 = 2.0;
 /// Le type de nœud d'une LoRA sur le modèle.
 const NOEUD_LORA: &str = "LoraLoaderModelOnly";
+/// Le plafond d'Aria : 10 images de référence, ce que les modèles ComfyUI officiels de Qwen-Image 2.1 Edit reçoivent.
+/// Chaque workflow garde sa propre limite, celle de son encodeur.
+pub const REFERENCES_MAX: usize = 10;
+/// La liberté d'une variation (denoise), au moins et au plus.
+pub const LIBERTE: (f64, f64) = (0.05, 1.0);
+
+/// Les encodeurs d'édition qui acceptent plusieurs images de référence : type, entrée de l'image n, nombre maximal
+/// d'images, nœud de latent vide adapté au modèle.
+const ENCODEURS_REFERENCES: [(&str, &str, usize, &str); 2] = [
+    ("TextEncodeQwenImageEditPlus", "image{}", 3, "EmptySD3LatentImage"),
+    ("TextEncodeQwenImage21", "images.image_{}", 16, "EmptyLatentImage"),
+];
+
+fn encodeur(type_: &str) -> Option<(&'static str, usize, &'static str)> {
+    ENCODEURS_REFERENCES
+        .iter()
+        .find(|(t, _, _, _)| *t == type_)
+        .map(|(_, entree, max, latent)| (*entree, *max, *latent))
+}
 
 /// Un workflow livré : sa fiche et son graphe ComfyUI.
 #[derive(Debug, Clone, PartialEq)]
@@ -342,13 +361,20 @@ impl Workflow {
             tout.insert("steps".to_owned(), json!(self.steps_de(reglages, &checkpoint)));
         }
         let loras = tout.remove("loras").filter(|l| !l.is_null());
-        for option in ["references", "format_sortie", "variation"] {
-            if tout.remove(option).is_some_and(|v| !v.is_null()) {
-                return Err(format!(
-                    "« {option} » n'est pas encore pris en charge par cette version"
-                ));
-            }
-        }
+        // Images 2 et suivantes (déjà téléversées) ; l'image 1 est l'entrée « image ».
+        let references: Vec<String> = tout
+            .remove("references")
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_owned))
+            .collect();
+        // S'inspirer : le format choisi au lieu de celui de l'image 1.
+        let format_sortie = tout
+            .remove("format_sortie")
+            .and_then(|v| v.as_str().map(str::to_owned));
+        // {image : nom téléversé, denoise : la liberté, format : facultatif}.
+        let variation = tout.remove("variation").filter(|v| !v.is_null());
         // Le point de passage obligé de tout prompt vers ComfyUI (comme en v2) : le filtre AS-18.
         if let Some(prompt) = tout.get("prompt") {
             let texte = prompt.as_str().map_or_else(|| prompt.to_string(), str::to_owned);
@@ -373,6 +399,26 @@ impl Workflow {
             .unwrap_or(true);
         if !lora_workflow {
             retirer_loras_workflow(&mut api);
+        }
+        if !references.is_empty() || format_sortie.is_some() {
+            self.brancher_references(&mut api, &references, format_sortie.as_deref())?;
+        }
+        if let Some(v) = variation {
+            let image = v
+                .get("image")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "Variation sans image de départ".to_owned())?;
+            let denoise = v
+                .get("denoise")
+                .and_then(Value::as_f64)
+                .ok_or_else(|| "Variation sans liberté".to_owned())?;
+            let format = v.get("format").and_then(Value::as_str);
+            let megapixels = regle
+                .get("megapixels")
+                .and_then(Value::as_f64)
+                .or_else(|| self.fiche.pointer("/defauts/megapixels").and_then(Value::as_f64))
+                .unwrap_or(1.0);
+            self.brancher_variation(&mut api, image, denoise, format, megapixels)?;
         }
         if let Some(Value::Array(choix)) = loras
             && !choix.is_empty()
@@ -437,6 +483,157 @@ fn sortir(map: &mut Map<String, Value>, cle: &str) -> Map<String, Value> {
     match map.remove(cle) {
         Some(Value::Object(objet)) => objet,
         _ => Map::new(),
+    }
+}
+
+impl Workflow {
+    /// Le nombre d'images de référence que ce workflow sait recevoir (0 : aucune) : il faut une entrée « image »
+    /// pour la première, et un encodeur d'édition qui en accepte plusieurs.
+    pub fn accepte_references(&self) -> usize {
+        if !self.a_l_entree("image") {
+            return 0;
+        }
+        self.api
+            .as_object()
+            .into_iter()
+            .flat_map(|g| g.values())
+            .filter_map(|n| n.get("class_type").and_then(Value::as_str).and_then(encodeur))
+            .map(|(_, max, _)| max)
+            .min()
+            .map_or(0, |max| max.min(REFERENCES_MAX))
+    }
+
+    /// Réservé à la Retouche (fiche : `reserve: retouche`) : S'inspirer ne le propose pas.
+    pub fn reserve_retouche(&self) -> bool {
+        self.fiche.get("reserve").and_then(Value::as_str) == Some("retouche")
+    }
+
+    /// Redessiner une image (img2img) demande un KSampler et un VAELoader uniques.
+    pub fn accepte_variation(&self) -> bool {
+        noeud_unique(&self.api, "KSampler").is_some() && noeud_unique(&self.api, "VAELoader").is_some()
+    }
+
+    /// Images 2 et suivantes sur tous les encodeurs d'édition, et latent vide au format choisi (S'inspirer).
+    fn brancher_references(
+        &self,
+        api: &mut Value,
+        noms: &[String],
+        format_sortie: Option<&str>,
+    ) -> Result<(), String> {
+        let encodeurs: Vec<(String, &str, &str)> = api
+            .as_object()
+            .into_iter()
+            .flat_map(|g| g.iter())
+            .filter_map(|(id, n)| {
+                let (entree, _, latent) = encodeur(n.get("class_type").and_then(Value::as_str)?)?;
+                Some((id.clone(), entree, latent))
+            })
+            .collect();
+        if encodeurs.is_empty() || noms.len() + 1 > self.accepte_references() {
+            return Err(format!(
+                "{} n'accepte pas {} images de référence",
+                self.id,
+                noms.len() + 1
+            ));
+        }
+        let graphe = api
+            .as_object_mut()
+            .ok_or_else(|| format!("{} : graphe illisible", self.id))?;
+        for (i, nom) in noms.iter().enumerate() {
+            let rang = i + 2;
+            let id = format!("aria_ref_{rang}");
+            graphe.insert(
+                id.clone(),
+                json!({"class_type": "LoadImage", "inputs": {"image": nom}}),
+            );
+            for (noeud, entree, _) in &encodeurs {
+                if let Some(entrees) = graphe
+                    .get_mut(noeud)
+                    .and_then(|n| n.get_mut("inputs"))
+                    .and_then(Value::as_object_mut)
+                {
+                    entrees.insert(entree.replace("{}", &rang.to_string()), json!([id, 0]));
+                }
+            }
+        }
+        if let Some(format) = format_sortie {
+            let ks = noeud_unique(api, "KSampler")
+                .ok_or_else(|| format!("{} n'a pas de KSampler unique", self.id))?;
+            let latent = encodeurs.first().map_or("EmptyLatentImage", |(_, _, l)| *l);
+            let graphe = api
+                .as_object_mut()
+                .ok_or_else(|| format!("{} : graphe illisible", self.id))?;
+            graphe.insert(
+                "aria_format".to_owned(),
+                json!({"class_type": "ResolutionSelector",
+                       "inputs": {"aspect_ratio": format, "megapixels": 1, "multiple": 32}}),
+            );
+            graphe.insert(
+                "aria_latent".to_owned(),
+                json!({"class_type": latent,
+                       "inputs": {"width": ["aria_format", 0], "height": ["aria_format", 1], "batch_size": 1}}),
+            );
+            poser(api, &ks, "latent_image", &json!(["aria_latent", 0]));
+        }
+        Ok(())
+    }
+
+    /// img2img : le latent part de l'image de départ au lieu d'un latent vide ; denoise = liberté. Avec un format,
+    /// l'image est recadrée au centre à ce format avant d'être redessinée ; sinon le résultat garde son format.
+    fn brancher_variation(
+        &self,
+        api: &mut Value,
+        nom: &str,
+        denoise: f64,
+        format: Option<&str>,
+        megapixels: f64,
+    ) -> Result<(), String> {
+        let (Some(ks), Some(vae)) = (noeud_unique(api, "KSampler"), noeud_unique(api, "VAELoader")) else {
+            return Err(format!("{} ne permet pas la variation", self.id));
+        };
+        if !(LIBERTE.0..=LIBERTE.1).contains(&denoise) {
+            return Err(format!("Liberté entre 0,05 et 1 : {denoise}"));
+        }
+        let graphe = api
+            .as_object_mut()
+            .ok_or_else(|| format!("{} : graphe illisible", self.id))?;
+        graphe.insert(
+            "aria_var_image".to_owned(),
+            json!({"class_type": "LoadImage", "inputs": {"image": nom}}),
+        );
+        match format {
+            Some(f) => {
+                if !FORMATS.contains(&f) {
+                    return Err(format!("Format inconnu : {f}"));
+                }
+                graphe.insert(
+                    "aria_var_format".to_owned(),
+                    json!({"class_type": "ResolutionSelector",
+                           "inputs": {"aspect_ratio": f, "megapixels": megapixels, "multiple": 32}}),
+                );
+                graphe.insert(
+                    "aria_var_echelle".to_owned(),
+                    json!({"class_type": "ImageScale", "inputs": {
+                        "image": ["aria_var_image", 0], "upscale_method": "lanczos",
+                        "width": ["aria_var_format", 0], "height": ["aria_var_format", 1], "crop": "center"}}),
+                );
+            }
+            None => {
+                graphe.insert(
+                    "aria_var_echelle".to_owned(),
+                    json!({"class_type": "ImageScaleToTotalPixels", "inputs": {
+                        "image": ["aria_var_image", 0], "upscale_method": "lanczos",
+                        "megapixels": megapixels, "resolution_steps": 16}}),
+                );
+            }
+        }
+        graphe.insert(
+            "aria_var_latent".to_owned(),
+            json!({"class_type": "VAEEncode", "inputs": {"pixels": ["aria_var_echelle", 0], "vae": [vae, 0]}}),
+        );
+        poser(api, &ks, "latent_image", &json!(["aria_var_latent", 0]));
+        poser(api, &ks, "denoise", &json!(denoise));
+        Ok(())
     }
 }
 
@@ -759,6 +956,7 @@ mod tests {
                 .unwrap_err()
                 .contains("n'a pas d'entrée « duree »")
         );
+        // Krea 2 n'a pas d'encodeur d'édition : pas de référence.
         assert!(
             wf.preparer(
                 &valeurs(json!({ "prompt": "x", "references": ["a.png"] })),
@@ -767,7 +965,7 @@ mod tests {
                 &filtre()
             )
             .unwrap_err()
-            .contains("pas encore pris en charge")
+            .contains("n'accepte pas 2 images de référence")
         );
     }
 
@@ -912,5 +1110,127 @@ mod tests {
         }
         assert_eq!(section["qwen_image_2_1"]["cfg"], json!(2.5));
         assert!(reglages::section(&dossier, "securite").is_some());
+    }
+
+    fn installe(id: &str) -> (tempfile::TempDir, Workflow) {
+        let temp = tempfile::tempdir().unwrap();
+        let wf = obtenir(id).unwrap();
+        for f in wf.fiche["fichiers"].as_array().unwrap() {
+            deposer(
+                temp.path(),
+                f["dossier"].as_str().unwrap(),
+                f["nom"].as_str().unwrap(),
+            );
+        }
+        (temp, wf)
+    }
+
+    #[test]
+    fn ce_que_chaque_workflow_accepte() {
+        let krea = obtenir("krea2_turbo").unwrap();
+        let edit = obtenir("qwen_image_2_1_edit").unwrap();
+        assert_eq!(krea.accepte_references(), 0);
+        // L'encodeur de Qwen-Image 2.1 a 16 entrées ; Aria s'arrête à 10.
+        assert_eq!(edit.accepte_references(), REFERENCES_MAX);
+        // Qwen-Image 2.1 (texte → image) a l'encodeur mais pas d'entrée « image ».
+        assert_eq!(obtenir("qwen_image_2_1").unwrap().accepte_references(), 0);
+        assert!(!krea.reserve_retouche());
+        assert!(krea.accepte_variation());
+    }
+
+    #[test]
+    fn s_inspirer_branche_les_references_sur_l_encodeur() {
+        let (temp, wf) = installe("qwen_image_2_1_edit");
+        let mut variante = Map::new();
+        variante.insert(wf.modele_origine().unwrap(), json!({"steps": 25}));
+        let mut reglages = Map::new();
+        reglages.insert("variantes".to_owned(), Value::Object(variante));
+        let max = wf.accepte_references();
+        let api = wf
+            .preparer(
+                &valeurs(json!({"prompt": "x", "image": "a.png", "references": ["b.png"], "format_sortie": "16:9 (Widescreen)"})),
+                temp.path(),
+                Some(&reglages),
+                &filtre(),
+            )
+            .unwrap();
+        assert_eq!(api["aria_ref_2"]["inputs"]["image"], json!("b.png"));
+        let branche = api
+            .as_object()
+            .unwrap()
+            .values()
+            .filter(|n| encodeur(n["class_type"].as_str().unwrap_or_default()).is_some())
+            .all(|n| {
+                n["inputs"]
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .any(|v| *v == json!(["aria_ref_2", 0]))
+            });
+        assert!(branche);
+        assert_eq!(
+            api["aria_format"]["inputs"]["aspect_ratio"],
+            json!("16:9 (Widescreen)")
+        );
+        let ks = noeud_unique(&api, "KSampler").unwrap();
+        assert_eq!(
+            api[ks.as_str()]["inputs"]["latent_image"],
+            json!(["aria_latent", 0])
+        );
+        let trop: Vec<String> = (0..max).map(|i| format!("r{i}.png")).collect();
+        assert!(
+            wf.preparer(
+                &valeurs(json!({"prompt": "x", "image": "a.png", "references": trop})),
+                temp.path(),
+                Some(&reglages),
+                &filtre(),
+            )
+            .unwrap_err()
+            .contains("n'accepte pas")
+        );
+    }
+
+    #[test]
+    fn redessiner_part_de_l_image() {
+        let (temp, wf) = krea_installe();
+        let api = wf
+            .preparer(
+                &valeurs(
+                    json!({"prompt": "x", "variation": {"image": "a.png", "denoise": 0.6, "format": null}}),
+                ),
+                temp.path(),
+                None,
+                &filtre(),
+            )
+            .unwrap();
+        let ks = noeud_unique(&api, "KSampler").unwrap();
+        assert_eq!(
+            api[ks.as_str()]["inputs"]["latent_image"],
+            json!(["aria_var_latent", 0])
+        );
+        assert_eq!(api[ks.as_str()]["inputs"]["denoise"], json!(0.6));
+        assert_eq!(
+            api["aria_var_echelle"]["class_type"],
+            json!("ImageScaleToTotalPixels")
+        );
+        let api = wf
+            .preparer(
+                &valeurs(json!({"prompt": "x", "variation": {"image": "a.png", "denoise": 0.6, "format": "1:1 (Square)"}})),
+                temp.path(),
+                None,
+                &filtre(),
+            )
+            .unwrap();
+        assert_eq!(api["aria_var_echelle"]["class_type"], json!("ImageScale"));
+        assert!(
+            wf.preparer(
+                &valeurs(json!({"prompt": "x", "variation": {"image": "a.png", "denoise": 1.5}})),
+                temp.path(),
+                None,
+                &filtre(),
+            )
+            .unwrap_err()
+            .starts_with("Liberté entre 0,05 et 1")
+        );
     }
 }

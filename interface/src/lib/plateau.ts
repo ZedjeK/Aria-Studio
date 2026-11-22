@@ -1,6 +1,6 @@
 // Le Plateau : textes et saisies, d'après ce que rend le cœur.
 
-import type { ChoixWorkflow, Commande, EtatCommande, OptionsPlateau } from './api';
+import type { ChoixWorkflow, Commande, EtatCommande, ModeReference, OptionsPlateau } from './api';
 
 const LIBELLES: Record<EtatCommande, string> = {
   attente: 'en attente',
@@ -60,6 +60,30 @@ export function llmInitial(options: OptionsPlateau, workflowId: string): string 
 /** Ce qu'une commande montre : le prompt, ou l'idée tant que le LLM ne l'a pas réécrite. */
 export function texteCommande(commande: Commande): string {
   return commande.prompt || commande.idee;
+}
+
+/** La liberté d'une variation, au moins et au plus (aria_coeur::workflows::LIBERTE). */
+export const LIBERTE = { min: 0.05, max: 1, defaut: 0.6 };
+
+/**
+ * Les workflows proposés selon le départ : sans rushes, ceux du texte → image ; pour s'inspirer, ceux de la retouche qui
+ * reçoivent des références et ne sont pas réservés à la Retouche ; pour redessiner, ceux qui savent le faire.
+ */
+export function workflowsPour(
+  mode: ModeReference | null,
+  options: OptionsPlateau,
+  retouche: OptionsPlateau | null,
+): ChoixWorkflow[] {
+  if (mode === 'inspirer') return (retouche?.workflows ?? []).filter((w) => w.references > 0 && !w.reserveRetouche);
+  if (mode === 'variation') return options.workflows.filter((w) => w.variation);
+  return options.workflows;
+}
+
+/** Le nombre de rushes qu'on peut choisir : un pour redessiner, ce que reçoit le workflow pour s'inspirer. */
+export function rushesMax(mode: ModeReference | null, workflow: ChoixWorkflow | undefined): number {
+  if (mode === 'variation') return 1;
+  if (mode === 'inspirer') return workflow?.references ?? 0;
+  return 0;
 }
 
 /** Le nom d'un checkpoint sans son extension. */

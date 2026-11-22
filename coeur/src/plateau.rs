@@ -32,6 +32,12 @@ use crate::{Dossier, creations, fiches, prompt, reglages, securite};
 pub const NOMBRE_MAX: u32 = 50;
 /// Le workflow texte → image de la v2 (`config.yaml`, `generation.texte_vers_image`).
 pub const WORKFLOW_DEFAUT: &str = "qwen_image_2_1";
+/// Le workflow de « S'inspirer » de la v2 (`config.yaml`, `generation.references`).
+pub const WORKFLOW_REFERENCES: &str = "qwen_image_2_1_edit";
+/// Les modes d'une création à partir de rushes : s'en inspirer, ou en redessiner un.
+pub const MODES_REFERENCE: [&str; 2] = ["inspirer", "variation"];
+/// La liberté d'une variation par défaut (denoise), comme en v2.
+pub const LIBERTE_DEFAUT: f64 = 0.6;
 /// Le préfixe des fichiers que ComfyUI écrit pour le Plateau.
 pub const PREFIXE: &str = "aria_plateau";
 /// La tâche des workflows du Plateau.
@@ -51,7 +57,7 @@ pub enum EtatCommande {
 }
 
 /// Ce que l'interface demande.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Demande {
     /// L'idée à réécrire, ou le prompt tel quel.
@@ -70,6 +76,19 @@ pub struct Demande {
     pub nombre: u32,
     /// Un checkpoint de la famille ; absent : celui des réglages.
     pub modele: Option<String>,
+    /// Des rushes de départ : à mélanger (S'inspirer, de 1 à 10 selon le modèle) ou à redessiner (un seul).
+    #[serde(default)]
+    pub references: Vec<String>,
+    /// `inspirer` ou `variation`, s'il y a des rushes de départ.
+    #[serde(default)]
+    pub mode_reference: Option<String>,
+    /// Redessiner : la liberté (denoise), de 0,05 (copie) à 1 (libre).
+    #[serde(default = "liberte_defaut")]
+    pub liberte: f64,
+}
+
+const fn liberte_defaut() -> f64 {
+    LIBERTE_DEFAUT
 }
 
 /// Une commande du Plateau et son avancement.
@@ -115,6 +134,10 @@ pub struct Commande {
     pub ancrage: Option<String>,
     /// Le format auquel la source d'une retouche est recadrée au centre.
     pub cadrage: Option<String>,
+    /// Les rushes de départ d'une création.
+    pub references: Vec<String>,
+    pub mode_reference: Option<String>,
+    pub liberte: f64,
 }
 
 impl Commande {
@@ -146,6 +169,9 @@ impl Commande {
             hauteur: None,
             ancrage: None,
             cadrage: None,
+            references: Vec::new(),
+            mode_reference: None,
+            liberte: LIBERTE_DEFAUT,
         }
     }
 }
@@ -168,6 +194,12 @@ pub struct ChoixWorkflow {
     pub a_valider: Vec<String>,
     /// Les steps que dit la fiche, à proposer pour les valider.
     pub steps_suggeres: Vec<u64>,
+    /// Le nombre d'images de référence qu'il reçoit (S'inspirer ; 0 : aucune).
+    pub references: usize,
+    /// Il sait redessiner une image (variation).
+    pub variation: bool,
+    /// Réservé à la Retouche : S'inspirer ne le propose pas.
+    pub reserve_retouche: bool,
 }
 
 /// Un LLM proposé pour réécrire.
@@ -197,6 +229,10 @@ pub struct Options {
     pub llm: Vec<ChoixLlm>,
     /// Le LLM de chaque workflow prêt : celui choisi pour lui, sinon le LLM par défaut.
     pub llm_par_workflow: Map<String, Value>,
+    /// Le workflow de « S'inspirer » par défaut.
+    pub defaut_references: String,
+    /// Le plus d'images de référence qu'Aria envoie.
+    pub references_max: usize,
 }
 
 /// Les dossiers dont le Plateau a besoin.
@@ -334,6 +370,9 @@ pub fn options_pour(contexte: &Contexte, tache: &str, defaut: String) -> Options
             format: regle.get("ratio").and_then(Value::as_str).map(str::to_owned),
             a_valider,
             steps_suggeres: wf.steps_suggeres(),
+            references: wf.accepte_references(),
+            variation: wf.accepte_variation(),
+            reserve_retouche: wf.reserve_retouche(),
             modeles,
             id: wf.id,
         });
@@ -353,7 +392,75 @@ pub fn options_pour(contexte: &Contexte, tache: &str, defaut: String) -> Options
         incomplets,
         llm: llm_au_choix(&contexte.modeles),
         llm_par_workflow,
+        defaut_references: workflow_references(&contexte.dossier),
+        references_max: workflows::REFERENCES_MAX,
     }
+}
+
+/// Le workflow de « S'inspirer » par défaut : le favori de l'utilisateur (`favoris.generation.references`) s'il est
+/// encore livré, sinon celui de la v2.
+pub fn workflow_references(dossier: &Dossier) -> String {
+    reglages::section(dossier, "favoris")
+        .and_then(|f| {
+            f.get("generation")?
+                .get("references")?
+                .as_str()
+                .map(str::to_owned)
+        })
+        .filter(|id| workflows::obtenir(id).is_ok())
+        .unwrap_or_else(|| WORKFLOW_REFERENCES.to_owned())
+}
+
+/// Vérifie les rushes de départ et rend le workflow qui les recevra, comme la v2.
+fn valider_references(contexte: &Contexte, demande: &Demande) -> Result<String, String> {
+    let mode = demande.mode_reference.as_deref().unwrap_or_default();
+    if !MODES_REFERENCE.contains(&mode) {
+        return Err(format!("Mode de référence inconnu : {mode}"));
+    }
+    for id in &demande.references {
+        creations::fiche(&contexte.data, id)?;
+    }
+    if mode == "variation" {
+        if demande.references.len() != 1 {
+            return Err("Redessiner une image part d'une seule image de référence".to_owned());
+        }
+        if !(workflows::LIBERTE.0..=workflows::LIBERTE.1).contains(&demande.liberte) {
+            return Err(format!(
+                "Liberté entre {} et {}",
+                workflows::LIBERTE.0,
+                workflows::LIBERTE.1
+            )
+            .replace('.', ","));
+        }
+        let id = demande
+            .workflow
+            .clone()
+            .unwrap_or_else(|| workflow_defaut(&contexte.dossier));
+        let wf = workflows::obtenir(&id)?;
+        if wf.tache() != TACHE || !wf.accepte_variation() {
+            return Err(format!("{} ne permet pas de redessiner une image", nom_de(&wf)));
+        }
+        return Ok(id);
+    }
+    let id = demande
+        .workflow
+        .clone()
+        .unwrap_or_else(|| workflow_references(&contexte.dossier));
+    let wf = workflows::obtenir(&id)?;
+    if wf.reserve_retouche() {
+        return Err(format!(
+            "{} est réservé à la retouche : Mélanger des images passe par un autre modèle",
+            nom_de(&wf)
+        ));
+    }
+    let max = wf.accepte_references();
+    if !(1..=max).contains(&demande.references.len()) {
+        return Err(format!(
+            "{} accepte de 1 à {max} images de référence",
+            nom_de(&wf)
+        ));
+    }
+    Ok(id)
 }
 
 /// Les LLM installés : les favoris d'abord, avec leur nom ; les autres avec le nom de leur fiche, sinon celui du
@@ -418,13 +525,18 @@ pub fn valider(contexte: &Contexte, demande: &Demande) -> Result<Validee, String
     if prompt.is_empty() {
         return Err("Écris ton idée".to_owned());
     }
-    let id = demande
-        .workflow
-        .clone()
-        .unwrap_or_else(|| workflow_defaut(&contexte.dossier));
+    let avec_references = !demande.references.is_empty();
+    let id = if avec_references {
+        valider_references(contexte, demande)?
+    } else {
+        demande
+            .workflow
+            .clone()
+            .unwrap_or_else(|| workflow_defaut(&contexte.dossier))
+    };
     let indisponible = || format!("Workflow indisponible pour créer : {id}");
     let wf = workflows::obtenir(&id).map_err(|_| indisponible())?;
-    if wf.tache() != TACHE || !wf.manquants(&contexte.modeles).is_empty() {
+    if (!avec_references && wf.tache() != TACHE) || !wf.manquants(&contexte.modeles).is_empty() {
         return Err(indisponible());
     }
     let reglages = reglages_workflow(&contexte.dossier, &id);
@@ -449,7 +561,9 @@ pub fn valider(contexte: &Contexte, demande: &Demande) -> Result<Validee, String
         }
         _ => {}
     }
-    if !FORMATS.contains(&demande.format.as_str()) {
+    let image_source = demande.mode_reference.as_deref() == Some("variation")
+        && demande.format == crate::retouche::FORMAT_IMAGE;
+    if !FORMATS.contains(&demande.format.as_str()) && !image_source {
         return Err(format!("Format inconnu : {}", demande.format));
     }
     if !(1..=NOMBRE_MAX).contains(&demande.nombre) {
@@ -468,7 +582,11 @@ pub fn valider(contexte: &Contexte, demande: &Demande) -> Result<Validee, String
     } else {
         None
     };
-    securite::verifier(&contexte.dossier, &[prompt.as_str()]).map_err(|e| e.to_string())?;
+    // Le filtre lit aussi les idées et prompts des rushes de départ et de leurs ancêtres : il ne lit pas les images.
+    let origine = creations::textes_origine(&contexte.data, &demande.references)?;
+    let mut textes: Vec<&str> = vec![prompt.as_str()];
+    textes.extend(origine.iter().map(String::as_str));
+    securite::verifier(&contexte.dossier, &textes).map_err(|e| e.to_string())?;
     Ok(Validee {
         workflow: id,
         texte: prompt,
@@ -669,6 +787,11 @@ impl Plateau {
         commande.seed = demande.seed;
         commande.nombre = demande.nombre;
         commande.modele.clone_from(&demande.modele);
+        if !demande.references.is_empty() {
+            commande.references.clone_from(&demande.references);
+            commande.mode_reference.clone_from(&demande.mode_reference);
+            commande.liberte = demande.liberte;
+        }
         self.mettre_en_file(commande)
     }
 
@@ -788,15 +911,42 @@ fn executer(
         .map_err(|e| e.to_string())?;
     let wf = workflows::obtenir(&c.workflow)?;
     let reglages = reglages_workflow(&contexte.dossier, &wf.id);
+    let origine = creations::textes_origine(&contexte.data, &c.references)?;
+    let sources = c
+        .references
+        .iter()
+        .map(|id| -> Result<Vec<u8>, String> {
+            let chemin = creations::chemin_image(&contexte.data, id)?;
+            std::fs::read(&chemin).map_err(|e| format!("Image de {id} illisible : {e}"))
+        })
+        .collect::<Result<Vec<Vec<u8>>, String>>()?;
+    let inspirer = c.mode_reference.as_deref() == Some("inspirer") && !sources.is_empty();
+    let variation = c.mode_reference.as_deref() == Some("variation") && !sources.is_empty();
     let debut_reecriture = Instant::now();
     let (texte_prompt, llm_utilise) = if c.reecrire {
         partage.modifier(&c.id, |cmd| cmd.etape = "Réécriture du prompt".to_owned());
+        let vues = c
+            .references
+            .iter()
+            .zip(&sources)
+            .map(|(id, png)| -> Result<prompt::Vue, String> {
+                Ok(prompt::Vue {
+                    png: crate::images::pour_la_vision(png)?,
+                    texte: creations::description(&contexte.data, &creations::fiche(&contexte.data, id)?, 3),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let images = prompt::Images {
+            references: if inspirer { sources.len() } else { 0 },
+            vues: &vues,
+        };
         let ecriture = prompt::preparer_reecriture(
             &contexte.lieux(),
             &c.idee,
             c.llm.as_deref(),
             Some(&wf),
             reglages.as_ref(),
+            &images,
         )?;
         let reponse = generateur.ecrire(ecriture.lancement.clone(), &ecriture.demande)?;
         let texte = prompt::lire_reecriture(&ecriture, &c.idee, &reponse.texte, &filtre)?;
@@ -805,6 +955,9 @@ fn executer(
     } else {
         (c.prompt.clone(), None)
     };
+    let mut textes: Vec<&str> = vec![c.idee.as_str(), texte_prompt.as_str()];
+    textes.extend(origine.iter().map(String::as_str));
+    filtre.verifier(&textes).map_err(|e| e.to_string())?;
     let duree_reecriture = debut_reecriture.elapsed().as_secs_f64();
     let modele = c.modele.clone().or_else(|| {
         wf.regle(&contexte.modeles, reglages.as_ref())
@@ -816,6 +969,11 @@ fn executer(
         Some(seed) => seed,
         None => seed_au_hasard()?,
     };
+    // Les rushes de départ sont téléversés une seule fois pour toutes les images.
+    let mut noms = Vec::new();
+    for (i, png) in sources.iter().enumerate() {
+        noms.push(generateur.televerser(&format!("aria_{}_{}.png", c.id, i + 1), png)?);
+    }
     for i in 0..c.nombre {
         if partage.annule.load(Ordering::Relaxed) {
             return Err(ANNULEE.to_owned());
@@ -835,7 +993,19 @@ fn executer(
         valeurs.insert("seed".to_owned(), json!(seed));
         valeurs.insert("modele".to_owned(), json!(c.modele));
         valeurs.insert("prefixe".to_owned(), json!(PREFIXE));
-        valeurs.insert("ratio".to_owned(), json!(c.format));
+        if inspirer {
+            valeurs.insert("image".to_owned(), json!(noms.first()));
+            valeurs.insert("references".to_owned(), json!(noms.get(1..).unwrap_or_default()));
+            valeurs.insert("format_sortie".to_owned(), json!(c.format));
+        } else if variation {
+            let format = (c.format != crate::retouche::FORMAT_IMAGE).then_some(c.format.as_str());
+            valeurs.insert(
+                "variation".to_owned(),
+                json!({"image": noms.first(), "denoise": c.liberte, "format": format}),
+            );
+        } else {
+            valeurs.insert("ratio".to_owned(), json!(c.format));
+        }
         let api = wf.preparer(&valeurs, &contexte.modeles, reglages.as_ref(), &filtre)?;
         let fichiers = generateur
             .generer(
@@ -869,10 +1039,10 @@ fn executer(
             "loras": [],
             "format": c.format,
             "seed": seed,
-            "parent": null,
-            "references": [],
-            "mode_reference": null,
-            "liberte": null,
+            "parent": c.references.first(),
+            "references": c.references,
+            "mode_reference": c.mode_reference,
+            "liberte": if variation { json!(c.liberte) } else { Value::Null },
             "duree_s": duree,
         });
         let infos = infos.as_object().cloned().unwrap_or_default();
@@ -938,6 +1108,9 @@ mod tests {
             modele: None,
             reecrire: false,
             llm: None,
+            references: Vec::new(),
+            mode_reference: None,
+            liberte: LIBERTE_DEFAUT,
         }
     }
 
@@ -1316,5 +1489,140 @@ mod tests {
         assert!(avec_origine.contains(&format!("Reviens au modèle d'origine ({origine})")));
         let sans_origine = expliquer_erreur(&wf, Some("x.safetensors"), &[], brut);
         assert!(sans_origine.contains("Choisis un autre checkpoint de la famille Qwen-Image2.1"));
+    }
+
+    /// Krea 2 et Qwen-Image 2.1 Edit installés, steps validés ; deux rushes de départ.
+    fn avec_references(temp: &tempfile::TempDir) -> (Contexte, String, String) {
+        let ctx = contexte(temp, KREA);
+        let edit = workflows::obtenir(WORKFLOW_REFERENCES).unwrap();
+        for f in edit.manquants(&ctx.modeles) {
+            let chemin = modeles::destination(
+                &ctx.modeles,
+                f["dossier"].as_str().unwrap(),
+                f["nom"].as_str().unwrap(),
+            )
+            .unwrap();
+            fs::create_dir_all(chemin.parent().unwrap()).unwrap();
+            fs::write(chemin, b"poids").unwrap();
+        }
+        if let Some(origine) = edit.modele_origine() {
+            workflows::valider_checkpoint(&ctx.dossier, &ctx.modeles, WORKFLOW_REFERENCES, &origine, 25)
+                .unwrap();
+        }
+        let infos = |prompt: &str| {
+            json!({"type": "creation", "prompt": prompt})
+                .as_object()
+                .cloned()
+                .unwrap()
+        };
+        let un = creations::enregistrer(&ctx.data, &png(), &infos("a cat")).unwrap();
+        let deux = creations::enregistrer(&ctx.data, &png(), &infos("a dog")).unwrap();
+        (ctx, un, deux)
+    }
+
+    #[test]
+    fn controle_des_rushes_de_depart() {
+        let temp = tempfile::tempdir().unwrap();
+        let (ctx, un, deux) = avec_references(&temp);
+        let mut d = demande("le chat et le chien");
+        d.workflow = None;
+        d.references = vec![un.clone(), deux.clone()];
+        d.mode_reference = Some("melanger".to_owned());
+        assert_eq!(
+            valider(&ctx, &d).unwrap_err(),
+            "Mode de référence inconnu : melanger"
+        );
+        d.mode_reference = Some("inspirer".to_owned());
+        assert_eq!(valider(&ctx, &d).unwrap().workflow, WORKFLOW_REFERENCES);
+        d.workflow = Some(KREA.to_owned());
+        assert_eq!(
+            valider(&ctx, &d).unwrap_err(),
+            "Krea 2 accepte de 1 à 0 images de référence"
+        );
+        d.mode_reference = Some("variation".to_owned());
+        assert_eq!(
+            valider(&ctx, &d).unwrap_err(),
+            "Redessiner une image part d'une seule image de référence"
+        );
+        d.references = vec![un.clone()];
+        d.liberte = 1.5;
+        assert!(
+            valider(&ctx, &d)
+                .unwrap_err()
+                .starts_with("Liberté entre 0,05 et 1")
+        );
+        d.liberte = 0.4;
+        d.format = crate::retouche::FORMAT_IMAGE.to_owned();
+        assert_eq!(valider(&ctx, &d).unwrap().workflow, KREA);
+        // « image source » ne vaut que pour redessiner.
+        let mut d = demande("x");
+        d.format = crate::retouche::FORMAT_IMAGE.to_owned();
+        assert_eq!(valider(&ctx, &d).unwrap_err(), "Format inconnu : image source");
+        let mut d = demande("x");
+        d.references = vec!["20200101-000000-000000".to_owned()];
+        d.mode_reference = Some("variation".to_owned());
+        assert!(valider(&ctx, &d).unwrap_err().starts_with("Création inconnue"));
+    }
+
+    #[test]
+    fn s_inspirer_puis_redessiner() {
+        let temp = tempfile::tempdir().unwrap();
+        let (ctx, un, deux) = avec_references(&temp);
+        let data = ctx.data.clone();
+        let (generateur, recus) = faux(None, Duration::ZERO);
+        let televerses = Arc::clone(&generateur.televerses);
+        let plateau = Plateau::demarrer(ctx, generateur);
+
+        let mut d = demande("le chat et le chien sur un canapé");
+        d.workflow = None;
+        d.format = "16:9 (Widescreen)".to_owned();
+        d.references = vec![un.clone(), deux.clone()];
+        d.mode_reference = Some("inspirer".to_owned());
+        let c = plateau.commander(&d).unwrap();
+        let fin = attendre(&plateau, &c.id);
+        assert_eq!(fin.etat, EtatCommande::Termine, "{:?}", fin.erreur);
+        assert_eq!(televerses.lock().unwrap().len(), 2);
+        let api = recus.lock().unwrap()[0].clone();
+        let edit = workflows::obtenir(WORKFLOW_REFERENCES).unwrap();
+        let (noeud, entree) = edit.entree("image").unwrap();
+        assert_eq!(
+            api[noeud.as_str()]["inputs"][entree.as_str()],
+            json!(format!("televerse/aria_{}_1.png", c.id))
+        );
+        assert_eq!(
+            api["aria_ref_2"]["inputs"]["image"],
+            json!(format!("televerse/aria_{}_2.png", c.id))
+        );
+        assert_eq!(
+            api["aria_format"]["inputs"]["aspect_ratio"],
+            json!("16:9 (Widescreen)")
+        );
+        let f = creations::fiche(&data, &fin.images[0]).unwrap();
+        assert_eq!(f["references"], json!([un, deux]));
+        assert_eq!(f["mode_reference"], json!("inspirer"));
+        assert_eq!(f["parent"], json!(un));
+        assert_eq!(f["liberte"], Value::Null);
+
+        let mut d = demande("en hiver");
+        d.format = crate::retouche::FORMAT_IMAGE.to_owned();
+        d.references = vec![un.clone()];
+        d.mode_reference = Some("variation".to_owned());
+        d.liberte = 0.4;
+        let c = plateau.commander(&d).unwrap();
+        let fin = attendre(&plateau, &c.id);
+        assert_eq!(fin.etat, EtatCommande::Termine, "{:?}", fin.erreur);
+        let api = recus.lock().unwrap()[1].clone();
+        assert_eq!(
+            api["aria_var_image"]["inputs"]["image"],
+            json!(format!("televerse/aria_{}_1.png", c.id))
+        );
+        assert_eq!(
+            api["aria_var_echelle"]["class_type"],
+            json!("ImageScaleToTotalPixels")
+        );
+        let f = creations::fiche(&data, &fin.images[0]).unwrap();
+        assert_eq!(f["mode_reference"], json!("variation"));
+        assert_eq!(f["liberte"], json!(0.4));
+        assert_eq!(f["format"], json!(crate::retouche::FORMAT_IMAGE));
     }
 }
