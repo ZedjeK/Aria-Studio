@@ -27,6 +27,8 @@ pub mod presence;
 pub mod reglages;
 pub mod sauvegardes;
 pub mod secrets;
+pub mod securite;
+pub mod workflows;
 
 pub use donnees::Dossier;
 pub use reglages::{Reglages, ReglagesFond, Vitesse};
