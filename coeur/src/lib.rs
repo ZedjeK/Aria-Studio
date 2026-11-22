@@ -11,6 +11,7 @@ pub mod comfy_serveur;
 pub mod demarrage;
 pub mod donnees;
 pub mod emplacements;
+pub mod fiches;
 pub mod garde;
 pub mod identite;
 pub mod installation;
