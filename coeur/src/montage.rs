@@ -175,6 +175,9 @@ pub struct DemandeClip {
     /// Le LLM qui a écrit le prompt au Scénario (noté sur la fiche).
     #[serde(default)]
     pub ecrit_par: Option<String>,
+    /// Le dossier où ranger les résultats (« Ranger dans ») ; absent : non rangés (un dossier des Bobines).
+    #[serde(default)]
+    pub dossier: Option<String>,
 }
 
 /// Contrôle une demande de clip comme la v2, et rend la commande à mettre en file.
@@ -257,6 +260,7 @@ pub fn commande_clip(contexte: &Contexte, d: &DemandeClip, id: String) -> Result
     c.mode_video = Some(d.mode.clone());
     c.qualite = Some(d.qualite.clone());
     c.duree = Some(d.duree);
+    c.dossier = crate::rushes::valider_dossier(&contexte.data, d.dossier.as_deref(), "clips")?;
     Ok(c)
 }
 
@@ -382,6 +386,9 @@ pub fn executer(
         if c.cadrage.is_none() {
             infos.remove("cadrage");
         }
+        if let Some(d) = &c.dossier {
+            infos.insert("dossier".to_owned(), json!(d));
+        }
         let id = creations::enregistrer_clip(&contexte.data, &mp4, &affiche, &infos)?;
         suivi.image(id);
     }
@@ -447,6 +454,7 @@ mod tests {
             modele: None,
             loras: Vec::new(),
             ecrit_par: None,
+            dossier: None,
         }
     }
 

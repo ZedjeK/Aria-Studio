@@ -34,6 +34,7 @@
   } from '../lib/plateau';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -71,6 +72,8 @@
   let optionsInspirer = $state<OptionsPlateau | null>(null);
   let stepsSaisis = $state<Record<string, number>>({});
   let envoi = $state(false);
+  /** « Ranger dans » : le dossier des prochaines créations. */
+  let dossier = $state<string | null>(null);
 
   const proposes = $derived(options ? workflowsPour(modeReference, options, optionsInspirer) : []);
   const workflow = $derived(proposes.find((w) => w.id === workflowId));
@@ -166,6 +169,7 @@
         modeReference,
         liberte,
         loras: lorasChoisies(workflow.loras, lignesLoras),
+        dossier,
       });
       signaler(nombre > 1 ? `${nombre} images en file.` : 'Image en file.');
       await relireCommandes();
@@ -362,6 +366,7 @@
       <p class="erreur">La seed est un entier positif, ou rien pour la tirer au hasard.</p>
     {/if}
     <div class="actions">
+      <RangerDans genre="images" bind:dossier />
       <Bouton genre="principal" desactive={!peutCreer} onclick={() => void creer()}>Créer</Bouton>
     </div>
   </Panneau>

@@ -21,6 +21,7 @@
   import { estActive, lireSeed, modeleInitial, nomCheckpoint, texteAvancement, texteCommande } from '../lib/plateau';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
@@ -49,6 +50,8 @@
   /** Change quand la file a enregistré quelque chose : la bibliothèque des voix se relit. */
   let rafraichir = $state(0);
   let envoi = $state(false);
+  /** « Ranger dans » : le dossier des prochaines créations. */
+  let dossier = $state<string | null>(null);
 
   const proposes = $derived(options ? (mode === 'animer' ? options.animer : options.texte) : null);
   const workflow = $derived(proposes?.workflows.find((w) => w.id === proposes.defaut) ?? proposes?.workflows[0]);
@@ -118,6 +121,7 @@
         modele: modele || null,
         loras: lorasChoisies(workflow.loras, lignesLoras),
         ecritPar: null,
+        dossier,
       });
       signaler(nombre > 1 ? `${nombre} clips en file.` : 'Clip en file.');
       await relireCommandes();
@@ -241,6 +245,7 @@
       <p class="alerte">La seed est un entier positif, ou rien pour la tirer au hasard.</p>
     {/if}
     <div class="actions">
+      <RangerDans genre="clips" bind:dossier {rafraichir} />
       <span class="discret">≈ {estimation} sur la carte de la mesure</span>
       <Bouton genre="principal" desactive={!peutTourner} onclick={() => void tourner()}>Tourner</Bouton>
     </div>

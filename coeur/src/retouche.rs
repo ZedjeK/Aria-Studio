@@ -17,7 +17,7 @@ use crate::images::{self, ANCRAGES, TAILLE_MAX};
 use crate::plateau::{self, ChoixLora, Commande, Contexte, Generateur, NOMBRE_MAX, Options, PREFIXE, Suivi};
 use crate::prompt::{self, Vue};
 use crate::workflows::{self, FORMATS, Workflow};
-use crate::{creations, llm, reglages, securite};
+use crate::{creations, llm, reglages, rushes, securite};
 
 /// La consigne d'un agrandissement : remplacer le gris par la suite de la scène (v2, mot pour mot).
 pub const CONSIGNE_AGRANDISSEMENT: &str = "Replace the flat gray border areas with a natural continuation of the scene, as if the camera had captured a wider view: extend the environment, objects and lighting seamlessly, matching the style, colors and perspective. No gray areas, no frames, no borders must remain. Keep the existing picture unchanged.";
@@ -79,6 +79,9 @@ pub struct DemandeRetouche {
     /// Les LoRA de la famille du workflow.
     #[serde(default)]
     pub loras: Vec<ChoixLora>,
+    /// Le dossier où ranger les résultats (« Ranger dans ») ; absent : à côté de la source.
+    #[serde(default)]
+    pub dossier: Option<String>,
 }
 
 /// Une demande d'agrandissement, comme celle de la v2.
@@ -110,6 +113,9 @@ pub struct DemandeAgrandissement {
     /// Les LoRA de la famille du workflow.
     #[serde(default)]
     pub loras: Vec<ChoixLora>,
+    /// Le dossier où ranger les résultats (« Ranger dans ») ; absent : à côté de la source.
+    #[serde(default)]
+    pub dossier: Option<String>,
 }
 
 /// Le workflow de retouche par défaut : le favori de l'utilisateur (`favoris.generation.retouche`) s'il est encore
@@ -256,6 +262,7 @@ pub fn commande_retouche(contexte: &Contexte, d: &DemandeRetouche, id: String) -
     c.fondu = d.fondu.min(FONDU_MAX);
     c.cadrage = format;
     c.loras = loras;
+    c.dossier = rushes::valider_dossier(&contexte.data, d.dossier.as_deref(), "images")?;
     Ok(c)
 }
 
@@ -319,6 +326,7 @@ pub fn commande_agrandissement(
     c.hauteur = Some(d.hauteur);
     c.ancrage = Some(d.ancrage.clone());
     c.loras = loras;
+    c.dossier = rushes::valider_dossier(&contexte.data, d.dossier.as_deref(), "images")?;
     Ok(c)
 }
 
@@ -326,7 +334,13 @@ pub fn commande_agrandissement(
 ///
 /// # Errors
 /// Image illisible, ou dossier qui ne s'écrit pas.
-pub fn importer(contexte: &Contexte, octets: &[u8], nom: &str) -> Result<String, String> {
+pub fn importer(
+    contexte: &Contexte,
+    octets: &[u8],
+    nom: &str,
+    dossier: Option<&str>,
+) -> Result<String, String> {
+    let dossier = rushes::valider_dossier(&contexte.data, dossier, "images")?;
     let mut image = images::ouvrir(octets)?;
     let (l, h) = image.dimensions();
     if l.max(h) > TAILLE_MAX {
@@ -352,11 +366,11 @@ pub fn importer(contexte: &Contexte, octets: &[u8], nom: &str) -> Result<String,
         "nom_origine": nom_origine,
         "duree_s": 0,
     });
-    creations::enregistrer(
-        &contexte.data,
-        &images::png(&image)?,
-        infos.as_object().unwrap_or(&Map::new()),
-    )
+    let mut infos = infos.as_object().cloned().unwrap_or_default();
+    if let Some(d) = dossier {
+        infos.insert("dossier".to_owned(), json!(d));
+    }
+    creations::enregistrer(&contexte.data, &images::png(&image)?, &infos)
 }
 
 /// Exécute une retouche ou un agrandissement : traduction de la consigne s'il y a lieu, source téléversée une fois,
@@ -437,10 +451,14 @@ pub fn executer(
             .and_then(Value::as_str)
             .map(str::to_owned)
     });
-    let dossier = creations::fiche(&contexte.data, &parent)?
-        .get("dossier")
-        .and_then(Value::as_str)
-        .map(str::to_owned);
+    // Sans dossier choisi, le résultat reste à côté de sa source (comme en v2).
+    let dossier = match &c.dossier {
+        Some(d) => Some(d.clone()),
+        None => creations::fiche(&contexte.data, &parent)?
+            .get("dossier")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+    };
     let base = match c.seed {
         Some(seed) => seed,
         None => crate::plateau::seed_au_hasard()?,
@@ -591,6 +609,7 @@ mod tests {
             nombre: 1,
             format: None,
             loras: Vec::new(),
+            dossier: None,
         }
     }
 
@@ -609,6 +628,7 @@ mod tests {
             modele: None,
             nombre: 1,
             loras: Vec::new(),
+            dossier: None,
         }
     }
 
@@ -721,7 +741,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let ctx = contexte(&temp);
         let grande = images::png(&uni(5000, 100, [9, 9, 9])).unwrap();
-        let id = importer(&ctx, &grande, "photo.jpg").unwrap();
+        let id = importer(&ctx, &grande, "photo.jpg", None).unwrap();
         let f = creations::fiche(&ctx.data, &id).unwrap();
         assert_eq!(
             (f["largeur"].clone(), f["hauteur"].clone()),
@@ -731,7 +751,17 @@ mod tests {
             (f["type"].clone(), f["nom_origine"].clone()),
             (json!("import"), json!("photo.jpg"))
         );
-        assert!(importer(&ctx, b"rien", "x").is_err());
+        assert!(importer(&ctx, b"rien", "x", None).is_err());
+        assert!(f.get("dossier").is_none());
+        // « Ranger dans » : un dossier des Rushes existant, sinon refusé.
+        let petite = images::png(&uni(40, 30, [9, 9, 9])).unwrap();
+        assert!(importer(&ctx, &petite, "a.png", Some("Renards")).is_err());
+        rushes::creer_dossier(&ctx.data, "Renards", "images").unwrap();
+        let rangee = importer(&ctx, &petite, "a.png", Some("Renards")).unwrap();
+        assert_eq!(
+            creations::fiche(&ctx.data, &rangee).unwrap()["dossier"],
+            "Renards"
+        );
     }
 
     /// Un ComfyUI de test : note les téléversements et les graphes, rend une image rouge de 64 × 64.

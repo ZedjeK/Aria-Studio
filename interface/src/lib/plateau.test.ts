@@ -91,6 +91,7 @@ function commande(changements: Partial<Commande>): Commande {
     description: '',
     sequence: null,
     plans: [],
+    dossier: null,
     ...changements,
   };
 }

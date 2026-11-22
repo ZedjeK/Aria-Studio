@@ -33,6 +33,7 @@
   } from '../lib/retouche';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -65,6 +66,8 @@
   let hauteur = $state(0);
   let ancrage = $state('centre');
   let envoi = $state(false);
+  /** « Ranger dans » : le dossier des prochaines créations. */
+  let dossier = $state<string | null>(null);
 
   // Le masque : un canevas à la taille de l'image, peint en blanc opaque sur fond transparent.
   let canevas = $state<HTMLCanvasElement | null>(null);
@@ -177,7 +180,7 @@
       if (typeof lecteur.result !== 'string') return;
       void (async () => {
         try {
-          const fiche = await importerImage(lecteur.result as string, fichier.name);
+          const fiche = await importerImage(lecteur.result as string, fichier.name, dossier);
           signaler(`Image importée : ${fiche.largeur}×${fiche.hauteur}.`);
           await relireRushes();
           prendre(fiche);
@@ -234,6 +237,7 @@
         modele: modele || null,
         nombre,
         loras: lorasChoisies(workflow.loras, lignesLoras),
+        dossier,
       };
       if (mode === 'retouche') {
         const masque = peint && canevas ? canevas.toDataURL('image/png') : null;
@@ -451,6 +455,7 @@
       {/if}
 
       <div class="actions">
+        <RangerDans genre="images" cle="aria.destination.retouche" bind:dossier />
         <Bouton genre="principal" desactive={!peutLancer || (peint && format !== FORMAT_IMAGE && mode === 'retouche')} onclick={() => void lancer()}>
           {mode === 'retouche' ? 'Retoucher' : 'Agrandir'}
         </Bouton>

@@ -88,6 +88,9 @@ pub struct Demande {
     /// Les LoRA de la famille du workflow, cochées au Plateau.
     #[serde(default)]
     pub loras: Vec<ChoixLora>,
+    /// Le dossier où ranger les résultats (« Ranger dans ») ; absent : non rangés.
+    #[serde(default)]
+    pub dossier: Option<String>,
 }
 
 const fn liberte_defaut() -> f64 {
@@ -176,6 +179,9 @@ pub struct Commande {
     /// Séquence du Montage : son identifiant, et les plans à tourner (indices, dans l'ordre).
     pub sequence: Option<String>,
     pub plans: Vec<usize>,
+    /// Le dossier des Rushes ou des Bobines où ranger les résultats ; absent : non rangés (une retouche reste à côté
+    /// de sa source).
+    pub dossier: Option<String>,
 }
 
 impl Commande {
@@ -217,6 +223,7 @@ impl Commande {
             description: String::new(),
             sequence: None,
             plans: Vec::new(),
+            dossier: None,
         }
     }
 }
@@ -968,6 +975,8 @@ impl Plateau {
         commande.nombre = demande.nombre;
         commande.modele.clone_from(&demande.modele);
         commande.loras = validee.loras;
+        commande.dossier =
+            crate::rushes::valider_dossier(&self.contexte.data, demande.dossier.as_deref(), "images")?;
         if !demande.references.is_empty() {
             commande.references.clone_from(&demande.references);
             commande.mode_reference.clone_from(&demande.mode_reference);
@@ -1043,8 +1052,8 @@ impl Plateau {
     ///
     /// # Errors
     /// Voir [`retouche::importer`].
-    pub fn importer(&self, octets: &[u8], nom: &str) -> Result<String, String> {
-        retouche::importer(&self.contexte, octets, nom)
+    pub fn importer(&self, octets: &[u8], nom: &str, dossier: Option<&str>) -> Result<String, String> {
+        retouche::importer(&self.contexte, octets, nom, dossier)
     }
 
     fn mettre_en_file(&self, commande: Commande) -> Result<Commande, String> {
@@ -1289,7 +1298,10 @@ fn executer(
             "liberte": if variation { json!(c.liberte) } else { Value::Null },
             "duree_s": duree,
         });
-        let infos = infos.as_object().cloned().unwrap_or_default();
+        let mut infos = infos.as_object().cloned().unwrap_or_default();
+        if let Some(d) = &c.dossier {
+            infos.insert("dossier".to_owned(), json!(d));
+        }
         let id_creation = creations::enregistrer(&contexte.data, &png, &infos)?;
         partage.modifier(&c.id, |cmd| {
             cmd.images.push(id_creation);
@@ -1355,6 +1367,7 @@ mod tests {
             mode_reference: None,
             liberte: LIBERTE_DEFAUT,
             loras: Vec::new(),
+            dossier: None,
         }
     }
 
