@@ -8,14 +8,11 @@
   import {
     annulerCommande,
     commanderImage,
-    imageCreation,
     lireCommandes,
-    lireCreations,
     messageErreur,
     optionsPlateau,
     validerCheckpoint,
     type Commande,
-    type Creation,
     type OptionsPlateau,
   } from '../lib/api';
   import {
@@ -32,6 +29,7 @@
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import PanneauRushes from './PanneauRushes.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -41,9 +39,8 @@
 
   let options = $state<OptionsPlateau | null>(null);
   let commandes = $state<Commande[]>([]);
-  let creations = $state<Creation[]>([]);
-  // Les images affichées : une adresse blob: par création, libérée en quittant la page.
-  let vignettes = $state<Record<string, string>>({});
+  // Change quand de nouvelles images sont enregistrées : les Rushes se relisent.
+  let rafraichir = $state(0);
 
   let workflowId = $state('');
   let prompt = $state('');
@@ -97,31 +94,12 @@
     }
   }
 
-  async function chargerVignette(id: string) {
-    if (vignettes[id]) return;
-    try {
-      const octets = await imageCreation(id);
-      vignettes[id] = URL.createObjectURL(new Blob([octets], { type: 'image/png' }));
-    } catch {
-      // Une image effacée entre-temps : la fiche reste, sans vignette.
-    }
-  }
-
-  async function relireCreations() {
-    try {
-      creations = await lireCreations();
-      await Promise.all(creations.map((c) => chargerVignette(c.id)));
-    } catch (e) {
-      signaler(messageErreur(e), true);
-    }
-  }
-
   async function relireCommandes() {
     try {
       const avant = commandes.reduce((total, c) => total + c.images.length, 0);
       commandes = await lireCommandes();
       const apres = commandes.reduce((total, c) => total + c.images.length, 0);
-      if (apres !== avant) await relireCreations();
+      if (apres !== avant) rafraichir += 1;
     } catch (e) {
       signaler(messageErreur(e), true);
     }
@@ -174,7 +152,6 @@
   onMount(() => {
     void relireOptions();
     void relireCommandes();
-    void relireCreations();
     const minuterie = setInterval(() => {
       if (commandes.some(estActive)) void relireCommandes();
     }, 1000);
@@ -184,7 +161,6 @@
     return () => {
       clearInterval(minuterie);
       window.removeEventListener('focus', auRetour);
-      for (const adresse of Object.values(vignettes)) URL.revokeObjectURL(adresse);
     };
   });
 </script>
@@ -318,27 +294,7 @@
   </Panneau>
 {/if}
 
-<Panneau titre="Dernières créations">
-  {#if creations.length === 0}
-    <p class="discret">Rien pour l'instant.</p>
-  {:else}
-    <div class="galerie">
-      {#each creations as creation (creation.id)}
-        <figure>
-          {#if vignettes[creation.id]}
-            <img src={vignettes[creation.id]} alt={creation.prompt ?? ''} width={creation.largeur} height={creation.hauteur} />
-          {:else}
-            <div class="vide" aria-hidden="true"></div>
-          {/if}
-          <figcaption>
-            <span class="prompt-court">{creation.prompt || 'Sans prompt'}</span>
-            <span class="discret code">{creation.largeur}×{creation.hauteur}{creation.seed != null ? ` · seed ${creation.seed}` : ''}</span>
-          </figcaption>
-        </figure>
-      {/each}
-    </div>
-  {/if}
-</Panneau>
+<PanneauRushes {signaler} {rafraichir} />
 
 <style>
   .grille {
@@ -457,34 +413,7 @@
     accent-color: var(--cyan);
   }
 
-  .galerie {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-    gap: 14px;
-  }
 
-  figure {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin: 0;
-    min-width: 0;
-  }
 
-  img,
-  .vide {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1;
-    object-fit: cover;
-    border: 1px solid var(--ligne);
-    background: var(--fond);
-  }
 
-  figcaption {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 12px;
-  }
 </style>

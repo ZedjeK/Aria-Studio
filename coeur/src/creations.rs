@@ -179,6 +179,30 @@ pub fn liste(data: &Path, limite: usize) -> Vec<Value> {
         .collect()
 }
 
+/// Réécrit la fiche d'une création qui existe (rangement, archive, corbeille), par un fichier temporaire : une fiche
+/// à moitié écrite ne doit jamais apparaître.
+///
+/// # Errors
+/// Fiche sans identifiant, création inconnue, ou dossier qui ne s'écrit pas.
+pub fn ecrire_fiche(data: &Path, fiche: &Value) -> Result<(), String> {
+    let id = fiche
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Fiche de création sans identifiant".to_owned())?;
+    verifier_id(data, id)?;
+    let dossier = dossier(data);
+    let temporaire = dossier.join(format!("{id}.json.tmp"));
+    let ecrit = json_v2(fiche).and_then(|octets| {
+        fs::write(&temporaire, octets)
+            .and_then(|()| fs::rename(&temporaire, dossier.join(format!("{id}.json"))))
+            .map_err(|e| format!("fiche de {id} : {e}"))
+    });
+    if ecrit.is_err() {
+        let _ = fs::remove_file(&temporaire);
+    }
+    ecrit
+}
+
 /// Le chemin du PNG d'une création.
 ///
 /// # Errors
@@ -356,6 +380,20 @@ mod tests {
             fiche(temp.path(), "20261122-140305-0a9fbc").unwrap_err(),
             "Création inconnue : 20261122-140305-0a9fbc"
         );
+    }
+
+    #[test]
+    fn reecrit_une_fiche_existante() {
+        let temp = tempfile::tempdir().unwrap();
+        let id = enregistrer(temp.path(), &png(8, 8), &infos(json!({"prompt": "a fox"}))).unwrap();
+        let mut f = fiche(temp.path(), &id).unwrap();
+        f["archive"] = json!(true);
+        ecrire_fiche(temp.path(), &f).unwrap();
+        let relue = fiche(temp.path(), &id).unwrap();
+        assert_eq!(relue["archive"], json!(true));
+        assert_eq!(relue["prompt"], json!("a fox"));
+        assert!(ecrire_fiche(temp.path(), &json!({"id": "20200101-000000-000000"})).is_err());
+        assert!(ecrire_fiche(temp.path(), &json!({"prompt": "x"})).is_err());
     }
 
     #[test]

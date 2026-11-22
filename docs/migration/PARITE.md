@@ -62,7 +62,7 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | --- | --- | --- | --- | --- |
 | — | Assistant de premier lancement | plan, licences, téléchargement, essai | `assistant.py`, `web/assistant.js`, `web/guide.js` | [ ] |
 | Création | Scénario | idée, listes, personnages, prompt final, traduction, optimisation, découpage en séquences | `prompt.py`, `listes.py`, `personnages.py`, `optimiseur.py`, `decoupage.py`, `routes_scenario.py`, `web/scenario.js`, `web/libre.js`, `web/decoupage.js`, `web/references.js` | [ ] |
-| Création | Plateau | créer, options, estimation, paliers, rushes, résultat, agrandissement | `plateau.py`, `paliers.py`, `estimation.py`, `rushes.py`, `orchestrateur.py`, `web/plateau.js`, `web/galerie.js` | [ ] page Plateau (`coeur/src/plateau.rs`, `appli/src/plateau.rs`, `interface/src/pages/Plateau.svelte`) : texte → image depuis une idée réécrite par le LLM (`coeur/src/prompt.rs` : consigne au gabarit de la v2, règles du modèle cible, consigne réécrite dans Réglages, spécialiste du workflow, nettoyage, AS-18 avant et après) ou depuis un prompt tel quel, LLM du workflow, workflow, checkpoint, format, nombre, seed, file et ✕ Annuler, dernières créations ; validation des steps d'un checkpoint « à valider » posée là en attendant Modèles → Ma collection. Restent : références, variation, LoRA, vision du LLM, estimation, paliers, Rushes, agrandissement |
+| Création | Plateau | créer, options, estimation, paliers, rushes, résultat, agrandissement | `plateau.py`, `paliers.py`, `estimation.py`, `rushes.py`, `orchestrateur.py`, `web/plateau.js`, `web/galerie.js` | [ ] page Plateau (`coeur/src/plateau.rs`, `appli/src/plateau.rs`, `interface/src/pages/Plateau.svelte`) : texte → image depuis une idée réécrite par le LLM (`coeur/src/prompt.rs` : consigne au gabarit de la v2, règles du modèle cible, consigne réécrite dans Réglages, spécialiste du workflow, nettoyage, AS-18 avant et après) ou depuis un prompt tel quel, LLM du workflow, workflow, checkpoint, format, nombre, seed, file et ✕ Annuler, dernières créations ; validation des steps d'un checkpoint « à valider » posée là en attendant Modèles → Ma collection. Rushes (`coeur/src/rushes.rs`, `interface/src/pages/PanneauRushes.svelte`) : vues Tous, Non rangés, Archives, Corbeille, dossiers dans `data\dossiers.json` (ancien format lu), sélection, actions, corbeille vidée seulement après confirmation. Restent : références, variation, LoRA, vision du LLM, estimation, paliers, import d'une image, rangement d'une nouvelle création dans un dossier, agrandissement |
 | Création | Retouche | rushes, retoucher | `retouche.py`, `web/retouche.js` | [ ] |
 | Création | Montage | tourner un clip, bobines, séquences, voix, corbeille | `sequences.py`, `voix.py`, `repliques.py`, `routes_montage.py`, `web/montage.js`, `web/sequence.js`, `web/voix.js` | [ ] |
 | Préparation | Modèles | Rechercher, Ma collection, Texte → image, Image → image, Vidéo ; téléchargements, corbeille, moteurs | `modeles.py`, `collection.py`, `decouvrir.py`, `telechargement.py`, `sources/`, `fiches.py`, `gguf.py`, `migration_modeles.py`, `moteurs.py`, `web/modeles.js`, `web/decouvrir.js`, `web/loras.js` | [ ] |
@@ -101,7 +101,7 @@ La v2 expose 138 routes HTTP. En v3, l'interface appelle des commandes Tauri : p
 | Clés | `/api/cles*` (4) | | [ ] |
 | Collection et LoRA | `/api/collection*` (6) | | [ ] |
 | Commandes en cours | `/api/commandes*` (2) | `lire_commandes`, `annuler_commande` (images du Plateau) | [ ] |
-| Créations | `/api/creations*`, `/api/agrandissements`, `/api/retouches` (9) | `commander_image`, `lire_creations`, `image_creation` | [ ] |
+| Créations | `/api/creations*`, `/api/agrandissements`, `/api/retouches` (9) | `commander_image`, `lire_rushes`, `image_creation` | [ ] |
 | Découvrir et télécharger | `/api/decouvrir*`, `/api/telechargements*`, `/api/workflows/*/telecharger`, `/api/llm/*/installer` (9) | | [ ] |
 | Démarrage, installation, mise à jour | `/api/demarrage`, `/api/installation`, `/api/mise-a-jour*` (9) | squelette | [ ] |
 | Emplacements | `/api/emplacements*` (4) | | [ ] |
@@ -114,7 +114,7 @@ La v2 expose 138 routes HTTP. En v3, l'interface appelle des commandes Tauri : p
 | Plateau | `/api/plateau*` (2) | `options_plateau` | [ ] |
 | Prompt | `/api/prompt*` (8) | réécriture d'une idée par `commander_image` (`reecrire`) | [ ] |
 | Réglages | `/api/reglages*` (6) | | [ ] |
-| Rushes | `/api/rushes*` (6) | | [ ] |
+| Rushes | `/api/rushes*` (6) | `etat_rushes`, `agir_rushes`, `vider_corbeille`, `creer_dossier`, `renommer_dossier`, `supprimer_dossier` (genre images ; les clips avec le Montage) | [ ] |
 | Sécurité | `/api/securite*` (7) | | [ ] |
 | Séquences | `/api/sequences*`, `/api/clips` (11) | | [ ] |
 | Sources | `/api/sources/*` (1) | | [ ] |
