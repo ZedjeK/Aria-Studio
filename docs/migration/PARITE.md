@@ -79,7 +79,10 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | llama-server | téléchargé, lancé sur `127.0.0.1:8095` avec une clé neuve à chaque démarrage (`llm.py`) ; fork PrismML | [ ] `coeur/src/llama.rs` : arguments, clé par `LLAMA_API_KEY`, corps des demandes, lecture du flux, messages ; processus et HTTP avec l'orchestrateur |
 | Installation d'un moteur | `moteurs.py` : état (absent, manuel, différent, à jour, externe), archives dans `_archives\` avec reprise et SHA-256, zip et 7z (tar de Windows puis 7-Zip), `.new` puis échange sous verrou, place nécessaire | [ ] `coeur/src/moteurs.rs` fait ; branchement réseau, verrou et commandes avec l'onglet Moteurs |
 | Retour à la version précédente d'un moteur | `moteurs.py` | [ ] `coeur/src/moteurs.rs::revenir` fait ; commande avec l'onglet Moteurs |
-| Libérer la mémoire vidéo | `moteurs.py`, `mesures.py` | [ ] |
+| Libérer la mémoire vidéo | `moteurs.py`, `mesures.py` | [ ] `coeur/src/orchestrateur.rs::liberer` et `comfy_serveur::liberer_vram` faits ; commande avec l'onglet Moteurs |
+| Un seul moteur sur la carte | `orchestrateur.py` : ComfyUI vide sa VRAM sans s'arrêter quand le LLM prend la main ; moteur arrêté pendant un échange ; ComfyUI orphelin repris | [ ] `coeur/src/orchestrateur.rs` fait ; branché avec les pages qui génèrent |
+| Garde VRAM | `garde.py` : attente sous 3,5 Gio, forcer, annuler ; processus coupables listés | [ ] `coeur/src/garde.rs` fait, sans la liste des coupables ; dialogue avec l'interface |
+| Carte graphique | `moteurs.py::carte` (NVML) : nom, pilote minimum, VRAM, RAM | [ ] `coeur/src/carte.rs` fait ; affichage avec l'onglet Moteurs |
 
 ## 5. API v2 et son équivalent v3
 

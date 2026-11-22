@@ -1,0 +1,147 @@
+//! La carte graphique, lue par NVML, comme en v2 (`app/moteurs.py::carte`, `app/mesures.py`) : nom, pilote, VRAM,
+//! et la RAM du PC. Les moteurs d'Aria demandent une carte NVIDIA avec un pilote assez récent pour CUDA 13.
+//!
+//! NVML est la bibliothèque du pilote NVIDIA (`nvml.dll`), chargée à l'exécution : sans carte NVIDIA, rien ne
+//! plante, la carte est dite absente.
+
+use std::sync::OnceLock;
+
+use nvml_wrapper::Nvml;
+use serde::Serialize;
+
+const GIO: u64 = 1024 * 1024 * 1024;
+
+/// Ce que l'onglet Moteurs dit de la carte.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Carte {
+    pub nvidia: bool,
+    pub nom: Option<String>,
+    pub pilote: Option<String>,
+    /// VRAM totale, en Gio arrondis.
+    pub vram_go: Option<u64>,
+    /// RAM du PC, en Gio arrondis.
+    pub ram_go: u64,
+    /// Carte et pilote conviennent.
+    pub ok: bool,
+    pub message: Option<String>,
+}
+
+/// La carte d'après ce que NVML a lu ; `pilote_min` est la branche minimale du pilote (580 pour CUDA 13).
+pub fn evaluer(lu: Option<(String, String, u64)>, ram: u64, pilote_min: u32) -> Carte {
+    let ram_go = arrondi_go(ram);
+    let Some((nom, pilote, vram)) = lu else {
+        return Carte {
+            nvidia: false,
+            nom: None,
+            pilote: None,
+            vram_go: None,
+            ram_go,
+            ok: false,
+            message: Some(
+                "Aucune carte NVIDIA détectée : les moteurs d'Aria demandent une carte NVIDIA (CUDA 13)."
+                    .to_owned(),
+            ),
+        };
+    };
+    let branche = pilote
+        .split('.')
+        .next()
+        .and_then(|b| b.trim().parse::<u32>().ok());
+    let ok = branche.is_some_and(|b| b >= pilote_min);
+    let message = (!ok).then(|| {
+        format!("Pilote {pilote} trop ancien : installe un pilote NVIDIA {pilote_min} ou plus récent.")
+    });
+    Carte {
+        nvidia: true,
+        nom: Some(nom),
+        pilote: Some(pilote),
+        vram_go: Some(arrondi_go(vram)),
+        ram_go,
+        ok,
+        message,
+    }
+}
+
+fn arrondi_go(octets: u64) -> u64 {
+    octets.saturating_add(GIO / 2) / GIO
+}
+
+/// NVML, initialisée une fois ; rien sans pilote NVIDIA.
+fn nvml() -> Option<&'static Nvml> {
+    static NVML: OnceLock<Option<Nvml>> = OnceLock::new();
+    NVML.get_or_init(|| Nvml::init().ok()).as_ref()
+}
+
+/// La carte de ce PC (la première carte NVIDIA).
+pub fn lire(pilote_min: u32) -> Carte {
+    let lu = nvml().and_then(|nvml| {
+        let carte = nvml.device_by_index(0).ok()?;
+        let nom = carte.name().ok()?;
+        let vram = carte.memory_info().ok()?.total;
+        let pilote = nvml.sys_driver_version().ok()?;
+        Some((nom, pilote, vram))
+    });
+    evaluer(lu, ram_totale(), pilote_min)
+}
+
+/// La VRAM occupée sur la première carte, tous programmes compris ; rien sans NVML.
+pub fn vram_utilisee() -> Option<u64> {
+    let nvml = nvml()?;
+    Some(nvml.device_by_index(0).ok()?.memory_info().ok()?.used)
+}
+
+/// La RAM du PC, en octets (0 si elle ne se lit pas).
+pub fn ram_totale() -> u64 {
+    let Ok(mut systeme) = sysinfo::System::new() else {
+        return 0;
+    };
+    systeme.refresh_memory();
+    systeme.total_memory()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sans_nvidia_la_carte_est_dite_absente() {
+        let c = evaluer(None, 32 * GIO, 580);
+        assert!(!c.nvidia && !c.ok);
+        assert_eq!(c.ram_go, 32);
+        assert!(c.message.unwrap().contains("Aucune carte NVIDIA"));
+    }
+
+    #[test]
+    fn un_pilote_trop_ancien_cite_le_minimum() {
+        let c = evaluer(
+            Some(("RTX 4080".to_owned(), "566.36".to_owned(), 16 * GIO)),
+            64 * GIO,
+            580,
+        );
+        assert!(c.nvidia && !c.ok);
+        assert_eq!(c.vram_go, Some(16));
+        let message = c.message.unwrap();
+        assert!(message.contains("566.36") && message.contains("580"), "{message}");
+    }
+
+    #[test]
+    fn un_pilote_recent_convient() {
+        let c = evaluer(
+            Some(("RTX 5090".to_owned(), "581.15".to_owned(), 32 * GIO)),
+            64 * GIO,
+            580,
+        );
+        assert!(c.ok);
+        assert_eq!(c.message, None);
+    }
+
+    #[test]
+    fn lire_ne_plante_jamais_meme_sans_carte() {
+        // Sur la CI, il n'y a pas de carte NVIDIA : la carte est dite absente, sans erreur.
+        let c = lire(580);
+        if !c.nvidia {
+            assert!(!c.ok);
+        }
+    }
+}
