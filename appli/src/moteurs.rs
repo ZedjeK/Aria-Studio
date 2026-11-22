@@ -102,7 +102,9 @@ impl Moteurs {
             catalogue,
             dossier_moteurs: emplacements.moteurs.clone(),
             dossier,
-            orchestrateur: Arc::new(Mutex::new(Orchestrateur::new(comfy, llama, garde))),
+            orchestrateur: Arc::new(Mutex::new(
+                Orchestrateur::new(comfy, llama, garde).avec_modeles(emplacements.modeles.clone()),
+            )),
             tache: Arc::new(Mutex::new(None)),
             annuler: Arc::new(AtomicBool::new(false)),
         })
