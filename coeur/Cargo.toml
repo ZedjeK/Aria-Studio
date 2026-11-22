@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+# La clé de llama-server, tirée à chaque lancement (déjà dans l'arbre par Tauri : aucune crate de plus).
+getrandom = "0.4.3"
 serde = { version = "1.0.229", features = ["derive"] }
 # Les données d'Aria Studio sont en YAML commenté (catalogue\, workflows\, securite\, casting\) : lecteur en Rust pur,
 # sans libyaml (serde_yaml n'est plus maintenu). Épinglé sur 2.1.1 par Cargo.lock.
@@ -16,6 +18,10 @@ serde-saphyr = { version = "2.1.1", default-features = false, features = ["deser
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 thiserror = "2.0.21"
+# Le WebSocket de ComfyUI, sur ws://127.0.0.1 seulement : sans TLS.
+tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+# HTTP vers les moteurs, sur 127.0.0.1 seulement : sans TLS ni proxy (la même version que l'appli).
+ureq = { version = "3.5.2", default-features = false }
 # Le zip des mises à jour : décompression deflate seule, en Rust (sans C à compiler).
 zip = { version = "9.8.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
