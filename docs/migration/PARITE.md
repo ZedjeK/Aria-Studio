@@ -77,7 +77,7 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | Moteur | v2 | Fait |
 | --- | --- | --- |
 | « J'ai déjà ComfyUI » | `moteurs.py::examiner_comfyui`, `verifier_comfyui` : ComfyUI portable de l'utilisateur (pas sur le réseau, version minimale, nœuds vérifiés par un lancement) | [ ] reporté : demande un sélecteur de dossier natif ; le chemin déjà choisi en v2 (`emplacements.comfyui`) est lu par l'appli |
-| Filtre AS-18 (protection des mineurs) | `securite.py`, `securite/socle.yaml`, `securite/temoins.yaml` : mineur + terme sensible refusé, termes toujours bloqués, âges en chiffres et en lettres, deux lectures des tirets ; ajouts de l'utilisateur dans `reglages.json` | [ ] `coeur/src/securite.rs` fait (socle embarqué, ajouts lus, témoins rejoués), appliqué à tout prompt dans `Workflow::preparer` ; page Réglages → Sécurité (essayer, ajouter, retirer, témoins) à porter ; la promotion d'un terme dans le socle n'existe plus (socle embarqué) |
+| Filtre AS-18 (protection des mineurs) | `securite.py`, `securite/socle.yaml`, `securite/temoins.yaml` : mineur + terme sensible refusé, termes toujours bloqués, âges en chiffres et en lettres, deux lectures des tirets ; ajouts de l'utilisateur dans `reglages.json` | [ ] `coeur/src/securite.rs` fait (socle embarqué, ajouts lus, témoins rejoués), appliqué à tout prompt dans `Workflow::preparer` ; Réglages → Sécurité fait (`coeur/src/securite_reglages.rs`, `interface/src/pages/ReglagesSecurite.svelte`) : socle lu, essayer une phrase, ajouter et retirer ses termes (à confirmer s'ils font bloquer un témoin « doit passer »), phrases témoins ajoutées, retirées et rejouées ; la promotion d'un terme dans le socle n'existe plus (socle embarqué) |
 | Préparation d'un workflow | `workflows.py::preparer`, `reglages.py` (section `workflows`) : défauts, réglages, appel ; checkpoint choisi ou par défaut ; steps à valider ; LoRA en chaîne ; LoRA du workflow retirée ; références ; variation | [ ] `coeur/src/workflows.rs` fait, références et variation comprises ; l'affiche vidéo et les balises de dialogue viendront avec le Montage |
 | Dossiers des modèles et chemins pour ComfyUI | `modeles.py` : `<nature>/<Famille>/{modeles,loras}`, `<nature>/_base/<type>`, `llm` ; `cache/comfyui_chemins.yaml` réécrit avant chaque lancement | [x] `coeur/src/modeles.rs`, écrit par l'orchestrateur avant de lancer ComfyUI |
 | Catalogue des moteurs | `catalogue/moteurs.yaml` lu par `app/moteurs.py` | [x] même fichier, embarqué dans l'exe et contrôlé à la lecture (`coeur/src/catalogue.rs`) ; YAML lu par `serde-saphyr` |
@@ -117,7 +117,7 @@ La v2 expose 138 routes HTTP. En v3, l'interface appelle des commandes Tauri : p
 | Prompt | `/api/prompt*` (8) | réécriture d'une idée par `commander_image` (`reecrire`) | [ ] |
 | Réglages | `/api/reglages*` (6) | | [ ] |
 | Rushes | `/api/rushes*` (6) | `etat_rushes`, `agir_rushes`, `vider_corbeille`, `creer_dossier`, `renommer_dossier`, `supprimer_dossier` (genre images ; les clips avec le Montage) | [ ] |
-| Sécurité | `/api/securite*` (7) | | [ ] |
+| Sécurité | `/api/securite*` (7) | `etat_securite`, `essayer_securite`, `ajouter_terme_securite`, `retirer_terme_securite`, `ajouter_temoin_securite`, `retirer_temoin_securite` ; `promouvoir` retirée (socle embarqué) | [x] |
 | Séquences | `/api/sequences*`, `/api/clips` (11) | | [ ] |
 | Sources | `/api/sources/*` (1) | | [ ] |
 | Voix | `/api/voix*` (7) | | [ ] |

@@ -13,6 +13,7 @@ mod installation;
 mod mise_a_jour;
 mod moteurs;
 mod plateau;
+mod securite;
 
 use std::path::{Path, PathBuf};
 
@@ -148,6 +149,12 @@ fn lancer() -> Result<(), String> {
             moteurs::liberer_carte,
             plateau::options_plateau,
             plateau::commander_image,
+            securite::etat_securite,
+            securite::essayer_securite,
+            securite::ajouter_terme_securite,
+            securite::retirer_terme_securite,
+            securite::ajouter_temoin_securite,
+            securite::retirer_temoin_securite,
             plateau::options_retouche,
             plateau::commander_retouche,
             plateau::commander_agrandissement,

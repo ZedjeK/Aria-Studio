@@ -1,7 +1,7 @@
 <!--
   Réglages : la première page est celle des moteurs (comme en v2) : la carte graphique, ComfyUI et llama.cpp, leur
-  installation depuis leur release GitHub officielle, leur suivi, le retour à la version précédente. Les autres
-  pages des réglages (emplacements, clés, sécurité, LLM, modèles image…) viennent avec leur portage.
+  installation depuis leur release GitHub officielle, leur suivi, le retour à la version précédente. Puis la sécurité
+  (filtre AS-18). Les autres pages des réglages (emplacements, clés, LLM, modèles image…) viennent avec leur portage.
   Pas de bouton orange ici : plusieurs moteurs, plusieurs actions de même poids ; donc aucun panneau accentué.
 -->
 <script lang="ts">
@@ -31,6 +31,7 @@
   import Jauge from '../lib/composants/Jauge.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
+  import ReglagesSecurite from './ReglagesSecurite.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -38,7 +39,10 @@
 
   let { signaler }: Props = $props();
 
-  const onglets = [{ id: 'moteurs', titre: 'Moteurs' }];
+  const onglets = [
+    { id: 'moteurs', titre: 'Moteurs' },
+    { id: 'securite', titre: 'Sécurité' },
+  ];
   let onglet = $state('moteurs');
   let etat = $state<EtatMoteurs | null>(null);
   /** Ce qu'on demande de confirmer : installer ou revenir, pour un moteur. */
@@ -104,6 +108,9 @@
 <h1>Réglages</h1>
 <p class="sous-titre">Ce qui fait tourner Aria Studio : les moteurs, puis tes réglages.</p>
 <SousOnglets {onglets} bind:actif={onglet} />
+{#if onglet === 'securite'}
+  <ReglagesSecurite {signaler} />
+{:else}
 <ASavoir>
   Versions épinglées et testées ensemble : téléchargées depuis leur release GitHub officielle, empreinte SHA-256
   vérifiée. L'ancienne version reste à côté, pour revenir en arrière.
@@ -171,6 +178,7 @@
   </Panneau>
 {:else}
   <p class="discret">Lecture…</p>
+{/if}
 {/if}
 
 {#if demande}
