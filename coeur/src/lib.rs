@@ -13,6 +13,8 @@ pub mod identite;
 pub mod installation;
 pub mod journal;
 pub mod llama;
+pub mod llama_serveur;
+pub mod local;
 pub mod mises_a_jour;
 pub mod moteurs;
 pub mod presence;
