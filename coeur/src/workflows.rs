@@ -672,10 +672,7 @@ mod tests {
             .unwrap();
         let (sn, se) = wf.entree("steps").unwrap();
         assert_eq!(api[&sn]["inputs"][&se], 30);
-        assert_eq!(
-            wf.variantes(temp.path(), Some(&reglages), &filtre()),
-            vec![origine]
-        );
+        assert_eq!(wf.variantes(temp.path(), Some(&reglages)), vec![origine]);
     }
 
     #[test]
