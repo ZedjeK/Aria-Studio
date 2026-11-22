@@ -33,6 +33,8 @@
   } from '../lib/retouche';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
+  import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import Panneau from '../lib/composants/Panneau.svelte';
 
   interface Props {
@@ -72,6 +74,8 @@
   let dernier: { x: number; y: number } | null = null;
 
   const workflow = $derived(options?.workflows.find((w) => w.id === workflowId));
+  /** Les LoRA de la famille du workflow : cochées, force, mots déclencheurs. */
+  let lignesLoras = $state<Record<string, LigneLora>>({});
   const seed = $derived(lireSeed(seedTexte));
   const probleme = $derived(source && mode === 'agrandissement' ? problemeTaille(source, largeur, hauteur) : null);
   const resultats = $derived(commandes.filter((c) => c.type !== 'creation'));
@@ -103,6 +107,7 @@
     workflowId = id;
     const choisi = options?.workflows.find((w) => w.id === id);
     modele = modeleInitial(choisi);
+    lignesLoras = lignesPour(choisi?.loras ?? [], lignesLoras);
     if (options) llmChoisi = llmInitial(options, id);
   }
 
@@ -228,6 +233,7 @@
         seed,
         modele: modele || null,
         nombre,
+        loras: lorasChoisies(workflow.loras, lignesLoras),
       };
       if (mode === 'retouche') {
         const masque = peint && canevas ? canevas.toDataURL('image/png') : null;
@@ -431,7 +437,17 @@
         </label>
       </div>
       {#if workflow && workflow.modeles.length === 0}
-        <p class="discret">Les steps de ce checkpoint attendent d'être validés : fais-le depuis le Plateau.</p>
+        <p class="discret">
+          Les steps de ce checkpoint attendent d'être validés : fais-le depuis le Plateau ou Modèles → Ma collection.
+        </p>
+      {/if}
+      {#if workflow}
+        <ChoixLoras
+          famille={workflow.famille}
+          proposees={workflow.loras}
+          forceMax={options.loraForceMax}
+          bind:lignes={lignesLoras}
+        />
       {/if}
 
       <div class="actions">

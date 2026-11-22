@@ -34,6 +34,8 @@
   } from '../lib/plateau';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
+  import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import Panneau from '../lib/composants/Panneau.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
   import PanneauRushes from './PanneauRushes.svelte';
@@ -68,6 +70,8 @@
 
   const proposes = $derived(options ? workflowsPour(modeReference, options, optionsInspirer) : []);
   const workflow = $derived(proposes.find((w) => w.id === workflowId));
+  /** Les LoRA de la famille du workflow : cochées, force, mots déclencheurs. */
+  let lignesLoras = $state<Record<string, LigneLora>>({});
   const maxRushes = $derived(rushesMax(modeReference, workflow));
   const seed = $derived(lireSeed(seedTexte));
   const nombreValide = $derived(Number.isInteger(nombre) && nombre >= 1 && nombre <= (options?.nombreMax ?? 1));
@@ -86,6 +90,7 @@
     workflowId = id;
     const choisi = proposes.find((w) => w.id === id);
     modele = modeleInitial(choisi);
+    lignesLoras = lignesPour(choisi?.loras ?? [], lignesLoras);
     if (options) {
       format = modeReference === 'variation' ? FORMAT_IMAGE : formatInitial(options, choisi);
       llmChoisi = llmInitial(modeReference === 'inspirer' && optionsInspirer ? optionsInspirer : options, id);
@@ -147,6 +152,7 @@
         references: modeReference ? references : [],
         modeReference,
         liberte,
+        loras: lorasChoisies(workflow.loras, lignesLoras),
       });
       signaler(nombre > 1 ? `${nombre} images en file.` : 'Image en file.');
       await relireCommandes();
@@ -285,6 +291,15 @@
         <input type="text" inputmode="numeric" placeholder="au hasard" bind:value={seedTexte} class:invalide={seed === undefined} />
       </label>
     </div>
+
+    {#if workflow}
+      <ChoixLoras
+        famille={workflow.famille}
+        proposees={workflow.loras}
+        forceMax={options.loraForceMax}
+        bind:lignes={lignesLoras}
+      />
+    {/if}
 
     {#if workflow && workflow.aValider.length > 0}
       <div class="a-valider">

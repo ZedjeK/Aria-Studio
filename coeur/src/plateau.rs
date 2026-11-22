@@ -26,7 +26,7 @@ use crate::llm::{self, Lieux};
 use crate::orchestrateur::Orchestrateur;
 use crate::retouche::{self, DemandeAgrandissement, DemandeRetouche};
 use crate::workflows::{self, FORMATS, ReglagesWorkflow, Workflow};
-use crate::{Dossier, creations, fiches, prompt, reglages, securite};
+use crate::{Dossier, collection, creations, fiches, modeles, prompt, reglages, securite};
 
 /// Images d'une même commande, au plus (contre une faute de frappe, comme en v2).
 pub const NOMBRE_MAX: u32 = 50;
@@ -85,10 +85,37 @@ pub struct Demande {
     /// Redessiner : la liberté (denoise), de 0,05 (copie) à 1 (libre).
     #[serde(default = "liberte_defaut")]
     pub liberte: f64,
+    /// Les LoRA de la famille du workflow, cochées au Plateau.
+    #[serde(default)]
+    pub loras: Vec<ChoixLora>,
 }
 
 const fn liberte_defaut() -> f64 {
     LIBERTE_DEFAUT
+}
+
+/// Une LoRA choisie : son fichier dans le dossier des LoRA de la famille, sa force et ses mots déclencheurs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ChoixLora {
+    pub fichier: String,
+    #[serde(default = "force_lora_defaut")]
+    pub force: f64,
+    #[serde(default)]
+    pub declencheurs: String,
+}
+
+const fn force_lora_defaut() -> f64 {
+    1.0
+}
+
+/// Une LoRA proposée pour un workflow : celles de sa famille, avec les mots et la force retenus.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LoraProposee {
+    pub fichier: String,
+    pub nom: String,
+    pub declencheurs: String,
+    pub force: f64,
+    pub page: Option<String>,
 }
 
 /// Une commande du Plateau et son avancement.
@@ -138,6 +165,8 @@ pub struct Commande {
     pub references: Vec<String>,
     pub mode_reference: Option<String>,
     pub liberte: f64,
+    /// Les LoRA branchées, et leurs mots déclencheurs en tête du prompt.
+    pub loras: Vec<ChoixLora>,
 }
 
 impl Commande {
@@ -172,12 +201,13 @@ impl Commande {
             references: Vec::new(),
             mode_reference: None,
             liberte: LIBERTE_DEFAUT,
+            loras: Vec::new(),
         }
     }
 }
 
 /// Un workflow proposé par le Plateau.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChoixWorkflow {
     pub id: String,
@@ -200,6 +230,8 @@ pub struct ChoixWorkflow {
     pub variation: bool,
     /// Réservé à la Retouche : S'inspirer ne le propose pas.
     pub reserve_retouche: bool,
+    /// Les LoRA de sa famille.
+    pub loras: Vec<LoraProposee>,
 }
 
 /// Un LLM proposé pour réécrire.
@@ -215,7 +247,7 @@ pub struct ChoixLlm {
 }
 
 /// Ce que le Plateau propose : relu à chaque appel, un modèle déposé y apparaît aussitôt.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Options {
     pub formats: Vec<String>,
@@ -233,6 +265,8 @@ pub struct Options {
     pub defaut_references: String,
     /// Le plus d'images de référence qu'Aria envoie.
     pub references_max: usize,
+    /// La force d'une LoRA, au plus.
+    pub lora_force_max: f64,
 }
 
 /// Les dossiers dont le Plateau a besoin.
@@ -373,6 +407,7 @@ pub fn options_pour(contexte: &Contexte, tache: &str, defaut: String) -> Options
             references: wf.accepte_references(),
             variation: wf.accepte_variation(),
             reserve_retouche: wf.reserve_retouche(),
+            loras: loras_proposees(contexte, &wf),
             modeles,
             id: wf.id,
         });
@@ -394,6 +429,109 @@ pub fn options_pour(contexte: &Contexte, tache: &str, defaut: String) -> Options
         llm_par_workflow,
         defaut_references: workflow_references(&contexte.dossier),
         references_max: workflows::REFERENCES_MAX,
+        lora_force_max: workflows::FORCE_LORA_MAX,
+    }
+}
+
+/// Les LoRA de la famille d'un workflow, avec leurs mots et leur force retenus.
+fn loras_proposees(contexte: &Contexte, wf: &Workflow) -> Vec<LoraProposee> {
+    let registre = crate::telechargement::registre(&contexte.data);
+    let dossier = wf.dossier_loras();
+    collection::loras(&contexte.dossier, &contexte.data, &contexte.modeles, &dossier)
+        .into_iter()
+        .map(|(fichier, r)| LoraProposee {
+            nom: fichier
+                .rsplit_once('.')
+                .map_or(fichier.as_str(), |(n, _)| n)
+                .to_owned(),
+            page: registre
+                .get(&format!("{dossier}/{fichier}"))
+                .and_then(|e| e.get("page"))
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            declencheurs: r.declencheurs,
+            force: r.force,
+            fichier,
+        })
+        .collect()
+}
+
+/// Les LoRA d'une demande, contrôlées comme en v2 : de la famille du workflow, force de 0 à 2, mots déclencheurs
+/// sans espaces en trop. Le filtre AS-18 les lit avec la demande (voir [`textes_loras`]).
+///
+/// # Errors
+/// LoRA absente, force hors bornes, mots trop longs.
+pub fn valider_loras(
+    contexte: &Contexte,
+    wf: &Workflow,
+    loras: &[ChoixLora],
+) -> Result<Vec<ChoixLora>, String> {
+    if loras.is_empty() {
+        return Ok(Vec::new());
+    }
+    let dossier = wf.dossier_loras();
+    let disponibles = modeles::fichiers(&contexte.modeles, &dossier, &modeles::EXTENSIONS_IMAGE);
+    loras
+        .iter()
+        .map(|l| {
+            if !disponibles.contains(&l.fichier) {
+                return Err(format!("LoRA absente de modeles/{dossier} : {}", l.fichier));
+            }
+            if !(0.0..=workflows::FORCE_LORA_MAX).contains(&l.force) {
+                return Err(format!("Force de LoRA entre 0 et 2 : {}", l.force));
+            }
+            let declencheurs = l.declencheurs.split_whitespace().collect::<Vec<_>>().join(" ");
+            if declencheurs.chars().count() > collection::LONGUEUR_DECLENCHEURS {
+                return Err(format!(
+                    "Mots déclencheurs de {} : {} caractères au plus",
+                    l.fichier,
+                    collection::LONGUEUR_DECLENCHEURS
+                ));
+            }
+            Ok(ChoixLora {
+                fichier: l.fichier.clone(),
+                force: (l.force * 100.0).round() / 100.0,
+                declencheurs,
+            })
+        })
+        .collect()
+}
+
+/// Les mots déclencheurs des LoRA, pour le filtre AS-18.
+pub fn textes_loras(loras: &[ChoixLora]) -> impl Iterator<Item = &str> {
+    loras
+        .iter()
+        .map(|l| l.declencheurs.as_str())
+        .filter(|d| !d.is_empty())
+}
+
+/// Retient les mots et la force des LoRA choisies pour la prochaine fois (`reglages.json`, section `loras`).
+///
+/// # Errors
+/// `reglages.json` ne s'écrit pas.
+pub fn memoriser_loras(contexte: &Contexte, wf: &Workflow, loras: &[ChoixLora]) -> Result<(), String> {
+    if loras.is_empty() {
+        return Ok(());
+    }
+    let dossier = wf.dossier_loras();
+    reglages::modifier_section(&contexte.dossier, "loras", |s| {
+        for l in loras {
+            s.insert(
+                format!("{dossier}/{}", l.fichier),
+                json!({"declencheurs": l.declencheurs, "force": l.force}),
+            );
+        }
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Le prompt envoyé à ComfyUI : les mots déclencheurs des LoRA en tête, comme en v2.
+pub fn avec_declencheurs(prompt: &str, loras: &[ChoixLora]) -> String {
+    let declencheurs: Vec<&str> = textes_loras(loras).collect();
+    if declencheurs.is_empty() {
+        prompt.to_owned()
+    } else {
+        format!("{}, {prompt}", declencheurs.join(", "))
     }
 }
 
@@ -506,13 +644,15 @@ fn nom_de(wf: &Workflow) -> String {
 }
 
 /// Ce qu'une demande contrôlée devient.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Validee {
     pub workflow: String,
     /// L'idée ou le prompt, sans les espaces autour.
     pub texte: String,
     /// Le GGUF qui réécrira, s'il faut réécrire.
     pub llm: Option<String>,
+    /// Les LoRA contrôlées.
+    pub loras: Vec<ChoixLora>,
 }
 
 /// Contrôle une demande, comme la v2 avant de la mettre en file.
@@ -583,14 +723,17 @@ pub fn valider(contexte: &Contexte, demande: &Demande) -> Result<Validee, String
         None
     };
     // Le filtre lit aussi les idées et prompts des rushes de départ et de leurs ancêtres : il ne lit pas les images.
+    let loras = valider_loras(contexte, &wf, &demande.loras)?;
     let origine = creations::textes_origine(&contexte.data, &demande.references)?;
     let mut textes: Vec<&str> = vec![prompt.as_str()];
     textes.extend(origine.iter().map(String::as_str));
+    textes.extend(textes_loras(&loras));
     securite::verifier(&contexte.dossier, &textes).map_err(|e| e.to_string())?;
     Ok(Validee {
         workflow: id,
         texte: prompt,
         llm,
+        loras,
     })
 }
 
@@ -772,6 +915,8 @@ impl Plateau {
     /// Voir [`valider`] ; ou le fil du Plateau est arrêté.
     pub fn commander(&self, demande: &Demande) -> Result<Commande, String> {
         let validee = valider(&self.contexte, demande)?;
+        let wf = workflows::obtenir(&validee.workflow)?;
+        memoriser_loras(&self.contexte, &wf, &validee.loras)?;
         let mut commande = Commande::nouvelle(
             nouvel_id()?,
             "creation",
@@ -787,6 +932,7 @@ impl Plateau {
         commande.seed = demande.seed;
         commande.nombre = demande.nombre;
         commande.modele.clone_from(&demande.modele);
+        commande.loras = validee.loras;
         if !demande.references.is_empty() {
             commande.references.clone_from(&demande.references);
             commande.mode_reference.clone_from(&demande.mode_reference);
@@ -989,10 +1135,16 @@ fn executer(
         });
         let debut = Instant::now();
         let mut valeurs = Map::new();
-        valeurs.insert("prompt".to_owned(), json!(texte_prompt));
+        valeurs.insert(
+            "prompt".to_owned(),
+            json!(avec_declencheurs(&texte_prompt, &c.loras)),
+        );
         valeurs.insert("seed".to_owned(), json!(seed));
         valeurs.insert("modele".to_owned(), json!(c.modele));
         valeurs.insert("prefixe".to_owned(), json!(PREFIXE));
+        if !c.loras.is_empty() {
+            valeurs.insert("loras".to_owned(), json!(c.loras));
+        }
         if inspirer {
             valeurs.insert("image".to_owned(), json!(noms.first()));
             valeurs.insert("references".to_owned(), json!(noms.get(1..).unwrap_or_default()));
@@ -1036,7 +1188,7 @@ fn executer(
             "llm": llm_utilise,
             "workflow": c.workflow,
             "modele": modele,
-            "loras": [],
+            "loras": c.loras,
             "format": c.format,
             "seed": seed,
             "parent": c.references.first(),
@@ -1058,7 +1210,6 @@ fn executer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::modeles;
     use std::fs;
     use std::time::Duration;
 
@@ -1111,7 +1262,50 @@ mod tests {
             references: Vec::new(),
             mode_reference: None,
             liberte: LIBERTE_DEFAUT,
+            loras: Vec::new(),
         }
+    }
+
+    #[test]
+    fn loras_d_une_demande() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp, KREA);
+        let wf = workflows::obtenir(KREA).unwrap();
+        let dossier = ctx.modeles.join(wf.dossier_loras());
+        fs::create_dir_all(&dossier).unwrap();
+        fs::write(dossier.join("neon.safetensors"), b"x").unwrap();
+        let choix = |fichier: &str, force: f64, declencheurs: &str| ChoixLora {
+            fichier: fichier.to_owned(),
+            force,
+            declencheurs: declencheurs.to_owned(),
+        };
+        let propres =
+            valider_loras(&ctx, &wf, &[choix("neon.safetensors", 0.756, "  neon   glow ")]).unwrap();
+        assert_eq!(propres, vec![choix("neon.safetensors", 0.76, "neon glow")]);
+        assert!(valider_loras(&ctx, &wf, &[choix("absente.safetensors", 1.0, "")]).is_err());
+        assert!(valider_loras(&ctx, &wf, &[choix("neon.safetensors", 2.5, "")]).is_err());
+        assert_eq!(avec_declencheurs("a fox", &propres), "neon glow, a fox");
+        assert_eq!(
+            avec_declencheurs("a fox", &[choix("neon.safetensors", 1.0, "")]),
+            "a fox"
+        );
+        memoriser_loras(&ctx, &wf, &propres).unwrap();
+        let proposees = loras_proposees(&ctx, &wf);
+        assert_eq!(proposees.len(), 1);
+        assert_eq!(
+            (
+                proposees[0].nom.as_str(),
+                proposees[0].declencheurs.as_str(),
+                proposees[0].force
+            ),
+            ("neon", "neon glow", 0.76)
+        );
+        // Les mots déclencheurs passent au filtre AS-18 avec la demande.
+        let mut d = demande("a portrait");
+        d.loras = vec![choix("neon.safetensors", 1.0, "twelve-year-old girl, nude")];
+        assert!(valider(&ctx, &d).is_err());
+        d.loras = vec![choix("neon.safetensors", 1.0, "neon")];
+        assert_eq!(valider(&ctx, &d).unwrap().loras.len(), 1);
     }
 
     /// Ce que le faux llama-server a reçu.
