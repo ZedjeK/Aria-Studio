@@ -1,0 +1,264 @@
+<!--
+  Réglages : la première page est celle des moteurs (comme en v2) : la carte graphique, ComfyUI et llama.cpp, leur
+  installation depuis leur release GitHub officielle, leur suivi, le retour à la version précédente. Les autres
+  pages des réglages (emplacements, clés, sécurité, LLM, modèles image…) viennent avec leur portage.
+  Pas de bouton orange ici : plusieurs moteurs, plusieurs actions de même poids ; donc aucun panneau accentué.
+-->
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import {
+    annulerInstallationMoteur,
+    installerMoteur,
+    libererCarte,
+    lireMoteurs,
+    messageErreur,
+    revenirMoteur,
+    type EtatMoteur,
+    type EtatMoteurs,
+  } from '../lib/api';
+  import {
+    fractionTache,
+    libelleStatut,
+    manquants,
+    mesureTache,
+    texteCarte,
+    texteConfirmation,
+    texteInstaller,
+  } from '../lib/moteurs';
+  import ASavoir from '../lib/composants/ASavoir.svelte';
+  import Bouton from '../lib/composants/Bouton.svelte';
+  import Dialogue from '../lib/composants/Dialogue.svelte';
+  import Jauge from '../lib/composants/Jauge.svelte';
+  import Panneau from '../lib/composants/Panneau.svelte';
+  import SousOnglets from '../lib/composants/SousOnglets.svelte';
+
+  interface Props {
+    signaler: (texte: string, erreur?: boolean) => void;
+  }
+
+  let { signaler }: Props = $props();
+
+  const onglets = [{ id: 'moteurs', titre: 'Moteurs' }];
+  let onglet = $state('moteurs');
+  let etat = $state<EtatMoteurs | null>(null);
+  /** Ce qu'on demande de confirmer : installer ou revenir, pour un moteur. */
+  let demande = $state<{ action: 'installer' | 'revenir'; moteur: EtatMoteur } | null>(null);
+  let minuteur: ReturnType<typeof setTimeout> | undefined;
+
+  const enCours = $derived(etat?.tache != null && !etat.tache.fini);
+  const absents = $derived(etat ? manquants(etat.moteurs) : []);
+
+  async function relire() {
+    clearTimeout(minuteur);
+    try {
+      etat = await lireMoteurs();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+    // Pendant une installation, l'avancement se relit chaque seconde.
+    if (etat?.tache && !etat.tache.fini) minuteur = setTimeout(() => void relire(), 1000);
+  }
+
+  async function confirmer() {
+    const d = demande;
+    demande = null;
+    if (!d) return;
+    try {
+      if (d.action === 'installer') {
+        await installerMoteur(d.moteur.id);
+      } else {
+        const version = await revenirMoteur(d.moteur.id);
+        signaler(`${d.moteur.nom} : retour à la version ${version ?? 'posée à la main'}.`);
+      }
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+    await relire();
+  }
+
+  async function annuler() {
+    try {
+      await annulerInstallationMoteur();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+    await relire();
+  }
+
+  async function liberer() {
+    try {
+      await libererCarte();
+      signaler('Carte graphique libérée.');
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+    await relire();
+  }
+
+  onMount(() => {
+    void relire();
+    return () => clearTimeout(minuteur);
+  });
+</script>
+
+<h1>Réglages</h1>
+<p class="sous-titre">Ce qui fait tourner Aria Studio : les moteurs, puis tes réglages.</p>
+<SousOnglets {onglets} bind:actif={onglet} />
+<ASavoir>
+  Versions épinglées et testées ensemble : téléchargées depuis leur release GitHub officielle, empreinte SHA-256
+  vérifiée. L'ancienne version reste à côté, pour revenir en arrière.
+</ASavoir>
+
+{#if etat}
+  {#if absents.length > 0}
+    <p class="manque" role="status">
+      {absents.map((m) => m.nom).join(' et ')} : absent{absents.length > 1 ? 's' : ''}, Aria ne peut pas générer sans.
+    </p>
+  {/if}
+
+  <Panneau titre="Carte graphique">
+    <p class:ko={!etat.carte.ok}>{texteCarte(etat.carte)}</p>
+    <div class="actions">
+      <Bouton petit onclick={() => void liberer()}>Libérer la carte</Bouton>
+    </div>
+  </Panneau>
+
+  <Panneau titre="Moteurs">
+    <ul class="moteurs">
+      {#each etat.moteurs as m (m.id)}
+        {@const installer = texteInstaller(m)}
+        {@const tache = etat.tache && etat.tache.id === m.id ? etat.tache : null}
+        <li>
+          <div class="entete">
+            <strong>{m.nom}</strong>
+            <span class="badge" class:bon={m.statut === 'a_jour' || m.statut === 'externe'}>{libelleStatut(m.statut)}</span>
+            {#if m.facultatif}<span class="badge">facultatif</span>{/if}
+            {#if m.occupe}<span class="badge">en marche</span>{/if}
+          </div>
+          <p class="discret">
+            {m.role} · épinglé {m.version}{m.versionInstallee && m.versionInstallee !== m.version
+              ? ` · installé ${m.versionInstallee}`
+              : ''}
+          </p>
+          {#if m.externe}<p class="discret">Dossier : <code>{m.chemin}</code></p>{/if}
+          {#if m.prerequis}<p class="ko">{m.prerequis}</p>{/if}
+          {#if tache}
+            <div class="suivi">
+              <Jauge etiquette={tache.etape} fraction={fractionTache(tache)} mesure={mesureTache(tache)} />
+              {#if tache.erreur}<p class="ko">{tache.erreur}</p>{/if}
+            </div>
+          {/if}
+          <div class="actions">
+            {#if tache && !tache.fini && tache.etape.startsWith('Téléchargement')}
+              <Bouton genre="discret" petit onclick={() => void annuler()}>Annuler</Bouton>
+            {/if}
+            {#if installer}
+              <Bouton
+                petit
+                desactive={enCours || m.prerequis !== null}
+                onclick={() => (demande = { action: 'installer', moteur: m })}>{installer}</Bouton
+              >
+            {/if}
+            {#if m.precedente && !m.externe}
+              <Bouton petit desactive={enCours} onclick={() => (demande = { action: 'revenir', moteur: m })}
+                >Revenir</Bouton
+              >
+            {/if}
+          </div>
+        </li>
+      {/each}
+    </ul>
+  </Panneau>
+{:else}
+  <p class="discret">Lecture…</p>
+{/if}
+
+{#if demande}
+  <Dialogue
+    titre={demande.action === 'installer'
+      ? `Installer ${demande.moteur.nom} ${demande.moteur.version} ?`
+      : `Revenir à la version précédente de ${demande.moteur.nom} ?`}
+    fermer={() => (demande = null)}
+  >
+    <p>
+      {demande.action === 'installer'
+        ? texteConfirmation(demande.moteur)
+        : 'Le moteur est arrêté le temps de l’échange ; un second « Revenir » redonne la version actuelle.'}
+    </p>
+    {#snippet pied()}
+      <Bouton genre="discret" onclick={() => (demande = null)}>Annuler</Bouton>
+      <Bouton genre="principal" onclick={() => void confirmer()}
+        >{demande?.action === 'installer' ? 'Installer' : 'Revenir'}</Bouton
+      >
+    {/snippet}
+  </Dialogue>
+{/if}
+
+<style>
+  .moteurs {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    padding-bottom: 14px;
+    border-bottom: 1px solid color-mix(in srgb, var(--ligne) 50%, transparent);
+  }
+
+  li:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .entete {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .badge {
+    padding: 1px 8px;
+    border: 1px solid var(--ligne);
+    color: var(--texte-2);
+    font-size: 11px;
+  }
+
+  .badge.bon {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  .discret {
+    margin: 4px 0 0;
+    color: var(--texte-2);
+    font-size: 13px;
+  }
+
+  .ko {
+    margin: 6px 0 0;
+    color: var(--rouge);
+  }
+
+  .manque {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--orange);
+    color: var(--texte);
+  }
+
+  .suivi {
+    margin-top: 10px;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+</style>

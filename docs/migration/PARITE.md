@@ -74,6 +74,7 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 
 | Moteur | v2 | Fait |
 | --- | --- | --- |
+| « J'ai déjà ComfyUI » | `moteurs.py::examiner_comfyui`, `verifier_comfyui` : ComfyUI portable de l'utilisateur (pas sur le réseau, version minimale, nœuds vérifiés par un lancement) | [ ] reporté : demande un sélecteur de dossier natif ; le chemin déjà choisi en v2 (`emplacements.comfyui`) est lu par l'appli |
 | Catalogue des moteurs | `catalogue/moteurs.yaml` lu par `app/moteurs.py` | [x] même fichier, embarqué dans l'exe et contrôlé à la lecture (`coeur/src/catalogue.rs`) ; YAML lu par `serde-saphyr` |
 | ComfyUI portable | téléchargé (`catalogue/moteurs.yaml`, SHA-256), lancé sur `127.0.0.1:8195`, piloté en HTTP et WebSocket (`comfy.py`) ; mode externe « J'ai déjà ComfyUI » | [ ] `coeur/src/comfy.rs` : arguments sans CORS, dossiers de travail, préfixes uniques, événements, historique, effacement des sorties, orphelins, VRAM stable ; processus, HTTP, WebSocket et mode externe avec l'orchestrateur |
 | llama-server | téléchargé, lancé sur `127.0.0.1:8095` avec une clé neuve à chaque démarrage (`llm.py`) ; fork PrismML | [ ] `coeur/src/llama.rs` : arguments, clé par `LLAMA_API_KEY`, corps des demandes, lecture du flux, messages ; processus et HTTP avec l'orchestrateur |
