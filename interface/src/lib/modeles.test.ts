@@ -10,6 +10,7 @@ import {
   ordreTache,
   stepsProposes,
   telechargementActif,
+  texteIdentification,
   texteTelechargement,
 } from './modeles';
 
@@ -66,5 +67,22 @@ describe('Modèles', () => {
     expect(erreurLora('neon', 2.5)).toBe('Force de LoRA entre 0 et 2');
     expect(dateLisible('2026-11-22T14:03:00')).toBe('22/11/2026 14:03');
     expect(dateLisible(null)).toBe('');
+  });
+
+  it('suit la recherche des sources', () => {
+    const base = { total: 3, fait: 0, fichier: null, phase: null, trouves: [], introuvables: [], erreurs: [] };
+    expect(texteIdentification({ ...base, etat: 'repos' })).toBe('');
+    expect(texteIdentification({ ...base, etat: 'en_cours', fait: 1, fichier: 'a.safetensors', phase: 'civitai' })).toBe(
+      '2 sur 3 · a.safetensors · recherche sur Civitai',
+    );
+    expect(
+      texteIdentification({
+        ...base,
+        etat: 'termine',
+        trouves: [{ nom: 'a', ou: 'Civitai : A' }],
+        introuvables: ['b', 'c'],
+        erreurs: [],
+      }),
+    ).toBe('1 retrouvé, 2 introuvables');
   });
 });

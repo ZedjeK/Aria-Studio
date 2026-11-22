@@ -598,6 +598,23 @@ export const telechargerLien = (lien: string, dossier: string): Promise<Telechar
 /** Une vignette de Civitai, en octets (l'interface ne charge rien d'ailleurs). */
 export const vignetteModele = (url: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('vignette_modele', { url });
 
+/** Où en est « Retrouver les sources » (aria_coeur::retrouver::Identification). */
+export interface IdentificationSources {
+  etat: 'repos' | 'en_cours' | 'termine';
+  total: number;
+  fait: number;
+  fichier: string | null;
+  phase: 'empreinte' | 'civitai' | null;
+  trouves: { nom: string; ou: string }[];
+  introuvables: string[];
+  erreurs: { nom: string; erreur: string }[];
+}
+
+export const retrouverSources = (): Promise<IdentificationSources> =>
+  invoke<IdentificationSources>('retrouver_sources');
+
+export const etatSources = (): Promise<IdentificationSources> => invoke<IdentificationSources>('etat_sources');
+
 /** Un dossier d'Aria (aria_coeur::emplacements::DossierConnu). */
 export interface DossierConnu {
   cle: string;

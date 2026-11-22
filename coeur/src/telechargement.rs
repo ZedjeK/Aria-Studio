@@ -132,6 +132,24 @@ pub fn registre(data: &Path) -> Map<String, Value> {
         .unwrap_or_default()
 }
 
+/// Un seul fil à la fois modifie le registre : la file, la corbeille, Retrouver les sources.
+static VERROU_REGISTRE: Mutex<()> = Mutex::new(());
+
+/// Modifie le registre sous verrou : relu, modifié, réécrit d'un coup.
+///
+/// # Errors
+/// Le registre ne s'écrit pas.
+pub fn modifier_registre<T>(
+    data: &Path,
+    modifier: impl FnOnce(&mut Map<String, Value>) -> T,
+) -> io::Result<T> {
+    let _verrou = VERROU_REGISTRE.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut r = registre(data);
+    let sortie = modifier(&mut r);
+    ecrire_registre(data, &r)?;
+    Ok(sortie)
+}
+
 fn ecrire_registre(data: &Path, registre: &Map<String, Value>) -> io::Result<()> {
     fs::create_dir_all(data)?;
     let chemin = data.join("modeles.json");
@@ -176,7 +194,6 @@ fn inscrire(
     taille: u64,
     sha256: &str,
 ) -> io::Result<()> {
-    let mut registre = registre(&contexte.data);
     let mut entree = json!({
         "source": fiche.source,
         "page": fiche.page,
@@ -205,8 +222,9 @@ fn inscrire(
         objet.insert("a_valider".to_owned(), json!({"steps": steps}));
         objet.insert("conseils".to_owned(), json!({"steps": steps, "cfg": cfg}));
     }
-    registre.insert(cle.to_owned(), entree);
-    ecrire_registre(&contexte.data, &registre)
+    modifier_registre(&contexte.data, |r| {
+        r.insert(cle.to_owned(), entree);
+    })
 }
 
 fn nouvel_id() -> Result<String, String> {
@@ -506,7 +524,11 @@ fn telecharger(
     Ok(())
 }
 
-fn empreinte(fichier: &Path) -> io::Result<String> {
+/// Le SHA-256 d'un fichier, en hexadécimal minuscule.
+///
+/// # Errors
+/// Le fichier ne se lit pas.
+pub fn empreinte(fichier: &Path) -> io::Result<String> {
     let mut entree = fs::File::open(fichier)?;
     let mut hacheur = Sha256::new();
     let mut tampon = vec![0u8; 16 * BLOC];

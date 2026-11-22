@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use aria_coeur::carte;
 use aria_coeur::decouvrir::{self, Demande, Famille, FichiersDepot, Proposition, Recherche};
+use aria_coeur::retrouver::{self, Identification};
 use aria_coeur::telechargement::{Reseau, Tache, Telechargeur};
 use tauri::State;
 use tauri::ipc::Response;
@@ -142,4 +143,31 @@ pub async fn vignette_modele(
         Ok(Response::new(octets))
     })
     .await
+}
+
+/// Lance « Retrouver les sources » des fichiers déposés à la main, dans un fil à part ; l'interface suit
+/// `etat_sources`.
+#[tauri::command]
+pub fn retrouver_sources(
+    file: State<'_, Arc<Telechargeur>>,
+    sources: State<'_, Arc<Sources>>,
+    suivi: State<'_, Arc<retrouver::Suivi>>,
+) -> Result<Identification, String> {
+    let c = file.contexte();
+    let orphelins = retrouver::orphelins(&c.data, &c.modeles);
+    if !suivi.commencer(orphelins.len()) {
+        return Err("La recherche des sources est déjà en cours".to_owned());
+    }
+    let (file, sources, suivi_fil) = (Arc::clone(&file), Arc::clone(&sources), Arc::clone(&suivi));
+    std::thread::Builder::new()
+        .name("retrouver-sources".to_owned())
+        .spawn(move || retrouver::identifier(file.contexte(), &sources.0, &orphelins, &suivi_fil))
+        .map_err(|e| format!("Recherche des sources impossible : {e}"))?;
+    Ok(suivi.lire())
+}
+
+/// Où en est « Retrouver les sources ».
+#[tauri::command]
+pub fn etat_sources(suivi: State<'_, Arc<retrouver::Suivi>>) -> Identification {
+    suivi.lire()
 }

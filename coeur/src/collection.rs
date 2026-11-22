@@ -8,7 +8,7 @@
 //! restauration. Seul « Vider la corbeille » efface pour de bon. Seuls les modèles téléchargés par Aria se
 //! suppriment : un fichier déposé à la main reste à l'utilisateur.
 //!
-//! Pas encore portés : « Retrouver les sources » (l'empreinte demandée à Civitai), les favoris des usages.
+//! « Retrouver les sources » est dans `retrouver`. Pas encore portés : les favoris des usages.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -19,7 +19,7 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use crate::modeles::{self, DOSSIER_LLM};
-use crate::telechargement::registre;
+use crate::telechargement::{modifier_registre, registre};
 use crate::{Dossier, fiches, journal, llm, reglages, workflows};
 
 /// Le dossier de la corbeille, dans le dossier des modèles.
@@ -359,11 +359,16 @@ pub fn valider_checkpoint(
         .find(|w| w.dossier_modeles() == dossier_fichier && w.entree("steps").is_some())
         .ok_or_else(|| format!("Checkpoint absent, ou sans workflow qui règle ses steps : {cle}"))?;
     workflows::valider_checkpoint(dossier, modeles_dir, &wf.id, nom, steps)?;
-    let mut r = registre(data);
-    if let Some(entree) = r.get_mut(cle).and_then(Value::as_object_mut)
-        && entree.remove("a_valider").is_some()
+    if registre(data)
+        .get(cle)
+        .is_some_and(|e| e.get("a_valider").is_some())
     {
-        ecrire_json(&data.join("modeles.json"), &Value::Object(r), 4)?;
+        modifier_registre(data, |r| {
+            if let Some(entree) = r.get_mut(cle).and_then(Value::as_object_mut) {
+                entree.remove("a_valider");
+            }
+        })
+        .map_err(|e| format!("registre des modèles : {e}"))?;
     }
     Ok(())
 }
@@ -504,8 +509,7 @@ pub fn mettre_a_la_corbeille(
     modeles_dir: &Path,
     cle: &str,
 ) -> Result<(), String> {
-    let mut r = registre(data);
-    let Some(entree) = r.get(cle).cloned() else {
+    let Some(entree) = registre(data).get(cle).cloned() else {
         return Err("Seuls les modèles téléchargés par l'appli peuvent être supprimés".to_owned());
     };
     let fichier = dans(modeles_dir, cle)?;
@@ -540,8 +544,10 @@ pub fn mettre_a_la_corbeille(
         ecrire_json(&fichier_corbeille(data), &Value::Object(corbeille), 2)?;
     }
     // Sans fichier (déjà effacé à la main), seule sa fiche s'en va.
-    r.remove(cle);
-    ecrire_json(&data.join("modeles.json"), &Value::Object(r), 4)?;
+    modifier_registre(data, |r| {
+        r.remove(cle);
+    })
+    .map_err(|e| format!("registre des modèles : {e}"))?;
     journal::noter(
         dossier,
         "Modèle mis à la corbeille",
@@ -626,12 +632,11 @@ pub fn restaurer(dossier: &Dossier, data: &Path, modeles_dir: &Path, cle: &str) 
     }
     let source = dans(&modeles_dir.join(CORBEILLE), cle)?;
     let cible = dans(modeles_dir, cle)?;
-    let mut r = registre(data);
     let nom = cible
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    if cible.exists() || r.contains_key(cle) {
+    if cible.exists() || registre(data).contains_key(cle) {
         return Err(format!(
             "{nom} est déjà présent (retéléchargé ?) : la copie de la corbeille n'est pas restaurée, vide la corbeille \
              pour libérer la place"
@@ -651,8 +656,10 @@ pub fn restaurer(dossier: &Dossier, data: &Path, modeles_dir: &Path, cle: &str) 
     let mut remise = entree.as_object().cloned().unwrap_or_default();
     remise.remove("corbeille");
     remise.remove("dossier_modeles");
-    r.insert(cle.to_owned(), Value::Object(remise));
-    ecrire_json(&data.join("modeles.json"), &Value::Object(r), 4)?;
+    modifier_registre(data, |r| {
+        r.insert(cle.to_owned(), Value::Object(remise));
+    })
+    .map_err(|e| format!("registre des modèles : {e}"))?;
     corbeille.remove(cle);
     ecrire_json(&fichier_corbeille(data), &Value::Object(corbeille), 2)?;
     supprimer_dossiers_vides(&modeles_dir.join(CORBEILLE));

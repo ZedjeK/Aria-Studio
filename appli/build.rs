@@ -45,6 +45,8 @@ fn main() {
         "preparer_lien",
         "telecharger_lien",
         "vignette_modele",
+        "retrouver_sources",
+        "etat_sources",
         "etat_emplacements",
         "ouvrir_dossier",
         "parcourir_dossier",
