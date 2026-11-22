@@ -50,7 +50,7 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | Créations, rushes, clips, séquences, voix | `data\` | relus | [ ] |
 | Cache | `cache\` (empreintes SHA-256, samplers, chemins ComfyUI) | recalculable | [ ] |
 | Modèles et moteurs | `modeles\`, `moteurs\`, dossier des modèles choisi | mêmes chemins décidés au lancement, rien de déplacé (`coeur/src/emplacements.rs`) ; leur contenu se lit avec les lots des moteurs et des modèles | [ ] |
-| Clés Civitai et Hugging Face | Gestionnaire d'identification Windows (`Aria-Studio/civitai`, `Aria-Studio/huggingface`) | lues, puis rangées chiffrées (DPAPI) dans `secrets\` ; l'entrée du coffre n'est retirée qu'avec l'accord de l'utilisateur | [ ] |
+| Clés Civitai et Hugging Face | Gestionnaire d'identification Windows (`Aria-Studio/civitai`, `Aria-Studio/huggingface`), repli `CIVITAI_TOKEN` et `HF_TOKEN` | recopiées au lancement, chiffrées (DPAPI), dans `secrets\` si elles n'y sont pas déjà ; l'entrée du coffre reste en place pour une v2 restaurée et ne sera retirée qu'avec l'accord de l'utilisateur (`coeur/src/cles.rs`, `appli/src/main.rs`) ; saisie, test et retrait attendent la page Réglages | [ ] |
 | Démarrage avec Windows | valeur `Run` « Aria Studio » (HKCU) | même valeur, nouvelle cible | [ ] |
 | Raccourci du Bureau | `Aria Studio.lnk` | proposé en mise à jour, jamais remplacé en silence | [ ] |
 | Mode portable | `data\` à côté du code, sauf code dans `.Aria-Studio` ; moteurs dans `services\` ; pas de proposition d'installation | même règle (`coeur/src/emplacements.rs`, `appli/src/main.rs`) | [x] |
