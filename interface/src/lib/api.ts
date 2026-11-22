@@ -326,6 +326,66 @@ export const commanderAgrandissement = (demande: DemandeAgrandissement): Promise
 export const importerImage = (image: string, nom: string): Promise<Creation> =>
   invoke<Creation>('importer_image', { image, nom });
 
+/** Un dossier d'Aria (aria_coeur::emplacements::DossierConnu). */
+export interface DossierConnu {
+  cle: string;
+  nom: string;
+  chemin: string;
+  existe: boolean;
+}
+
+/** Réglages → Emplacements : les dossiers, et le choix du dossier des modèles. */
+export interface EtatLieux {
+  portable: boolean;
+  dossiers: DossierConnu[];
+  modelesChoisi: string | null;
+  modelesDefaut: string;
+  /** Le dossier des modèles du prochain lancement. */
+  modelesProchain: string;
+  /** Un choix est fait, pris en compte au prochain lancement. */
+  redemarrage: boolean;
+  /** La place libre sur le disque de chaque dossier, en octets. */
+  libres: Record<string, number | null>;
+}
+
+/** D'où vient la clé d'une source : jamais la clé elle-même. */
+export interface EtatCle {
+  source: string;
+  nom: string;
+  variable: string;
+  aide: string;
+  origine: 'aria' | 'variable' | null;
+}
+
+export interface TestCle {
+  ok: boolean;
+  message: string;
+}
+
+export const etatEmplacements = (): Promise<EtatLieux> => invoke<EtatLieux>('etat_emplacements');
+
+/** Ouvre un dossier connu dans l'Explorateur (`sous` : un sous-dossier connu des modèles). */
+export const ouvrirDossier = (cle: string, sous: string | null = null): Promise<void> =>
+  invoke<void>('ouvrir_dossier', { cle, sous });
+
+/** Le sélecteur de dossier natif ; null : l'utilisateur a renoncé. */
+export const parcourirDossier = (titre: string, depart: string | null): Promise<string | null> =>
+  invoke<string | null>('parcourir_dossier', { titre, depart });
+
+/** Le dossier des modèles du prochain lancement ; null : celui par défaut. */
+export const choisirDossierModeles = (chemin: string | null): Promise<EtatLieux> =>
+  invoke<EtatLieux>('choisir_dossier_modeles', { chemin });
+
+export const etatCles = (): Promise<EtatCle[]> => invoke<EtatCle[]>('etat_cles');
+
+export const enregistrerCle = (sourceId: string, valeur: string): Promise<EtatCle[]> =>
+  invoke<EtatCle[]>('enregistrer_cle', { sourceId, valeur });
+
+export const supprimerCle = (sourceId: string): Promise<EtatCle[]> => invoke<EtatCle[]>('supprimer_cle', { sourceId });
+
+/** Présente la clé à sa source, qui dit à quel compte elle appartient. */
+export const testerCle = (sourceId: string): Promise<TestCle> => invoke<TestCle>('tester_cle', { sourceId });
+
 /** Un réglage fin (aria_coeur::reglages_fins::Param). */
 export interface ParamReglage {
   cle: string;

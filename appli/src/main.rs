@@ -10,6 +10,7 @@ mod disque;
 mod erreur_fatale;
 mod icone;
 mod installation;
+mod lieux;
 mod mise_a_jour;
 mod moteurs;
 mod plateau;
@@ -117,6 +118,7 @@ fn lancer() -> Result<(), String> {
                 ramener(app);
             }
         }))
+        .manage(emplacements.clone())
         .manage(Etat {
             dossier,
             cache_webview,
@@ -150,6 +152,14 @@ fn lancer() -> Result<(), String> {
             moteurs::liberer_carte,
             plateau::options_plateau,
             plateau::commander_image,
+            lieux::etat_emplacements,
+            lieux::ouvrir_dossier,
+            lieux::parcourir_dossier,
+            lieux::choisir_dossier_modeles,
+            lieux::etat_cles,
+            lieux::enregistrer_cle,
+            lieux::supprimer_cle,
+            lieux::tester_cle,
             reglages_fins::etat_reglages,
             reglages_fins::modifier_reglages_llm,
             reglages_fins::modifier_reglages_workflow,
