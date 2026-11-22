@@ -1,6 +1,6 @@
-//! La page Plateau : créer une image depuis un prompt, suivre la file, voir les dernières créations. Le travail est
-//! dans le cœur (`aria_coeur::plateau`, `aria_coeur::creations`) ; ici, les commandes, hors du fil de l'interface
-//! quand elles lisent le disque.
+//! La page Plateau : créer une image depuis une idée réécrite par le LLM ou depuis un prompt tel quel, suivre la
+//! file, voir les dernières créations. Le travail est dans le cœur (`aria_coeur::plateau`, `aria_coeur::creations`) ;
+//! ici, les commandes, hors du fil de l'interface quand elles lisent le disque.
 
 use std::sync::Arc;
 
@@ -11,7 +11,7 @@ use serde_json::Value;
 use tauri::State;
 use tauri::ipc::Response;
 
-use crate::moteurs::Moteurs;
+use crate::moteurs::{Moteurs, PORT_LLAMA};
 
 /// Les créations montrées par la page, au plus.
 const CREATIONS_MAX: usize = 60;
@@ -23,6 +23,8 @@ pub fn demarrer(emplacements: &Emplacements, moteurs: &Moteurs) -> Arc<Plateau> 
             dossier: emplacements.dossier.clone(),
             data: emplacements.data.clone(),
             modeles: emplacements.modeles.clone(),
+            moteurs: emplacements.moteurs.clone(),
+            port_llama: PORT_LLAMA,
         },
         Arc::clone(&moteurs.orchestrateur),
     ))

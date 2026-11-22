@@ -3,11 +3,13 @@ import type { ChoixWorkflow, Commande, OptionsPlateau } from './api';
 import {
   estActive,
   formatInitial,
+  llmInitial,
   libelleEtat,
   lireSeed,
   modeleInitial,
   nomCheckpoint,
   texteAvancement,
+  texteCommande,
   texteStepsSuggeres,
 } from './plateau';
 
@@ -29,12 +31,20 @@ const options: OptionsPlateau = {
   defaut: 'qwen_image_2_1',
   workflows: [krea],
   incomplets: [],
+  llm: [
+    { fichier: 'Ternary-Bonsai-2-27B-PTQ1_0.gguf', nom: 'Bonsai 2 27B', favori: true, specialiste: false },
+    { fichier: 'mistral.gguf', nom: 'mistral', favori: false, specialiste: false },
+  ],
+  llmParWorkflow: { krea2_turbo: 'mistral.gguf', qwen_image_2_1: 'retire.gguf' },
 };
 
 function commande(changements: Partial<Commande>): Commande {
   return {
     id: 'a1',
+    idee: 'un renard',
     prompt: 'a fox',
+    reecrire: false,
+    llm: null,
     workflow: 'krea2_turbo',
     format: '1:1 (Square)',
     seed: null,
@@ -81,6 +91,14 @@ describe('Plateau', () => {
     expect(modeleInitial({ ...krea, modeleDefaut: 'retire.safetensors' })).toBe('krea2_turbo.safetensors');
     expect(modeleInitial({ ...krea, modeles: [] })).toBe('');
     expect(modeleInitial(undefined)).toBe('');
+  });
+
+  it('propose le LLM du workflow', () => {
+    expect(llmInitial(options, 'krea2_turbo')).toBe('mistral.gguf');
+    expect(llmInitial(options, 'qwen_image_2_1')).toBe('Ternary-Bonsai-2-27B-PTQ1_0.gguf');
+    expect(llmInitial({ ...options, llm: [] }, 'krea2_turbo')).toBe('');
+    expect(texteCommande(commande({ prompt: '', idee: 'un renard' }))).toBe('un renard');
+    expect(texteCommande(commande({}))).toBe('a fox');
   });
 
   it('écrit les checkpoints et les steps', () => {

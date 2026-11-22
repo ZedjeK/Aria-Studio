@@ -1,7 +1,7 @@
 <!--
-  Le Plateau : créer une image depuis un prompt écrit tel quel, suivre la file, voir les dernières créations. La
-  réécriture par le LLM, les références, la retouche et la vidéo viendront ensuite. Le bouton orange (Créer) agit
-  sur le panneau accentué.
+  Le Plateau : créer une image depuis une idée réécrite par le LLM, ou depuis un prompt écrit tel quel ; suivre la
+  file, voir les dernières créations. Les références, la retouche et la vidéo viendront ensuite. Le bouton orange
+  (Créer) agit sur le panneau accentué.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -22,9 +22,11 @@
     estActive,
     formatInitial,
     lireSeed,
+    llmInitial,
     modeleInitial,
     nomCheckpoint,
     texteAvancement,
+    texteCommande,
     texteStepsSuggeres,
   } from '../lib/plateau';
   import ASavoir from '../lib/composants/ASavoir.svelte';
@@ -49,6 +51,9 @@
   let format = $state('');
   let nombre = $state(1);
   let seedTexte = $state('');
+  let reecrire = $state(true);
+  let llmChoisi = $state('');
+  let premiereLecture = true;
   let stepsSaisis = $state<Record<string, number>>({});
   let envoi = $state(false);
 
@@ -56,14 +61,23 @@
   const seed = $derived(lireSeed(seedTexte));
   const nombreValide = $derived(Number.isInteger(nombre) && nombre >= 1 && nombre <= (options?.nombreMax ?? 1));
   const peutCreer = $derived(
-    !envoi && workflow !== undefined && modele !== '' && prompt.trim() !== '' && seed !== undefined && nombreValide,
+    !envoi &&
+      workflow !== undefined &&
+      modele !== '' &&
+      prompt.trim() !== '' &&
+      seed !== undefined &&
+      nombreValide &&
+      (!reecrire || llmChoisi !== ''),
   );
 
   function choisirWorkflow(id: string) {
     workflowId = id;
     const choisi = options?.workflows.find((w) => w.id === id);
     modele = modeleInitial(choisi);
-    if (options) format = formatInitial(options, choisi);
+    if (options) {
+      format = formatInitial(options, choisi);
+      llmChoisi = llmInitial(options, id);
+    }
     for (const checkpoint of choisi?.aValider ?? []) {
       stepsSaisis[checkpoint] ??= choisi?.stepsSuggeres[0] ?? 20;
     }
@@ -72,6 +86,9 @@
   async function relireOptions() {
     try {
       options = await optionsPlateau();
+      // Sans LLM installé, la case part décochée : le prompt est alors envoyé tel quel.
+      if (premiereLecture) reecrire = options.llm.length > 0;
+      premiereLecture = false;
       const garde = options.workflows.some((w) => w.id === workflowId);
       const defaut = options.workflows.find((w) => w.id === options?.defaut) ?? options.workflows[0];
       choisirWorkflow(garde ? workflowId : (defaut?.id ?? ''));
@@ -114,7 +131,16 @@
     if (!workflow || seed === undefined) return;
     envoi = true;
     try {
-      await commanderImage({ prompt, workflow: workflow.id, format, seed, nombre, modele: modele || null });
+      await commanderImage({
+        prompt,
+        reecrire,
+        llm: reecrire ? llmChoisi || null : null,
+        workflow: workflow.id,
+        format,
+        seed,
+        nombre,
+        modele: modele || null,
+      });
       signaler(nombre > 1 ? `${nombre} images en file.` : 'Image en file.');
       await relireCommandes();
     } catch (e) {
@@ -164,11 +190,11 @@
 </script>
 
 <h1>Plateau</h1>
-<p class="sous-titre">Créer une image à partir d'un prompt.</p>
+<p class="sous-titre">Créer une image à partir d'une idée.</p>
 <ASavoir>
-  Le prompt part tel quel vers le modèle, de préférence en anglais : la réécriture par le LLM arrive dans une prochaine
-  version. Tout prompt passe par le filtre AS-18 avant d'entrer dans la file. Les images sont rangées dans
-  data\creations, avec leur fiche, comme en version 2.
+  Écris ton idée en français : le LLM la réécrit en prompt pour le modèle choisi, puis l'image est générée. Décoche la
+  réécriture pour envoyer ton texte tel quel (en anglais de préférence). L'idée et le prompt passent par le filtre
+  AS-18. Les images sont rangées dans data\creations, avec leur fiche, comme en version 2.
 </ASavoir>
 
 {#if options === null}
@@ -233,9 +259,34 @@
       </div>
     {/if}
 
+    <div class="ligne reecriture">
+      <label>
+        <input type="checkbox" bind:checked={reecrire} disabled={options.llm.length === 0} />
+        Réécrire mon idée avec le LLM
+      </label>
+      {#if reecrire}
+        <select bind:value={llmChoisi} aria-label="LLM qui réécrit">
+          {#each options.llm as choix (choix.fichier)}
+            <option value={choix.fichier}>{choix.nom}{choix.specialiste ? ' (spécialiste)' : ''}</option>
+          {/each}
+        </select>
+      {/if}
+    </div>
+    {#if options.llm.length === 0}
+      <p class="discret">
+        Aucun LLM dans modeles\llm : ton texte part tel quel. Les LLM téléchargés par la version 2 sont repris.
+      </p>
+    {/if}
+
     <label class="prompt">
-      <span class="etiquette">Prompt</span>
-      <textarea rows="4" bind:value={prompt} placeholder="A red fox sitting in fresh snow, golden hour, 35 mm photo"></textarea>
+      <span class="etiquette">{reecrire ? 'Idée' : 'Prompt'}</span>
+      <textarea
+        rows="4"
+        bind:value={prompt}
+        placeholder={reecrire
+          ? 'Un renard roux assis dans la neige fraîche, lumière dorée du soir'
+          : 'A red fox sitting in fresh snow, golden hour, 35 mm photo'}
+      ></textarea>
     </label>
     {#if seed === undefined}
       <p class="erreur">La seed est un entier positif, ou rien pour la tirer au hasard.</p>
@@ -252,7 +303,7 @@
       {#each commandes as c (c.id)}
         <li class:erreur={c.etat === 'erreur'}>
           <div class="texte">
-            <span class="prompt-court">{c.prompt}</span>
+            <span class="prompt-court">{texteCommande(c)}</span>
             <span class="discret">{texteAvancement(c)}</span>
             {#if c.etat === 'en_cours'}
               <progress max="1" value={c.progression}></progress>
@@ -311,6 +362,10 @@
   }
 
   .prompt {
+    margin-top: 14px;
+  }
+
+  .reecriture {
     margin-top: 14px;
   }
 

@@ -1,13 +1,14 @@
 //! Le Plateau : la file des créations, comme en v2 (`app/plateau.py`), réduite pour l'instant à la création d'une
-//! image depuis un prompt écrit tel quel (« Sans réécriture » en v2). La réécriture par le LLM, les références, la
-//! retouche, l'agrandissement, les LoRA et la vidéo viendront ensuite.
+//! image depuis une idée réécrite par le LLM, ou depuis un prompt écrit tel quel (« Sans réécriture »). Les
+//! références, la retouche, l'agrandissement, les LoRA et la vidéo viendront ensuite.
 //!
-//! Une commande est contrôlée avant d'entrer dans la file (workflow prêt, modèle, format, nombre, filtre AS-18), puis
-//! un fil unique les exécute une par une : graphe préparé, ComfyUI, image enregistrée dans `data\creations\` avec la
-//! fiche de la v2. Le filtre AS-18 relit le prompt au moment de générer, et `Workflow::preparer` le relit encore.
+//! Une commande est contrôlée avant d'entrer dans la file (workflow prêt, modèle, LLM installé, format, nombre,
+//! filtre AS-18), puis un fil unique les exécute une par une : réécriture par le LLM s'il y a lieu, graphe préparé,
+//! ComfyUI, image enregistrée dans `data\creations\` avec la fiche de la v2. Le filtre AS-18 relit l'idée et le
+//! prompt au moment de générer, et `Workflow::preparer` relit encore le prompt.
 //!
-//! ✕ Annuler : une commande en attente ne part pas ; celle en cours s'arrête (ComfyUI interrompt la sienne). Les
-//! images déjà enregistrées restent.
+//! ✕ Annuler : une commande en attente ne part pas ; celle en cours s'arrête (ComfyUI interrompt la sienne ; une
+//! réécriture en cours va jusqu'au bout, puis rien ne part vers ComfyUI). Les images déjà enregistrées restent.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,9 +21,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::comfy_serveur::{ANNULEE, Fichier};
+use crate::llama::{self, Lancement};
+use crate::llm::{self, Lieux};
 use crate::orchestrateur::Orchestrateur;
 use crate::workflows::{self, FORMATS, ReglagesWorkflow, Workflow};
-use crate::{Dossier, creations, reglages, securite};
+use crate::{Dossier, creations, fiches, prompt, reglages, securite};
 
 /// Images d'une même commande, au plus (contre une faute de frappe, comme en v2).
 pub const NOMBRE_MAX: u32 = 50;
@@ -50,7 +53,14 @@ pub enum EtatCommande {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Demande {
+    /// L'idée à réécrire, ou le prompt tel quel.
     pub prompt: String,
+    /// Faire réécrire l'idée par le LLM (absent : non).
+    #[serde(default)]
+    pub reecrire: bool,
+    /// Le GGUF qui réécrit ; absent : celui du workflow, sinon le LLM par défaut.
+    #[serde(default)]
+    pub llm: Option<String>,
     /// Absent : le favori de l'utilisateur, sinon celui de la v2.
     pub workflow: Option<String>,
     pub format: String,
@@ -66,7 +76,13 @@ pub struct Demande {
 #[serde(rename_all = "camelCase")]
 pub struct Commande {
     pub id: String,
+    /// Ce que l'utilisateur a écrit.
+    pub idee: String,
+    /// Le prompt envoyé au modèle : l'idée telle quelle, ou vide tant que le LLM ne l'a pas réécrite.
     pub prompt: String,
+    pub reecrire: bool,
+    /// Le GGUF qui réécrit.
+    pub llm: Option<String>,
     pub workflow: String,
     pub format: String,
     pub seed: Option<u64>,
@@ -102,6 +118,18 @@ pub struct ChoixWorkflow {
     pub steps_suggeres: Vec<u64>,
 }
 
+/// Un LLM proposé pour réécrire.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChoixLlm {
+    pub fichier: String,
+    pub nom: String,
+    /// Proposé au choix par Aria (gagnant du Casting).
+    pub favori: bool,
+    /// Entraîné pour un modèle cible : il ne réécrit que pour lui.
+    pub specialiste: bool,
+}
+
 /// Ce que le Plateau propose : relu à chaque appel, un modèle déposé y apparaît aussitôt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -113,6 +141,10 @@ pub struct Options {
     pub workflows: Vec<ChoixWorkflow>,
     /// Ceux auxquels il manque des fichiers, par leur nom.
     pub incomplets: Vec<String>,
+    /// Les LLM installés, les favoris d'abord.
+    pub llm: Vec<ChoixLlm>,
+    /// Le LLM de chaque workflow prêt : celui choisi pour lui, sinon le LLM par défaut.
+    pub llm_par_workflow: Map<String, Value>,
 }
 
 /// Les dossiers dont le Plateau a besoin.
@@ -121,10 +153,31 @@ pub struct Contexte {
     pub dossier: Dossier,
     pub data: PathBuf,
     pub modeles: PathBuf,
+    pub moteurs: PathBuf,
+    /// Le port de llama-server.
+    pub port_llama: u16,
 }
 
-/// Ce qui exécute un graphe : ComfyUI par l'orchestrateur, un faux dans les tests.
+impl Contexte {
+    /// Où vivent les LLM et leur moteur.
+    pub fn lieux(&self) -> Lieux {
+        Lieux {
+            dossier: self.dossier.clone(),
+            modeles: self.modeles.clone(),
+            moteurs: self.moteurs.clone(),
+            port: self.port_llama,
+        }
+    }
+}
+
+/// Ce qui écrit et ce qui génère : llama-server et ComfyUI par l'orchestrateur, un faux dans les tests.
 pub trait Generateur: Send + 'static {
+    /// Fait écrire le LLM, lancé avec ces réglages.
+    ///
+    /// # Errors
+    /// llama-server ne démarre pas, refuse la demande, ou rend une réponse vide.
+    fn ecrire(&mut self, lancement: Lancement, demande: &llama::Demande) -> Result<llama::Reponse, String>;
+
     /// Exécute le graphe et rend ses fichiers de sortie.
     ///
     /// # Errors
@@ -140,6 +193,13 @@ pub trait Generateur: Send + 'static {
 /// ComfyUI, démarré au besoin par l'orchestrateur. L'orchestrateur reste pris pendant la génération : un autre
 /// usage de la carte attend la fin de l'image.
 impl Generateur for Arc<Mutex<Orchestrateur>> {
+    fn ecrire(&mut self, lancement: Lancement, demande: &llama::Demande) -> Result<llama::Reponse, String> {
+        let mut orchestrateur = self
+            .lock()
+            .map_err(|_| "orchestrateur des moteurs indisponible".to_owned())?;
+        orchestrateur.llm(lancement)?.generer(demande)
+    }
+
     fn generer(
         &mut self,
         api: &Value,
@@ -208,13 +268,56 @@ pub fn options(contexte: &Contexte) -> Options {
             id: wf.id,
         });
     }
+    let llm_par_workflow = prets
+        .iter()
+        .map(|w| {
+            let choisi = llm::de_workflow(&contexte.dossier, &contexte.modeles, &w.id);
+            (w.id.clone(), Value::String(choisi))
+        })
+        .collect();
     Options {
         formats: FORMATS.iter().map(|f| (*f).to_owned()).collect(),
         nombre_max: NOMBRE_MAX,
         defaut: workflow_defaut(&contexte.dossier),
         workflows: prets,
         incomplets,
+        llm: llm_au_choix(&contexte.modeles),
+        llm_par_workflow,
     }
+}
+
+/// Les LLM installés : les favoris d'abord, avec leur nom ; les autres avec le nom de leur fiche, sinon celui du
+/// fichier.
+pub fn llm_au_choix(modeles: &std::path::Path) -> Vec<ChoixLlm> {
+    let presents = llm::disponibles(modeles);
+    let mut choix: Vec<ChoixLlm> = llm::FAVORIS
+        .iter()
+        .filter(|(f, _)| presents.iter().any(|p| p == f))
+        .map(|(f, nom)| ChoixLlm {
+            fichier: (*f).to_owned(),
+            nom: (*nom).to_owned(),
+            favori: true,
+            specialiste: false,
+        })
+        .collect();
+    for f in presents {
+        if choix.iter().any(|c| c.fichier == f) {
+            continue;
+        }
+        let fiche = fiches::fiche_llm(&f);
+        let nom = fiche
+            .as_ref()
+            .and_then(|x| x.get("nom"))
+            .and_then(Value::as_str)
+            .map_or_else(|| f.trim_end_matches(".gguf").to_owned(), str::to_owned);
+        choix.push(ChoixLlm {
+            specialiste: fiche.as_ref().is_some_and(|x| x.get("specialiste").is_some()),
+            fichier: f,
+            nom,
+            favori: false,
+        });
+    }
+    choix
 }
 
 fn nom_de(wf: &Workflow) -> String {
@@ -225,12 +328,22 @@ fn nom_de(wf: &Workflow) -> String {
         .to_owned()
 }
 
-/// Contrôle une demande, comme la v2 avant de la mettre en file. Rend le workflow retenu et le prompt nettoyé.
+/// Ce qu'une demande contrôlée devient.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Validee {
+    pub workflow: String,
+    /// L'idée ou le prompt, sans les espaces autour.
+    pub texte: String,
+    /// Le GGUF qui réécrira, s'il faut réécrire.
+    pub llm: Option<String>,
+}
+
+/// Contrôle une demande, comme la v2 avant de la mettre en file.
 ///
 /// # Errors
-/// Le message de la v2 : prompt vide, workflow indisponible, modèle absent, format inconnu, nombre hors bornes, ou
-/// refus du filtre AS-18.
-pub fn valider(contexte: &Contexte, demande: &Demande) -> Result<(String, String), String> {
+/// Le message de la v2 : idée vide, workflow indisponible, modèle absent, LLM absent, format inconnu, nombre hors
+/// bornes, ou refus du filtre AS-18.
+pub fn valider(contexte: &Contexte, demande: &Demande) -> Result<Validee, String> {
     let prompt = demande.prompt.trim().to_owned();
     if prompt.is_empty() {
         return Err("Écris ton idée".to_owned());
@@ -272,8 +385,25 @@ pub fn valider(contexte: &Contexte, demande: &Demande) -> Result<(String, String
     if !(1..=NOMBRE_MAX).contains(&demande.nombre) {
         return Err(format!("Nombre d'images entre 1 et {NOMBRE_MAX}"));
     }
+    let llm = if demande.reecrire {
+        let choisi = demande
+            .llm
+            .clone()
+            .filter(|l| !l.is_empty())
+            .unwrap_or_else(|| llm::de_workflow(&contexte.dossier, &contexte.modeles, &id));
+        if !llm::disponibles(&contexte.modeles).contains(&choisi) {
+            return Err(format!("GGUF absent de modeles/llm : {choisi}"));
+        }
+        Some(choisi)
+    } else {
+        None
+    };
     securite::verifier(&contexte.dossier, &[prompt.as_str()]).map_err(|e| e.to_string())?;
-    Ok((id, prompt))
+    Ok(Validee {
+        workflow: id,
+        texte: prompt,
+        llm,
+    })
 }
 
 /// Un checkpoint déposé qui n'est pas de la bonne architecture fait échouer ComfyUI au chargement : on le dit
@@ -396,11 +526,18 @@ impl Plateau {
     /// # Errors
     /// Voir [`valider`] ; ou le fil du Plateau est arrêté.
     pub fn commander(&self, demande: &Demande) -> Result<Commande, String> {
-        let (workflow, prompt) = valider(&self.contexte, demande)?;
+        let validee = valider(&self.contexte, demande)?;
         let commande = Commande {
             id: nouvel_id()?,
-            prompt,
-            workflow,
+            prompt: if demande.reecrire {
+                String::new()
+            } else {
+                validee.texte.clone()
+            },
+            idee: validee.texte,
+            reecrire: demande.reecrire,
+            llm: validee.llm,
+            workflow: validee.workflow,
             format: demande.format.clone(),
             seed: demande.seed,
             nombre: demande.nombre,
@@ -492,9 +629,29 @@ fn executer(
 ) -> Result<(), String> {
     // Relu au moment de générer : des ajouts écrits entre-temps comptent.
     let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
-    filtre.verifier(&[c.prompt.as_str()]).map_err(|e| e.to_string())?;
+    filtre
+        .verifier(&[c.idee.as_str(), c.prompt.as_str()])
+        .map_err(|e| e.to_string())?;
     let wf = workflows::obtenir(&c.workflow)?;
     let reglages = reglages_workflow(&contexte.dossier, &wf.id);
+    let debut_reecriture = Instant::now();
+    let (texte_prompt, llm_utilise) = if c.reecrire {
+        partage.modifier(&c.id, |cmd| cmd.etape = "Réécriture du prompt".to_owned());
+        let ecriture = prompt::preparer_reecriture(
+            &contexte.lieux(),
+            &c.idee,
+            c.llm.as_deref(),
+            Some(&wf),
+            reglages.as_ref(),
+        )?;
+        let reponse = generateur.ecrire(ecriture.lancement.clone(), &ecriture.demande)?;
+        let texte = prompt::lire_reecriture(&ecriture, &c.idee, &reponse.texte, &filtre)?;
+        partage.modifier(&c.id, |cmd| cmd.prompt.clone_from(&texte));
+        (texte, Some(ecriture.modele()))
+    } else {
+        (c.prompt.clone(), None)
+    };
+    let duree_reecriture = debut_reecriture.elapsed().as_secs_f64();
     let modele = c.modele.clone().or_else(|| {
         wf.regle(&contexte.modeles, reglages.as_ref())
             .get("modele")
@@ -520,7 +677,7 @@ fn executer(
         });
         let debut = Instant::now();
         let mut valeurs = Map::new();
-        valeurs.insert("prompt".to_owned(), json!(c.prompt));
+        valeurs.insert("prompt".to_owned(), json!(texte_prompt));
         valeurs.insert("seed".to_owned(), json!(seed));
         valeurs.insert("modele".to_owned(), json!(c.modele));
         valeurs.insert("prefixe".to_owned(), json!(PREFIXE));
@@ -546,12 +703,13 @@ fn executer(
             .find(|(nom, _)| nom.to_ascii_lowercase().ends_with(".png"))
             .map(|(_, octets)| octets)
             .ok_or_else(|| "ComfyUI n'a renvoyé aucune image".to_owned())?;
-        let duree = (debut.elapsed().as_secs_f64() * 100.0).round() / 100.0;
+        let ecoule = debut.elapsed().as_secs_f64() + if i == 0 { duree_reecriture } else { 0.0 };
+        let duree = (ecoule * 100.0).round() / 100.0;
         let infos = json!({
             "type": "creation",
-            "idee": c.prompt,
-            "prompt": c.prompt,
-            "llm": null,
+            "idee": c.idee,
+            "prompt": texte_prompt,
+            "llm": llm_utilise,
             "workflow": c.workflow,
             "modele": modele,
             "loras": [],
@@ -611,6 +769,8 @@ mod tests {
             dossier: Dossier::a(temp.path()),
             data: temp.path().join("data"),
             modeles: modeles_dir,
+            moteurs: temp.path().join("moteurs"),
+            port_llama: 8095,
         }
     }
 
@@ -622,17 +782,36 @@ mod tests {
             seed: Some(7),
             nombre: 1,
             modele: None,
+            reecrire: false,
+            llm: None,
         }
     }
 
-    /// Un ComfyUI de test : note les graphes reçus et rend un PNG, ou une erreur.
+    /// Un llama-server et un ComfyUI de test : notent les demandes et les graphes reçus, rendent un prompt et un PNG,
+    /// ou une erreur.
     struct Faux {
         recus: Arc<Mutex<Vec<Value>>>,
+        ecrits: Arc<Mutex<Vec<(Lancement, llama::Demande)>>>,
         erreur: Option<String>,
         attente: Duration,
     }
 
     impl Generateur for Faux {
+        fn ecrire(
+            &mut self,
+            lancement: Lancement,
+            demande: &llama::Demande,
+        ) -> Result<llama::Reponse, String> {
+            self.ecrits.lock().unwrap().push((lancement, demande.clone()));
+            Ok(llama::Reponse {
+                texte: "**A red fox** sitting in fresh snow".to_owned(),
+                tokens_entree: 900,
+                tokens_sortie: 12,
+                lecture_tps: 0.0,
+                ecriture_tps: 0.0,
+            })
+        }
+
         fn generer(
             &mut self,
             api: &Value,
@@ -663,6 +842,7 @@ mod tests {
         (
             Faux {
                 recus: Arc::clone(&recus),
+                ecrits: Arc::new(Mutex::new(Vec::new())),
                 erreur: erreur.map(str::to_owned),
                 attente,
             },
@@ -683,12 +863,76 @@ mod tests {
     }
 
     #[test]
+    fn idee_reecrite_par_le_llm() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp, KREA);
+        let data = ctx.data.clone();
+        let mut d = demande("  un renard dans la neige ");
+        d.reecrire = true;
+        // Aucun LLM installé : le défaut manque.
+        assert_eq!(
+            valider(&ctx, &d).unwrap_err(),
+            format!("GGUF absent de modeles/llm : {}", llm::LLM_ORIGINE)
+        );
+        let llm_dir = ctx.modeles.join(crate::modeles::DOSSIER_LLM);
+        fs::create_dir_all(&llm_dir).unwrap();
+        fs::write(llm_dir.join("mistral.gguf"), crate::gguf::essai::gguf(&[12])).unwrap();
+        assert_eq!(valider(&ctx, &d).unwrap().llm.as_deref(), Some("mistral.gguf"));
+        d.llm = Some("absent.gguf".to_owned());
+        assert_eq!(
+            valider(&ctx, &d).unwrap_err(),
+            "GGUF absent de modeles/llm : absent.gguf"
+        );
+        d.llm = None;
+        let o = options(&ctx);
+        assert_eq!(o.llm.len(), 1);
+        assert_eq!((o.llm[0].nom.as_str(), o.llm[0].favori), ("mistral", false));
+        assert_eq!(o.llm_par_workflow[KREA], json!("mistral.gguf"));
+
+        let (generateur, recus) = faux(None, Duration::ZERO);
+        let ecrits = Arc::clone(&generateur.ecrits);
+        let plateau = Plateau::demarrer(ctx, generateur);
+        let c = plateau.commander(&d).unwrap();
+        assert_eq!(
+            (c.idee.as_str(), c.prompt.as_str()),
+            ("un renard dans la neige", "")
+        );
+        let fin = attendre(&plateau, &c.id);
+        assert_eq!(fin.etat, EtatCommande::Termine, "{:?}", fin.erreur);
+        assert_eq!(fin.prompt, "A red fox sitting in fresh snow");
+
+        let ecrits = ecrits.lock().unwrap();
+        let (lancement, demande_llm) = &ecrits[0];
+        assert!(lancement.modele.ends_with("mistral.gguf"));
+        assert_eq!(
+            demande_llm.messages[1]["content"],
+            json!("un renard dans la neige")
+        );
+        let consigne = demande_llm.messages[0]["content"].as_str().unwrap();
+        assert!(consigne.contains("40 to 150 words"), "{consigne}");
+        let wf = workflows::obtenir(KREA).unwrap();
+        let (noeud, entree) = wf.entree("prompt").unwrap();
+        assert_eq!(
+            recus.lock().unwrap()[0][noeud.as_str()]["inputs"][entree.as_str()],
+            json!("A red fox sitting in fresh snow")
+        );
+        let fiche = creations::fiche(&data, &fin.images[0]).unwrap();
+        assert_eq!(fiche["idee"], json!("un renard dans la neige"));
+        assert_eq!(fiche["prompt"], json!("A red fox sitting in fresh snow"));
+        assert_eq!(fiche["llm"], json!("mistral.gguf"));
+    }
+
+    #[test]
     fn controle_comme_la_v2() {
         let temp = tempfile::tempdir().unwrap();
         let ctx = contexte(&temp, KREA);
         assert_eq!(valider(&ctx, &demande("  ")).unwrap_err(), "Écris ton idée");
-        let (id, prompt) = valider(&ctx, &demande("  a red fox in the snow ")).unwrap();
-        assert_eq!((id.as_str(), prompt.as_str()), (KREA, "a red fox in the snow"));
+        let v = valider(&ctx, &demande("  a red fox in the snow ")).unwrap();
+        assert_eq!(
+            (v.workflow.as_str(), v.texte.as_str()),
+            (KREA, "a red fox in the snow")
+        );
+        assert_eq!(v.llm, None);
 
         let mut d = demande("a fox");
         d.format = "5:4".to_owned();

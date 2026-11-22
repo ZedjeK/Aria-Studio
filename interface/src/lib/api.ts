@@ -144,6 +144,15 @@ export interface ChoixWorkflow {
   stepsSuggeres: number[];
 }
 
+/** Un LLM proposé pour réécrire (aria_coeur::plateau::ChoixLlm). */
+export interface ChoixLlm {
+  fichier: string;
+  nom: string;
+  favori: boolean;
+  /** Entraîné pour un modèle cible : il ne réécrit que pour lui. */
+  specialiste: boolean;
+}
+
 /** Ce que le Plateau propose (aria_coeur::plateau::Options). */
 export interface OptionsPlateau {
   formats: string[];
@@ -152,11 +161,19 @@ export interface OptionsPlateau {
   workflows: ChoixWorkflow[];
   /** Les workflows auxquels il manque des fichiers, par leur nom. */
   incomplets: string[];
+  /** Les LLM installés, les favoris d'abord. */
+  llm: ChoixLlm[];
+  /** Le LLM de chaque workflow prêt. */
+  llmParWorkflow: Record<string, string>;
 }
 
 /** Une demande de création (aria_coeur::plateau::Demande). */
 export interface DemandeImage {
+  /** L'idée à réécrire, ou le prompt tel quel. */
   prompt: string;
+  reecrire: boolean;
+  /** Le GGUF qui réécrit ; null : celui du workflow. */
+  llm: string | null;
   workflow: string | null;
   format: string;
   seed: number | null;
@@ -170,7 +187,12 @@ export type EtatCommande = 'attente' | 'en_cours' | 'termine' | 'erreur' | 'annu
 /** Une commande du Plateau (aria_coeur::plateau::Commande). */
 export interface Commande {
   id: string;
+  /** Ce que l'utilisateur a écrit. */
+  idee: string;
+  /** Le prompt envoyé au modèle ; vide tant que le LLM ne l'a pas réécrit. */
   prompt: string;
+  reecrire: boolean;
+  llm: string | null;
   workflow: string;
   format: string;
   seed: number | null;
@@ -194,7 +216,9 @@ export interface Creation {
   largeur: number;
   hauteur: number;
   type?: string;
+  idee?: string | null;
   prompt?: string | null;
+  llm?: string | null;
   workflow?: string | null;
   modele?: string | null;
   format?: string | null;

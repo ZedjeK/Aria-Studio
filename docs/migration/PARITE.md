@@ -62,7 +62,7 @@ Essai obligatoire avant la release : une v2.4.x réellement installée se met à
 | --- | --- | --- | --- | --- |
 | — | Assistant de premier lancement | plan, licences, téléchargement, essai | `assistant.py`, `web/assistant.js`, `web/guide.js` | [ ] |
 | Création | Scénario | idée, listes, personnages, prompt final, traduction, optimisation, découpage en séquences | `prompt.py`, `listes.py`, `personnages.py`, `optimiseur.py`, `decoupage.py`, `routes_scenario.py`, `web/scenario.js`, `web/libre.js`, `web/decoupage.js`, `web/references.js` | [ ] |
-| Création | Plateau | créer, options, estimation, paliers, rushes, résultat, agrandissement | `plateau.py`, `paliers.py`, `estimation.py`, `rushes.py`, `orchestrateur.py`, `web/plateau.js`, `web/galerie.js` | [ ] page Plateau (`coeur/src/plateau.rs`, `appli/src/plateau.rs`, `interface/src/pages/Plateau.svelte`) : texte → image depuis un prompt écrit tel quel (« Sans réécriture » de la v2), workflow, checkpoint, format, nombre, seed, file et ✕ Annuler, dernières créations ; validation des steps d'un checkpoint « à valider » posée là en attendant Modèles → Ma collection. Restent : réécriture par le LLM, références, variation, LoRA, estimation, paliers, Rushes, agrandissement |
+| Création | Plateau | créer, options, estimation, paliers, rushes, résultat, agrandissement | `plateau.py`, `paliers.py`, `estimation.py`, `rushes.py`, `orchestrateur.py`, `web/plateau.js`, `web/galerie.js` | [ ] page Plateau (`coeur/src/plateau.rs`, `appli/src/plateau.rs`, `interface/src/pages/Plateau.svelte`) : texte → image depuis une idée réécrite par le LLM (`coeur/src/prompt.rs` : consigne au gabarit de la v2, règles du modèle cible, consigne réécrite dans Réglages, spécialiste du workflow, nettoyage, AS-18 avant et après) ou depuis un prompt tel quel, LLM du workflow, workflow, checkpoint, format, nombre, seed, file et ✕ Annuler, dernières créations ; validation des steps d'un checkpoint « à valider » posée là en attendant Modèles → Ma collection. Restent : références, variation, LoRA, vision du LLM, estimation, paliers, Rushes, agrandissement |
 | Création | Retouche | rushes, retoucher | `retouche.py`, `web/retouche.js` | [ ] |
 | Création | Montage | tourner un clip, bobines, séquences, voix, corbeille | `sequences.py`, `voix.py`, `repliques.py`, `routes_montage.py`, `web/montage.js`, `web/sequence.js`, `web/voix.js` | [ ] |
 | Préparation | Modèles | Rechercher, Ma collection, Texte → image, Image → image, Vidéo ; téléchargements, corbeille, moteurs | `modeles.py`, `collection.py`, `decouvrir.py`, `telechargement.py`, `sources/`, `fiches.py`, `gguf.py`, `migration_modeles.py`, `moteurs.py`, `web/modeles.js`, `web/decouvrir.js`, `web/loras.js` | [ ] |
@@ -112,7 +112,7 @@ La v2 expose 138 routes HTTP. En v3, l'interface appelle des commandes Tauri : p
 | Modèles | `/api/modeles*` (8) | `valider_checkpoint` (`/api/modeles/valider`) | [ ] |
 | Moteurs | `/api/moteurs*` (7) | | [ ] |
 | Plateau | `/api/plateau*` (2) | `options_plateau` | [ ] |
-| Prompt | `/api/prompt*` (8) | | [ ] |
+| Prompt | `/api/prompt*` (8) | réécriture d'une idée par `commander_image` (`reecrire`) | [ ] |
 | Réglages | `/api/reglages*` (6) | | [ ] |
 | Rushes | `/api/rushes*` (6) | | [ ] |
 | Sécurité | `/api/securite*` (7) | | [ ] |
