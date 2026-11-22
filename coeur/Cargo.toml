@@ -13,6 +13,8 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock", "s
 getrandom = "0.4.3"
 # NVML, la bibliothèque du pilote NVIDIA, chargée à l'exécution : carte, pilote et VRAM (garde VRAM).
 nvml-wrapper = "0.13.0"
+# Le filtre AS-18 : ses motifs (déjà dans l'arbre par Tauri).
+regex = "1.13.2"
 serde = { version = "1.0.229", features = ["derive"] }
 # Les données d'Aria Studio sont en YAML commenté (catalogue\, workflows\, securite\, casting\) : lecteur en Rust pur,
 # sans libyaml (serde_yaml n'est plus maintenu). Épinglé sur 2.1.1 par Cargo.lock.
@@ -24,6 +26,8 @@ sysinfo = { version = "0.40.1", default-features = false, features = ["system"] 
 thiserror = "2.0.21"
 # Le WebSocket de ComfyUI, sur ws://127.0.0.1 seulement : sans TLS.
 tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+# Le filtre AS-18 : décomposition Unicode (NFKD) avant comparaison, comme la v2 (unicode-rs, sans dépendance).
+unicode-normalization = "0.1.26"
 # HTTP vers les moteurs, sur 127.0.0.1 seulement : sans TLS ni proxy (la même version que l'appli).
 ureq = { version = "3.5.2", default-features = false }
 # Le zip des mises à jour : décompression deflate seule, en Rust (sans C à compiler).

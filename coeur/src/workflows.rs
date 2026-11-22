@@ -13,6 +13,7 @@ use serde_json::{Map, Value, json};
 
 use crate::fiches::{self, LIVRES};
 use crate::modeles::{self, EXTENSIONS_IMAGE};
+use crate::securite::Filtre;
 
 /// Les formats d'image proposés (entrée `ratio`).
 pub const FORMATS: [&str; 8] = [
@@ -260,12 +261,14 @@ impl Workflow {
     ///
     /// # Errors
     /// Modèle absent, checkpoint à valider, LoRA absente ou trop forte, entrée inconnue du workflow, ou option pas
-    /// encore prise en charge par cette version.
+    /// encore prise en charge par cette version, ou prompt refusé par le filtre AS-18 (le message est celui du
+    /// filtre : « ERREUR AS-18 · Génération bloquée : … »).
     pub fn preparer(
         &self,
         valeurs: &Map<String, Value>,
         dossier_modeles: &Path,
         reglages: Option<&ReglagesWorkflow>,
+        filtre: &Filtre,
     ) -> Result<Value, String> {
         let mut api = self.api.clone();
         let regle = self.regle(dossier_modeles, reglages);
@@ -321,6 +324,11 @@ impl Workflow {
                     "« {option} » n'est pas encore pris en charge par cette version"
                 ));
             }
+        }
+        // Le point de passage obligé de tout prompt vers ComfyUI (comme en v2) : le filtre AS-18.
+        if let Some(prompt) = tout.get("prompt") {
+            let texte = prompt.as_str().map_or_else(|| prompt.to_string(), str::to_owned);
+            filtre.verifier(&[texte.as_str()]).map_err(|e| e.to_string())?;
         }
         for (cle, valeur) in &tout {
             let (noeud, entree) = self
@@ -499,7 +507,12 @@ fn inserer_loras(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::securite::Ajouts;
     use std::fs;
+
+    fn filtre() -> Filtre {
+        Filtre::livre(&Ajouts::default()).unwrap()
+    }
 
     fn deposer(modeles: &Path, dossier: &str, nom: &str) {
         let d = modeles.join(dossier);
@@ -558,6 +571,7 @@ mod tests {
                 &valeurs(json!({ "prompt": "a red fox", "seed": 42, "prefixe": "aria_plateau", "ratio": "16:9 (Widescreen)" })),
                 temp.path(),
                 None,
+            &filtre(),
             )
             .unwrap();
         let (pn, pe) = wf.entree("prompt").unwrap();
@@ -588,6 +602,7 @@ mod tests {
                 &valeurs(json!({ "prompt": "x", "steps": 5 })),
                 temp.path(),
                 Some(&reglages),
+                &filtre(),
             )
             .unwrap();
         let (rn, re) = wf.entree("ratio").unwrap();
@@ -601,6 +616,7 @@ mod tests {
                 &valeurs(json!({ "prompt": "x", "ratio": "1:1 (Square)" })),
                 temp.path(),
                 Some(&reglages),
+                &filtre(),
             )
             .unwrap();
         assert_eq!(api[&rn]["inputs"][&re], "1:1 (Square)");
@@ -614,6 +630,7 @@ mod tests {
                 &valeurs(json!({ "prompt": "x", "modele": "ailleurs.safetensors" })),
                 temp.path(),
                 None,
+                &filtre(),
             )
             .unwrap_err();
         assert!(
@@ -635,7 +652,7 @@ mod tests {
         }
         let origine = wf.modele_origine().unwrap();
         let erreur = wf
-            .preparer(&valeurs(json!({ "prompt": "x" })), temp.path(), None)
+            .preparer(&valeurs(json!({ "prompt": "x" })), temp.path(), None, &filtre())
             .unwrap_err();
         assert!(
             erreur.starts_with(&format!("Checkpoint à valider : {origine}")),
@@ -646,18 +663,26 @@ mod tests {
         let mut reglages = Map::new();
         reglages.insert("variantes".to_owned(), Value::Object(variantes));
         let api = wf
-            .preparer(&valeurs(json!({ "prompt": "x" })), temp.path(), Some(&reglages))
+            .preparer(
+                &valeurs(json!({ "prompt": "x" })),
+                temp.path(),
+                Some(&reglages),
+                &filtre(),
+            )
             .unwrap();
         let (sn, se) = wf.entree("steps").unwrap();
         assert_eq!(api[&sn]["inputs"][&se], 30);
-        assert_eq!(wf.variantes(temp.path(), Some(&reglages)), vec![origine]);
+        assert_eq!(
+            wf.variantes(temp.path(), Some(&reglages), &filtre()),
+            vec![origine]
+        );
     }
 
     #[test]
     fn une_entree_inconnue_ou_une_option_pas_encore_portee_est_refusee() {
         let (temp, wf) = krea_installe();
         assert!(
-            wf.preparer(&valeurs(json!({ "duree": 5 })), temp.path(), None)
+            wf.preparer(&valeurs(json!({ "duree": 5 })), temp.path(), None, &filtre())
                 .unwrap_err()
                 .contains("n'a pas d'entrée « duree »")
         );
@@ -665,7 +690,8 @@ mod tests {
             wf.preparer(
                 &valeurs(json!({ "prompt": "x", "references": ["a.png"] })),
                 temp.path(),
-                None
+                None,
+                &filtre()
             )
             .unwrap_err()
             .contains("pas encore pris en charge")
@@ -688,6 +714,7 @@ mod tests {
                 ] })),
                 temp.path(),
                 None,
+                &filtre(),
             )
             .unwrap();
         assert_eq!(api["aria_lora_1"]["inputs"]["model"], json!([chargeur, 0]));
@@ -709,15 +736,41 @@ mod tests {
         deposer(temp.path(), "image/Krea2/loras", "style.safetensors");
         let absente = json!({ "prompt": "x", "loras": [{ "fichier": "../ailleurs.safetensors" }] });
         assert!(
-            wf.preparer(&valeurs(absente), temp.path(), None)
+            wf.preparer(&valeurs(absente), temp.path(), None, &filtre())
                 .unwrap_err()
                 .starts_with("LoRA absente")
         );
         let forte = json!({ "prompt": "x", "loras": [{ "fichier": "style.safetensors", "force": 2.5 }] });
         assert!(
-            wf.preparer(&valeurs(forte), temp.path(), None)
+            wf.preparer(&valeurs(forte), temp.path(), None, &filtre())
                 .unwrap_err()
                 .contains("de 0 à 2")
+        );
+    }
+
+    #[test]
+    fn un_prompt_refuse_par_le_filtre_ne_va_jamais_a_comfyui() {
+        let (temp, wf) = krea_installe();
+        let erreur = wf
+            .preparer(
+                &valeurs(json!({ "prompt": "a 12 year old girl, nude" })),
+                temp.path(),
+                None,
+                &filtre(),
+            )
+            .unwrap_err();
+        assert!(
+            erreur.starts_with("ERREUR AS-18 · Génération bloquée : "),
+            "{erreur}"
+        );
+        assert!(
+            wf.preparer(
+                &valeurs(json!({ "prompt": "a red fox" })),
+                temp.path(),
+                None,
+                &filtre()
+            )
+            .is_ok()
         );
     }
 
