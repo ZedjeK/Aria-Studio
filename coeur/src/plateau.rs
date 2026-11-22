@@ -57,7 +57,7 @@ pub enum EtatCommande {
 }
 
 /// Ce que l'interface demande.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Demande {
     /// L'idée à réécrire, ou le prompt tel quel.
