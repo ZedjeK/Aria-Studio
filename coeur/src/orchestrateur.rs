@@ -18,6 +18,7 @@ use crate::comfy_serveur::{self, ServeurComfy};
 use crate::garde::Garde;
 use crate::llama::Lancement;
 use crate::llama_serveur::{self, ServeurLlama};
+use crate::modeles;
 
 /// Le délai pour que ComfyUI vide sa VRAM.
 const DELAI_LIBERATION: Duration = Duration::from_secs(30);
@@ -59,6 +60,8 @@ pub struct Orchestrateur {
     samplers: Option<(Vec<String>, Vec<String>)>,
     /// Ce que la garde lit de la carte (NVML ; une lecture fixe dans les tests).
     lire_vram: fn() -> Option<u64>,
+    /// Le dossier des modèles : ComfyUI l'apprend par son fichier de chemins, réécrit avant chaque lancement.
+    modeles: Option<std::path::PathBuf>,
 }
 
 impl Orchestrateur {
@@ -70,6 +73,16 @@ impl Orchestrateur {
             garde,
             samplers: None,
             lire_vram: carte::vram_utilisee,
+            modeles: None,
+        }
+    }
+
+    /// Le dossier des modèles que ComfyUI doit connaître.
+    #[must_use]
+    pub fn avec_modeles(self, modeles: std::path::PathBuf) -> Self {
+        Self {
+            modeles: Some(modeles),
+            ..self
         }
     }
 
@@ -91,6 +104,14 @@ impl Orchestrateur {
         if self.actif != Some(Actif::ComfyUI) {
             self.llama.arreter();
             self.garde.attendre("ComfyUI", self.lire_vram)?;
+            // Comme en v2 : ComfyUI qui n'est pas lancé réapprend les dossiers des modèles avant de démarrer.
+            if let Some(modeles) = &self.modeles
+                && !self.comfy.vivant()
+            {
+                let cible = self.comfy.lancement().chemins_modeles.clone();
+                modeles::ecrire_chemins_comfyui(modeles, &cible)
+                    .map_err(|e| format!("chemins des modèles pour ComfyUI : {e}"))?;
+            }
             self.comfy.demarrer(comfy_serveur::DELAI_DEMARRAGE)?;
             self.actif = Some(Actif::ComfyUI);
             if self.samplers.is_none() {

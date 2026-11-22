@@ -20,6 +20,7 @@ pub mod llama;
 pub mod llama_serveur;
 pub mod local;
 pub mod mises_a_jour;
+pub mod modeles;
 pub mod moteurs;
 pub mod orchestrateur;
 pub mod presence;
