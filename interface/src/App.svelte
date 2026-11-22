@@ -28,12 +28,14 @@
   import Accueil from './pages/Accueil.svelte';
   import Journal from './pages/Journal.svelte';
   import Parametres from './pages/Parametres.svelte';
+  import PageReglages from './pages/Reglages.svelte';
 
-  type Page = 'accueil' | 'journal' | 'parametres';
+  type Page = 'accueil' | 'reglages' | 'journal' | 'parametres';
 
   // Les familles de pages : le travail de l'appli d'abord, puis l'appli elle-même. À adapter.
   const familles: { titre: string; pages: { id: Page; titre: string }[] }[] = [
     { titre: 'Travail', pages: [{ id: 'accueil', titre: 'Accueil' }] },
+    { titre: 'Préparation', pages: [{ id: 'reglages', titre: 'Réglages' }] },
     {
       titre: 'Appli',
       pages: [
@@ -148,6 +150,8 @@
     <div class="page">
       {#if page === 'accueil'}
         <Accueil {identite} bind:fraction bind:mesure {signaler} />
+      {:else if page === 'reglages'}
+        <PageReglages {signaler} />
       {:else if page === 'journal'}
         <Journal {signaler} />
       {:else if identite && reglages}

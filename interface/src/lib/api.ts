@@ -60,6 +60,74 @@ export interface Operation {
   detail?: string;
 }
 
+/** L'état d'un moteur sur le disque (aria_coeur::moteurs::Statut). */
+export type StatutMoteur = 'absent' | 'manuel' | 'different' | 'a_jour' | 'externe';
+
+/** Un moteur dans l'onglet Moteurs (aria_coeur::moteurs::EtatMoteur). */
+export interface EtatMoteur {
+  id: string;
+  nom: string;
+  role: string;
+  facultatif: boolean;
+  dossier: string;
+  /** La version épinglée par le catalogue. */
+  version: string;
+  versionInstallee: string | null;
+  statut: StatutMoteur;
+  chemin: string;
+  externe: boolean;
+  /** Une version précédente attend à côté : « Revenir » est possible. */
+  precedente: boolean;
+  /** Octets encore à télécharger. */
+  aTelecharger: number;
+  /** Un programme écoute sur son port. */
+  occupe: boolean;
+  /** Ce qui manque pour l'installer (7-Zip pour un 7z). */
+  prerequis: string | null;
+}
+
+/** La carte graphique (aria_coeur::carte::Carte). */
+export interface Carte {
+  nvidia: boolean;
+  nom: string | null;
+  pilote: string | null;
+  vramGo: number | null;
+  ramGo: number;
+  ok: boolean;
+  message: string | null;
+}
+
+/** L'installation en cours ou la dernière. */
+export interface TacheMoteur {
+  id: string;
+  nom: string;
+  etape: string;
+  fait: number;
+  total: number;
+  erreur: string | null;
+  fini: boolean;
+}
+
+export interface EtatMoteurs {
+  carte: Carte;
+  moteurs: EtatMoteur[];
+  tache: TacheMoteur | null;
+}
+
+export const lireMoteurs = (): Promise<EtatMoteurs> => invoke<EtatMoteurs>('lire_moteurs');
+
+/** Lance l'installation en arrière-plan ; son avancement se lit avec lireMoteurs. */
+export const installerMoteur = (id: string): Promise<void> => invoke<void>('installer_moteur', { id });
+
+/** Annule un téléchargement en cours (la partie reçue est gardée pour reprendre). */
+export const annulerInstallationMoteur = (): Promise<void> => invoke<void>('annuler_installation_moteur');
+
+/** Revient à la version précédente ; rend la version qui revient (null : posée à la main). */
+export const revenirMoteur = (id: string): Promise<string | null> => invoke<string | null>('revenir_moteur', { id });
+
+/** ComfyUI vide sa VRAM, llama-server s'arrête. */
+export const libererCarte = (): Promise<void> => invoke<void>('liberer_carte');
+
 /** Les opérations du journal, la plus récente d'abord. */
 export const lireJournal = (): Promise<Operation[]> => invoke<Operation[]>('lire_journal');
 

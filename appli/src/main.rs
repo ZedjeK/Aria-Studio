@@ -11,6 +11,7 @@ mod erreur_fatale;
 mod icone;
 mod installation;
 mod mise_a_jour;
+mod moteurs;
 
 use std::path::{Path, PathBuf};
 
@@ -101,6 +102,8 @@ fn lancer() -> Result<(), String> {
             aria_coeur::installation::doit_proposer(&exe, &dossier, &Reglages::charger(&dossier), &arguments)
         });
     let cache_webview = dossier.cache_webview();
+    let moteurs = moteurs::Moteurs::new(&emplacements)?;
+    moteurs::reprendre(&moteurs);
 
     tauri::Builder::default()
         // Toujours le premier greffon : relancer l'exe ramène la fenêtre existante au lieu d'en ouvrir une autre.
@@ -116,6 +119,7 @@ fn lancer() -> Result<(), String> {
         })
         .manage(icone::Presence::default())
         .manage(mise_a_jour::Disponible::default())
+        .manage(moteurs)
         .invoke_handler(tauri::generate_handler![
             commandes::identite,
             commandes::lire_reglages,
@@ -134,6 +138,11 @@ fn lancer() -> Result<(), String> {
             mise_a_jour::mise_a_jour_disponible,
             mise_a_jour::voir_notes,
             mise_a_jour::installer_mise_a_jour,
+            moteurs::lire_moteurs,
+            moteurs::installer_moteur,
+            moteurs::annuler_installation_moteur,
+            moteurs::revenir_moteur,
+            moteurs::liberer_carte,
         ])
         .setup(move |app| {
             if proposer {
@@ -147,6 +156,8 @@ fn lancer() -> Result<(), String> {
         .map_err(|e| format!("l'interface n'a pas pu démarrer : {e}"))?
         .run(|app, evenement| {
             if let RunEvent::Exit = evenement {
+                // Les moteurs lancés par Aria s'arrêtent avec elle.
+                moteurs::arreter(&app.state::<moteurs::Moteurs>());
                 journal::noter(
                     &app.state::<Etat>().dossier,
                     "Aria fermée",
