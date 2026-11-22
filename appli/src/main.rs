@@ -16,6 +16,7 @@ mod mise_a_jour;
 mod moteurs;
 mod plateau;
 mod reglages_fins;
+mod scenario;
 mod securite;
 mod telechargements;
 
@@ -186,6 +187,9 @@ fn lancer() -> Result<(), String> {
             decouvrir::retrouver_sources,
             decouvrir::etat_sources,
             decouvrir::relire_lora,
+            scenario::sujets_scenario,
+            scenario::structure_scenario,
+            scenario::assembler_prompt,
             lieux::etat_emplacements,
             lieux::ouvrir_dossier,
             lieux::parcourir_dossier,
