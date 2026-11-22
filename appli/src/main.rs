@@ -29,6 +29,39 @@ pub struct Etat {
     pub cache_webview: PathBuf,
 }
 
+/// Les clés Civitai et Hugging Face de la v2 (Gestionnaire d'identification Windows) recopiées dans `secrets\`, au
+/// journal ce qui a été repris ou a échoué. L'entrée du Gestionnaire reste en place pour une v2 restaurée.
+#[cfg(windows)]
+fn reprendre_les_cles(dossier: &Dossier) {
+    use aria_coeur::cles::{self, GestionnaireIdentification, Reprise};
+    use aria_coeur::secrets::{Coffre, Dpapi};
+
+    let coffre = Coffre::du_dossier(dossier, &Dpapi);
+    for (source, reprise) in cles::reprendre_de_la_v2(&coffre, &GestionnaireIdentification) {
+        match reprise {
+            Reprise::Reprise => journal::noter(
+                dossier,
+                "Clé reprise du coffre Windows",
+                source.nom(),
+                journal::Resultat::Ok,
+                Some("l'entrée du coffre Windows reste en place pour la version 2"),
+            ),
+            Reprise::Echec(message) => journal::noter(
+                dossier,
+                "Clé non reprise du coffre Windows",
+                source.nom(),
+                journal::Resultat::Erreur,
+                Some(&message),
+            ),
+            Reprise::DejaLa | Reprise::Absente => {}
+        }
+    }
+}
+
+/// Hors de Windows, il n'y a ni Gestionnaire d'identification ni DPAPI : rien à reprendre.
+#[cfg(not(windows))]
+fn reprendre_les_cles(_dossier: &Dossier) {}
+
 fn main() {
     if let Err(message) = lancer() {
         erreur_fatale::afficher(&message);
@@ -54,6 +87,7 @@ fn lancer() -> Result<(), String> {
         journal::Resultat::Ok,
         None,
     );
+    reprendre_les_cles(&dossier);
     // Restes d'un remplacement précédent, maintenant que l'ancienne version est arrêtée.
     aria_coeur::installation::nettoyer(&dossier.programme());
     let arguments: Vec<String> = std::env::args().skip(1).collect();
