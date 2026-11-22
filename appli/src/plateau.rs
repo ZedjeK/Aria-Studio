@@ -85,10 +85,11 @@ pub async fn importer_image(
     plateau: State<'_, Arc<Plateau>>,
     image: String,
     nom: String,
+    dossier: Option<String>,
 ) -> Result<Value, String> {
     hors_interface(&plateau, move |p| {
         let octets = images::depuis_data_url(&image)?;
-        let id = p.importer(&octets, &nom)?;
+        let id = p.importer(&octets, &nom, dossier.as_deref())?;
         creations::fiche(&p.contexte().data, &id)
     })
     .await

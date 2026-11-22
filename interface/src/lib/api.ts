@@ -217,6 +217,8 @@ export interface DemandeImage {
   nombre: number;
   modele: string | null;
   loras: ChoixLora[];
+  /** Le dossier où ranger les résultats (« Ranger dans ») ; null : non rangés. */
+  dossier?: string | null;
 }
 
 /** Partir de rushes : s'en inspirer, ou en redessiner un. */
@@ -272,6 +274,8 @@ export interface Commande {
   /** Séquence du Montage : son identifiant, et les plans à tourner. */
   sequence: string | null;
   plans: number[];
+  /** Le dossier où ranger les résultats ; null : non rangés. */
+  dossier: string | null;
 }
 
 /** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */
@@ -335,6 +339,8 @@ export interface DemandeRetouche {
   /** Un format, qui recadre la source au centre ; null : celui de l'image. */
   format: string | null;
   loras: ChoixLora[];
+  /** Le dossier où ranger les résultats (« Ranger dans ») ; null : à côté de la source. */
+  dossier?: string | null;
 }
 
 /** Une demande d'agrandissement (aria_coeur::retouche::DemandeAgrandissement). */
@@ -352,6 +358,8 @@ export interface DemandeAgrandissement {
   modele: string | null;
   nombre: number;
   loras: ChoixLora[];
+  /** Le dossier où ranger les résultats (« Ranger dans ») ; null : à côté de la source. */
+  dossier?: string | null;
 }
 
 /** Les workflows de retouche, les formats et les LLM. */
@@ -364,8 +372,8 @@ export const commanderAgrandissement = (demande: DemandeAgrandissement): Promise
   invoke<Commande>('commander_agrandissement', { demande });
 
 /** Ajoute une image personnelle (data URL) aux créations ; rend sa fiche. */
-export const importerImage = (image: string, nom: string): Promise<Creation> =>
-  invoke<Creation>('importer_image', { image, nom });
+export const importerImage = (image: string, nom: string, dossier: string | null = null): Promise<Creation> =>
+  invoke<Creation>('importer_image', { image, nom, dossier });
 
 /** La licence d'un modèle (aria_coeur::installations::Licence). */
 export interface LicenceModele {
@@ -1286,6 +1294,8 @@ export interface DemandeClip {
   modele: string | null;
   loras: ChoixLora[];
   ecritPar: string | null;
+  /** Le dossier où ranger les résultats (« Ranger dans ») ; null : non rangés (un dossier des Bobines). */
+  dossier?: string | null;
 }
 
 export const optionsMontage = (): Promise<OptionsMontage> => invoke<OptionsMontage>('options_montage');
