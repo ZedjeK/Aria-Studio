@@ -238,6 +238,13 @@ fn lancer() -> Result<(), String> {
             plateau::supprimer_voix,
             plateau::importer_voix,
             plateau::son_voix,
+            plateau::lire_sequences,
+            plateau::creer_sequence,
+            plateau::modifier_sequence,
+            plateau::supprimer_sequence,
+            plateau::restaurer_sequence,
+            plateau::vider_corbeille_sequences,
+            plateau::tourner_sequence,
         ])
         .setup(move |app| {
             if proposer {

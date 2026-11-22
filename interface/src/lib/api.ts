@@ -227,7 +227,7 @@ export type EtatCommande = 'attente' | 'en_cours' | 'termine' | 'erreur' | 'annu
 
 /** Une commande du Plateau (aria_coeur::plateau::Commande). */
 /** Ce que fait une commande du Plateau. */
-export type GenreCommande = 'creation' | 'retouche' | 'agrandissement' | 'clip' | 'voix';
+export type GenreCommande = 'creation' | 'retouche' | 'agrandissement' | 'clip' | 'voix' | 'sequence';
 
 export interface Commande {
   id: string;
@@ -269,6 +269,9 @@ export interface Commande {
   duree: number | null;
   /** Essai de voix : qui parle, et comment. */
   description: string;
+  /** Séquence du Montage : son identifiant, et les plans à tourner. */
+  sequence: string | null;
+  plans: number[];
 }
 
 /** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */
@@ -1333,3 +1336,101 @@ export const importerVoix = (son: string, nom: string, nomOrigine: string): Prom
 
 /** Le son d'une voix, en octets. */
 export const sonVoix = (id: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('son_voix', { id });
+
+// --- Montage : séquences (aria_coeur::sequences, data\sequences\ au format de la v2) ---
+
+export type Enchainement = 'rush' | 'texte' | 'prolonger' | 'couper' | 'transition';
+
+export interface PlanSequence {
+  /** Absent pour un plan pas encore enregistré. */
+  id?: string;
+  idee: string;
+  prompt: string | null;
+  duree: number;
+  enchainement: Enchainement;
+  rush: string | null;
+  seed?: number | null;
+  ambiance: boolean;
+  clip: string | null;
+  prompt_final?: string | null;
+  a_jour: boolean;
+}
+
+export interface CastingSequence {
+  personnage: string | null;
+  /** `auto`, `voix:<id>` (bibliothèque), l'identifiant d'un clip, ou rien. */
+  voix: string | null;
+  ambiance: string;
+  contrainte: string;
+  reference_partout: boolean;
+}
+
+export interface Sequence {
+  /** Absent tant qu'elle n'est pas enregistrée. */
+  id: string | null;
+  titre: string;
+  qualite: string;
+  format: string;
+  llm: string | null;
+  modele: string | null;
+  loras: ChoixLora[];
+  casting: CastingSequence;
+  plans: PlanSequence[];
+  film: string | null;
+  date?: string;
+  dossier?: string;
+  /** Par exemple : sa voix de la bibliothèque a été supprimée. */
+  alerte?: string;
+  contrainte_en?: { fr: string; en: string };
+  /** Calculés par le cœur. */
+  a_tourner?: number[];
+  estimation_s?: number;
+  duree_totale?: number;
+}
+
+export interface SequenceCorbeille {
+  id: string;
+  titre: string;
+  plans: number;
+  date: string | null;
+}
+
+export interface OptionsSequence {
+  plansMax: number;
+  longueurTitre: number;
+  longueurIdee: number;
+  longueurAmbiance: number;
+  longueurContrainte: number;
+  surcout: number;
+  stepsParole: number;
+  surcoutParole: number;
+  exposantDuree: number;
+  /** Les steps de chaque checkpoint prêt. */
+  steps: Record<string, number>;
+  modeleDefaut: string | null;
+}
+
+export interface EtatSequences {
+  sequences: Sequence[];
+  corbeille: SequenceCorbeille[];
+  enTournage: string[];
+  options: OptionsSequence;
+}
+
+export const lireSequences = (): Promise<EtatSequences> => invoke<EtatSequences>('lire_sequences');
+
+export const creerSequence = (donnees: Sequence): Promise<Sequence> => invoke<Sequence>('creer_sequence', { donnees });
+
+export const modifierSequence = (id: string, donnees: Sequence): Promise<Sequence> =>
+  invoke<Sequence>('modifier_sequence', { id, donnees });
+
+export const supprimerSequence = (id: string): Promise<void> => invoke<void>('supprimer_sequence', { id });
+
+export const restaurerSequence = (id: string): Promise<Sequence> => invoke<Sequence>('restaurer_sequence', { id });
+
+/** Efface pour de bon les séquences de la corbeille (leurs clips restent dans les Bobines) ; rend leur nombre. */
+export const viderCorbeilleSequences = (): Promise<number> => invoke<number>('vider_corbeille_sequences');
+
+/** Tourne les plans demandés (tous ceux qui ne sont pas à jour si la liste est vide), puis assemble le film. */
+export const tournerSequence = (id: string, plans: number[]): Promise<Commande> =>
+  invoke<Commande>('tourner_sequence', { id, plans });

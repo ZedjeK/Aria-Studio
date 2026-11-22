@@ -103,6 +103,13 @@ fn main() {
         "supprimer_voix",
         "importer_voix",
         "son_voix",
+        "lire_sequences",
+        "creer_sequence",
+        "modifier_sequence",
+        "supprimer_sequence",
+        "restaurer_sequence",
+        "vider_corbeille_sequences",
+        "tourner_sequence",
     ]);
     let attributs = tauri_build::Attributes::new().app_manifest(commandes);
     if let Err(erreur) = tauri_build::try_build(attributs) {

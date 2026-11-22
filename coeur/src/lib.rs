@@ -48,6 +48,7 @@ pub mod scenario;
 pub mod secrets;
 pub mod securite;
 pub mod securite_reglages;
+pub mod sequences;
 pub mod suggestions;
 pub mod telechargement;
 pub mod usages;
