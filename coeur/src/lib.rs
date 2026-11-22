@@ -22,6 +22,7 @@ pub mod images;
 pub mod installation;
 pub mod installations;
 pub mod journal;
+pub mod listes;
 pub mod llama;
 pub mod llama_serveur;
 pub mod llm;

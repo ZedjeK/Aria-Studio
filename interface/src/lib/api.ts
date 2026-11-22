@@ -1052,3 +1052,102 @@ export function messageErreur(erreur: unknown): string {
   if (erreur instanceof Error) return erreur.message;
   return 'erreur inconnue';
 }
+
+// --- Scénario : listes guidées et assemblage (aria_coeur::listes) ---
+
+export interface SujetScenario {
+  id: string;
+  nom: string;
+}
+
+export interface ValeurListe {
+  nom: string;
+  prompt: string;
+  remplace: string[];
+  adulte: boolean;
+  genre: string | null;
+  promptsGenre: Record<string, string> | null;
+  mineur: boolean;
+  bornes: [number, number] | null;
+  familles: string[];
+  origines: string[];
+  description: string;
+  /** Sous-liste → valeurs avec lesquelles celle-ci reste cohérente. */
+  avec: Record<string, string[]>;
+  categorie: string;
+}
+
+export interface SousListeScenario {
+  nom: string;
+  note: string;
+  /** Toutes ses valeurs sont adultes : elle disparaît pour un mineur. */
+  adulte: boolean;
+  condition: { sousListe: string; contient: string } | null;
+  valeurs: ValeurListe[];
+}
+
+export type OngletScenario = 'sujet' | 'decor' | 'scene';
+
+export interface GroupeScenario {
+  nom: string;
+  onglet: OngletScenario;
+  sousListes: SousListeScenario[];
+}
+
+export interface BlocScenario {
+  id: string;
+  titre: string;
+  /** Le bloc Plan : seulement pour un modèle vidéo. */
+  video: boolean;
+  groupes: GroupeScenario[];
+}
+
+/** [bloc, sous-liste, valeur] de chaque côté. */
+export type Incompatibilite = [[string, string, string], [string, string, string]];
+
+export interface StructureScenario {
+  sujet: string;
+  nom: string;
+  blocs: BlocScenario[];
+  incompatibilites: Incompatibilite[];
+  agePrecis: [number, number];
+  longueurs: { action: number; replique: number };
+}
+
+/** {bloc: {sous-liste: valeur}}. */
+export type ChoixListes = Record<string, Record<string, string>>;
+
+export interface DemandeAssemblage {
+  sujet: string;
+  choix: ChoixListes;
+  age: number | null;
+  texte: string;
+  precisions: string;
+  workflow: string | null;
+  action: string;
+  replique: string;
+  dialogue: boolean | null;
+  musique: string;
+  avecMusique: boolean | null;
+  sansSujet: boolean;
+}
+
+export interface Assemblage {
+  prompt: string;
+  mots: number;
+  motsMax: number | null;
+  alertes: string[];
+  mineur: boolean;
+  tranche: string | null;
+  aTraduire: boolean;
+  video: boolean;
+}
+
+export const sujetsScenario = (): Promise<SujetScenario[]> => invoke<SujetScenario[]>('sujets_scenario');
+
+export const structureScenario = (sujet: string): Promise<StructureScenario> =>
+  invoke<StructureScenario>('structure_scenario', { sujet });
+
+/** Contrôle les règles des listes et le filtre AS-18, puis assemble le prompt. */
+export const assemblerPrompt = (demande: DemandeAssemblage): Promise<Assemblage> =>
+  invoke<Assemblage>('assembler_prompt', { demande });

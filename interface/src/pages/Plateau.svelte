@@ -42,9 +42,13 @@
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
+    /** Un prompt écrit au Scénario : il part tel quel, avec son modèle cible. */
+    recu?: { prompt: string; workflow: string | null } | null;
+    /** Le prompt reçu est posé. */
+    recuLu?: () => void;
   }
 
-  let { signaler }: Props = $props();
+  let { signaler, recu = null, recuLu }: Props = $props();
 
   let options = $state<OptionsPlateau | null>(null);
   let commandes = $state<Commande[]>([]);
@@ -112,6 +116,15 @@
       const voulu = modeReference === 'inspirer' ? options.defautReferences : options.defaut;
       const defaut = liste.find((w) => w.id === voulu) ?? liste[0];
       choisirWorkflow(garde ? workflowId : (defaut?.id ?? ''));
+      // Un prompt du Scénario : il part tel quel, avec son modèle cible s'il est prêt.
+      if (recu) {
+        prompt = recu.prompt;
+        reecrire = false;
+        const cible = recu.workflow;
+        if (cible && liste.some((w) => w.id === cible)) choisirWorkflow(cible);
+        recuLu?.();
+        signaler('Prompt du Scénario reçu : il partira tel quel.');
+      }
     } catch (e) {
       signaler(messageErreur(e), true);
     }
