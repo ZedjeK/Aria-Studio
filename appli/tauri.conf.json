@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Aria Studio",
+  "identifier": "io.github.zedjek.aria-studio",
+  "build": {
+    "frontendDist": "../interface/dist",
+    "devUrl": "http://localhost:1420"
+  },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": false,
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self'; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": false,
+    "publisher": "ZedjeK",
+    "copyright": "© 2026 ZedjeK",
+    "shortDescription": "Un studio d'images et de vidéos 100 % local : un LLM local écrit le prompt, ComfyUI le tourne.",
+    "icon": ["icons/icon.ico"]
+  }
+}

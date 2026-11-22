@@ -1,0 +1,82 @@
+/*
+  Identité visuelle des applis Aria : palette, polices et bases. Les formes (biais, encoche, coins coupés, carte à
+  onglet) vivent dans les composants de lib\composants\, une forme par sens.
+*/
+:root {
+  --fond: #030812;
+  --panneau: #06101f;
+  --texte: #ddebff;
+  --texte-2: #93a8c8;
+  --cyan: #7df9ff;
+  --bleu: #5c8bff;
+  --orange: #ff8a1f;
+  --rouge: #ff5c7a;
+  --ambre: #ffd166;
+  --ligne: #1a2d4d;
+
+  --police: 'Space Grotesk', system-ui, sans-serif;
+  --police-code: 'IBM Plex Mono', ui-monospace, monospace;
+  /* Taille des coins coupés et des encoches */
+  --coupe: 12px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#appli {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font: 500 14px/1.5 var(--police);
+  overflow: hidden;
+}
+
+code,
+.code {
+  font-family: var(--police-code);
+}
+
+input,
+select {
+  font: inherit;
+  color: var(--texte);
+  background: var(--fond);
+  border: 1px solid var(--ligne);
+  padding: 6px 8px;
+}
+
+input[type='number'] {
+  width: 5em;
+  font-family: var(--police-code);
+}
+
+input[type='checkbox'] {
+  accent-color: var(--cyan);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ambre);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--bleu);
+  color: var(--fond);
+}
+
+/* Windows demande moins d'animations : rien ne bouge, ni transition ni fond animé. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

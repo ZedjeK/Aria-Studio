@@ -1,21 +1,31 @@
-# Release automatique : pousser un tag « vX.Y.Z » construit la version portable sur Windows (build_portable.py :
-# Python embarqué, dépendances, lanceur compilé avec le csc.exe du runner), en fait le zip et son .sha256, atteste la
-# provenance du zip, puis crée la release en BROUILLON : tu relis les notes et tu publies. Les notes sont celles de
-# docs/releases/<tag>.md si ce fichier existe, sinon celles que GitHub génère.
+# Release : pousser un tag « vX.Y.Z » teste, construit l'exe portable, en fait le zip et son empreinte, atteste sa
+# provenance, puis crée la release en BROUILLON. Tu relis les notes, tu vérifies l'empreinte et tu publies : publier
+# est le geste qui prévient les utilisateurs, aucun workflow ne le fait à ta place.
 #
-#     git tag -a v2.0.0 -m "Version 2.0.0"; git push origin v2.0.0
+#     Set-Location C:\chemin\du\depot
+#     git switch main; git pull origin main
+#     git tag -a v1.2.3 -m "Version 1.2.3" SHA_COMPLET_DU_COMMIT_DE_FUSION; git push origin v1.2.3
 #
-# Le tag doit être celui de app/__init__.py (VERSION) : sinon le build s'arrête avant de rien publier.
+# Le Set-Location et le SHA complet du commit de fusion évitent deux erreurs déjà vues : un tag posé dans le mauvais
+# dépôt (terminal resté dans un autre dossier) et un tag posé sur le commit d'avant la fusion.
 #
-# Deux jobs : « build » ne fait que lire (dépendances, build, zip, empreinte) ; « publication » est le seul dont le
-# jeton peut écrire (release et attestation), et il n'exécute aucun code du dépôt.
+# Le tag doit être celui de la version affichée par tools/version.ps1, sinon le build s'arrête avant de rien publier.
+# Ne le pousse qu'une fois la version et les notes (docs/releases/<tag>.md) fusionnées dans main.
 #
-# Essai à blanc : Actions → Release → Run workflow lance le job « build » seul. Le zip est fabriqué et gardé 7 jours
-# comme artefact du run ; aucun tag, aucune release, aucune attestation.
+# Le commit du tag doit aussi appartenir à la branche par défaut : un tag posé sur une branche non fusionnée est refusé.
 #
-# Vérifier un zip téléchargé (gh doit être connecté) :
+# Les notes, la fiche projet et les licences doivent être complètes (tools/verifier-release.ps1) : sans notes de
+# version, aucune release, plus de notes générées à leur place.
 #
-#     gh attestation verify .\Aria-Studio-X.Y.Z.zip --repo ZedjeK/Aria-Studio
+# Deux jobs : « build » ne fait que lire (tests, exe, zip, empreinte) ; « publication » est le seul dont le jeton peut
+# écrire, et il n'exécute aucun code du dépôt.
+#
+# Essai à blanc, sans tag : « build » tourne sur main, liste ce qui manque encore pour sortir la version de
+# tools/version.ps1 et garde le zip 7 jours en artefact ; « publication » ne tourne pas.
+#
+#     gh workflow run Release --ref main
+#     $id = gh run list --workflow Release --limit 1 --json databaseId --jq '.[0].databaseId'
+#     gh run watch $id --exit-status
 name: Release
 
 on:
@@ -27,59 +37,80 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: pwsh
+
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # tout l'historique : il faut pouvoir situer le tag par rapport à la branche par défaut
 
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Dépendances
-        run: python -m pip install -r requirements.txt
-
-      - name: Le tag est celui de VERSION
-        if: github.ref_type == 'tag'
+      - name: Le tag est sur la branche par défaut
+        if: github.event_name == 'push'
+        env:
+          BRANCHE: ${{ github.event.repository.default_branch }}
         run: |
-          $version = python -c "from app import VERSION; print(VERSION)"
-          if ("v$version" -ne $env:GITHUB_REF_NAME) {
-            throw "Le tag $env:GITHUB_REF_NAME ne correspond pas à VERSION ($version) dans app/__init__.py."
+          git merge-base --is-ancestor $env:GITHUB_SHA "origin/$env:BRANCHE"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Le tag $env:GITHUB_REF_NAME pointe sur un commit qui n'est pas dans $env:BRANCHE : aucune release."
           }
 
-      # Notes de version, fiche projet et licences sans trou, avant de construire. Sur un tag, un trou arrête la
-      # release ; à l'essai à blanc, il est listé sans faire échouer le run.
-      - name: La version est prête (notes, fiche projet, licences)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Rust (la version de rust-toolchain.toml)
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          # Seule main enregistre le cache ; les PR et les tags le lisent sans pouvoir le remplacer.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Le tag est celui de la version
+        if: github.event_name == 'push'
         run: |
-          if ($env:GITHUB_REF_TYPE -eq 'tag') { ./tools/verifier-release.ps1 -Tag $env:GITHUB_REF_NAME }
-          else { ./tools/verifier-release.ps1 -EssaiABlanc }
-          if ($LASTEXITCODE -ne 0) { throw "La version n'est pas prête : voir les points ci-dessus." }
+          $version = "$(./tools/version.ps1 | Select-Object -Last 1)".Trim()
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "Le tag $env:GITHUB_REF_NAME ne correspond pas à la version $version donnée par tools/version.ps1."
+          }
 
-      - name: Construire la version portable
-        run: python tools/build_portable.py --sans-installer
+      - name: Notes, fiche projet et licences complètes
+        if: github.event_name == 'push'
+        run: ./tools/verifier-release.ps1 -Tag $env:GITHUB_REF_NAME
 
-      - name: Zip et empreinte
-        run: python tools/zip_release.py
+      - name: Ce qui manque encore pour sortir cette version (essai à blanc)
+        if: github.event_name == 'workflow_dispatch'
+        run: ./tools/verifier-release.ps1 -EssaiABlanc
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+      - name: Tests
+        run: ./tools/tester.ps1
+
+      - name: Construire l'exe portable
+        run: ./build.ps1
+
+      - name: Zip, empreinte et BUILDINFO
+        run: ./tools/empaqueter.ps1
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release
           path: |
-            .build_cache/release/*.zip
-            .build_cache/release/*.zip.sha256
-          include-hidden-files: true  # .build_cache commence par un point : sans cette ligne, l'action ignorerait les zips
+            .work/release/*.zip
+            .work/release/*.zip.sha256
+          include-hidden-files: true # .work commence par un point : sans cette ligne, l'action ignorerait le zip
           if-no-files-found: error
           retention-days: 7
 
   publication:
     needs: build
-    # Seulement sur un tag poussé : l'essai à blanc s'arrête après « build »
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    if: github.event_name == 'push' # jamais sur un essai à blanc
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
@@ -88,17 +119,17 @@ jobs:
       attestations: write
     steps:
       # Seulement pour lire les notes de version : aucun code du dépôt n'est exécuté dans ce job.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release
           path: release
 
       - name: Attestation de provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: release/*.zip
 
@@ -108,10 +139,6 @@ jobs:
         run: |
           $version = $env:GITHUB_REF_NAME.TrimStart("v")
           $zip = "release/Aria-Studio-$version.zip"
-          foreach ($f in @($zip, "$zip.sha256")) {
-            if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "Fichier attendu absent : $f" }
-          }
           $notes = "docs/releases/$env:GITHUB_REF_NAME.md"
-          if (Test-Path $notes) { $texte = @("--notes-file", $notes) } else { $texte = @("--generate-notes") }
-          gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --draft --verify-tag --title "Aria - Studio $version" @texte
-          if ($LASTEXITCODE -ne 0) { throw "La release en brouillon n'a pas pu être créée." }
+          if (-not (Test-Path $notes)) { throw "$notes est introuvable : aucune release sans notes de version." }
+          gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --draft --verify-tag --title "Aria Studio $version" --notes-file $notes

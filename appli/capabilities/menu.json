@@ -1,0 +1,14 @@
+{
+  "identifier": "menu",
+  "description": "Le menu de l'icône de notification : ses seules commandes, et l'écoute des événements de l'appli.",
+  "windows": ["menu"],
+  "permissions": [
+    "allow-etat-menu",
+    "allow-action-menu",
+    "allow-taille-menu",
+    "allow-lire-demarrage-auto",
+    "allow-regler-demarrage-auto",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

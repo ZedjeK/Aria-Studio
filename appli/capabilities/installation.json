@@ -1,0 +1,10 @@
+{
+  "identifier": "installation",
+  "description": "La proposition d'installation : ses seules commandes.",
+  "windows": ["installation"],
+  "permissions": [
+    "allow-infos-installation",
+    "allow-installer",
+    "allow-lancer-sans-installer"
+  ]
+}

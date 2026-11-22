@@ -1,0 +1,36 @@
+[package]
+name = "aria-appli"
+description = "L'appli Windows : fenêtre Tauri, interface Svelte, appels à Windows."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Interface embarquée dans l'exe (build.ps1 l'active) ; sans elle, la fenêtre charge le serveur de développement.
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.6", features = [] }
+
+[dependencies]
+aria-coeur = { path = "../coeur" }
+serde = { version = "1.0.229", features = ["derive"] }
+# tray-icon : l'icône de notification des applis qui servent en arrière-plan.
+tauri = { version = "2.12.7", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2.5.5"
+# Les mises à jour : HTTPS par SChannel, avec les certificats et le proxy de Windows.
+ureq = { version = "3.5.2", default-features = false, features = ["native-tls", "win-system-proxy"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[lints]
+workspace = true

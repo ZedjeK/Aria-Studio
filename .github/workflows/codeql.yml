@@ -1,12 +1,13 @@
-# CodeQL : GitHub relit le code à chaque changement et signale les failles connues (socle commun des applis Aria).
-# Le langage « actions » relit les workflows eux-mêmes ; Studio ajoute Python, JavaScript et C#.
+# CodeQL : GitHub relit le code à chaque changement et signale les failles connues.
+# Le langage « actions » relit les workflows eux-mêmes ; la stack ajoute le sien.
 name: CodeQL
 
+# refonte/v3 (branche d'intégration de la version 3) est relue comme main : le ruleset exige CodeQL sur les deux.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, refonte/v3]
   push:
-    branches: [main]
+    branches: [main, refonte/v3]
   schedule:
     - cron: "17 5 * * 1"
 
@@ -27,12 +28,10 @@ jobs:
         include:
           - language: actions
             build-mode: none
-          - language: python
+          # Rust et TypeScript relus sans compiler.
+          - language: rust
             build-mode: none
           - language: javascript-typescript
-            build-mode: none
-          # C# relu sans compiler : CodeQL tourne sous Linux, et le lanceur (tools/launcher) se compile sous Windows.
-          - language: csharp
             build-mode: none
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

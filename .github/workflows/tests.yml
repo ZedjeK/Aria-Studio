@@ -1,36 +1,55 @@
-# Suite de tests à chaque push et pull request, sur Windows avec le Python du projet (3.11).
-# Ni GPU, ni ComfyUI, ni llama-server, ni modèle : tools/tester.py lance les tests dans un dossier utilisateur jetable
-# où les fichiers des workflows sont posés vides et modeles/llm reste vide ; NVML, ComfyUI et Llama sont simulés dans
-# les tests qui en parlent (sans carte NVIDIA, les tests passent aussi). Le coffre Windows de test_cles est celui du
-# runner, sous un nom d'essai effacé à la fin.
+# Tests : sur chaque PR vers main ou refonte/v3, et sur chaque push sur ces deux branches.
+# refonte/v3 est la branche d'intégration de la version 3 (Rust, Tauri, Svelte) : le même ruleset la protège.
 #
-# Le job de test s'appelle « tests », comme dans tous les dépôts Aria, et le ruleset de main l'exige sous ce nom :
-# ne jamais le renommer sans changer d'abord le contrôle exigé par le ruleset, sinon plus aucune PR ne se fusionne.
+# Aucun filtre de chemins (paths, paths-ignore) : un workflow ignoré laisserait le check « tests » en attente et
+# bloquerait toute PR, puisque le ruleset de main l'exige.
 name: Tests
 
 on:
-  push:
   pull_request:
+    branches: [main, refonte/v3]
+  push:
+    branches: [main, refonte/v3]
 
 permissions:
   contents: read
 
+concurrency:
+  group: tests-${{ github.ref }}
+  # Seulement sur les PR : deux fusions rapprochées n'annulent pas le run de main.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: pwsh
+
 jobs:
-  tests:
+  tests: # ce nom est celui que le ruleset exige : ne jamais le renommer
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          python-version: "3.11"
-          cache: pip
+          node-version: "24"
 
-      - name: Dépendances
-        run: python -m pip install -r requirements.txt
+      - name: Rust (la version de rust-toolchain.toml)
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          # Seule main enregistre le cache ; les PR et les tags le lisent sans pouvoir le remplacer.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Tests
-        run: python tools/tester.py
+        run: ./tools/tester.ps1
+
+      # Les scripts .ps1 doivent aussi tourner sous Windows PowerShell 5.1, celui livré avec Windows.
+      # Même job : le check exigé par le ruleset garde son nom « tests ».
+      - name: Tests sous Windows PowerShell 5.1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./tools/tester.ps1

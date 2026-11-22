@@ -1,0 +1,56 @@
+name: "Bug"
+description: "Quelque chose ne marche pas comme prévu dans Aria Studio."
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Une faille de sécurité ne s'écrit pas ici : passe par le signalement privé (voir SECURITY.md).
+        N'écris ni mot de passe, ni jeton, ni donnée personnelle dans ce formulaire : il est public.
+  - type: input
+    id: version
+    attributes:
+      label: "Version d'Aria Studio"
+      description: "Elle est affichée dans l'appli."
+      placeholder: "1.2.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: systeme
+    attributes:
+      label: "Système"
+      options:
+        - "Windows 11"
+        - "Windows 10"
+        - "Autre (précise-le dans les étapes)"
+    validations:
+      required: true
+  - type: textarea
+    id: etapes
+    attributes:
+      label: "Étapes pour reproduire"
+      description: "Ce que tu as fait, dans l'ordre."
+      placeholder: |
+        1. Lance l'appli.
+        2. Clique sur …
+    validations:
+      required: true
+  - type: textarea
+    id: attendu
+    attributes:
+      label: "Ce que tu attendais"
+    validations:
+      required: true
+  - type: textarea
+    id: observe
+    attributes:
+      label: "Ce qui s'est passé"
+      description: "Le message d'erreur exact, s'il y en a un."
+    validations:
+      required: true
+  - type: textarea
+    id: journal
+    attributes:
+      label: "Extrait du journal (facultatif)"
+      description: "Les dernières lignes de %USERPROFILE%\\.Aria-Studio\\journal.json, relues avant d'être collées."
+      render: json

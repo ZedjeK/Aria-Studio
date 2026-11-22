@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Signaler une faille de sécurité"
+    url: "https://github.com/ZedjeK/Aria-Studio/security/advisories/new"
+    about: "En privé : seul l'auteur lit le message. Ne l'écris pas dans une issue publique."

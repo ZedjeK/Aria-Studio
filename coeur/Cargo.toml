@@ -1,0 +1,27 @@
+[package]
+name = "aria-coeur"
+description = "Le contrat des applis Aria : identité, dossier de données, réglages, journal, sauvegardes, secrets, démarrage automatique, icône, installation, mises à jour."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+# Le zip des mises à jour : décompression deflate seule, en Rust (sans C à compiler).
+zip = { version = "9.8.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+winreg = "0.56.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true
