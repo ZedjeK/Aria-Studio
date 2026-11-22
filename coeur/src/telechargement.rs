@@ -2,8 +2,8 @@
 //! `.part` (`Range`), cinq essais en cas de coupure, vérification de la taille et du SHA-256, puis inscription au
 //! registre `data\modeles.json` (le même que la v2). Une source qui refuse l'accès le dit avec ce qu'il faut faire.
 //!
-//! Seuls des fichiers aux adresses, tailles et empreintes figées (fiches des workflows, catalogue des LLM) passent
-//! ici pour l'instant ; la recherche sur Hugging Face et Civitai viendra avec « Rechercher ».
+//! Les fichiers viennent des fiches des workflows et du catalogue des LLM (adresses, tailles et empreintes figées), ou
+//! de « Rechercher » et d'un lien collé (`decouvrir`), lus sur Hugging Face et Civitai.
 
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
@@ -46,7 +46,7 @@ fn acces_refuse(source: &str) -> String {
 }
 
 /// Un fichier distant à télécharger.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Fiche {
     /// `huggingface` ou `civitai`.
     pub source: String,
@@ -56,6 +56,24 @@ pub struct Fiche {
     pub url: String,
     pub page: String,
     pub licence: Option<String>,
+    /// LoRA de Civitai : les mots qui la déclenchent.
+    #[serde(default)]
+    pub mots_declencheurs: Vec<String>,
+    /// Le modèle de base annoncé par la source (Civitai « baseModel »).
+    #[serde(default)]
+    pub base: Option<String>,
+    /// LoRA : la force médiane de ses images d'exemple, combien la donnent, et un de leurs prompts.
+    #[serde(default)]
+    pub force_auteur: Option<f64>,
+    #[serde(default)]
+    pub images_force: u32,
+    #[serde(default)]
+    pub prompt_exemple: Option<String>,
+    /// Checkpoint : les steps et le CFG lus sur sa page (`suggestions`), jamais appliqués seuls.
+    #[serde(default)]
+    pub steps_suggeres: Option<Value>,
+    #[serde(default)]
+    pub cfg_suggere: Option<Value>,
 }
 
 /// Où en est un téléchargement : « attente », « en_cours », « verification », « termine », « erreur », « annule ».
@@ -164,18 +182,28 @@ fn inscrire(
         "page": fiche.page,
         "url": fiche.url,
         "licence": fiche.licence,
-        "mots_declencheurs": [],
-        "base": null,
+        "mots_declencheurs": fiche.mots_declencheurs,
+        "base": fiche.base,
         "taille": taille,
         "sha256": sha256,
         "date": Local::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
     });
-    if modeles::est_checkpoint(dossier)
-        && let Some(objet) = entree.as_object_mut()
-    {
+    let Some(objet) = entree.as_object_mut() else {
+        return Err(io::Error::other("entrée du registre"));
+    };
+    if let Some(force) = fiche.force_auteur {
+        objet.insert("force_auteur".to_owned(), json!(force));
+        objet.insert("images_force".to_owned(), json!(fiche.images_force));
+    }
+    if let Some(prompt) = &fiche.prompt_exemple {
+        objet.insert("prompt_exemple".to_owned(), json!(prompt));
+    }
+    if modeles::est_checkpoint(dossier) {
         let vide = json!({"statut": "aucun", "valeurs": [], "extraits": []});
-        objet.insert("a_valider".to_owned(), json!({"steps": vide}));
-        objet.insert("conseils".to_owned(), json!({"steps": vide, "cfg": vide}));
+        let steps = fiche.steps_suggeres.clone().unwrap_or_else(|| vide.clone());
+        let cfg = fiche.cfg_suggere.clone().unwrap_or_else(|| vide.clone());
+        objet.insert("a_valider".to_owned(), json!({"steps": steps}));
+        objet.insert("conseils".to_owned(), json!({"steps": steps, "cfg": cfg}));
     }
     registre.insert(cle.to_owned(), entree);
     ecrire_registre(&contexte.data, &registre)
@@ -644,6 +672,7 @@ mod tests {
             url: format!("https://huggingface.co/x/resolve/main/{nom}"),
             page: "https://huggingface.co/x".to_owned(),
             licence: Some("Apache 2.0".to_owned()),
+            ..Fiche::default()
         }
     }
 

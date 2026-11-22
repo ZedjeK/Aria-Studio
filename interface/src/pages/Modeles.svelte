@@ -30,6 +30,7 @@
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import ModelesCollection from './ModelesCollection.svelte';
+  import ModelesRechercher from './ModelesRechercher.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -40,6 +41,7 @@
   const onglets = [
     { id: 'telecharger', titre: 'Workflows et LLM' },
     { id: 'collection', titre: 'Ma collection' },
+    { id: 'rechercher', titre: 'Rechercher' },
   ];
   let onglet = $state('telecharger');
   let etat = $state<EtatModeles | null>(null);
@@ -106,36 +108,38 @@
 
 <h1>Modèles</h1>
 <p class="sous-titre">Les modèles des workflows livrés et les LLM, téléchargés depuis leur source officielle.</p>
+{#if etat && etat.taches.length > 0}
+  <Panneau titre="Téléchargements">
+    <ul class="file">
+      {#each [...etat.taches].reverse() as t (t.id)}
+        <li class:ko={t.etat === 'erreur'}>
+          <div class="texte">
+            <span>{t.nom} <span class="discret">· {t.dossier}</span></span>
+            <span class="discret">{texteTelechargement(t)}</span>
+            {#if t.etat === 'en_cours'}
+              <progress max="1" value={fractionTelechargement(t) ?? 0}></progress>
+            {/if}
+          </div>
+          {#if telechargementActif(t)}
+            <Bouton genre="discret" petit onclick={() => void annuler(t.id)}>✕ Annuler</Bouton>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  </Panneau>
+{/if}
+
 <SousOnglets {onglets} bind:actif={onglet} />
 {#if onglet === 'collection'}
   <ModelesCollection {signaler} />
+{:else if onglet === 'rechercher'}
+  <ModelesRechercher {signaler} ajoute={() => void relire()} />
 {:else}
   <ASavoir>
     Chaque fichier a une adresse, une taille et une empreinte SHA-256 fixées dans la fiche de son workflow : un fichier
     qui ne correspond pas est rejeté. Un téléchargement interrompu reprend où il s'était arrêté. Les modèles déjà
     téléchargés par la version 2 sont repris tels quels.
   </ASavoir>
-
-  {#if etat && etat.taches.length > 0}
-    <Panneau titre="Téléchargements">
-      <ul class="file">
-        {#each [...etat.taches].reverse() as t (t.id)}
-          <li class:ko={t.etat === 'erreur'}>
-            <div class="texte">
-              <span>{t.nom} <span class="discret">· {t.dossier}</span></span>
-              <span class="discret">{texteTelechargement(t)}</span>
-              {#if t.etat === 'en_cours'}
-                <progress max="1" value={fractionTelechargement(t) ?? 0}></progress>
-              {/if}
-            </div>
-            {#if telechargementActif(t)}
-              <Bouton genre="discret" petit onclick={() => void annuler(t.id)}>✕ Annuler</Bouton>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-    </Panneau>
-  {/if}
 
   {#if etat}
     {#each parTache as w (w.id)}
