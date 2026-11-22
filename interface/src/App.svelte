@@ -31,9 +31,10 @@
   import Parametres from './pages/Parametres.svelte';
   import Plateau from './pages/Plateau.svelte';
   import Retouche from './pages/Retouche.svelte';
+  import Scenario from './pages/Scenario.svelte';
   import PageReglages from './pages/Reglages.svelte';
 
-  type Page = 'accueil' | 'plateau' | 'retouche' | 'modeles' | 'reglages' | 'journal' | 'parametres';
+  type Page = 'accueil' | 'scenario' | 'plateau' | 'retouche' | 'modeles' | 'reglages' | 'journal' | 'parametres';
 
   // Les familles de pages : le travail de l'appli d'abord, puis l'appli elle-même. À adapter.
   const familles: { titre: string; pages: { id: Page; titre: string }[] }[] = [
@@ -41,6 +42,7 @@
       titre: 'Travail',
       pages: [
         { id: 'accueil', titre: 'Accueil' },
+        { id: 'scenario', titre: 'Scénario' },
         { id: 'plateau', titre: 'Plateau' },
         { id: 'retouche', titre: 'Retouche' },
       ],
@@ -64,6 +66,8 @@
   let identite = $state<Identite | null>(null);
   let reglages = $state<Reglages | null>(null);
   let page = $state<Page>('accueil');
+  /** Un prompt écrit au Scénario, en route vers le Plateau. */
+  let versPlateau = $state<{ prompt: string; workflow: string | null } | null>(null);
   let fraction = $state<number | null>(null);
   let mesure = $state('');
   let miseAJour = $state<InfosMiseAJour | null>(null);
@@ -166,8 +170,16 @@
     <div class="page">
       {#if page === 'accueil'}
         <Accueil {identite} bind:fraction bind:mesure {signaler} />
+      {:else if page === 'scenario'}
+        <Scenario
+          {signaler}
+          envoyer={(prompt, workflow) => {
+            versPlateau = { prompt, workflow };
+            page = 'plateau';
+          }}
+        />
       {:else if page === 'plateau'}
-        <Plateau {signaler} />
+        <Plateau {signaler} recu={versPlateau} recuLu={() => (versPlateau = null)} />
       {:else if page === 'retouche'}
         <Retouche {signaler} />
       {:else if page === 'modeles'}
