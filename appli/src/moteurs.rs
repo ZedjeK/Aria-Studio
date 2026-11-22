@@ -69,7 +69,6 @@ pub struct Moteurs {
     dossier_moteurs: PathBuf,
     dossier: Dossier,
     pub orchestrateur: Arc<Mutex<Orchestrateur>>,
-    pub garde: Arc<Garde>,
     tache: Arc<Mutex<Option<Tache>>>,
     annuler: Arc<AtomicBool>,
 }
@@ -103,8 +102,7 @@ impl Moteurs {
             catalogue,
             dossier_moteurs: emplacements.moteurs.clone(),
             dossier,
-            orchestrateur: Arc::new(Mutex::new(Orchestrateur::new(comfy, llama, Arc::clone(&garde)))),
-            garde,
+            orchestrateur: Arc::new(Mutex::new(Orchestrateur::new(comfy, llama, garde))),
             tache: Arc::new(Mutex::new(None)),
             annuler: Arc::new(AtomicBool::new(false)),
         })
