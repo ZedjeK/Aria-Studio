@@ -270,6 +270,142 @@ pub fn problemes_hugging_face(hf: Option<&Value>) -> Vec<String> {
     Vec::new()
 }
 
+/// Les moteurs qu'une fiche de LLM peut demander (catalogue/moteurs.yaml).
+pub const SERVEURS_LLM: [&str; 2] = ["llama", "llama-prism"];
+/// Ce qu'un LLM spécialisé remplace : la réécriture d'une idée, ou la consigne de retouche (il voit l'image).
+pub const USAGES_SPECIALISTE: [&str; 2] = ["creation", "retouche"];
+/// Les fiches des LLM qui réécrivent les prompts, livrées avec l'appli.
+pub const CATALOGUE_LLM: &str = include_str!("../../catalogue/llm.yaml");
+
+/// Un fichier à télécharger : `{nom, url, taille, sha256}`.
+fn probleme_fichier(nom: &str, fichier: Option<&Value>) -> Vec<String> {
+    let bon = fichier.is_some_and(|f| {
+        ["nom", "url", "sha256"].iter().all(|c| texte(f.get(*c))) && nombre(f.get("taille"))
+    });
+    if bon {
+        Vec::new()
+    } else {
+        vec![format!("{nom} : {{nom, url, taille, sha256}}")]
+    }
+}
+
+/// Les problèmes du bloc `specialiste` d'une fiche de LLM : un LLM entraîné pour un modèle cible, avec sa consigne
+/// livrée, sa réflexion, sa sortie et son échantillonnage.
+pub fn problemes_specialiste(specialiste: Option<&Value>) -> Vec<String> {
+    let Some(s) = specialiste else {
+        return Vec::new();
+    };
+    if !s.is_object() {
+        return vec!["specialiste : un bloc (workflows, usage, consigne, reflexion, sortie…)".to_owned()];
+    }
+    let mut p = Vec::new();
+    if !s
+        .get("workflows")
+        .and_then(Value::as_array)
+        .is_some_and(|w| !w.is_empty())
+    {
+        p.push("specialiste.workflows : la liste des workflows servis".to_owned());
+    }
+    if !s
+        .get("usage")
+        .and_then(Value::as_str)
+        .is_some_and(|u| USAGES_SPECIALISTE.contains(&u))
+    {
+        p.push(format!("specialiste.usage : {}", USAGES_SPECIALISTE.join(", ")));
+    }
+    p.extend(probleme_fichier("specialiste.consigne", s.get("consigne")));
+    if let Some(vision) = s.get("vision") {
+        p.extend(probleme_fichier("specialiste.vision", Some(vision)));
+    }
+    let sortie = s.get("sortie").and_then(Value::as_str);
+    if !matches!(sortie, Some("json" | "texte")) || (sortie == Some("json") && !rempli(s.get("cle"))) {
+        p.push("specialiste.sortie : json (avec cle) ou texte".to_owned());
+    }
+    let max_tokens = s.get("max_tokens").and_then(Value::as_u64);
+    let contexte = s.get("contexte").and_then(Value::as_u64);
+    if !matches!((max_tokens, contexte), (Some(m), Some(c)) if m < c) {
+        p.push("specialiste : max_tokens et contexte entiers, max_tokens < contexte".to_owned());
+    }
+    if s.get("echantillonnage").is_some_and(|e| !e.is_object()) {
+        p.push("specialiste.echantillonnage : un bloc".to_owned());
+    }
+    p
+}
+
+/// Les problèmes d'une fiche de LLM (`catalogue/llm.yaml`) ; aucun si elle est bonne.
+pub fn problemes_llm(fiche: &Value) -> Vec<String> {
+    let mut p: Vec<String> = ["id", "nom", "url", "page", "sha256"]
+        .iter()
+        .filter(|c| !texte(fiche.get(**c)))
+        .map(|c| format!("{c} manquant"))
+        .collect();
+    if !fiche
+        .get("id")
+        .and_then(Value::as_str)
+        .is_some_and(|id| id.ends_with(".gguf"))
+    {
+        p.push("id : le nom du fichier GGUF".to_owned());
+    }
+    if !nombre(fiche.get("taille")) {
+        p.push("taille : en octets".to_owned());
+    }
+    if !fiche
+        .get("serveur")
+        .and_then(Value::as_str)
+        .is_some_and(|s| SERVEURS_LLM.contains(&s))
+    {
+        p.push(format!("serveur : {}", SERVEURS_LLM.join(", ")));
+    }
+    if let Some(vision) = fiche.get("vision") {
+        p.extend(probleme_fichier("vision", Some(vision)));
+    }
+    p.extend(problemes_licence(fiche.get("licence")));
+    p.extend(problemes_materiel(fiche.get("materiel")));
+    p.extend(problemes_specialiste(fiche.get("specialiste")));
+    p
+}
+
+/// Les fiches des LLM livrées. Une fiche invalide fait échouer la lecture : le catalogue est livré avec l'appli, et
+/// les tests le vérifient.
+///
+/// # Errors
+/// Catalogue illisible, d'un autre format, ou une fiche invalide.
+pub fn catalogue_llm() -> Result<Vec<Value>, String> {
+    let donnees = lire(CATALOGUE_LLM).map_err(|e| format!("llm.yaml : {e}"))?;
+    if donnees.get("format").and_then(Value::as_u64) != Some(FORMAT) {
+        return Err(format!("llm.yaml : format {FORMAT} attendu"));
+    }
+    let fiches = donnees
+        .get("llm")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for fiche in &fiches {
+        let p = problemes_llm(fiche);
+        if !p.is_empty() {
+            let id = fiche.get("id").and_then(Value::as_str).unwrap_or("?");
+            return Err(format!("llm.yaml, {id} : {}", p.join(" ; ")));
+        }
+    }
+    Ok(fiches)
+}
+
+/// La fiche livrée d'un GGUF ; rien s'il n'est pas au catalogue (ou si le catalogue ne se lit pas).
+pub fn fiche_llm(fichier: &str) -> Option<Value> {
+    catalogue_llm()
+        .ok()?
+        .into_iter()
+        .find(|f| f.get("id").and_then(Value::as_str) == Some(fichier))
+}
+
+/// Le bloc `specialiste` d'un GGUF du catalogue ; rien pour un LLM généraliste ou inconnu.
+pub fn specialiste(fichier: &str) -> Option<Value> {
+    fiche_llm(fichier)?
+        .get("specialiste")
+        .filter(|s| s.is_object())
+        .cloned()
+}
+
 /// Une fiche lue dans son texte YAML.
 ///
 /// # Errors
@@ -464,5 +600,43 @@ mod tests {
         let mut f = bonne();
         f["reserve"] = json!("retouche");
         assert!(problemes_workflow(&f).iter().any(|x| x.starts_with("reserve")));
+    }
+
+    #[test]
+    fn le_catalogue_des_llm_livre_est_valide() {
+        let fiches = catalogue_llm().unwrap();
+        assert!(fiches.len() >= 3);
+        let bonsai = fiche_llm("Ternary-Bonsai-2-27B-PTQ1_0.gguf").unwrap();
+        assert_eq!(bonsai["serveur"], json!("llama-prism"));
+        assert!(specialiste("Ternary-Bonsai-2-27B-PTQ1_0.gguf").is_none());
+        let t2i = specialiste("Qwen-Image-2.1-PE-T2I.Q5_K_M.gguf").unwrap();
+        assert_eq!(t2i["usage"], json!("creation"));
+        assert_eq!(t2i["workflows"], json!(["qwen_image_2_1"]));
+        assert_eq!(t2i["cle"], json!("rewritten_prompt"));
+        assert!(fiche_llm("inconnu.gguf").is_none());
+    }
+
+    #[test]
+    fn une_fiche_de_llm_mal_formee_est_dite() {
+        let mut f = catalogue_llm().unwrap()[0].clone();
+        assert!(problemes_llm(&f).is_empty());
+        f["id"] = json!("bonsai.bin");
+        f["serveur"] = json!("ollama");
+        f["taille"] = json!(0);
+        let p = problemes_llm(&f);
+        assert!(p.contains(&"id : le nom du fichier GGUF".to_owned()));
+        assert!(p.contains(&"serveur : llama, llama-prism".to_owned()));
+        assert!(p.contains(&"taille : en octets".to_owned()));
+
+        let mut s = specialiste("Qwen-Image-2.1-PE-T2I.Q5_K_M.gguf").unwrap();
+        assert!(problemes_specialiste(Some(&s)).is_empty());
+        s["usage"] = json!("video");
+        s["sortie"] = json!("json");
+        s["cle"] = json!("");
+        s["max_tokens"] = json!(16384);
+        s["consigne"] = json!({"nom": "x.txt"});
+        let p = problemes_specialiste(Some(&s));
+        assert_eq!(p.len(), 4, "{p:?}");
+        assert!(problemes_specialiste(Some(&json!("oui")))[0].starts_with("specialiste : un bloc"));
     }
 }
