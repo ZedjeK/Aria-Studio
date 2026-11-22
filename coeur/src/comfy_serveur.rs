@@ -17,9 +17,11 @@ use serde_json::{Value, json};
 use tungstenite::Message;
 use tungstenite::protocol::WebSocketConfig;
 
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+
 use crate::comfy::{
-    Evenement, Lancement, avec_prefixes_uniques, effacer_sortie, lire_evenement, nouveau_jeton,
-    parametres_vue, sorties_a_recuperer, type_mime, vram_stable, workflow_refuse,
+    Evenement, Lancement, Processus, avec_prefixes_uniques, effacer_sortie, est_orphelin, lire_evenement,
+    nouveau_jeton, parametres_vue, sorties_a_recuperer, type_mime, vram_stable, workflow_refuse,
 };
 use crate::local;
 
@@ -37,6 +39,8 @@ pub struct ServeurComfy {
     /// `data\` d'Aria : le journal va dans `data\logs\comfyui.log`.
     data: std::path::PathBuf,
     processus: Option<Child>,
+    /// Un ComfyUI lancé par une Aria qui n'est plus là, repris par celle-ci : son numéro de processus.
+    adopte: Option<u32>,
 }
 
 impl ServeurComfy {
@@ -45,7 +49,30 @@ impl ServeurComfy {
             lancement,
             data,
             processus: None,
+            adopte: None,
         }
+    }
+
+    /// ComfyUI tourne-t-il pour Aria (lancé ou adopté) ?
+    pub fn vivant(&mut self) -> bool {
+        if self.adopte.is_some_and(|pid| !processus_existe(pid)) {
+            self.adopte = None;
+        }
+        self.tourne() || self.adopte.is_some()
+    }
+
+    /// Reprend un ComfyUI resté seul après une Aria arrêtée (notre port, notre dossier, parent mort), comme en v2.
+    /// Rend vrai s'il en a trouvé un.
+    pub fn adopter(&mut self) -> bool {
+        if self.vivant() {
+            return false;
+        }
+        let moi = std::process::id();
+        let trouve = pythons()
+            .into_iter()
+            .find(|p| est_orphelin(p, self.lancement.port, &self.lancement.dossier, moi));
+        self.adopte = trouve.map(|p| p.pid);
+        self.adopte.is_some()
     }
 
     pub fn lancement(&self) -> &Lancement {
@@ -85,9 +112,11 @@ impl ServeurComfy {
     /// ComfyUI ne se lance pas, s'arrête au démarrage, ou ne répond pas à temps.
     pub fn demarrer(&mut self, delai: Duration) -> Result<(), String> {
         if self.est_pret() {
+            self.adopter();
             return Ok(());
         }
         if self.tourne() || self.port_pris() {
+            self.adopter();
             return self.attendre(delai, false);
         }
         let python = self.lancement.python();
@@ -146,10 +175,13 @@ impl ServeurComfy {
         }
     }
 
-    /// Arrête le ComfyUI lancé par Aria (pas un ComfyUI lancé par quelqu'un d'autre).
+    /// Arrête le ComfyUI lancé ou adopté par Aria (jamais un ComfyUI lancé par quelqu'un d'autre).
     pub fn arreter(&mut self) {
         if let Some(mut processus) = self.processus.take() {
             local::arreter(&mut processus);
+        }
+        if let Some(pid) = self.adopte.take() {
+            tuer(pid);
         }
     }
 
@@ -413,6 +445,65 @@ impl Drop for ServeurComfy {
     /// Aria qui s'arrête n'abandonne pas le ComfyUI qu'elle a lancé.
     fn drop(&mut self) {
         self.arreter();
+    }
+}
+
+/// Les processus Python qui tournent, avec leur ligne de commande et leur dossier courant.
+fn pythons() -> Vec<Processus> {
+    let Ok(mut systeme) = System::new() else {
+        return Vec::new();
+    };
+    let quoi = ProcessRefreshKind::nothing()
+        .with_cmd(UpdateKind::Always)
+        .with_cwd(UpdateKind::Always);
+    systeme.refresh_processes_specifics(ProcessesToUpdate::All, true, quoi);
+    let tous = systeme.processes();
+    tous.values()
+        .filter(|p| p.name().to_string_lossy().to_lowercase().starts_with("python"))
+        .map(|p| {
+            // Un parent plus jeune que l'enfant est un autre processus qui a repris son numéro.
+            let parent_vivant = p
+                .parent()
+                .and_then(|parent| tous.get(&parent))
+                .is_some_and(|parent| parent.start_time() <= p.start_time());
+            Processus {
+                pid: p.pid().as_u32(),
+                nom: p.name().to_string_lossy().into_owned(),
+                ligne_de_commande: p.cmd().iter().map(|a| a.to_string_lossy().into_owned()).collect(),
+                dossier: p.cwd().map(std::path::Path::to_path_buf),
+                parent_vivant,
+            }
+        })
+        .collect()
+}
+
+fn processus_existe(pid: u32) -> bool {
+    let Ok(mut systeme) = System::new() else {
+        return false;
+    };
+    let pid = Pid::from_u32(pid);
+    systeme.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing(),
+    );
+    systeme.process(pid).is_some()
+}
+
+/// Arrête un ComfyUI adopté.
+fn tuer(pid: u32) {
+    let Ok(mut systeme) = System::new() else {
+        return;
+    };
+    let pid = Pid::from_u32(pid);
+    systeme.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing(),
+    );
+    if let Some(processus) = systeme.process(pid) {
+        // Déjà arrêté entre-temps : sans conséquence.
+        let _ = processus.kill();
     }
 }
 

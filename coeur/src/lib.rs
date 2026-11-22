@@ -3,6 +3,7 @@
 //! Tout ici se teste sur n'importe quel système, sauf les accès à Windows (registre, DPAPI), marqués
 //! `cfg(windows)` et testés par la CI Windows.
 
+pub mod carte;
 pub mod catalogue;
 pub mod cles;
 pub mod comfy;
@@ -10,6 +11,7 @@ pub mod comfy_serveur;
 pub mod demarrage;
 pub mod donnees;
 pub mod emplacements;
+pub mod garde;
 pub mod identite;
 pub mod installation;
 pub mod journal;
@@ -18,6 +20,7 @@ pub mod llama_serveur;
 pub mod local;
 pub mod mises_a_jour;
 pub mod moteurs;
+pub mod orchestrateur;
 pub mod presence;
 pub mod reglages;
 pub mod sauvegardes;
