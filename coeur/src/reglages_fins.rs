@@ -409,8 +409,11 @@ fn texte_noeud(wf: &Workflow, noeud: &str, entree: &str) -> Option<String> {
 /// Les réglages des boutons de résolution du Montage : `resolution_<clé>`.
 const PREFIXE_RESOLUTION: &str = "resolution_";
 
+/// Un workflow vidéo : sa fiche a une section `video` (fps, durée, son), comme le teste la v2.
 fn est_video(wf: &Workflow) -> bool {
-    wf.fiche.get("video").is_some_and(|v| v.as_bool() == Some(true))
+    wf.fiche
+        .get("video")
+        .is_some_and(|v| !v.is_null() && v.as_bool() != Some(false))
 }
 
 fn reel_noeud(wf: &Workflow, noeud: &str, entree: &str) -> Option<f64> {
