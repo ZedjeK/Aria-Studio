@@ -824,7 +824,7 @@ pub fn consigne(
     } else {
         format!("{texte}\n\nCharacter: {regle}") // consigne retouchée sans le repère
     };
-    let cadre = conversation::cadre_format(format);
+    let cadre = conversation::cadre_format(format, "plan");
     if !cadre.is_empty() {
         texte.push_str("\n\n");
         texte.push_str(&cadre);
@@ -872,18 +872,46 @@ fn image_existante(contexte: &Contexte, id: &str) -> Result<(), String> {
     creations::chemin_image(&contexte.data, id).map(|_| ())
 }
 
-/// Le LLM écrit les prompts des plans d'une séquence : tous ensemble (✨ Tout écrire), ou un seul (`plan`), les
-/// autres servant de contexte. Puis les garde-fous d'ici les contrôlent, et la contrainte est traduite (une fois).
+/// Ce que ✨ Tout écrire, ✨ d'un plan et 💬 d'un plan partagent : les plans contrôlés, le personnage, la contrainte,
+/// les entrées passées par AS-18, ce qui a le droit d'être dit, et la demande au LLM (comme `preparer_ecriture` de la
+/// v2).
+pub struct Preparation {
+    pub plans: Vec<Plan>,
+    /// La description du personnage ; vide avec une image de référence (l'image fait l'identité).
+    pub personnage: String,
+    pub contrainte: String,
+    pub reference: Option<String>,
+    pub format: Option<String>,
+    /// Tout ce qui part au LLM, avec les textes d'origine des rushes (et « minor » pour un mineur).
+    pub entrees: Vec<String>,
+    /// Ce qui a le droit d'être dit (le reste est une réplique inventée).
+    pub source: String,
+    /// Le message envoyé au LLM : l'histoire et les plans.
+    pub demande: String,
+    pub regle_personnage: &'static str,
+    /// La longueur conseillée de chaque plan, et celle du modèle vidéo.
+    pub mots: Vec<u64>,
+    pub mots_max: u64,
+    video: Option<(Workflow, Option<Map<String, Value>>)>,
+}
+
+impl Preparation {
+    /// Le modèle vidéo lit son prompt en trois champs.
+    pub fn champs(&self) -> bool {
+        self.video.as_ref().is_some_and(|(wf, _)| champs_video(wf))
+    }
+
+    /// L'identifiant du modèle vidéo du découpage.
+    pub fn workflow(&self) -> Option<&str> {
+        self.video.as_ref().map(|(wf, _)| wf.id.as_str())
+    }
+}
+
+/// Contrôle une demande de découpage, la passe par AS-18 et prépare la demande au LLM.
 ///
 /// # Errors
-/// Demande invalide (le message de la v2), LLM absent, filtre AS-18, réponse mal formée deux fois, ou llama-server
-/// qui échoue.
-#[allow(clippy::too_many_lines)] // l'écriture de la v2, gardée d'un tenant pour se relire à côté d'elle
-pub fn decouper(
-    contexte: &Contexte,
-    generateur: &mut impl Generateur,
-    d: &DemandeDecoupage,
-) -> Result<Decoupe, String> {
+/// Demande invalide (le message de la v2), LLM absent, ou filtre AS-18.
+pub fn preparer(contexte: &Contexte, d: &DemandeDecoupage) -> Result<Preparation, String> {
     scenario::verifier_llm(contexte, d.llm.as_deref())?;
     let format = d.format.as_deref().filter(|f| !f.is_empty());
     if let Some(f) = format
@@ -970,6 +998,56 @@ pub fn decouper(
         musique: musique.as_deref(),
     };
     let demande_texte = demande_decoupage(&histoire, &plans, &arrivees, d.plan, &mots);
+    Ok(Preparation {
+        regle_personnage: if reference.is_some() {
+            REGLE_AVEC_REFERENCE
+        } else {
+            REGLE_SANS_REFERENCE
+        },
+        reference: reference.map(str::to_owned),
+        format: format.map(str::to_owned),
+        plans,
+        personnage,
+        contrainte,
+        entrees,
+        source,
+        demande: demande_texte,
+        mots,
+        mots_max,
+        video,
+    })
+}
+
+/// Le LLM écrit les prompts des plans d'une séquence : tous ensemble (✨ Tout écrire), ou un seul (`plan`), les
+/// autres servant de contexte. Puis les garde-fous d'ici les contrôlent, et la contrainte est traduite (une fois).
+///
+/// # Errors
+/// Demande invalide (le message de la v2), LLM absent, filtre AS-18, réponse mal formée deux fois, ou llama-server
+/// qui échoue.
+#[allow(clippy::too_many_lines)] // l'écriture de la v2, gardée d'un tenant pour se relire à côté d'elle
+pub fn decouper(
+    contexte: &Contexte,
+    generateur: &mut impl Generateur,
+    d: &DemandeDecoupage,
+) -> Result<Decoupe, String> {
+    let Preparation {
+        plans,
+        personnage,
+        contrainte,
+        reference,
+        format,
+        entrees,
+        source,
+        demande: demande_texte,
+        mots,
+        mots_max,
+        video,
+        ..
+    } = preparer(contexte, d)?;
+    let reference = reference.as_deref();
+    let format = format.as_deref();
+    let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
+    let refs: Vec<&str> = entrees.iter().map(String::as_str).collect();
     let cibles: Vec<usize> = d.plan.map_or_else(|| (0..plans.len()).collect(), |k| vec![k]);
 
     // Le LLM de ce modèle, sinon celui par défaut ; un spécialiste ne fait pas de découpage.

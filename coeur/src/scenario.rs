@@ -61,7 +61,7 @@ pub struct Ecrit {
 }
 
 /// Une image montrée au LLM : ses pixels (il la voit s'il a sa vision), sinon ce qu'en dit sa fiche.
-fn vue(contexte: &Contexte, id: &str) -> Result<Vue, String> {
+pub(crate) fn vue(contexte: &Contexte, id: &str) -> Result<Vue, String> {
     let chemin = creations::chemin_image(&contexte.data, id)?;
     let octets = std::fs::read(&chemin).map_err(|e| format!("Image de {id} illisible : {e}"))?;
     Ok(Vue {

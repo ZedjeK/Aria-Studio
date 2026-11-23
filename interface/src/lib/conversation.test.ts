@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { TourConversation } from './api';
-import { ECRIRE, conversationGardee, dernierPrompt, echanges, reponse, type MessageConversation } from './conversation';
+import {
+  ECRIRE,
+  cleConversation,
+  conversationGardee,
+  dernierPrompt,
+  echanges,
+  reponse,
+  type MessageConversation,
+} from './conversation';
 
 const tour = (prompt: string | null): TourConversation => ({
   message: 'Compris.',
@@ -8,6 +16,7 @@ const tour = (prompt: string | null): TourConversation => ({
   questions: [],
   prompt,
   brut: '{"message":"Compris."}',
+  alertes: [],
   modele: 'mistral.gguf',
   dureeS: 1.2,
 });
@@ -34,5 +43,15 @@ describe('Conversation', () => {
     expect(conversationGardee(gardee)).toHaveLength(2);
     expect(conversationGardee([{ role: 'user', texte: 3 }])).toEqual([]);
     expect(conversationGardee('n’importe quoi')).toEqual([]);
+  });
+
+  it('garde une conversation par atelier et par plan', () => {
+    expect(cleConversation('image')).toBe('aria-scenario-conversation');
+    expect(cleConversation('retouche')).toBe('aria-scenario-conversation-retouche');
+    expect(cleConversation('plan', 2)).toBe('aria-scenario-conversation-plan-2');
+    // Un tour gardé avant les alertes en reçoit une liste vide.
+    const { alertes: _sans, ...ancien } = tour('A fox');
+    const relue = conversationGardee([{ role: 'assistant', tour: ancien }]);
+    expect(relue[0]).toEqual({ role: 'assistant', tour: tour('A fox') });
   });
 });

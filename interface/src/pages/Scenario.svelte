@@ -337,7 +337,7 @@
     final = b?.final ?? '';
     finalRetouche = b?.finalRetouche ?? false;
     imageAtelier = [];
-    if (nouvel !== 'image') modeIdee = 'ecrire';
+    if (nouvel === 'sequence') modeIdee = 'ecrire';
     planifier();
   }
   const traductionValide = $derived(traduction !== null && traduction.de === precisions.trim());
@@ -545,6 +545,7 @@
   <ScenarioSequence
     {signaler}
     {sujet}
+    {complements}
     choix={choixSequence}
     {age}
     {llms}
@@ -559,23 +560,32 @@
     <p class="etiquette">{atelier === 'retouche' ? "L'image à retoucher" : 'Le rush à animer'}</p>
     <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
   {/if}
-  {#if atelier === 'image'}
-    <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
-  {/if}
-  {#if modeIdee === 'preciser' && atelier === 'image'}
-    <ScenarioConversation
-      workflow={workflowId}
-      llm={llmChoisi || null}
-      contexte={complements}
-      {sujet}
-      disponible={llms.length > 0}
-      {signaler}
-      utiliser={(p) => {
-        final = p;
-        finalRetouche = true;
-        signaler('Prompt de la conversation posé dans le prompt final.');
-      }}
-    />
+  <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
+  {#if modeIdee === 'preciser'}
+    {#key atelier}
+      <ScenarioConversation
+        forme={atelier}
+        workflow={cible}
+        llm={llmChoisi || null}
+        contexte={complements}
+        {sujet}
+        images={imageRequise ? imageAtelier : []}
+        role={atelier === 'clip' && modeClip === 'animer' ? 'animer' : atelier === 'retouche' ? 'retouche' : null}
+        duree={atelier === 'clip' ? dureeClip : null}
+        disponible={llms.length > 0}
+        {signaler}
+        libelleUtiliser={atelier === 'retouche' ? 'Utiliser cette consigne' : 'Utiliser ce prompt'}
+        utiliser={(p, alertes) => {
+          final = p;
+          finalRetouche = true;
+          const coupes = alertes.length > 0 ? ` · ⚠ ${alertes.join(' ')}` : '';
+          signaler(
+            `${atelier === 'retouche' ? 'Consigne de la conversation posée dans la consigne finale' : 'Prompt de la conversation posé dans le prompt final'}.${coupes}`,
+            alertes.length > 0,
+          );
+        }}
+      />
+    {/key}
   {:else}
   <textarea
     rows="3"

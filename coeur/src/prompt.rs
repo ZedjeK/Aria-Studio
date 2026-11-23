@@ -281,11 +281,14 @@ fn gabarit(g: &Gabarit, regles: &[(String, Vec<String>)]) -> String {
 const ENTETE_USAGE: &str = "Rules for writing the prompt. They shape the OPEN parts only: whenever one clashes with what the user fixed or asked, the user wins.";
 
 /// Les règles d'écriture d'un usage en un bloc, pour la conversation (💬 M'aider à préciser) : l'en-tête, puis les
-/// mêmes sections que le gabarit de ✨ Écrire le prompt, celles du modèle cible rangées dedans.
-pub fn bloc_usage(usage: &str, regles: &[(String, Vec<String>)]) -> String {
+/// mêmes sections que le gabarit de ✨ Écrire le prompt, celles du modèle cible rangées dedans. `champs` : un clip
+/// s'écrit en trois champs (H3), les sons ont leur champ.
+pub fn bloc_usage(usage: &str, regles: &[(String, Vec<String>)], champs: bool) -> String {
     let g = match usage {
         "retouche" => &RETOUCHE,
         "references" => &REFERENCES,
+        "video" if champs => &VIDEO_CHAMPS,
+        "video" => &VIDEO,
         _ => &REECRITURE,
     };
     let mut blocs = vec![ENTETE_USAGE.to_owned()];

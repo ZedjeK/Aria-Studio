@@ -1287,18 +1287,33 @@ export interface TourConversation {
   prompt: string | null;
   /** Le tour tel qu'il repart au LLM. */
   brut: string;
+  /** Clip : heures de coupe hors du clip ; plan : répliques inventées retirées, réplique trop longue. */
+  alertes: string[];
   modele: string;
   dureeS: number;
 }
 
+/** L'atelier d'une conversation : un plan est celui d'une séquence, `sequence` en écrit le fil de l'histoire. */
+export type FormeConversation = 'image' | 'retouche' | 'clip' | 'sequence' | 'plan';
+
 export interface DemandeConversation {
   echanges: EchangeConversation[];
-  forme: 'image';
+  forme: FormeConversation;
   workflow: string | null;
   contexte: string;
   llm: string | null;
   format: string | null;
   sujet: string | null;
+  /** L'image à retoucher, le rush à animer, ou les images de référence. */
+  images: string[];
+  /** Leur rôle : inspirer, variation, retouche ou animer (null : celui de l'atelier). */
+  role: string | null;
+  /** La durée d'un clip ; un plan prend la sienne. */
+  duree: number | null;
+  /** S'inspirer, Redessiner : le sujet vient des images. */
+  sansSujet: boolean;
+  /** 💬 d'un plan : la demande du découpage, `plan` étant son numéro. */
+  sequence: DemandeDecoupage | null;
 }
 
 export const conversationScenario = (demande: DemandeConversation): Promise<TourConversation> =>
