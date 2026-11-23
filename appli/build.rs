@@ -106,6 +106,7 @@ fn main() {
         "supprimer_voix",
         "importer_voix",
         "son_voix",
+        "commande_mcp",
         "etat_assistant",
         "plan_assistant",
         "accepter_licences_assistant",
