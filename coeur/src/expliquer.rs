@@ -843,7 +843,7 @@ fn par_le_llm(
     connue: Option<&'static CauseConnue>,
 ) -> Result<Explication, String> {
     let nom = llm_de(contexte, d);
-    let lancement = match llm::lancement(&contexte.lieux(), Some(&nom)) {
+    let lancement = match lancement_pret(contexte, &nom) {
         Ok(l) => l,
         Err(e) => {
             return Ok(sans_llm(
@@ -970,7 +970,18 @@ fn par_le_llm(
 
 /// Un LLM généraliste est-il prêt à expliquer ?
 fn llm_disponible(contexte: &Contexte, d: &DemandeExplication) -> bool {
-    llm::lancement(&contexte.lieux(), Some(&llm_de(contexte, d))).is_ok()
+    lancement_pret(contexte, &llm_de(contexte, d)).is_ok()
+}
+
+/// Le lancement de ce GGUF, s'il est bien sur le disque (`llm::lancement` ne vérifie ses fichiers qu'au démarrage du
+/// serveur). Un llama-server absent se dira au premier appel.
+fn lancement_pret(contexte: &Contexte, nom: &str) -> Result<Lancement, String> {
+    let lancement = llm::lancement(&contexte.lieux(), Some(nom))?;
+    if lancement.modele.is_file() {
+        Ok(lancement)
+    } else {
+        Err(format!("GGUF absent de modeles/llm : {nom}"))
+    }
 }
 
 /// Explique une erreur : la cause connue si elle correspond (aussitôt, sans LLM), sinon l'analyse du LLM ; notée au
