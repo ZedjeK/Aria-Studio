@@ -6,7 +6,13 @@ import {
   conversationGardee,
   dernierPrompt,
   echanges,
+  comprisDernier,
+  demandeRetrait,
+  pourModifier,
+  pourReessayer,
   reponse,
+  texteACopier,
+  unTourEnArriere,
   type MessageConversation,
 } from './conversation';
 
@@ -36,6 +42,43 @@ describe('Conversation', () => {
     expect(dernierPrompt(messages)).toBeNull();
     expect(dernierPrompt([...messages, { role: 'assistant', tour: tour('A fox') }])).toBe('A fox');
     expect(reponse('Quel décor ?', 'Forêt')).toBe('Quel décor ? → Forêt');
+  });
+
+  it('revient en arrière, réessaie et modifie', () => {
+    const messages: MessageConversation[] = [
+      { role: 'user', texte: 'un renard' },
+      { role: 'assistant', tour: tour(null) },
+      { role: 'user', texte: 'dans la neige' },
+      { role: 'assistant', tour: tour('A fox') },
+    ];
+    expect(unTourEnArriere(messages)).toEqual(messages.slice(0, 2));
+    expect(unTourEnArriere(messages.slice(0, 3))).toEqual(messages.slice(0, 2));
+    expect(unTourEnArriere(messages.slice(0, 2))).toEqual([]);
+    expect(unTourEnArriere([])).toEqual([]);
+
+    expect(pourReessayer(messages)).toEqual({ avant: messages.slice(0, 2), texte: 'dans la neige' });
+    expect(pourReessayer(messages.slice(0, 3))).toBeNull();
+    expect(pourReessayer([])).toBeNull();
+
+    expect(pourModifier(messages, 2)).toEqual({ avant: messages.slice(0, 2), texte: 'dans la neige' });
+    expect(pourModifier(messages, 1)).toBeNull();
+    expect(pourModifier([{ role: 'user', texte: ECRIRE }], 0)).toBeNull();
+  });
+
+  it('montre ce que le LLM a compris et sait le lui faire oublier', () => {
+    const messages: MessageConversation[] = [
+      { role: 'user', texte: 'un renard' },
+      { role: 'assistant', tour: tour(null) },
+    ];
+    expect(comprisDernier(messages)).toEqual([{ nom: 'Sujet', valeur: 'un renard' }]);
+    expect(comprisDernier(messages.slice(0, 1))).toEqual([]);
+    expect(demandeRetrait('Sujet', 'un renard')).toBe('Retire ça de ce que tu as compris : Sujet : un renard');
+  });
+
+  it('copie le prompt écrit, sinon le message', () => {
+    expect(texteACopier({ role: 'user', texte: 'bonjour' })).toBe('bonjour');
+    expect(texteACopier({ role: 'assistant', tour: tour('A fox') })).toBe('A fox');
+    expect(texteACopier({ role: 'assistant', tour: tour(null) })).toBe('Compris.');
   });
 
   it('relit une conversation gardée sans lui faire confiance', () => {
