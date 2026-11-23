@@ -4,11 +4,13 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { lireDemarrageAuto, messageErreur, reglerDemarrageAuto } from '../lib/api';
-  import type { Identite, Reglages } from '../lib/api';
+  import { lireDemarrageAuto, messageErreur, miseAJourDisponible, reglerDemarrageAuto } from '../lib/api';
+  import type { Identite, InfosMiseAJour, Reglages } from '../lib/api';
   import ASavoir from '../lib/composants/ASavoir.svelte';
+  import Bouton from '../lib/composants/Bouton.svelte';
   import CarteChoix from '../lib/composants/CarteChoix.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import DialogueMiseAJour from '../dialogues/MiseAJour.svelte';
 
   interface Props {
     identite: Identite;
@@ -19,6 +21,9 @@
 
   let { identite, reglages = $bindable(), enregistrer, signaler }: Props = $props();
   let demarrageAuto = $state(false);
+  /** La version trouvée au lancement, s'il y en a une : « Voir la mise à jour » n'apparaît qu'alors. */
+  let miseAJour = $state<InfosMiseAJour | null>(null);
+  let dialogueMiseAJour = $state(false);
 
   async function relireDemarrageAuto() {
     if (!identite.enFond) return;
@@ -41,6 +46,9 @@
 
   onMount(() => {
     void relireDemarrageAuto();
+    void miseAJourDisponible()
+      .then((infos) => (miseAJour = infos))
+      .catch((e: unknown) => signaler(messageErreur(e), true));
     // « Démarrer avec Windows » se change aussi dans Windows et dans le menu de l'icône : relu au retour.
     const auRetour = () => void relireDemarrageAuto();
     window.addEventListener('focus', auRetour);
@@ -79,6 +87,12 @@
     <input type="checkbox" bind:checked={reglages.chercherMisesAJour} onchange={enregistrer} />
     Chercher une nouvelle version au lancement (une requête vers GitHub ; rien n'est installé sans ton accord)
   </label>
+  {#if miseAJour}
+    <div class="actions">
+      <span class="discret">La version {miseAJour.version} est publiée (en cours : {miseAJour.actuelle}).</span>
+      <Bouton petit onclick={() => (dialogueMiseAJour = true)}>Voir la mise à jour</Bouton>
+    </div>
+  {/if}
 </Panneau>
 
 <Panneau titre="Fond animé">
@@ -100,14 +114,32 @@
     </CarteChoix>
   </div>
 
-  <p class="etiquette">Éléments par passage</p>
+  <p class="etiquette">Gouttes par passage</p>
   <div class="ligne">
     <label>Au moins <input type="number" min="1" max="12" bind:value={reglages.fond.minimum} onchange={enregistrer} /></label>
     <label>au plus <input type="number" min="1" max="12" bind:value={reglages.fond.maximum} onchange={enregistrer} /></label>
   </div>
 </Panneau>
 
+{#if dialogueMiseAJour && miseAJour}
+  <DialogueMiseAJour infos={miseAJour} fermer={() => (dialogueMiseAJour = false)} />
+{/if}
+
 <style>
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+
+  .discret {
+    color: var(--texte-2);
+    font-size: 13px;
+  }
+
   .ligne {
     display: flex;
     flex-wrap: wrap;
