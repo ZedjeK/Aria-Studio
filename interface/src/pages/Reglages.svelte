@@ -40,9 +40,11 @@
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
+    /** Relance l'assistant de premier lancement. */
+    ouvrirAssistant?: () => void;
   }
 
-  let { signaler }: Props = $props();
+  let { signaler, ouvrirAssistant }: Props = $props();
 
   const onglets = [
     { id: 'moteurs', titre: 'Moteurs' },
@@ -158,6 +160,9 @@
     <p class:ko={!etat.carte.ok}>{texteCarte(etat.carte)}</p>
     <div class="actions">
       <Bouton petit onclick={() => void liberer()}>Libérer la carte</Bouton>
+      {#if ouvrirAssistant}
+        <Bouton petit onclick={ouvrirAssistant}>Relancer l'assistant</Bouton>
+      {/if}
     </div>
   </Panneau>
 

@@ -182,6 +182,10 @@ pub struct Commande {
     /// Le dossier des Rushes ou des Bobines où ranger les résultats ; absent : non rangés (une retouche reste à côté
     /// de sa source).
     pub dossier: Option<String>,
+    /// Des valeurs imposées au workflow (l'essai de l'assistant : peu de steps, petite image) ; seules celles
+    /// qu'il reçoit servent.
+    #[serde(skip)]
+    pub imposees: Map<String, Value>,
     /// Casting : l'identifiant du casting (`data\bancs\<id>`), et les générations faites (sur `nombre`).
     pub banc: Option<String>,
     pub fait: u32,
@@ -227,6 +231,7 @@ impl Commande {
             sequence: None,
             plans: Vec::new(),
             dossier: None,
+            imposees: Map::new(),
             banc: None,
             fait: 0,
         }
@@ -1031,6 +1036,18 @@ impl Plateau {
     /// # Errors
     /// Voir [`valider`] ; ou le fil du Plateau est arrêté.
     pub fn commander(&self, demande: &Demande) -> Result<Commande, String> {
+        self.commander_avec(demande, Map::new())
+    }
+
+    /// Comme [`Plateau::commander`], avec des valeurs imposées au workflow (l'image d'essai de l'assistant).
+    ///
+    /// # Errors
+    /// Voir [`valider`] ; ou le fil du Plateau est arrêté.
+    pub fn commander_avec(
+        &self,
+        demande: &Demande,
+        imposees: Map<String, Value>,
+    ) -> Result<Commande, String> {
         let validee = valider(&self.contexte, demande)?;
         let wf = workflows::obtenir(&validee.workflow)?;
         memoriser_loras(&self.contexte, &wf, &validee.loras)?;
@@ -1057,6 +1074,7 @@ impl Plateau {
             commande.mode_reference.clone_from(&demande.mode_reference);
             commande.liberte = demande.liberte;
         }
+        commande.imposees = imposees;
         self.mettre_en_file(commande)
     }
 
@@ -1366,6 +1384,11 @@ fn executer(
             );
         } else {
             valeurs.insert("ratio".to_owned(), json!(c.format));
+        }
+        for (cle, valeur) in &c.imposees {
+            if wf.entree(cle).is_some() {
+                valeurs.insert(cle.clone(), valeur.clone());
+            }
         }
         let api = wf.preparer(&valeurs, &contexte.modeles, reglages.as_ref(), &filtre)?;
         let fichiers = generateur

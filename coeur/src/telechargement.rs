@@ -375,7 +375,8 @@ impl Telechargeur {
 }
 
 /// Le premier dossier qui existe, en remontant (un dossier des modèles neuf n'existe pas encore : même disque).
-fn premier_existant(chemin: &Path) -> PathBuf {
+/// Le dossier lui-même, ou son premier parent qui existe (pour lire la place libre d'un dossier à venir).
+pub fn premier_existant(chemin: &Path) -> PathBuf {
     chemin
         .ancestors()
         .find(|p| p.exists())

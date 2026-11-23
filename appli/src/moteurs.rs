@@ -183,6 +183,24 @@ impl Reseau for Github {
     }
 }
 
+/// De quoi lire l'état des moteurs hors du fil de l'interface (l'assistant en a besoin aussi).
+pub(crate) fn lecteur_etats(etat: &Moteurs) -> impl FnOnce() -> Vec<EtatMoteur> + Send + 'static {
+    let catalogue = etat.catalogue.clone();
+    let dossier_moteurs = etat.dossier_moteurs.clone();
+    let dossier = etat.dossier.clone();
+    move || {
+        let externe = comfyui_externe(&dossier);
+        let (extracteurs, _) = outils();
+        moteurs::etat(
+            &catalogue,
+            &dossier_moteurs,
+            externe.as_deref(),
+            &extracteurs,
+            port_occupe,
+        )
+    }
+}
+
 /// L'état des moteurs et de la carte.
 #[tauri::command]
 pub async fn lire_moteurs(moteurs: State<'_, Moteurs>) -> Result<EtatMoteurs, String> {

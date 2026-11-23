@@ -3,6 +3,7 @@
 //! Tout ici se teste sur n'importe quel système, sauf les accès à Windows (registre, DPAPI), marqués
 //! `cfg(windows)` et testés par la CI Windows.
 
+pub mod assistant;
 pub mod carte;
 pub mod casting;
 pub mod catalogue;
