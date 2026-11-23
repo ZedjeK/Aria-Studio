@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 
 use aria_coeur::conversation::{self, DemandeConversation, Tour};
 use aria_coeur::decoupage::{self, Decoupe, DemandeDecoupage};
+use aria_coeur::directions::{self, DemandeDirections, Directions};
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::listes::{self, Assemblage, DemandeAssemblage, Structure, Sujet};
 use aria_coeur::personnages::{self, Personnage};
@@ -102,6 +103,23 @@ pub async fn decouper_sequence(
     tauri::async_runtime::spawn_blocking(move || decoupage::decouper(&contexte, &mut orchestrateur, &demande))
         .await
         .map_err(|e| format!("Scénario indisponible : {e}"))?
+}
+
+/// « Proposer des directions » : à partir d'une envie vague, le LLM propose trois directions distinctes, avant
+/// d'écrire le prompt.
+#[tauri::command]
+pub async fn proposer_directions(
+    plateau: State<'_, Arc<Plateau>>,
+    moteurs: State<'_, Moteurs>,
+    demande: DemandeDirections,
+) -> Result<Directions, String> {
+    let contexte = plateau.contexte().clone();
+    let mut orchestrateur = ecriture(&moteurs);
+    tauri::async_runtime::spawn_blocking(move || {
+        directions::proposer(&contexte, &mut orchestrateur, &demande)
+    })
+    .await
+    .map_err(|e| format!("Scénario indisponible : {e}"))?
 }
 
 /// Les personnages enregistrés.

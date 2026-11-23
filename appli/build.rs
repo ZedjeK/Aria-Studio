@@ -55,6 +55,7 @@ fn main() {
         "ecrire_prompt_scenario",
         "traduire_precisions",
         "decouper_sequence",
+        "proposer_directions",
         "annuler_ecriture",
         "lire_personnages",
         "enregistrer_personnage",

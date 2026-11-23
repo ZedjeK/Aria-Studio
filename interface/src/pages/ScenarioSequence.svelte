@@ -46,6 +46,7 @@
     traductionValide,
     type EtatDecoupage,
   } from '../lib/decoupage';
+  import { etatVide, versIdee } from '../lib/directions';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Dialogue from '../lib/composants/Dialogue.svelte';
@@ -53,6 +54,7 @@
   import VignetteCreation from '../lib/composants/VignetteCreation.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
+  import ScenarioDirections from './ScenarioDirections.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -118,7 +120,12 @@
   let aide = $state<'histoire' | number | null>(null);
 
   const dureeTotale = $derived(e.plans.reduce((t, p) => t + p.duree, 0));
-  const occupe = $derived(ecriture !== null || envoi);
+  /** « 🧭 Proposer des directions » pour le fil de l'histoire, gardées tant qu'on reste dans l'atelier. */
+  let directions = $state(etatVide());
+  let directionsEnCours = $state(false);
+  /** Une direction emmenée dans 💬 M'aider à préciser l'histoire. */
+  let amorceHistoire = $state('');
+  const occupe = $derived(ecriture !== null || envoi || directionsEnCours);
 
   // Le brouillon suit chaque changement.
   $effect(() => {
@@ -361,6 +368,26 @@
       {aide === 'histoire' ? "Fermer l'aide" : "💬 M'aider à préciser l'histoire"}
     </Bouton>
   </div>
+  <ScenarioDirections
+    atelier="sequence"
+    envie={e.synopsis}
+    {complements}
+    workflow={null}
+    llm={llmChoisi || null}
+    disponible={llms.length > 0}
+    bloque={ecriture !== null || envoi}
+    bind:etat={directions}
+    bind:occupe={directionsEnCours}
+    {signaler}
+    prendre={(d) => {
+      e.synopsis = versIdee(d);
+      signaler("Direction posée dans le fil de l'histoire : retouche-la si tu veux, puis ✨ Tout écrire.");
+    }}
+    parler={(d) => {
+      amorceHistoire = versIdee(d);
+      aide = 'histoire';
+    }}
+  />
   {#if aide === 'histoire'}
     <ScenarioConversation
       forme="sequence"
@@ -372,6 +399,8 @@
       disponible={llms.length > 0}
       {signaler}
       libelleUtiliser="Utiliser cette histoire"
+      amorce={amorceHistoire}
+      amorceLue={() => (amorceHistoire = '')}
       utiliser={(p) => {
         e.synopsis = p;
         signaler("Histoire posée dans le fil : ✨ Tout écrire la répartit dans les plans.");

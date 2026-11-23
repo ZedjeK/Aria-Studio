@@ -1310,6 +1310,47 @@ export interface EnvoiClip {
 export const ecrirePromptScenario = (demande: DemandeEcriture): Promise<PromptEcrit> =>
   invoke<PromptEcrit>('ecrire_prompt_scenario', { demande });
 
+/** Un atelier qui propose des directions (aria_coeur::directions::ATELIERS). */
+export type AtelierDirections = 'image' | 'retouche' | 'clip' | 'sequence';
+
+/** Une direction proposée par le LLM : un titre court, deux ou trois phrases, et ce qui la distingue des autres. */
+export interface Direction {
+  titre: string;
+  texte: string;
+  difference: string;
+}
+
+/** Une demande de directions (aria_coeur::directions::DemandeDirections). */
+export interface DemandeDirections {
+  atelier: AtelierDirections;
+  /** L'envie, souvent vague. */
+  envie: string;
+  /** Ce que les compléments imposent déjà. */
+  complements: string;
+  workflow: string | null;
+  llm: string | null;
+  images: string[];
+  role: string | null;
+  duree: number | null;
+  /** Les directions déjà proposées, dont le LLM doit s'écarter. */
+  ecartees: Direction[];
+}
+
+/** Les directions proposées (aria_coeur::directions::Directions). */
+export interface Directions {
+  directions: Direction[];
+  /** La réponse a été redemandée au LLM, et pourquoi. */
+  redemandee: string | null;
+  /** Ce que le contrôle qualité reproche encore à la réponse gardée. */
+  alertes: string[];
+  llm: string;
+  dureeS: number;
+}
+
+/** « Proposer des directions » : trois directions distinctes à partir d'une envie, avant d'écrire le prompt. */
+export const proposerDirections = (demande: DemandeDirections): Promise<Directions> =>
+  invoke<Directions>('proposer_directions', { demande });
+
 /** Traduit les précisions en anglais. */
 export const traduirePrecisions = (texte: string, llm: string | null): Promise<string> =>
   invoke<string>('traduire_precisions', { texte, llm });
