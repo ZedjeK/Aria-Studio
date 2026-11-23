@@ -49,3 +49,34 @@ export function nomConsigne(cle: string): string {
   };
   return noms[cle] ?? cle;
 }
+
+/** Un groupe de champs du LLM : son titre, et les réglages qui y vont. */
+export interface GroupeReglages {
+  titre: string;
+  params: ParamReglage[];
+}
+
+/**
+ * Les réglages d'un LLM rangés comme dans la maquette : l'écriture sans réflexion, l'écriture avec réflexion, puis la
+ * capacité et le moteur. Un réglage inconnu du classement va avec la capacité ; un groupe vide n'est pas rendu.
+ */
+export function groupesLlm(params: ParamReglage[]): GroupeReglages[] {
+  const sans: ParamReglage[] = [];
+  const avec: ParamReglage[] = [];
+  const capacite: ParamReglage[] = [];
+  for (const p of params) {
+    if (p.cle.endsWith('_reflexion')) avec.push(p);
+    else if (/^(temperature_|top_p$|top_k$|min_p$|presence_penalty$)/.test(p.cle)) sans.push(p);
+    else capacite.push(p);
+  }
+  return [
+    { titre: 'Écriture sans réflexion', params: sans },
+    { titre: 'Écriture avec réflexion', params: avec },
+    { titre: 'Capacité et moteur', params: capacite },
+  ].filter((g) => g.params.length > 0);
+}
+
+/** « 2 changements non enregistrés », « 1 changement non enregistré », « 0 changement non enregistré ». */
+export function texteChangements(nombre: number): string {
+  return `${nombre} changement${nombre > 1 ? 's' : ''} non enregistré${nombre > 1 ? 's' : ''}`;
+}

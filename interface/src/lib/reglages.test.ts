@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ParamReglage } from './api';
-import { changements, libelleChoix, nomConsigne, valeurAffichee } from './reglages';
+import { changements, groupesLlm, libelleChoix, nomConsigne, texteChangements, valeurAffichee } from './reglages';
 
 function param(changes: Partial<ParamReglage>): ParamReglage {
   return {
@@ -51,5 +51,33 @@ describe('Réglages', () => {
     expect(nomConsigne('video')).toBe('Prompt d’un clip');
     expect(nomConsigne('precisions')).toBe('Traduction des précisions');
     expect(nomConsigne('autre')).toBe('autre');
+  });
+
+  it('range les réglages du LLM en trois groupes, sans groupe vide', () => {
+    const cles = [
+      'temperature_reecriture',
+      'top_p',
+      'presence_penalty',
+      'temperature_reflexion',
+      'top_k_reflexion',
+      'max_tokens',
+      'contexte',
+      'reflexion',
+      'moteur',
+      'vision',
+    ];
+    const groupes = groupesLlm(cles.map((cle) => param({ cle })));
+    expect(groupes.map((g) => g.titre)).toEqual(['Écriture sans réflexion', 'Écriture avec réflexion', 'Capacité et moteur']);
+    expect(groupes[0]?.params.map((p) => p.cle)).toEqual(['temperature_reecriture', 'top_p', 'presence_penalty']);
+    expect(groupes[1]?.params.map((p) => p.cle)).toEqual(['temperature_reflexion', 'top_k_reflexion']);
+    expect(groupes[2]?.params.map((p) => p.cle)).toEqual(['max_tokens', 'contexte', 'reflexion', 'moteur', 'vision']);
+    expect(groupesLlm([param({ cle: 'moteur' })]).map((g) => g.titre)).toEqual(['Capacité et moteur']);
+    expect(groupesLlm([])).toEqual([]);
+  });
+
+  it('compte les changements non enregistrés', () => {
+    expect(texteChangements(0)).toBe('0 changement non enregistré');
+    expect(texteChangements(1)).toBe('1 changement non enregistré');
+    expect(texteChangements(2)).toBe('2 changements non enregistrés');
   });
 });

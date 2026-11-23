@@ -27,7 +27,17 @@
 </script>
 
 <div class="champ" class:ecart>
-  <label for={`reglage-${param.cle}`}>{param.libelle}</label>
+  <label for={`reglage-${param.cle}`}>
+    {param.libelle}
+    {#if ecart}
+      <button
+        type="button"
+        class="modifie"
+        title={`Revenir à ${String(param.defaut)}`}
+        onclick={() => (saisies = { ...saisies, [param.cle]: null })}>modifié ↺</button
+      >
+    {/if}
+  </label>
   <div class="saisie">
     {#if param.type === 'booleen'}
       <input id={`reglage-${param.cle}`} type="checkbox" checked={valeur === true} onchange={(e) => poser(e.currentTarget.checked)} />
@@ -48,11 +58,6 @@
         onchange={(e) => nombre(e.currentTarget.value)}
       />
     {/if}
-    {#if ecart}
-      <button type="button" class="origine" title={`Revenir à ${String(param.defaut)}`} onclick={() => (saisies = { ...saisies, [param.cle]: null })}>
-        ↺
-      </button>
-    {/if}
   </div>
   {#if param.aide}<p class="aide">{param.aide}</p>{/if}
 </div>
@@ -69,8 +74,16 @@
     font-size: 13px;
   }
 
-  .ecart label {
+  .modifie {
+    margin-left: 6px;
+    padding: 1px 8px;
+    font: inherit;
+    font-size: 11px;
+    letter-spacing: 0.04em;
     color: var(--orange);
+    background: transparent;
+    border: 1px solid var(--orange);
+    cursor: pointer;
   }
 
   .saisie {
@@ -85,14 +98,6 @@
 
   select {
     max-width: 100%;
-  }
-
-  .origine {
-    font: inherit;
-    color: var(--texte-2);
-    background: transparent;
-    border: none;
-    cursor: pointer;
   }
 
   .aide {
