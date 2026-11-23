@@ -416,7 +416,23 @@ pub async fn tourner_sequence(
 /// Le Casting : les castings faits, et ce que ferait un casting de chaque tâche.
 #[tauri::command]
 pub async fn lire_castings(plateau: State<'_, Arc<Plateau>>) -> Result<casting::EtatCasting, String> {
-    hors_interface(&plateau, move |p| casting::etat(p.contexte())).await
+    hors_interface(&plateau, move |p| {
+        casting::etat(p.contexte(), p.dernier_casting().as_ref())
+    })
+    .await
+}
+
+/// Lance un casting (dans la file du Plateau) ; `workflows` : les modèles choisis, sinon tous ceux de la tâche.
+#[tauri::command]
+pub async fn lancer_casting(
+    plateau: State<'_, Arc<Plateau>>,
+    tache: String,
+    workflows: Option<Vec<String>>,
+) -> Result<Commande, String> {
+    hors_interface(&plateau, move |p| {
+        p.commander_casting(&tache, &workflows.unwrap_or_default())
+    })
+    .await
 }
 
 /// Les résultats d'un casting, à l'aveugle tant qu'il n'est pas révélé.
