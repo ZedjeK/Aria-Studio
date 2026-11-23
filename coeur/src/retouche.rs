@@ -434,25 +434,13 @@ pub fn executer(
             return Err(crate::comfy_serveur::ANNULEE.to_owned());
         }
         let (traduction, llm, faite) = match essai {
-            Ok((controle, modele)) if controle.reste.is_none() => {
-                let etat = if controle.redemande.is_some() {
-                    "redemandee"
-                } else {
-                    "faite"
-                };
-                (
-                    controle.texte,
-                    Some(modele),
-                    Reecriture::de(etat, controle.redemande),
-                )
+            // La consigne traduite part, même imparfaite après deux essais.
+            Ok((controle, modele)) => {
+                let faite = Reecriture::du_controle(&controle);
+                (controle.texte, Some(modele), faite)
             }
-            // Repli : le LLM a raté deux fois, ou il a planté ; la consigne part telle quelle.
-            Ok((controle, _)) => (
-                c.idee.clone(),
-                None,
-                Reecriture::de("repli", controle.reste.map(|m| format!("contrôle qualité : {m}"))),
-            ),
             Err(e) if e == crate::comfy_serveur::ANNULEE => return Err(e),
+            // Repli : le LLM ne s'est pas lancé, a planté ou a dépassé son délai ; la consigne part telle quelle.
             Err(e) => (c.idee.clone(), None, Reecriture::de("repli", Some(e))),
         };
         let consigne = if agrandir {
