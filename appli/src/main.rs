@@ -247,6 +247,14 @@ fn lancer() -> Result<(), String> {
             plateau::restaurer_sequence,
             plateau::vider_corbeille_sequences,
             plateau::tourner_sequence,
+            plateau::lire_castings,
+            plateau::lire_casting,
+            plateau::image_casting,
+            plateau::source_casting,
+            plateau::noter_casting,
+            plateau::reveler_casting,
+            plateau::favori_casting,
+            plateau::source_depuis_casting,
         ])
         .setup(move |app| {
             if proposer {

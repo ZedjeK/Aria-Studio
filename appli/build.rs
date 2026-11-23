@@ -112,6 +112,14 @@ fn main() {
         "restaurer_sequence",
         "vider_corbeille_sequences",
         "tourner_sequence",
+        "lire_castings",
+        "lire_casting",
+        "image_casting",
+        "source_casting",
+        "noter_casting",
+        "reveler_casting",
+        "favori_casting",
+        "source_depuis_casting",
     ]);
     let attributs = tauri_build::Attributes::new().app_manifest(commandes);
     if let Err(erreur) = tauri_build::try_build(attributs) {
