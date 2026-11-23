@@ -10,6 +10,8 @@
 # dépôt (terminal resté dans un autre dossier) et un tag posé sur le commit d'avant la fusion.
 #
 # Le tag doit être celui de la version affichée par tools/version.ps1, sinon le build s'arrête avant de rien publier.
+# Un tag vX.Y.Z-essai.N (version X.Y.Z-essai.N) donne une release de test, créée en préversion : GitHub ne la compte
+# pas comme « latest », et l'appli ne la propose jamais en mise à jour.
 # Ne le pousse qu'une fois la version et les notes (docs/releases/<tag>.md) fusionnées dans main.
 #
 # Le commit du tag doit aussi appartenir à la branche par défaut : un tag posé sur une branche non fusionnée est refusé.
@@ -141,4 +143,7 @@ jobs:
           $zip = "release/Aria-Studio-$version.zip"
           $notes = "docs/releases/$env:GITHUB_REF_NAME.md"
           if (-not (Test-Path $notes)) { throw "$notes est introuvable : aucune release sans notes de version." }
-          gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --draft --verify-tag --title "Aria Studio $version" --notes-file $notes
+          $options = @('--draft', '--verify-tag')
+          # Une release de test (vX.Y.Z-essai.N) est une préversion : jamais « latest », jamais proposée en mise à jour.
+          if ($env:GITHUB_REF_NAME -match '-essai\.[1-9]\d*$') { $options += '--prerelease' }
+          gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" @options --title "Aria Studio $version" --notes-file $notes

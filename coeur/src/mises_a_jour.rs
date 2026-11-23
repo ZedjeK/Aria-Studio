@@ -54,6 +54,49 @@ pub fn lire_version(texte: &str) -> Option<Version> {
     parties.next().is_none().then_some(version)
 }
 
+/// Le suffixe d'une version d'essai : `X.Y.Z-essai.N`, publiée en préversion dans la copie de test du dépôt.
+pub const SUFFIXE_ESSAI: &str = "-essai.";
+
+/// La version de cet exe : une version publiée, ou une version d'essai qui la précède (`3.0.0-essai.2` vient avant
+/// `3.0.0`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Actuelle {
+    pub version: Version,
+    /// Le numéro d'essai, à partir de 1 ; rien pour une version publiée.
+    pub essai: Option<u32>,
+}
+
+impl Actuelle {
+    /// Vrai si `autre` est plus récente : une version d'essai s'efface devant la version publiée qu'elle prépare.
+    pub fn precede(&self, autre: Version) -> bool {
+        autre > self.version || (autre == self.version && self.essai.is_some())
+    }
+}
+
+impl From<Version> for Actuelle {
+    fn from(version: Version) -> Self {
+        Self { version, essai: None }
+    }
+}
+
+/// Lit la version d'un exe : « X.Y.Z » ou « X.Y.Z-essai.N » (N entier à partir de 1, sans zéro en tête) ; rien pour
+/// tout autre texte. Une release annoncée par GitHub, elle, ne se lit qu'avec [`lire_version`] : une version d'essai
+/// n'est jamais proposée comme mise à jour.
+pub fn lire_actuelle(texte: &str) -> Option<Actuelle> {
+    let (base, essai) = match texte.split_once(SUFFIXE_ESSAI) {
+        None => (texte, None),
+        Some((base, numero)) => {
+            let bon =
+                !numero.is_empty() && !numero.starts_with('0') && numero.bytes().all(|o| o.is_ascii_digit());
+            (base, Some(numero.parse::<u32>().ok().filter(|_| bon)?))
+        }
+    };
+    Some(Actuelle {
+        version: lire_version(base)?,
+        essai,
+    })
+}
+
 /// Écrit une version en « X.Y.Z ».
 pub fn ecrire_version((a, b, c): Version) -> String {
     format!("{a}.{b}.{c}")
@@ -94,8 +137,10 @@ fn texte<'a>(valeur: &'a Value, cle: &str) -> Option<&'a str> {
 }
 
 /// Analyse la réponse de l'API : une mise à jour seulement si la release est publiée, plus récente, et porte un
-/// zip `Aria-Nom-X.Y.Z.zip` de ce dépôt avec sa taille et son empreinte. Tout le reste : rien.
-pub fn analyser(json: &str, actuelle: Version) -> Option<MiseAJour> {
+/// zip `Aria-Nom-X.Y.Z.zip` de ce dépôt avec sa taille et son empreinte. Tout le reste : rien. Une version d'essai
+/// (`actuelle`) se voit proposer la version publiée qu'elle prépare.
+pub fn analyser(json: &str, actuelle: impl Into<Actuelle>) -> Option<MiseAJour> {
+    let actuelle = actuelle.into();
     let racine: Value = serde_json::from_str(json).ok()?;
     if racine.get("draft").and_then(Value::as_bool) == Some(true)
         || racine.get("prerelease").and_then(Value::as_bool) == Some(true)
@@ -105,7 +150,7 @@ pub fn analyser(json: &str, actuelle: Version) -> Option<MiseAJour> {
     let version = texte(&racine, "tag_name")?
         .strip_prefix('v')
         .and_then(lire_version)?;
-    if version <= actuelle {
+    if !actuelle.precede(version) {
         return None;
     }
     let attendu = format!("{}-{}.zip", identite::NOM_EXE, ecrire_version(version));
@@ -312,6 +357,18 @@ mod tests {
         assert_eq!(maj.paquet.taille, 1234);
         assert_eq!(maj.paquet.sha256, "ab".repeat(32));
         assert!(maj.page.starts_with(&depot()));
+        // Un exe d'essai de la 1.2.0 se voit proposer la 1.2.0 publiée.
+        let essai = lire_actuelle("1.2.0-essai.3").unwrap();
+        let maj = analyser(&reponse("v1.2.0", &nom, &adresse, &digest), essai).unwrap();
+        assert_eq!(maj.version, (1, 2, 0));
+    }
+
+    #[test]
+    fn une_release_d_essai_n_est_jamais_proposee() {
+        let nom = zip_attendu("1.2.0-essai.1");
+        let adresse = format!("{}v1.2.0-essai.1/{nom}", prefixe_telechargement());
+        let digest = format!("sha256:{}", "AB".repeat(32));
+        assert!(analyser(&reponse("v1.2.0-essai.1", &nom, &adresse, &digest), (1, 0, 0)).is_none());
     }
 
     #[test]
@@ -336,6 +393,34 @@ mod tests {
         let brouillon = reponse("v1.2.0", &nom, &bonne, &digest).replace("\"draft\":false", "\"draft\":true");
         assert!(analyser(&brouillon, (1, 0, 0)).is_none());
         assert!(analyser("pas du json", (1, 0, 0)).is_none());
+    }
+
+    #[test]
+    fn les_versions_d_essai() {
+        assert_eq!(lire_actuelle("3.0.0"), Some(Actuelle::from((3, 0, 0))));
+        assert_eq!(
+            lire_actuelle("3.0.0-essai.12"),
+            Some(Actuelle {
+                version: (3, 0, 0),
+                essai: Some(12)
+            })
+        );
+        for texte in [
+            "3.0.0-essai.0",
+            "3.0.0-essai.01",
+            "3.0.0-essai.",
+            "3.0.0-essai.1a",
+            "3.0.0-beta.1",
+            "3.0-essai.1",
+        ] {
+            assert_eq!(lire_actuelle(texte), None, "{texte}");
+        }
+        // Une version d'essai s'efface devant la version publiée qu'elle prépare, pas devant une plus ancienne.
+        let essai = lire_actuelle("3.0.0-essai.2").unwrap();
+        assert!(essai.precede((3, 0, 0)) && essai.precede((3, 0, 1)) && !essai.precede((2, 9, 9)));
+        assert!(!Actuelle::from((3, 0, 0)).precede((3, 0, 0)));
+        // Une release d'essai annoncée par GitHub n'est jamais lue comme une mise à jour.
+        assert_eq!(lire_version("3.0.0-essai.1"), None);
     }
 
     #[test]

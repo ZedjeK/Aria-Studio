@@ -143,7 +143,7 @@ pub fn version_installee(programme: &Path) -> Option<String> {
         .as_deref()
         .and_then(|t| t.lines().next())
         .and_then(|l| l.split_whitespace().last())
-        .filter(|v| v.split('.').count() == 3 && v.split('.').all(|p| p.parse::<u32>().is_ok()));
+        .filter(|v| crate::mises_a_jour::lire_actuelle(v).is_some());
     Some(version.unwrap_or("precedente").to_owned())
 }
 
@@ -498,5 +498,8 @@ mod tests {
         fs::write(temp.path().join(nom_exe()), "exe").unwrap();
         assert_eq!(version_installee(temp.path()).as_deref(), Some("precedente"));
         assert_eq!(version_installee(&temp.path().join("vide")), None);
+        // Une version d'essai se lit telle quelle dans BUILDINFO.txt.
+        fs::write(temp.path().join(INFOS_BUILD), "Aria-Studio 3.0.0-essai.1\n").unwrap();
+        assert_eq!(version_installee(temp.path()).as_deref(), Some("3.0.0-essai.1"));
     }
 }

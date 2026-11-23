@@ -6,6 +6,7 @@ Vérifie qu'une version est prête à sortir : notes de version complètes, fich
 Lancé par release.yml avant le build. Commun à toutes les stacks.
 
     .\tools\verifier-release.ps1 -Tag v1.2.3      liste tous les trous, puis échoue s'il y en a
+    .\tools\verifier-release.ps1 -Tag v1.2.3-essai.1   pareil pour une release de test (préversion)
     .\tools\verifier-release.ps1 -EssaiABlanc     liste les trous sans échouer ; le tag vient de tools\version.ps1
 
 Contrôles :
@@ -30,7 +31,9 @@ if (-not $Tag) {
     $version = "$(& (Join-Path $PSScriptRoot 'version.ps1') | Select-Object -Last 1)".Trim()
     $Tag = "v$version"
 }
-if ($Tag -notmatch '\Av\d+\.\d+\.\d+\z') { throw "Tag inattendu : « $Tag ». Attendu : vX.Y.Z." }
+if ($Tag -notmatch '\Av\d+\.\d+\.\d+(-essai\.[1-9]\d*)?\z') {
+    throw "Tag inattendu : « $Tag ». Attendu : vX.Y.Z, ou vX.Y.Z-essai.N pour une release de test."
+}
 
 $problemes = New-Object Collections.Generic.List[string]
 

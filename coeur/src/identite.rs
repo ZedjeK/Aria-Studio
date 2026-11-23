@@ -31,10 +31,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn la_version_est_x_y_z() {
-        let morceaux: Vec<&str> = VERSION.split('.').collect();
-        assert_eq!(morceaux.len(), 3, "{VERSION}");
-        assert!(morceaux.iter().all(|m| m.parse::<u32>().is_ok()), "{VERSION}");
+    fn la_version_est_x_y_z_ou_un_essai() {
+        // « X.Y.Z », ou « X.Y.Z-essai.N » pour une release de test (tools/version.ps1 accepte les mêmes).
+        assert!(crate::mises_a_jour::lire_actuelle(VERSION).is_some(), "{VERSION}");
     }
 
     #[test]
