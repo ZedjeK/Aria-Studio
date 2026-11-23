@@ -1,6 +1,8 @@
 //! Le Scénario et le LLM, comme en v2 (`app/routes_scenario.py`) : « ✨ Écrire le prompt » d'un atelier (le LLM écrit
-//! le meilleur prompt pour le modèle cible, d'après l'idée et les compléments déjà fixés) et la traduction des
-//! précisions. Le LLM passe par l'orchestrateur, comme pour le Plateau : un seul moteur tient la carte.
+//! le meilleur prompt pour le modèle cible, d'après l'idée, les compléments déjà fixés et les images, qu'il voit) et
+//! la traduction des précisions. Atelier Image : un prompt d'image ; Retouche : une consigne d'édition sur l'image ;
+//! Clip : un prompt vidéo (trois champs et répliques en balise pour H3, heures de coupe contrôlées). Le LLM passe par
+//! l'orchestrateur, comme pour le Plateau : un seul moteur tient la carte.
 
 use std::time::Instant;
 
@@ -8,19 +10,21 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::plateau::{Contexte, Generateur};
-use crate::prompt::{self, Images};
-use crate::{listes, llm, reglages, securite, workflows};
+use crate::prompt::{self, Images, Vue};
+use crate::{creations, decoupage, images, listes, llm, montage, reglages, securite, workflows};
 
 /// L'idée, au plus (en caractères).
 pub const IDEE_MAX: usize = 2000;
 /// Les compléments, au plus.
 pub const COMPLEMENTS_MAX: usize = 4000;
+/// Les ateliers où ✨ écrit un prompt (la Séquence a son découpage).
+pub const ATELIERS: [&str; 3] = ["image", "retouche", "clip"];
 
 /// « ✨ Écrire le prompt ».
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DemandeEcriture {
-    /// `image` (les ateliers Retouche et Clip viennent avec leur portage).
+    /// `image`, `retouche` ou `clip`.
     pub atelier: String,
     /// L'idée, en français le plus souvent.
     #[serde(default)]
@@ -32,6 +36,15 @@ pub struct DemandeEcriture {
     pub workflow: Option<String>,
     #[serde(default)]
     pub llm: Option<String>,
+    /// Les rushes de l'atelier : l'image à retoucher, le rush à animer, ou les images de référence.
+    #[serde(default)]
+    pub images: Vec<String>,
+    /// Leur rôle : `inspirer` ou `variation` (Image), `animer` (Clip).
+    #[serde(default)]
+    pub role: Option<String>,
+    /// La durée d'un clip, en secondes (absente : 5).
+    #[serde(default)]
+    pub duree: Option<u32>,
 }
 
 /// Le prompt écrit.
@@ -43,6 +56,18 @@ pub struct Ecrit {
     pub duree_s: f64,
     /// Le GGUF qui a écrit.
     pub llm: String,
+    /// Clip : les heures de coupe hors du clip ou dans le désordre.
+    pub alertes: Vec<String>,
+}
+
+/// Une image montrée au LLM : ses pixels (il la voit s'il a sa vision), sinon ce qu'en dit sa fiche.
+fn vue(contexte: &Contexte, id: &str) -> Result<Vue, String> {
+    let chemin = creations::chemin_image(&contexte.data, id)?;
+    let octets = std::fs::read(&chemin).map_err(|e| format!("Image de {id} illisible : {e}"))?;
+    Ok(Vue {
+        png: images::pour_la_vision(&octets)?,
+        texte: creations::description(&contexte.data, &creations::fiche(&contexte.data, id)?, 3),
+    })
 }
 
 /// Un LLM choisi doit être dans `modeles\llm`.
@@ -58,33 +83,61 @@ pub(crate) fn verifier_llm(contexte: &Contexte, choisi: Option<&str>) -> Result<
     }
 }
 
-/// Le LLM écrit le prompt d'un atelier pour le modèle cible.
+/// Le LLM écrit le prompt d'un atelier pour le modèle cible : un prompt d'image (avec ses références ou l'image à
+/// redessiner), une consigne de retouche (il voit l'image), ou le prompt d'un clip (il voit le rush à animer).
 ///
 /// # Errors
-/// Atelier inconnu, idée vide ou trop longue, LLM absent, filtre AS-18, ou llama-server qui échoue.
+/// Atelier inconnu, idée vide ou trop longue, image manquante, durée inconnue, LLM absent, filtre AS-18, ou
+/// llama-server qui échoue.
+#[allow(clippy::too_many_lines)] // la route de la v2, gardée d'un tenant pour se relire à côté d'elle
 pub fn ecrire_prompt(
     contexte: &Contexte,
     generateur: &mut impl Generateur,
     d: &DemandeEcriture,
 ) -> Result<Ecrit, String> {
-    if d.atelier != "image" {
-        return Err(format!("Atelier pas encore porté : {}", d.atelier));
+    let atelier = d.atelier.as_str();
+    if !ATELIERS.contains(&atelier) {
+        return Err("Atelier inconnu : image, retouche ou clip".to_owned());
     }
     verifier_llm(contexte, d.llm.as_deref())?;
     let (idee, complements) = (d.idee.trim(), d.complements.trim());
     if idee.is_empty() && complements.is_empty() {
-        return Err("Écris ton idée (ou choisis des compléments)".to_owned());
+        return Err(if atelier == "retouche" {
+            "Écris ce que tu veux changer".to_owned()
+        } else {
+            "Écris ton idée (ou choisis des compléments)".to_owned()
+        });
     }
-    if idee.chars().count() > IDEE_MAX || complements.chars().count() > COMPLEMENTS_MAX {
-        return Err("Idée ou compléments trop longs".to_owned());
+    if idee.chars().count() > IDEE_MAX
+        || complements.chars().count() > COMPLEMENTS_MAX
+        || d.images.len() > workflows::REFERENCES_MAX
+    {
+        return Err("Idée, compléments ou images en trop".to_owned());
+    }
+    if atelier == "retouche" && d.images.len() != 1 {
+        return Err("Choisis l'image à retoucher".to_owned());
+    }
+    let role = d.role.as_deref().unwrap_or_default();
+    let animer = atelier == "clip" && role == "animer";
+    if animer && d.images.is_empty() {
+        return Err("Choisis le rush à animer".to_owned());
+    }
+    let duree = d.duree.unwrap_or(montage::DUREES[0]);
+    if atelier == "clip" && !montage::DUREES.contains(&duree) {
+        let durees: Vec<String> = montage::DUREES.iter().map(u32::to_string).collect();
+        return Err(format!("Durée proposée : {} s", durees.join(", ")));
     }
     let texte = match (idee.is_empty(), complements.is_empty()) {
         (false, false) => format!("{idee}\n\nAlso fixed (keep it): {complements}"),
         (false, true) => idee.to_owned(),
         _ => complements.to_owned(),
     };
+    // AS-18 : l'idée, et les textes d'origine des images (un rush né d'un mineur le reste).
+    let origine = creations::textes_origine(&contexte.data, &d.images)?;
     let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
-    filtre.verifier(&[texte.as_str()]).map_err(|e| e.to_string())?;
+    let mut a_lire: Vec<&str> = vec![texte.as_str()];
+    a_lire.extend(origine.iter().map(String::as_str));
+    filtre.verifier(&a_lire).map_err(|e| e.to_string())?;
     let wf = d.workflow.as_deref().map(workflows::obtenir).transpose()?;
     let reglage = d.workflow.as_deref().and_then(|w| {
         reglages::section(&contexte.dossier, "workflows")
@@ -95,25 +148,67 @@ pub fn ecrire_prompt(
             .as_deref()
             .map(|w| llm::de_workflow(&contexte.dossier, &contexte.modeles, w))
     });
+    let vues = d
+        .images
+        .iter()
+        .map(|id| vue(contexte, id))
+        .collect::<Result<Vec<Vue>, String>>()?;
     let debut = Instant::now();
-    let ecriture = prompt::preparer_reecriture(
-        &contexte.lieux(),
-        &texte,
-        choisi.as_deref(),
-        wf.as_ref(),
-        reglage.as_ref(),
-        &Images {
-            references: 0,
-            vues: &[],
-        },
-    )?;
+    let lieux = contexte.lieux();
+    let ecriture = match atelier {
+        "retouche" => {
+            prompt::preparer_traduction(&lieux, &texte, choisi.as_deref(), wf.as_ref(), vues.first())?
+        }
+        "clip" => prompt::preparer_video(
+            &lieux,
+            &texte,
+            choisi.as_deref(),
+            wf.as_ref(),
+            reglage.as_ref(),
+            duree,
+            if animer { vues.first() } else { None },
+        )?,
+        _ => {
+            let (references, montrees): (usize, &[Vue]) = match role {
+                "inspirer" => (vues.len(), vues.as_slice()),
+                "variation" => (0, vues.as_slice()),
+                _ => (0, &vues[..0]),
+            };
+            prompt::preparer_reecriture(
+                &lieux,
+                &texte,
+                choisi.as_deref(),
+                wf.as_ref(),
+                reglage.as_ref(),
+                &Images {
+                    references,
+                    vues: montrees,
+                },
+            )?
+        }
+    };
     let reponse = generateur.ecrire(ecriture.lancement.clone(), &ecriture.demande)?;
-    let ecrit = prompt::lire_reecriture(&ecriture, &texte, &reponse.texte, &filtre)?;
+    let mut ecrit = prompt::lire_reecriture(&ecriture, &texte, &reponse.texte, &filtre)?;
+    let mut alertes = Vec::new();
+    if atelier == "clip" {
+        if prompt::dialogue_en_balise(wf.as_ref()) {
+            ecrit = decoupage::vers_balises(&ecrit); // une réplique entre guillemets passe dans la balise <d> de H3
+        }
+        if prompt::champs_video(wf.as_ref()) {
+            ecrit = prompt::mettre_en_champs(&ecrit, animer);
+            alertes = prompt::controler_coupes(&ecrit, duree);
+        }
+    }
+    // L'idée, le prompt et les textes d'origine ensemble : le LLM peut avoir ajouté un terme sensible.
+    let mut a_lire: Vec<&str> = vec![texte.as_str(), ecrit.as_str()];
+    a_lire.extend(origine.iter().map(String::as_str));
+    filtre.verifier(&a_lire).map_err(|e| e.to_string())?;
     Ok(Ecrit {
         mots: ecrit.split_whitespace().count(),
         duree_s: (debut.elapsed().as_secs_f64() * 100.0).round() / 100.0,
         llm: ecriture.modele(),
         prompt: ecrit,
+        alertes,
     })
 }
 
@@ -210,7 +305,7 @@ mod tests {
             idee: "un renard dans la neige".to_owned(),
             complements: "Golden hour light.".to_owned(),
             workflow: Some("krea2_turbo".to_owned()),
-            llm: None,
+            ..DemandeEcriture::default()
         };
         let e = ecrire_prompt(&ctx, &mut faux, &d).unwrap();
         assert_eq!(e.prompt, "A red fox sitting in fresh snow");
@@ -222,12 +317,12 @@ mod tests {
             ..DemandeEcriture::default()
         };
         assert!(ecrire_prompt(&ctx, &mut faux, &vide).is_err());
-        let clip = DemandeEcriture {
-            atelier: "clip".to_owned(),
+        let inconnu = DemandeEcriture {
+            atelier: "sequence".to_owned(),
             idee: "x".to_owned(),
             ..DemandeEcriture::default()
         };
-        assert!(ecrire_prompt(&ctx, &mut faux, &clip).is_err());
+        assert!(ecrire_prompt(&ctx, &mut faux, &inconnu).is_err());
         let absent = DemandeEcriture {
             llm: Some("absent.gguf".to_owned()),
             ..d.clone()
@@ -245,6 +340,83 @@ mod tests {
             ecrire_prompt(&ctx, &mut faux, &refus)
                 .unwrap_err()
                 .starts_with("ERREUR AS-18")
+        );
+    }
+
+    #[test]
+    fn ecrire_le_prompt_d_un_clip() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let mut faux = Faux {
+            texte: "integrated_multimodal_description: The fox says \"Bonjour\" and runs. overall_soundscape: wind"
+                .to_owned(),
+            demandes: Vec::new(),
+        };
+        let d = DemandeEcriture {
+            atelier: "clip".to_owned(),
+            idee: "le renard dit bonjour et court".to_owned(),
+            workflow: Some("minimax_h3_t2v".to_owned()),
+            duree: Some(8),
+            ..DemandeEcriture::default()
+        };
+        let e = ecrire_prompt(&ctx, &mut faux, &d).unwrap();
+        assert!(
+            e.prompt
+                .starts_with("integrated_multimodal_description: [Shot 1]"),
+            "{}",
+            e.prompt
+        );
+        assert!(e.prompt.contains("<d>") && e.prompt.contains("\n\noverall_soundscape: wind"));
+        assert!(e.alertes.is_empty());
+        let demande = serde_json::to_string(&faux.demandes[0].messages).unwrap();
+        assert!(
+            demande.contains("Clip length: 8 seconds") && demande.contains("(Clip: 8 s, from text only)")
+        );
+        let mauvaise = DemandeEcriture {
+            duree: Some(7),
+            ..d.clone()
+        };
+        assert!(
+            ecrire_prompt(&ctx, &mut faux, &mauvaise)
+                .unwrap_err()
+                .starts_with("Durée proposée")
+        );
+        let sans_rush = DemandeEcriture {
+            role: Some("animer".to_owned()),
+            ..d
+        };
+        assert_eq!(
+            ecrire_prompt(&ctx, &mut faux, &sans_rush).unwrap_err(),
+            "Choisis le rush à animer"
+        );
+    }
+
+    #[test]
+    fn ecrire_une_consigne_de_retouche() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let png = crate::images::png(&image::RgbImage::new(8, 8)).unwrap();
+        let id = creations::enregistrer(&ctx.data, &png, &serde_json::Map::new()).unwrap();
+        let mut faux = Faux {
+            texte: "Make the sky red, keep everything else unchanged.".to_owned(),
+            demandes: Vec::new(),
+        };
+        let d = DemandeEcriture {
+            atelier: "retouche".to_owned(),
+            idee: "rends le ciel rouge".to_owned(),
+            images: vec![id],
+            ..DemandeEcriture::default()
+        };
+        let e = ecrire_prompt(&ctx, &mut faux, &d).unwrap();
+        assert_eq!(e.prompt, "Make the sky red, keep everything else unchanged.");
+        assert_eq!(faux.demandes[0].max_tokens, 200);
+        let sans_image = DemandeEcriture {
+            images: Vec::new(),
+            ..d
+        };
+        assert_eq!(
+            ecrire_prompt(&ctx, &mut faux, &sans_image).unwrap_err(),
+            "Choisis l'image à retoucher"
         );
     }
 
