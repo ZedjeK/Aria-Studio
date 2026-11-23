@@ -332,6 +332,7 @@ pub fn consigne_d_origine(usage: &str) -> Option<String> {
         "directions" => Some(crate::directions::CONSIGNE_DIRECTIONS.to_owned()),
         "verification" => Some(crate::verification::CONSIGNE_VERIFICATION.to_owned()),
         "choix" => Some(crate::verification::CONSIGNE_CHOIX.to_owned()),
+        "explication" => Some(crate::expliquer::CONSIGNE_EXPLICATION.to_owned()),
         _ => None,
     }
 }

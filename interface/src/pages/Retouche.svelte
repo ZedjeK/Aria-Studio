@@ -34,6 +34,7 @@
   } from '../lib/retouche';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
@@ -489,6 +490,9 @@
           <div class="texte">
             <span class="prompt-court">{c.type === 'agrandissement' ? 'Agrandissement' : 'Retouche'} · {texteCommande(c) || 'sans précision'}</span>
             <span class="discret">{texteAvancement(c)}</span>
+            {#if c.etat === 'erreur' && c.erreur}
+              <ExpliquerErreur erreur={c.erreur} origine={'retouche'} commande={c.id} contexte={c.etape} />
+            {/if}
             {#if c.note}
               <span class="note-reecriture">⚠ {c.note}</span>
             {/if}

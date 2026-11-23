@@ -4,9 +4,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { lireJournal, messageErreur, type Operation } from '../lib/api';
+  import { erreurDuJournal } from '../lib/expliquer';
   import { dateLisible, libelleResultat } from '../lib/journal';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
 
   interface Props {
@@ -50,6 +52,13 @@
             </td>
             <td class:echec={operation.resultat === 'erreur'} class:partiel={operation.resultat === 'partiel'}>
               {libelleResultat(operation.resultat)}
+              {#if operation.resultat === 'erreur'}
+                <ExpliquerErreur
+                  erreur={erreurDuJournal(operation)}
+                  origine="journal"
+                  contexte={`${operation.action} · ${operation.objet}`}
+                />
+              {/if}
             </td>
           </tr>
         {/each}

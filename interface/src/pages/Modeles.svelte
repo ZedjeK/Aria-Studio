@@ -30,6 +30,7 @@
   } from '../lib/modeles';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import Dialogue from '../lib/composants/Dialogue.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
@@ -138,6 +139,9 @@
           <div class="texte">
             <span>{t.nom} <span class="discret">· {t.dossier}</span></span>
             <span class="discret">{texteTelechargement(t)}</span>
+            {#if t.etat === 'erreur' && t.erreur}
+              <ExpliquerErreur erreur={t.erreur} origine="telechargement" contexte={`${t.nom} · ${t.dossier}`} />
+            {/if}
             {#if t.etat === 'en_cours'}
               <progress max="1" value={fractionTelechargement(t) ?? 0}></progress>
             {/if}

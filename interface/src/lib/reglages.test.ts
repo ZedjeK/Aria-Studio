@@ -47,6 +47,7 @@ describe('Réglages', () => {
     expect(nomConsigne('directions')).toBe('Directions proposées');
     expect(nomConsigne('verification')).toBe('Vérification d’une image');
     expect(nomConsigne('choix')).toBe('Choix des meilleures images');
+    expect(nomConsigne('explication')).toBe('Explication d’une erreur');
     expect(nomConsigne('video')).toBe('Prompt d’un clip');
     expect(nomConsigne('precisions')).toBe('Traduction des précisions');
     expect(nomConsigne('autre')).toBe('autre');

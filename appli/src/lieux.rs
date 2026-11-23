@@ -161,6 +161,21 @@ fn avec_coffre<T>(
     action(&coffre)
 }
 
+/// Les clés connues (Civitai, Hugging Face) et le jeton du canal MCP : masqués mot pour mot avant tout envoi au LLM
+/// (« Expliquer une erreur »). Jamais montrés.
+pub(crate) fn secrets_connus(dossier: &Dossier) -> Vec<String> {
+    let mut secrets: Vec<String> = avec_coffre(dossier, |c| {
+        Source::TOUTES
+            .into_iter()
+            .filter_map(|s| cles::cle(c, s))
+            .collect()
+    });
+    if let Ok(session) = aria_coeur::mcp::lire_session(dossier) {
+        secrets.push(session.jeton);
+    }
+    secrets
+}
+
 fn source(id: &str) -> Result<Source, String> {
     Source::depuis(id).ok_or_else(|| format!("Source inconnue : {id}"))
 }

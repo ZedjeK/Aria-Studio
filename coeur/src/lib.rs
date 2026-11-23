@@ -20,6 +20,7 @@ pub mod directions;
 pub mod donnees;
 pub mod emplacements;
 pub mod estimation;
+pub mod expliquer;
 pub mod fiches;
 pub mod garde;
 pub mod gguf;
