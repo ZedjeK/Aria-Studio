@@ -9,7 +9,10 @@ use aria_coeur::conversation::{self, DemandeConversation, Tour};
 use aria_coeur::decoupage::{self, Decoupe, DemandeDecoupage};
 use aria_coeur::directions::{self, DemandeDirections, Directions};
 use aria_coeur::emplacements::Emplacements;
+use aria_coeur::expliquer::{self, DemandeExplication, Explication, Situation};
 use aria_coeur::listes::{self, Assemblage, DemandeAssemblage, Structure, Sujet};
+use aria_coeur::moteurs::Statut;
+use aria_coeur::orchestrateur::Actif;
 use aria_coeur::personnages::{self, Personnage};
 use aria_coeur::plateau::{EcritureAnnulable, Plateau};
 use aria_coeur::scenario::{self, DemandeEcriture, Ecrit};
@@ -120,6 +123,65 @@ pub async fn proposer_directions(
     })
     .await
     .map_err(|e| format!("Scénario indisponible : {e}"))?
+}
+
+fn statut_lisible(statut: Statut) -> &'static str {
+    match statut {
+        Statut::Absent => "absent",
+        Statut::Manuel => "installé à la main",
+        Statut::Different => "installé dans une autre version",
+        Statut::AJour => "à jour",
+        Statut::Externe => "ComfyUI de l'utilisateur",
+    }
+}
+
+/// « Expliquer » une erreur : la cause connue d'Aria (aussitôt, sans LLM), sinon l'analyse du LLM, avec l'état des
+/// moteurs, la commande en cause et la carte. Les secrets connus sont masqués avant l'envoi.
+#[tauri::command]
+pub async fn expliquer_erreur(
+    plateau: State<'_, Arc<Plateau>>,
+    moteurs: State<'_, Moteurs>,
+    demande: DemandeExplication,
+) -> Result<Explication, String> {
+    let contexte = plateau.contexte().clone();
+    let commande = demande
+        .commande
+        .as_deref()
+        .and_then(|id| plateau.commandes().into_iter().find(|c| c.id == id));
+    // Le verrou est tenu pendant qu'un moteur travaille : « un moteur travaille » plutôt que d'attendre.
+    let actif = match moteurs.orchestrateur.try_lock() {
+        Ok(o) => o.actif().map(|a| {
+            match a {
+                Actif::ComfyUI => "ComfyUI",
+                Actif::Llama => "llama-server",
+            }
+            .to_owned()
+        }),
+        Err(_) => Some("un moteur travaille".to_owned()),
+    };
+    let lire_etats = crate::moteurs::lecteur_etats(&moteurs);
+    let mut orchestrateur = ecriture(&moteurs);
+    tauri::async_runtime::spawn_blocking(move || {
+        let situation = Situation {
+            moteurs: lire_etats()
+                .iter()
+                .map(|m| {
+                    format!(
+                        "{} : {}{}",
+                        m.nom,
+                        statut_lisible(m.statut),
+                        if m.occupe { " (son port est occupé)" } else { "" }
+                    )
+                })
+                .collect(),
+            actif,
+            commande,
+            secrets: crate::lieux::secrets_connus(&contexte.dossier),
+        };
+        expliquer::expliquer(&contexte, &mut orchestrateur, &demande, &situation)
+    })
+    .await
+    .map_err(|e| format!("Explication indisponible : {e}"))?
 }
 
 /// Les personnages enregistrés.

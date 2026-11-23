@@ -51,6 +51,7 @@
     "allow-traduire-precisions",
     "allow-decouper-sequence",
     "allow-proposer-directions",
+    "allow-expliquer-erreur",
     "allow-etat-vision",
     "allow-verifier-images",
     "allow-choisir-meilleures",

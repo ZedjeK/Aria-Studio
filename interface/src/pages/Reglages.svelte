@@ -29,6 +29,7 @@
   } from '../lib/moteurs';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import Dialogue from '../lib/composants/Dialogue.svelte';
   import Jauge from '../lib/composants/Jauge.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -193,11 +194,22 @@
               Vérification de ce ComfyUI : lancement d'essai pour lire ses nœuds (jusqu'à une minute)…
             </p>
           {/if}
-          {#if m.prerequis}<p class="ko">{m.prerequis}</p>{/if}
+          {#if m.prerequis}
+            <p class="ko">{m.prerequis}</p>
+            <ExpliquerErreur erreur={m.prerequis} origine="moteur" contexte={m.nom} moteur={m.id} />
+          {/if}
           {#if tache}
             <div class="suivi">
               <Jauge etiquette={tache.etape} fraction={fractionTache(tache)} mesure={mesureTache(tache)} />
-              {#if tache.erreur}<p class="ko">{tache.erreur}</p>{/if}
+              {#if tache.erreur}
+                <p class="ko">{tache.erreur}</p>
+                <ExpliquerErreur
+                  erreur={tache.erreur}
+                  origine="moteur"
+                  contexte={`${m.nom} · ${tache.etape}`}
+                  moteur={m.id}
+                />
+              {/if}
             </div>
           {/if}
           <div class="actions">

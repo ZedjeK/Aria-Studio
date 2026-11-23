@@ -56,6 +56,7 @@ fn main() {
         "traduire_precisions",
         "decouper_sequence",
         "proposer_directions",
+        "expliquer_erreur",
         "etat_vision",
         "verifier_images",
         "choisir_meilleures",

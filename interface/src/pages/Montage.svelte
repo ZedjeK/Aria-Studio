@@ -27,6 +27,7 @@
   import { estActive, lireSeed, modeleInitial, nomCheckpoint, texteAvancement, texteCommande } from '../lib/plateau';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -372,6 +373,9 @@
           <div class="texte">
             <span class="prompt-court">{texteCommande(c)}</span>
             <span class="discret">{texteAvancement(c)}</span>
+            {#if c.etat === 'erreur' && c.erreur}
+              <ExpliquerErreur erreur={c.erreur} origine={'montage'} commande={c.id} contexte={c.etape} />
+            {/if}
             {#if c.etat === 'en_cours'}
               <progress max="1" value={c.progression}></progress>
             {/if}

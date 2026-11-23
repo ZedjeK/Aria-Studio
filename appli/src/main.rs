@@ -204,6 +204,7 @@ fn lancer() -> Result<(), String> {
             scenario::traduire_precisions,
             scenario::decouper_sequence,
             scenario::proposer_directions,
+            scenario::expliquer_erreur,
             vision::etat_vision,
             vision::verifier_images,
             vision::choisir_meilleures,

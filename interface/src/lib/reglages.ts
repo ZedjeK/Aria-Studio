@@ -45,6 +45,7 @@ export function nomConsigne(cle: string): string {
     directions: 'Directions proposées',
     verification: 'Vérification d’une image',
     choix: 'Choix des meilleures images',
+    explication: 'Explication d’une erreur',
   };
   return noms[cle] ?? cle;
 }

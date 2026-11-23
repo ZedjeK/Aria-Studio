@@ -1359,6 +1359,53 @@ export interface Directions {
 export const proposerDirections = (demande: DemandeDirections): Promise<Directions> =>
   invoke<Directions>('proposer_directions', { demande });
 
+// --- Expliquer une erreur (aria_coeur::expliquer) ---
+
+export type Certitude = 'sure' | 'probable' | 'possible' | 'inconnue';
+
+/** Là où une erreur peut être expliquée (aria_coeur::expliquer::ORIGINES). */
+export type OrigineErreur =
+  | 'plateau'
+  | 'retouche'
+  | 'montage'
+  | 'moteur'
+  | 'telechargement'
+  | 'installation'
+  | 'journal'
+  | 'autre';
+
+export interface DemandeExplication {
+  erreur: string;
+  origine: OrigineErreur;
+  /** L'étape, l'objet du Journal, le fichier téléchargé… */
+  contexte?: string;
+  /** La commande du Plateau, de la Retouche ou du Montage en erreur. */
+  commande?: string | null;
+  /** Le moteur en cause (`comfyui`, `llama`), pour lire la fin de son journal. */
+  moteur?: string | null;
+  llm?: string | null;
+  /** Faire lire au LLM une cause connue mais large, avec le journal du moteur. */
+  approfondir?: boolean;
+}
+
+export interface Explication {
+  cause: string;
+  certitude: Certitude;
+  remedes: string[];
+  /** `base` : une cause connue d'Aria ; `llm` : l'analyse du LLM ; `aucune` : rien ne correspond. */
+  source: 'base' | 'llm' | 'aucune';
+  cle: string | null;
+  /** Une cause connue mais large, qu'un LLM disponible peut approfondir. */
+  approfondir: boolean;
+  llm: string | null;
+  alertes: string[];
+  dureeS: number;
+}
+
+/** La cause d'une erreur et ses remèdes : connue d'Aria (aussitôt), sinon analysée par le LLM ; notée au Journal. */
+export const expliquerErreur = (demande: DemandeExplication): Promise<Explication> =>
+  invoke<Explication>('expliquer_erreur', { demande });
+
 /** Traduit les précisions en anglais. */
 export const traduirePrecisions = (texte: string, llm: string | null): Promise<string> =>
   invoke<string>('traduire_precisions', { texte, llm });
