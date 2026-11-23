@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(e.prompt, format!("A red fox sitting in fresh snow{SUITE}"));
         assert!(e.alertes.is_empty(), "{:?}", e.alertes);
         assert_eq!(faux.demandes.len(), 1);
-        assert_eq!((e.mots, e.llm.as_str()), (7, "mistral.gguf"));
+        assert_eq!((e.mots, e.llm.as_str()), (52, "mistral.gguf"));
         let demande = serde_json::to_string(&faux.demandes[0].messages).unwrap();
         assert!(demande.contains("Also fixed (keep it): Golden hour light."));
         let vide = DemandeEcriture {
