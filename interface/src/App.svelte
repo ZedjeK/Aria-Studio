@@ -17,6 +17,7 @@
     type InfosMiseAJour,
     type Reglages,
     type EnvoiClip,
+    type EnvoiPlateau,
     type EnvoiRetouche,
     type Sequence,
   } from './lib/api';
@@ -72,7 +73,7 @@
   let reglages = $state<Reglages | null>(null);
   let page = $state<Page>('accueil');
   /** Un prompt écrit au Scénario, en route vers le Plateau. */
-  let versPlateau = $state<{ prompt: string; workflow: string | null } | null>(null);
+  let versPlateau = $state<EnvoiPlateau | null>(null);
   /** Une séquence écrite au Scénario, à ouvrir au Montage ; une séquence du Montage, à retravailler au Scénario. */
   let versMontage = $state<string | null>(null);
   let versScenario = $state<Sequence | null>(null);
@@ -184,8 +185,8 @@
       {:else if page === 'scenario'}
         <Scenario
           {signaler}
-          envoyer={(prompt, workflow) => {
-            versPlateau = { prompt, workflow };
+          envoyer={(prompt, workflow, references, modeReference) => {
+            versPlateau = { prompt, workflow, references, modeReference };
             page = 'plateau';
           }}
           versMontage={(id) => {
