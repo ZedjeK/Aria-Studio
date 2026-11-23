@@ -1,18 +1,21 @@
 //! Scénario → « 💬 M'aider à préciser », comme en v2 (`app/prompt.py` : `libre`, `lire_libre`, `elaguer`) : le prompt
 //! s'écrit en conversation. Le LLM pose les questions essentielles (avec des réponses à cliquer) au lieu de deviner ce
 //! que l'utilisateur n'a pas dit, tient une fiche de ce qu'il a compris, puis écrit le prompt et l'ajuste. Chaque tour
-//! rend un objet JSON ; la conversation est gardée par l'interface. Ce lot porte l'atelier Image ; la retouche, le clip
-//! et la séquence viendront avec leurs ateliers.
+//! rend un objet JSON ; la conversation est gardée par l'interface. Tous les ateliers : Image (avec ses images de
+//! référence), Retouche (le LLM voit l'image à retoucher), Clip (le rush à animer, trois champs et répliques en balise
+//! pour H3), Séquence (le fil de l'histoire, en français) et un plan d'une séquence (ce que sait le découpage, avec ses
+//! garde-fous).
 
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
+use crate::decoupage::{self, DemandeDecoupage};
 use crate::llama::{self, BUDGET_REFLEXION};
 use crate::plateau::{Contexte, Generateur};
 use crate::prompt::{self, CLAUSE_MINEURS};
-use crate::{listes, llm, reglages, securite, workflows};
+use crate::{creations, listes, llm, reglages, securite, workflows};
 
 /// Le message qui demande d'écrire le prompt.
 pub const ECRIRE: &str = "ÉCRIS LE PROMPT";
@@ -47,7 +50,74 @@ Each turn:
 Answer ONLY with one JSON object, no markdown, nothing before or after:
 {"message": "...", "fiche": {"Sujet": "..."}, "questions": [{"question": "...", "choix": ["...", "..."], "liste": "optional guide topic"}], "prompt": null}"#;
 
-const ESSENTIELS_IMAGE: &str = "subject, action or pose, setting, medium and style, framing, lighting";
+/// Les ateliers de la conversation : `image`, `retouche`, `clip`, `sequence` (le fil de l'histoire) et `plan` (un plan
+/// d'une séquence).
+pub const FORMES: [&str; 5] = ["image", "retouche", "clip", "sequence", "plan"];
+/// Les tokens d'une image montrée au LLM (≈ 600 mesurés, plus une marge).
+const TOKENS_PAR_IMAGE: usize = 700;
+
+/// Les sujets essentiels d'un atelier : ceux sur lesquels portent les questions.
+fn essentiels(forme: &str) -> &'static str {
+    match forme {
+        "retouche" => "what changes, where in the picture, how strongly, what must stay exactly as it is",
+        "sequence" => "the character, the place, the story from beginning to end, the spoken lines, the mood",
+        "plan" => "what happens in this shot, the framing, the camera movement, the sounds",
+        "clip" => "subject, action, setting, visual style, camera, sounds, spoken line if any",
+        _ => "subject, action or pose, setting, medium and style, framing, lighting",
+    }
+}
+
+/// Ce qu'on écrit pour un atelier : (la cible, les rubriques de la fiche en plus, la langue du prompt).
+fn cible(forme: &str, nom: &str, duree: u32) -> (String, &'static str, &'static str) {
+    match forme {
+        "clip" => (
+            format!("{nom}, a {duree}-second video clip with sound"),
+            ", Caméra, Son, Réplique",
+            "in English",
+        ),
+        "retouche" => (
+            format!(
+                "{nom}, an instruction-based image editing model: the prompt is an English edit instruction for the attached picture, one or two sentences"
+            ),
+            ", Retouche, À garder",
+            "in English",
+        ),
+        "sequence" => (
+            format!(
+                "the STORY of a short video sequence of several shots, that {nom} will film shot by shot"
+            ),
+            ", Histoire, Réplique",
+            "in French: the whole story from beginning to end as a short plain narrative, the way the user would tell it: no shots, no camera directions, no English, and spoken lines in quotes only if the user gave or accepted them",
+        ),
+        "plan" => (
+            format!(
+                "{nom}, ONE shot of a video sequence: a {duree}-second clip with sound. Write only this shot's prompt, in continuity with the shots around it; if the shot has a line, keep it word for word at its moment, tied to the visible action, and never invent another line"
+            ),
+            ", Caméra, Son, Réplique",
+            "in English",
+        ),
+        _ => (format!("{nom}, a still image"), "", "in English"),
+    }
+}
+
+/// Ce que les images jointes sont pour le LLM, selon leur rôle.
+fn note_images(role: &str) -> Option<&'static str> {
+    match role {
+        "inspirer" => Some(
+            "Reference pictures are attached (Picture 1, Picture 2...): look at them first and put what they show in the fiche, marked « (vu sur l'image) ». The target model receives them too: in the prompt, refer to them by number (\"the woman from Picture 1\"), keep the identity and outfit they show unless the user changes them, and do not re-describe faces or clothes. Ask what the user wants to do with them.",
+        ),
+        "variation" => Some(
+            "The attached picture is the starting image, partly redrawn by the target model: look at it first and put what it shows in the fiche, marked « (vu sur l'image) ». Keep its composition, subjects and style unless the user changes them; ask only about what should change.",
+        ),
+        "retouche" => Some(
+            "The attached picture is the image to edit: look at it first and put what it shows in the fiche, marked « (vu sur l'image) ». The prompt is an instruction for it: what changes and where, made clear and unmistakable, then one short clause saying that everything else stays unchanged.",
+        ),
+        "animer" => Some(
+            "The attached picture is the first frame of the clip: look at it first and put what it shows in the fiche, marked « (vu sur l'image) ». The prompt opens with one short sentence anchoring it as it really is (style, subject, setting), then describes what happens. Ask about the action, camera, sounds and spoken lines, never about what the picture already shows.",
+        ),
+        _ => None,
+    }
+}
 
 /// Ce qu'un LLM écrit pour dire qu'une rubrique est vide (« Réplique : None ») n'en est pas une.
 const VIDES: [&str; 8] = ["", "none", "null", "n/a", "-", "—", "aucun", "aucune"];
@@ -71,13 +141,28 @@ pub struct Echange {
 }
 
 /// Un tour demandé par l'interface.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DemandeConversation {
     pub echanges: Vec<Echange>,
-    /// `image` (les autres ateliers viendront avec leur portage).
+    /// L'atelier : voir [`FORMES`] (absent : `image`).
     #[serde(default)]
     pub forme: String,
+    /// Les rushes de l'atelier : images de référence, image à retoucher ou rush à animer.
+    #[serde(default)]
+    pub images: Vec<String>,
+    /// Leur rôle : `inspirer`, `variation`, `retouche` ou `animer`.
+    #[serde(default)]
+    pub role: Option<String>,
+    /// La durée d'un clip, en secondes (absente : 5 ; un plan prend la sienne).
+    #[serde(default)]
+    pub duree: Option<u32>,
+    /// S'inspirer, Redessiner : le sujet vient des images, pas des listes.
+    #[serde(default)]
+    pub sans_sujet: bool,
+    /// 💬 d'un plan : la demande du découpage, `plan` étant le numéro du plan (0 pour le premier).
+    #[serde(default)]
+    pub sequence: Option<DemandeDecoupage>,
     #[serde(default)]
     pub workflow: Option<String>,
     /// Ce que les autres onglets du Scénario ont déjà fixé (le prompt assemblé).
@@ -120,6 +205,8 @@ pub struct Tour {
     pub prompt: Option<String>,
     /// Le tour tel qu'il repart au LLM au tour suivant.
     pub brut: String,
+    /// Clip : heures de coupe hors du clip ; plan : répliques inventées retirées, réplique trop longue.
+    pub alertes: Vec<String>,
     pub modele: String,
     pub duree_s: f64,
 }
@@ -292,14 +379,24 @@ pub fn elaguer(echanges: &[Echange], budget: usize) -> Vec<Echange> {
 /// Une rubrique du guide : (sous-liste, groupe, valeurs).
 type RubriqueGuide = (String, String, Vec<String>);
 
-/// Les rubriques du guide utiles à la cible.
-fn rubriques_guide(sujet: Option<&str>, ignorees: &[String]) -> Vec<RubriqueGuide> {
+/// Les rubriques du guide utiles à la cible : pas de Sujet quand il vient des images (`sans_sujet`), pas de Caméra,
+/// Voix ni Son pour une image.
+fn rubriques_guide(
+    sujet: Option<&str>,
+    sans_sujet: bool,
+    video: bool,
+    ignorees: &[String],
+) -> Vec<RubriqueGuide> {
     let Ok(structure) = listes::structure(sujet.unwrap_or("personnage")) else {
         return Vec::new();
     };
     let mut sortie = Vec::new();
-    for bloc in structure.blocs.iter().filter(|b| !b.video) {
-        for groupe in &bloc.groupes {
+    for bloc in structure.blocs.iter().filter(|b| video || !b.video) {
+        for groupe in bloc
+            .groupes
+            .iter()
+            .filter(|g| !(sans_sujet && g.onglet == "sujet"))
+        {
             for sl in &groupe.sous_listes {
                 if ignorees.contains(&sl.nom) {
                     continue;
@@ -358,8 +455,9 @@ fn catalogue_guide(rubriques: &[RubriqueGuide], compact: bool) -> String {
     )
 }
 
-/// Le format choisi au Scénario, dit au LLM : rapport, orientation et ce que ça change à la composition.
-pub fn cadre_format(format: Option<&str>) -> String {
+/// Le format choisi au Scénario, dit au LLM : rapport, orientation et ce que ça change à la composition. Retouche :
+/// l'image est recadrée au centre à ce format avant l'édition ; Séquence : le cadre des plans, pour la mise en scène.
+pub fn cadre_format(format: Option<&str>, forme: &str) -> String {
     let Some(format) = format.map(str::trim).filter(|f| !f.is_empty()) else {
         return String::new();
     };
@@ -372,7 +470,7 @@ pub fn cadre_format(format: Option<&str>) -> String {
     let [largeur, hauteur] = nombres.as_slice() else {
         return String::new();
     };
-    let (forme, conseil) = if (largeur - hauteur).abs() < f64::EPSILON {
+    let (orientation, conseil) = if (largeur - hauteur).abs() < f64::EPSILON {
         ("square", "centered, balanced compositions work best")
     } else if largeur > hauteur {
         (
@@ -385,9 +483,17 @@ pub fn cadre_format(format: Option<&str>) -> String {
             "stack the scene vertically, favour a tall framing of the subject",
         )
     };
-    format!(
-        "Output frame chosen by the user: {format}, {forme}. Compose the prompt for this frame ({conseil}). It is fixed: never ask about it. If a prompt already exists and the frame differs from the one it was written for, adapt its framing and composition to the new frame and give the whole new prompt."
-    )
+    match forme {
+        "sequence" => format!(
+            "Output frame of the video, chosen by the user: {format}, {orientation}. Keep it in mind for the settings and the staging you imagine ({conseil}); never ask about it."
+        ),
+        "retouche" => format!(
+            "Output frame chosen by the user: {format}, {orientation}. The attached picture is cropped around its centre to this frame before the edit, so only what stays inside the frame can be edited: write the instruction for that framing, and never ask about the frame. If an instruction already exists and the frame changed, adapt it and give the whole new instruction."
+        ),
+        _ => format!(
+            "Output frame chosen by the user: {format}, {orientation}. Compose the prompt for this frame ({conseil}). It is fixed: never ask about it. If a prompt already exists and the frame differs from the one it was written for, adapt its framing and composition to the new frame and give the whole new prompt."
+        ),
+    }
 }
 
 /// Les rubriques que le modèle cible n'a pas à se faire demander (`profil_prompt.rubriques_ignorees` de sa fiche).
@@ -400,12 +506,22 @@ fn rubriques_ignorees(wf: Option<&workflows::Workflow>) -> Vec<String> {
         .collect()
 }
 
+/// L'atelier d'une demande (absent : l'image).
+fn forme_de(d: &DemandeConversation) -> &str {
+    if d.forme.is_empty() {
+        "image"
+    } else {
+        d.forme.as_str()
+    }
+}
+
 fn verifier_demande(d: &DemandeConversation) -> Result<(), String> {
-    if d.forme != "image" {
-        return Err(format!(
-            "Atelier pas encore porté pour la conversation : {}",
-            d.forme
-        ));
+    let forme = forme_de(d);
+    if !FORMES.contains(&forme) {
+        return Err("Atelier inconnu : image, retouche, clip, séquence ou plan".to_owned());
+    }
+    if forme == "plan" && d.sequence.as_ref().and_then(|s| s.plan).is_none() {
+        return Err("Quel plan de la séquence ?".to_owned());
     }
     let derniere_de_l_utilisateur = d.echanges.last().is_some_and(|e| e.role == "user");
     let valides = d.echanges.iter().all(|e| {
@@ -425,7 +541,8 @@ fn verifier_demande(d: &DemandeConversation) -> Result<(), String> {
 /// Un tour de conversation.
 ///
 /// # Errors
-/// Demande invalide, LLM absent, filtre AS-18, réponse illisible ou refus, ou llama-server qui échoue.
+/// Demande invalide, séquence illisible, LLM absent, filtre AS-18, réponse illisible ou refus, ou llama-server qui
+/// échoue.
 #[allow(clippy::too_many_lines)] // le tour de la v2, gardé d'un tenant pour se relire à côté d'elle
 pub fn tour(
     contexte: &Contexte,
@@ -438,6 +555,50 @@ pub fn tour(
     {
         return Err(format!("GGUF absent de modeles/llm : {l}"));
     }
+    let forme = forme_de(d);
+    let mut duree = d.duree.unwrap_or(5);
+    let mut deja = d.contexte.trim().to_owned();
+    // 💬 d'un plan : la conversation sait ce que sait le découpage, ce plan seul à écrire.
+    let plan = match (forme, &d.sequence) {
+        ("plan", Some(s)) => {
+            let prep = decoupage::preparer(contexte, s)?;
+            let k = s.plan.unwrap_or_default();
+            deja = format!("{}\nCharacter rule: {}", prep.demande, prep.regle_personnage);
+            duree = prep.plans.get(k).map_or(duree, |p| p.duree);
+            Some((k, prep))
+        }
+        _ => None,
+    };
+    let workflow = d
+        .workflow
+        .clone()
+        .filter(|w| !w.is_empty())
+        .or_else(|| plan.as_ref().and_then(|(_, p)| p.workflow().map(str::to_owned)))
+        // Le fil d'une séquence : le modèle vidéo du Montage, qui la tournera.
+        .or_else(|| {
+            (forme == "sequence")
+                .then(|| crate::montage::workflow_de(contexte, "texte_vers_video"))
+                .filter(|w| !w.is_empty())
+        });
+
+    // AS-18 : ce qui est déjà fixé, les messages de l'utilisateur et les textes d'origine des images (un rush né d'un
+    // mineur le reste) ; pour un plan, tout ce que lit le découpage.
+    let ids: Vec<String> = d
+        .images
+        .iter()
+        .filter(|i| !i.is_empty())
+        .take(workflows::REFERENCES_MAX)
+        .cloned()
+        .collect();
+    // Le rôle des images : celui donné, sinon celui de l'atelier (l'image à retoucher, le rush à animer) ; aucun
+    // sans image.
+    let role = match (d.role.as_deref().filter(|r| !r.is_empty()), forme) {
+        (Some(r), _) => r,
+        (None, "retouche") if !ids.is_empty() => "retouche",
+        (None, "clip") if !ids.is_empty() => "animer",
+        (None, _) => "",
+    };
+    let origines = creations::textes_origine(&contexte.data, &ids)?;
     let textes: Vec<&str> = d
         .echanges
         .iter()
@@ -445,18 +606,26 @@ pub fn tour(
         .map(|e| e.content.as_str())
         .collect();
     let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
-    let mut entrees = vec![d.contexte.as_str()];
+    let mut entrees = vec![deja.as_str()];
+    entrees.extend(origines.iter().map(String::as_str));
+    if let Some((_, prep)) = &plan {
+        entrees.extend(prep.entrees.iter().map(String::as_str));
+    }
     entrees.extend(textes.iter().copied());
     filtre.verifier(&entrees).map_err(|e| e.to_string())?;
+    let vues = ids
+        .iter()
+        .map(|id| crate::scenario::vue(contexte, id))
+        .collect::<Result<Vec<_>, String>>()?;
 
-    let wf = d.workflow.as_deref().map(workflows::obtenir).transpose()?;
-    let reglage = d.workflow.as_deref().and_then(|w| {
+    let wf = workflow.as_deref().map(workflows::obtenir).transpose()?;
+    let reglage = workflow.as_deref().and_then(|w| {
         reglages::section(&contexte.dossier, "workflows")
             .and_then(|s| s.get(w).and_then(Value::as_object).cloned())
     });
     // Un généraliste : un spécialiste ne tient pas de conversation (comme en v2).
     let demande_nom = d.llm.clone().filter(|l| !l.is_empty()).or_else(|| {
-        d.workflow
+        workflow
             .as_deref()
             .map(|w| llm::de_workflow(&contexte.dossier, &contexte.modeles, w))
     });
@@ -473,46 +642,83 @@ pub fn tour(
         .as_ref()
         .and_then(|w| w.fiche.get("nom").and_then(Value::as_str))
         .unwrap_or("the target model");
-    let mots = prompt::mots_max_de(wf.as_ref(), reglage.as_ref());
-    let systeme_base = CONSIGNE
-        .replace("{cible}", &format!("{nom_cible}, a still image"))
-        .replace(
-            "{contexte}",
-            if d.contexte.trim().is_empty() {
-                "nothing yet"
-            } else {
-                d.contexte.trim()
-            },
-        )
-        .replace("{sujets_video}", "")
-        .replace("{essentiels}", ESSENTIELS_IMAGE)
-        .replace("{langue_prompt}", "in English")
+    let (vise, sujets_video, langue_prompt) = cible(forme, nom_cible, duree);
+    let mut mots = if matches!(forme, "image" | "clip" | "plan") {
+        prompt::mots_max_de(wf.as_ref(), reglage.as_ref())
+    } else {
+        None
+    };
+    if matches!(forme, "clip" | "plan") {
+        mots = Some(decoupage::mots_pour_duree(
+            mots.unwrap_or(prompt::MOTS_MAX_VIDEO),
+            duree,
+        ));
+    }
+    let mut systeme = CONSIGNE
+        .replace("{cible}", &vise)
+        .replace("{contexte}", if deja.is_empty() { "nothing yet" } else { &deja })
+        .replace("{sujets_video}", sujets_video)
+        .replace("{essentiels}", essentiels(forme))
+        .replace("{langue_prompt}", langue_prompt)
         .replace(
             "{longueur}",
             &mots.map(|m| format!("At most {m} words.")).unwrap_or_default(),
         )
         .replace("{genre}", GENRE)
         .replace("{adultes}", ADULTES);
-    let mut systeme = systeme_base;
-    let cadre = cadre_format(d.format.as_deref());
-    if !cadre.is_empty() {
-        systeme.push_str("\n\n");
-        systeme.push_str(&cadre);
+    let mut ajouter = |bloc: &str| {
+        if !bloc.is_empty() {
+            systeme.push_str("\n\n");
+            systeme.push_str(bloc);
+        }
+    };
+    let noms = prompt::nom_image(wf.as_ref());
+    if !vues.is_empty()
+        && let Some(note) = note_images(role)
+    {
+        ajouter(&prompt::avec_noms_images(note, noms.as_deref()));
     }
-    let ignorees = rubriques_ignorees(wf.as_ref());
-    let rubriques = rubriques_guide(d.sujet.as_deref(), &ignorees);
-    let guide = catalogue_guide(&rubriques, lancement.contexte < CONTEXTE_CATALOGUE);
-    if !guide.is_empty() {
-        systeme.push_str("\n\n");
-        systeme.push_str(&guide);
-    }
-    systeme.push_str("\n\n");
-    systeme.push_str(&prompt::bloc_usage(
-        "reecriture",
-        &prompt::sections_prompt(wf.as_ref()),
+    ajouter(&cadre_format(d.format.as_deref(), forme));
+    let video = forme == "clip";
+    let rubriques = if matches!(forme, "image" | "clip") {
+        rubriques_guide(
+            d.sujet.as_deref(),
+            d.sans_sujet,
+            video,
+            &rubriques_ignorees(wf.as_ref()),
+        )
+    } else {
+        Vec::new()
+    };
+    ajouter(&catalogue_guide(
+        &rubriques,
+        lancement.contexte < CONTEXTE_CATALOGUE,
     ));
-    systeme.push_str("\n\n");
-    systeme.push_str(CLAUSE_MINEURS);
+    // Les règles d'écriture. Image, Clip, Retouche : celles de l'usage, avec celles du modèle cible rangées dedans.
+    // Un plan garde celles de la fiche seule (le découpage a les siennes) ; l'histoire d'une séquence n'est pas un
+    // prompt : elle n'en a pas.
+    let en_champs = video && prompt::champs_video(wf.as_ref());
+    let regles = prompt::sections_prompt(wf.as_ref());
+    let usage = match forme {
+        "image" if !vues.is_empty() && role == "inspirer" => Some("references"),
+        "image" => Some("reecriture"),
+        "clip" => Some("video"),
+        "retouche" => Some("retouche"),
+        _ => None,
+    };
+    match usage {
+        Some("references") => ajouter(&prompt::avec_noms_images(
+            &prompt::bloc_usage("references", &regles, false),
+            noms.as_deref(),
+        )),
+        Some(u) => ajouter(&prompt::bloc_usage(u, &regles, en_champs)),
+        None if forme == "plan" => ajouter(&prompt::bloc_modele(&regles)),
+        None => {}
+    }
+    if en_champs {
+        ajouter(decoupage::FORMAT_CHAMPS);
+    }
+    ajouter(CLAUSE_MINEURS);
     let noms_rubriques: Vec<String> = rubriques.into_iter().map(|(n, _, _)| n).collect();
 
     let ecrire = d
@@ -528,14 +734,24 @@ pub fn tour(
         } else {
             0
         };
-    let budget = (lancement.contexte as usize).saturating_sub(tokens_estimes(&systeme) + reserve);
+    let budget = (lancement.contexte as usize)
+        .saturating_sub(tokens_estimes(&systeme) + reserve + vues.len() * TOKENS_PAR_IMAGE);
     let conversation = elaguer(&d.echanges, budget);
+    // Les images de référence vont avec le premier message : le LLM les voit, ou lit leur fiche.
+    let usage_vue = match role {
+        "animer" | "variation" | "retouche" => role,
+        _ => "references",
+    };
+    let voit = lancement.vision.is_some();
     let mut messages: Vec<Value> = vec![json!({"role": "system", "content": systeme})];
-    messages.extend(
-        conversation
-            .iter()
-            .map(|e| json!({"role": e.role, "content": e.content})),
-    );
+    messages.extend(conversation.iter().enumerate().map(|(k, e)| {
+        let contenu = if k == 0 {
+            prompt::montrer(&e.content, &vues, usage_vue, voit, noms.as_deref())
+        } else {
+            json!(e.content)
+        };
+        json!({"role": e.role, "content": contenu})
+    }));
 
     let debut = Instant::now();
     let mut lu = None;
@@ -603,8 +819,30 @@ pub fn tour(
         message,
         fiche,
         questions,
-        prompt: ecrit,
+        prompt: mut ecrit,
     } = lu.ok_or_else(|| "Réponse du LLM illisible".to_owned())?;
+    // Les répliques dans la balise <d> de H3, et un clip en trois champs.
+    if matches!(forme, "clip" | "plan") && prompt::dialogue_en_balise(wf.as_ref()) {
+        ecrit = ecrit.map(|p| decoupage::vers_balises(&p));
+    }
+    if en_champs {
+        ecrit = ecrit.map(|p| prompt::mettre_en_champs(&p, role == "animer"));
+    }
+    let mut alertes = Vec::new();
+    // Un plan : les garde-fous du découpage (réplique du plan à son moment, rien d'inventé).
+    if let Some((k, prep)) = &plan
+        && let Some(p) = prep.plans.get(*k)
+        && let Some(texte) = ecrit.take()
+    {
+        let (fini, alertes_plan) =
+            decoupage::finir_plan(k + 1, p, &texte, &prep.personnage, &prep.source, false);
+        ecrit = Some(fini);
+        alertes = alertes_plan;
+    }
+    // Comme ✨ Écrire le prompt : les heures de coupe tombent-elles dans le clip ?
+    if en_champs && let Some(p) = &ecrit {
+        alertes.extend(prompt::controler_coupes(p, duree));
+    }
     let mut controles = entrees.clone();
     controles.extend(fiche.iter().map(|r| r.valeur.as_str()));
     controles.push(ecrit.as_deref().unwrap_or_default());
@@ -621,6 +859,7 @@ pub fn tour(
         questions,
         prompt: ecrit,
         brut,
+        alertes,
         modele: lancement
             .modele
             .file_name()
@@ -776,8 +1015,14 @@ mod tests {
         };
         assert!(tour(&ctx, &mut faux, &demande(&[("assistant", "x")])).is_err());
         let mut d = demande(&[("user", "x")]);
-        d.forme = "clip".into();
+        d.forme = "dessin".into();
         assert!(tour(&ctx, &mut faux, &d).is_err());
+        let mut d = demande(&[("user", "x")]);
+        d.forme = "plan".into();
+        assert_eq!(
+            tour(&ctx, &mut faux, &d).unwrap_err(),
+            "Quel plan de la séquence ?"
+        );
         let mut d = demande(&[("user", "x")]);
         d.format = Some("5:4".into());
         assert!(tour(&ctx, &mut faux, &d).is_err());
@@ -807,7 +1052,106 @@ mod tests {
         assert_eq!(court[0], echanges[0]);
         assert_eq!(court[1].role, "assistant");
         assert!(court.len() < 8);
-        assert!(cadre_format(Some("1:1 (Square)")).contains("square"));
-        assert_eq!(cadre_format(None), "");
+        assert!(cadre_format(Some("1:1 (Square)"), "image").contains("square"));
+        assert!(cadre_format(Some("9:16 (Portrait)"), "retouche").contains("cropped around its centre"));
+        assert!(cadre_format(Some("16:9 (Widescreen)"), "sequence").contains("staging"));
+        assert_eq!(cadre_format(None, "image"), "");
+    }
+    fn systeme(faux: &Faux) -> String {
+        faux.demandes[0].messages[0]["content"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[test]
+    fn retouche_et_clip() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        // Retouche : une consigne d'édition, les règles de la retouche, le cadre recadré.
+        let mut faux = Faux {
+            reponses: vec![r#"{"message": "Ok.", "fiche": {"Retouche": "ciel rouge"}, "questions": [], "prompt": "Make the sky red. Keep everything else unchanged."}"#.to_owned()],
+            demandes: Vec::new(),
+        };
+        let mut d = demande(&[("user", "ciel rouge")]);
+        d.forme = "retouche".into();
+        d.format = Some("1:1 (Square)".into());
+        let t = tour(&ctx, &mut faux, &d).unwrap();
+        assert!(t.prompt.unwrap().starts_with("Make the sky red"));
+        let sys = systeme(&faux);
+        assert!(sys.contains("instruction-based image editing model") && sys.contains("Retouche, À garder"));
+        assert!(sys.contains("cropped around its centre") && !sys.contains("Guide topics"));
+        // Clip pour H3 : la réplique passe dans la balise <d>, le prompt en trois champs, la longueur selon la durée.
+        let mut faux = Faux {
+            reponses: vec![r#"{"message": "Voilà.", "fiche": {}, "questions": [], "prompt": "A fox looks up and says « Bonjour ». Wind in the trees."}"#.to_owned()],
+            demandes: Vec::new(),
+        };
+        let mut d = demande(&[("user", ECRIRE)]);
+        d.forme = "clip".into();
+        d.workflow = Some("minimax_h3_t2v".into());
+        d.duree = Some(8);
+        let t = tour(&ctx, &mut faux, &d).unwrap();
+        let p = t.prompt.unwrap();
+        assert!(
+            p.starts_with("integrated_multimodal_description:") && p.contains("<d>"),
+            "{p}"
+        );
+        let sys = systeme(&faux);
+        assert!(
+            sys.contains("an 8-second video clip with sound")
+                || sys.contains("a 8-second video clip with sound")
+        );
+        assert!(sys.contains("Caméra, Son, Réplique") && sys.contains("overall_soundscape"));
+    }
+
+    #[test]
+    fn l_histoire_et_un_plan() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        // Le fil de l'histoire : en français, sans règles de prompt.
+        let mut faux = Faux {
+            reponses: vec![
+                r#"{"message": "Ok.", "fiche": {"Histoire": "un renard"}, "questions": [], "prompt": null}"#
+                    .to_owned(),
+            ],
+            demandes: Vec::new(),
+        };
+        let mut d = demande(&[("user", "un renard dans la neige")]);
+        d.forme = "sequence".into();
+        tour(&ctx, &mut faux, &d).unwrap();
+        let sys = systeme(&faux);
+        assert!(
+            sys.contains("the STORY of a short video sequence") && sys.contains("in French: the whole story")
+        );
+        assert!(sys.contains("staging") && !sys.contains("Guide topics"));
+        // Un plan : ce que sait le découpage, et ses garde-fous sur le prompt écrit.
+        let mut faux = Faux {
+            reponses: vec![
+                r#"{"message": "Voilà.", "fiche": {}, "questions": [], "prompt": "Cut: the fox runs away."}"#
+                    .to_owned(),
+            ],
+            demandes: Vec::new(),
+        };
+        let sequence: DemandeDecoupage = serde_json::from_value(json!({
+            "synopsis": "Un renard fuit la tempête.",
+            "sujet": "personnage",
+            "plans": [
+                {"enchainement": "texte", "duree": 5, "note": "le renard dort"},
+                {"enchainement": "couper", "duree": 8, "note": "le renard s'enfuit"},
+            ],
+            "plan": 1,
+        }))
+        .unwrap();
+        let mut d = demande(&[("user", ECRIRE)]);
+        d.forme = "plan".into();
+        d.workflow = None;
+        d.sequence = Some(sequence);
+        let t = tour(&ctx, &mut faux, &d).unwrap();
+        let p = t.prompt.unwrap();
+        assert!(!p.to_lowercase().starts_with("cut"), "{p}");
+        assert!(p.contains("fox runs away"));
+        let sys = systeme(&faux);
+        assert!(sys.contains("ONE shot of a video sequence: a 8-second clip"));
+        assert!(sys.contains("Shots:") && sys.contains("Character rule:"));
     }
 }

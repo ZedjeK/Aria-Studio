@@ -1,6 +1,6 @@
 // « 💬 M'aider à préciser » : la conversation gardée par l'interface, et ce qui en repart vers le LLM.
 
-import type { EchangeConversation, TourConversation } from './api';
+import type { EchangeConversation, FormeConversation, TourConversation } from './api';
 
 /** Le message qui demande d'écrire le prompt (comme le cœur). */
 export const ECRIRE = 'ÉCRIS LE PROMPT';
@@ -52,10 +52,21 @@ export function conversationGardee(v: unknown): MessageConversation[] {
     if (m.role === 'user' && 'texte' in m && typeof m.texte === 'string') {
       sortie.push({ role: 'user', texte: m.texte });
     } else if (m.role === 'assistant' && 'tour' in m && estTour(m.tour)) {
-      sortie.push({ role: 'assistant', tour: m.tour });
+      // Un tour gardé avant les alertes n'en a pas.
+      const brutes: unknown = 'alertes' in m.tour ? m.tour.alertes : undefined;
+      const lues = Array.isArray(brutes) ? brutes.filter((a: unknown): a is string => typeof a === 'string') : [];
+      sortie.push({ role: 'assistant', tour: { ...m.tour, alertes: lues } });
     } else {
       return [];
     }
   }
   return sortie;
+}
+
+/** Où la conversation d'un atelier est gardée : une par atelier, une par plan d'une séquence (l'image garde la clé
+ * d'avant les autres ateliers). */
+export function cleConversation(forme: FormeConversation, plan: number | null = null): string {
+  if (forme === 'image') return 'aria-scenario-conversation';
+  if (forme === 'plan') return `aria-scenario-conversation-plan-${plan ?? 0}`;
+  return `aria-scenario-conversation-${forme}`;
 }

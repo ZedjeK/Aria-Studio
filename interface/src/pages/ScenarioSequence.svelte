@@ -2,7 +2,8 @@
   Scénario, atelier Séquence, comme en v2 (web/decoupage.js). Le fil de l'histoire (facultatif), puis les plans, le
   cœur de l'atelier : chacun a son type, sa durée, « ce qui se passe », sa réplique (mot pour mot, au début, pendant
   l'action ou à la fin, voix off possible) et son prompt anglais, modifiable. ✨ d'un plan l'écrit seul (le LLM connaît
-  le fil et les plans voisins), ✨ Tout écrire écrit tous les plans d'un coup. Le personnage et le décor viennent des
+  le fil et les plans voisins), 💬 Préciser l'écrit en conversation sous ce plan, ✨ Tout écrire écrit tous les plans
+  d'un coup. 💬 M'aider à préciser l'histoire écrit le fil en conversation. Le personnage et le décor viennent des
   compléments. Puis la séquence part au Montage (créée, ou mise à jour), prête à tourner. Le brouillon est gardé.
 -->
 <script lang="ts">
@@ -51,10 +52,13 @@
   import Panneau from '../lib/composants/Panneau.svelte';
   import VignetteCreation from '../lib/composants/VignetteCreation.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
+  import ScenarioConversation from './ScenarioConversation.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
     sujet: string;
+    /** Ce que les compléments imposent déjà : la conversation de l'histoire en part. */
+    complements: string;
     /** Les choix des compléments (sans le Plan d'un clip seul) : le personnage et le décor en sont tirés. */
     choix: ChoixListes;
     age: number | null;
@@ -68,7 +72,18 @@
     versMontage: (id: string) => void;
   }
 
-  let { signaler, sujet, choix, age, llms, llmChoisi = $bindable(), recu, recuLu, versMontage }: Props = $props();
+  let {
+    signaler,
+    sujet,
+    complements,
+    choix,
+    age,
+    llms,
+    llmChoisi = $bindable(),
+    recu,
+    recuLu,
+    versMontage,
+  }: Props = $props();
 
   const BROUILLON = 'aria-decoupage';
 
@@ -99,6 +114,8 @@
   /** Le rush en cours de choix : la référence du personnage, ou l'arrivée d'une transition. */
   let choixRush = $state<'reference' | number | null>(null);
   let rushChoisi = $state<string[]>([]);
+  /** La conversation ouverte : celle du fil de l'histoire, ou celle d'un plan. */
+  let aide = $state<'histoire' | number | null>(null);
 
   const dureeTotale = $derived(e.plans.reduce((t, p) => t + p.duree, 0));
   const occupe = $derived(ecriture !== null || envoi);
@@ -334,6 +351,33 @@
       placeholder="Une pilote rentre au hangar après une mission ratée ; elle dit « Plus jamais ça »."
     ></textarea>
   </label>
+  <div class="actions">
+    <Bouton
+      genre="discret"
+      petit
+      desactive={llms.length === 0}
+      onclick={() => (aide = aide === 'histoire' ? null : 'histoire')}
+    >
+      {aide === 'histoire' ? "Fermer l'aide" : "💬 M'aider à préciser l'histoire"}
+    </Bouton>
+  </div>
+  {#if aide === 'histoire'}
+    <ScenarioConversation
+      forme="sequence"
+      workflow={null}
+      llm={llmChoisi || null}
+      contexte={complements}
+      {sujet}
+      format={formatCompte(e.plans) ? e.format : null}
+      disponible={llms.length > 0}
+      {signaler}
+      libelleUtiliser="Utiliser cette histoire"
+      utiliser={(p) => {
+        e.synopsis = p;
+        signaler("Histoire posée dans le fil : ✨ Tout écrire la répartit dans les plans.");
+      }}
+    />
+  {/if}
   <div class="ligne">
     <div class="emplacement">
       <span class="etiquette">Personnage de référence</span>
@@ -426,6 +470,9 @@
         <Bouton petit desactive={occupe || llms.length === 0} onclick={() => void ecrire(k)}>
           {ecriture === k ? 'Le LLM écrit…' : '✨ Écrire'}
         </Bouton>
+        <Bouton genre="discret" petit desactive={llms.length === 0} onclick={() => (aide = aide === k ? null : k)}>
+          {aide === k ? 'Fermer' : '💬 Préciser'}
+        </Bouton>
       </div>
       <div class="corps">
         {#if p.enchainement === 'transition'}
@@ -476,9 +523,28 @@
         <textarea
           rows="3"
           bind:value={p.prompt}
-          placeholder="✨ l'écrit ici ; tu peux le retoucher, ou l'écrire toi-même."
+          placeholder="✨ ou 💬 l'écrivent ici ; tu peux le retoucher, ou l'écrire toi-même."
         ></textarea>
       </label>
+      {#if aide === k}
+        <ScenarioConversation
+          forme="plan"
+          workflow={null}
+          llm={llmChoisi || null}
+          contexte=""
+          {sujet}
+          sequence={demande(k)}
+          disponible={llms.length > 0}
+          {signaler}
+          libelleUtiliser="Utiliser pour ce plan"
+          utiliser={(texte, alertes) => {
+            const cible = e.plans[k];
+            if (cible) cible.prompt = texte;
+            e.alertes = majAlertes(e.alertes, alertes, k);
+            signaler(`Plan ${k + 1} : prompt de la conversation posé.`, alertes.length > 0);
+          }}
+        />
+      {/if}
     </li>
   {/each}
 </ol>

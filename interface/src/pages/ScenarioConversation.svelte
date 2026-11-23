@@ -1,14 +1,23 @@
 <!--
   Scénario → « 💬 M'aider à préciser », comme en v2 : le prompt s'écrit en conversation. Le LLM pose les questions
   essentielles avec des réponses à cliquer, tient une fiche de ce qu'il a compris, puis écrit le prompt et l'ajuste.
-  La conversation est gardée dans ce navigateur ; « Utiliser ce prompt » le pose dans le prompt final.
+  Tous les ateliers : image, retouche (le LLM voit l'image), clip (le rush à animer, la durée), le fil d'une séquence,
+  et un plan d'une séquence (ce que sait le découpage). Chaque conversation est gardée dans ce navigateur ;
+  « Utiliser ce prompt » le pose où il va.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { conversationScenario, estAnnulation, messageErreur } from '../lib/api';
+  import {
+    conversationScenario,
+    estAnnulation,
+    messageErreur,
+    type DemandeDecoupage,
+    type FormeConversation,
+  } from '../lib/api';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import {
     ECRIRE,
+    cleConversation,
     conversationGardee,
     echanges,
     reponse,
@@ -25,13 +34,41 @@
     /** Le LLM est-il là ? */
     disponible: boolean;
     signaler: (texte: string, erreur?: boolean) => void;
-    /** Pose ce prompt dans le prompt final. */
-    utiliser: (prompt: string) => void;
+    /** Pose ce prompt là où il va (le prompt final, le fil de l'histoire, le prompt du plan), avec ses alertes. */
+    utiliser: (prompt: string, alertes: string[]) => void;
+    /** L'atelier (absent : l'image). */
+    forme?: FormeConversation;
+    /** L'image à retoucher, le rush à animer, ou les images de référence. */
+    images?: string[];
+    role?: string | null;
+    duree?: number | null;
+    format?: string | null;
+    sansSujet?: boolean;
+    /** 💬 d'un plan : la demande du découpage, avec le numéro du plan. */
+    sequence?: DemandeDecoupage | null;
+    /** Le libellé du bouton qui pose le prompt. */
+    libelleUtiliser?: string;
   }
 
-  let { workflow, llm, contexte, sujet, disponible, signaler, utiliser }: Props = $props();
+  let {
+    workflow,
+    llm,
+    contexte,
+    sujet,
+    disponible,
+    signaler,
+    utiliser,
+    forme = 'image',
+    images = [],
+    role = null,
+    duree = null,
+    format = null,
+    sansSujet = false,
+    sequence = null,
+    libelleUtiliser = 'Utiliser ce prompt',
+  }: Props = $props();
 
-  const CLE = 'aria-scenario-conversation';
+  const CLE = $derived(cleConversation(forme, sequence?.plan ?? null));
 
   let messages = $state<MessageConversation[]>([]);
   let saisie = $state('');
@@ -55,12 +92,17 @@
     try {
       const tour = await conversationScenario({
         echanges: echanges(messages),
-        forme: 'image',
+        forme,
         workflow,
         contexte,
         llm,
-        format: null,
+        format,
         sujet,
+        images,
+        role,
+        duree,
+        sansSujet,
+        sequence,
       });
       messages = [...messages, { role: 'assistant', tour }];
       garder();
@@ -121,8 +163,12 @@
         {/if}
         {#if m.tour.prompt}
           {@const ecrit = m.tour.prompt}
+          {@const alertes = m.tour.alertes}
           <blockquote>{ecrit}</blockquote>
-          <Bouton petit onclick={() => utiliser(ecrit)}>Utiliser ce prompt</Bouton>
+          {#each alertes as a (a)}
+            <p class="alerte">⚠ {a}</p>
+          {/each}
+          <Bouton petit onclick={() => utiliser(ecrit, alertes)}>{libelleUtiliser}</Bouton>
         {/if}
         <span class="discret">{m.tour.modele} · {m.tour.dureeS} s</span>
       </div>
@@ -219,5 +265,11 @@
 
   textarea {
     width: 100%;
+  }
+
+  .alerte {
+    margin: 4px 0;
+    color: var(--orange);
+    font-size: 13px;
   }
 </style>
