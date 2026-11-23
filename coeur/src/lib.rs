@@ -37,6 +37,7 @@ pub mod modeles;
 pub mod montage;
 pub mod moteurs;
 pub mod orchestrateur;
+pub mod paliers;
 pub mod personnages;
 pub mod plateau;
 pub mod presence;
