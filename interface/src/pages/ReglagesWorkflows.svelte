@@ -1,7 +1,8 @@
 <!--
   Réglages → Modèles image et vidéo, comme en v2 : les réglages de chaque workflow (CFG, sampler, scheduler, shift,
   mégapixels, format, longueur du prompt, checkpoint par défaut), puis ceux de chaque checkpoint de sa famille (LoRA du
-  workflow gardée ou non, steps). Seuls les écarts à l'origine sont enregistrés.
+  workflow gardée ou non, steps). Seuls les écarts à l'origine sont enregistrés. « Recommander » montre ce que la fiche
+  du modèle recommande, avant → après, et n'applique que ce qui est confirmé.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -10,10 +11,15 @@
     messageErreur,
     modifierReglagesVariante,
     modifierReglagesWorkflow,
+    recommanderWorkflow,
     type EtatReglages,
     type EtatWorkflow,
+    type Proposition,
+    type Recommandations,
   } from '../lib/api';
+  import { ecarts, parCible } from '../lib/optimiseur';
   import { changements, type Saisies } from '../lib/reglages';
+  import ApercuPropositions from '../lib/composants/ApercuPropositions.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import ChampReglage from '../lib/composants/ChampReglage.svelte';
@@ -32,6 +38,36 @@
 
   const workflow = $derived(etat?.workflows.find((w) => w.id === id));
   const aEnregistrer = $derived(workflow !== undefined && Object.keys(changements(workflow.params, saisies)).length > 0);
+  /** Les recommandations de la fiche du workflow affiché, le temps de l'aperçu. */
+  let recommandations = $state<Recommandations | null>(null);
+  const apercu = $derived(
+    recommandations && workflow ? ecarts(recommandations.propositions, workflow.params, saisies) : null,
+  );
+
+  async function recommander() {
+    if (!workflow) return;
+    try {
+      recommandations = await recommanderWorkflow(workflow.id);
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
+  async function appliquerRecommandations(choisies: Proposition[]) {
+    if (!workflow) return;
+    const groupe = parCible(choisies)[0];
+    if (!groupe) return;
+    try {
+      remplacer(await modifierReglagesWorkflow(workflow.id, groupe.changements));
+      const restantes: Saisies = { ...saisies };
+      for (const cle of Object.keys(groupe.changements)) delete restantes[cle];
+      saisies = restantes;
+      recommandations = null;
+      signaler(`${choisies.length} réglage${choisies.length > 1 ? 's' : ''} de ${workflow.nom} appliqué${choisies.length > 1 ? 's' : ''}.`);
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
 
   async function relire() {
     try {
@@ -99,8 +135,28 @@
       </select>
     </label>
     <span class="discret">{workflow.famille} · modeles\{workflow.dossierModeles.replaceAll('/', '\\')}</span>
+    <Bouton onclick={() => void recommander()}>Recommander</Bouton>
     <Bouton genre="principal" desactive={!aEnregistrer} onclick={() => void enregistrer()}>Enregistrer</Bouton>
   </div>
+
+  {#if recommandations && apercu}
+    <ApercuPropositions
+      titre={`Recommandations de la fiche · ${recommandations.nom}`}
+      lignes={apercu.aChanger}
+      alertes={recommandations.alertes}
+      notes={[
+        ...(apercu.dejaBon.length > 0
+          ? [`Déjà aux valeurs recommandées : ${apercu.dejaBon.map((p) => p.libelle).join(', ')}.`]
+          : []),
+        'Les steps se règlent par checkpoint, plus bas : ils ne sont pas proposés ici.',
+      ]}
+      vide={recommandations.sansRecommandation
+        ? 'La fiche de ce modèle ne range pas de recommandation officielle : rien à proposer.'
+        : 'Les réglages suivent déjà ce que recommande la fiche de ce modèle.'}
+      appliquer={appliquerRecommandations}
+      fermer={() => (recommandations = null)}
+    />
+  {/if}
 
   <Panneau titre="Réglages du workflow" accentue>
     {#if workflow.params.length === 0}

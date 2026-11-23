@@ -219,6 +219,8 @@ fn lancer() -> Result<(), String> {
             reglages_fins::modifier_reglages_llm,
             reglages_fins::modifier_reglages_workflow,
             reglages_fins::modifier_reglages_variante,
+            reglages_fins::adapter_a_ma_machine,
+            reglages_fins::recommander_workflow,
             securite::etat_securite,
             securite::essayer_securite,
             securite::ajouter_terme_securite,

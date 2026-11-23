@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use aria_coeur::optimiseur::{self, Adaptation, Recommandations};
 use aria_coeur::plateau::{Contexte, Plateau};
 use aria_coeur::reglages_fins::{self, EtatLlm, EtatReglages, EtatWorkflow};
 use serde_json::{Map, Value};
@@ -62,6 +63,24 @@ pub async fn modifier_reglages_variante(
 ) -> Result<EtatWorkflow, String> {
     hors_interface(&plateau, move |c| {
         reglages_fins::modifier_variante(&c.dossier, &c.modeles, &id, &fichier, &changements)
+    })
+    .await
+}
+
+/// ⚡ Adapter à ma machine (LLM) : des propositions seulement, rien n'est appliqué sans l'accord de l'utilisateur.
+#[tauri::command]
+pub async fn adapter_a_ma_machine(plateau: State<'_, Arc<Plateau>>) -> Result<Adaptation, String> {
+    hors_interface(&plateau, |c| Ok(optimiseur::adapter(&c.lieux()))).await
+}
+
+/// Recommander (modèle d'image ou de vidéo) : ce que sa fiche recommande. Rien n'est appliqué ici.
+#[tauri::command]
+pub async fn recommander_workflow(
+    plateau: State<'_, Arc<Plateau>>,
+    id: String,
+) -> Result<Recommandations, String> {
+    hors_interface(&plateau, move |c| {
+        optimiseur::recommandations_workflow(&c.dossier, &c.modeles, &id)
     })
     .await
 }

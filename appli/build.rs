@@ -75,6 +75,8 @@ fn main() {
         "modifier_reglages_llm",
         "modifier_reglages_workflow",
         "modifier_reglages_variante",
+        "adapter_a_ma_machine",
+        "recommander_workflow",
         "etat_securite",
         "essayer_securite",
         "ajouter_terme_securite",

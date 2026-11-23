@@ -38,6 +38,7 @@ export function nomConsigne(cle: string): string {
   const noms: Record<string, string> = {
     reecriture: 'Réécriture d’une idée',
     retouche: 'Consigne de retouche',
+    precisions: 'Traduction des précisions',
     references: 'Images de référence',
     video: 'Prompt d’un clip',
     decoupage: 'Découpage d’une séquence',

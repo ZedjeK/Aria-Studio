@@ -1,12 +1,24 @@
 <!--
   Réglages → LLM, comme en v2 : les réglages de chaque GGUF installé (températures, échantillonnage par mode, longueur,
   contexte, réflexion, moteur, vision) et ses consignes réécrites. Seuls les écarts à l'origine sont enregistrés ; la
-  clause de protection des mineurs, elle, termine toujours la consigne et ne se modifie pas.
+  clause de protection des mineurs, elle, termine toujours la consigne et ne se modifie pas. « ⚡ Adapter à ma machine »
+  propose, pour tous les LLM installés, les réglages officiels et ceux que la carte graphique demande : avant → après,
+  rien sans confirmation.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { etatReglages, messageErreur, modifierReglagesLlm, type EtatReglages } from '../lib/api';
+  import {
+    adapterAMaMachine,
+    etatReglages,
+    messageErreur,
+    modifierReglagesLlm,
+    type Adaptation,
+    type EtatReglages,
+    type Proposition,
+  } from '../lib/api';
+  import { parCible, texteMateriel } from '../lib/optimiseur';
   import { changements, nomConsigne, type Saisies } from '../lib/reglages';
+  import ApercuPropositions from '../lib/composants/ApercuPropositions.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import ChampReglage from '../lib/composants/ChampReglage.svelte';
@@ -58,6 +70,33 @@
     }
   }
 
+  /** ⚡ Adapter à ma machine : les propositions, le temps de l'aperçu. */
+  let adaptation = $state<Adaptation | null>(null);
+  let analyse = $state(false);
+
+  async function adapter() {
+    analyse = true;
+    try {
+      adaptation = await adapterAMaMachine();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      analyse = false;
+    }
+  }
+
+  async function appliquerAdaptation(choisies: Proposition[]) {
+    try {
+      for (const g of parCible(choisies)) await modifierReglagesLlm(g.cible, g.changements, {});
+      adaptation = null;
+      saisies = {};
+      await relire();
+      signaler(`${choisies.length} réglage${choisies.length > 1 ? 's' : ''} appliqué${choisies.length > 1 ? 's' : ''}.`);
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
   onMount(() => void relire());
 </script>
 
@@ -79,8 +118,28 @@
         {/each}
       </select>
     </label>
+    <Bouton desactive={analyse} onclick={() => void adapter()}>
+      {analyse ? 'Analyse…' : '⚡ Adapter à ma machine'}
+    </Bouton>
     <Bouton genre="principal" desactive={!aEnregistrer} onclick={() => void enregistrer()}>Enregistrer</Bouton>
   </div>
+
+  {#if adaptation}
+    <ApercuPropositions
+      titre="⚡ Adapter à ma machine"
+      entete={texteMateriel(adaptation.materiel)}
+      lignes={adaptation.propositions.map((p) => ({ proposition: p, avant: p.actuel }))}
+      alertes={adaptation.alertes}
+      notes={adaptation.sansRecommandation.length > 0
+        ? [
+            `Sans recommandation officielle rangée (seul le matériel compte) : ${adaptation.sansRecommandation.join(', ')}.`,
+          ]
+        : []}
+      vide="Rien à proposer : tes réglages suivent déjà les recommandations."
+      appliquer={appliquerAdaptation}
+      fermer={() => (adaptation = null)}
+    />
+  {/if}
 
   <Panneau titre="Réglages" accentue>
     <div class="grille">

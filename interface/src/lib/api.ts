@@ -889,6 +889,53 @@ export const modifierReglagesWorkflow = (id: string, changements: Changements): 
 export const modifierReglagesVariante = (id: string, fichier: string, changements: Changements): Promise<EtatWorkflow> =>
   invoke<EtatWorkflow>('modifier_reglages_variante', { id, fichier, changements });
 
+/** Un réglage qui changerait (aria_coeur::optimiseur::Proposition) : rien n'est appliqué sans l'accord de l'utilisateur. */
+export interface Proposition {
+  type: string;
+  /** Le GGUF ou le workflow. */
+  cible: string;
+  nom: string;
+  cle: string;
+  libelle: string;
+  actuel: number | boolean | string | null;
+  propose: number | boolean | string | null;
+  raison: string;
+  source: string | null;
+}
+
+/** La machine, telle que l'onglet Réglages la résume (aria_coeur::optimiseur::Materiel). */
+export interface Materiel {
+  gpu: string;
+  vramTotaleGo: number;
+  vramAutresGo: number;
+  vramLibreGo: number;
+  ramGo: number;
+  coeurs: number | null;
+  threads: number | null;
+}
+
+/** « Recommander » pour un modèle d'image ou de vidéo. */
+export interface Recommandations {
+  workflow: string;
+  nom: string;
+  propositions: Proposition[];
+  alertes: string[];
+  sansRecommandation: boolean;
+}
+
+/** « ⚡ Adapter à ma machine » pour les LLM. */
+export interface Adaptation {
+  materiel: Materiel;
+  propositions: Proposition[];
+  alertes: string[];
+  sansRecommandation: string[];
+}
+
+export const adapterAMaMachine = (): Promise<Adaptation> => invoke<Adaptation>('adapter_a_ma_machine');
+
+export const recommanderWorkflow = (id: string): Promise<Recommandations> =>
+  invoke<Recommandations>('recommander_workflow', { id });
+
 /** Un terme qui a fait bloquer, et d'où il vient (aria_coeur::securite::Terme). */
 export interface TermeBloque {
   terme: string;
