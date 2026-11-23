@@ -508,9 +508,9 @@ pub fn preparer_video(
     duree: u32,
     vue: Option<&Vue>,
 ) -> Result<Ecriture, String> {
-    let demande_nom = llm::nom(&lieux.modeles, modele);
+    let demande_nom = llm::nom(&lieux.dossier, &lieux.modeles, modele);
     let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
-        llm::defaut(&lieux.modeles)
+        llm::defaut(&lieux.dossier, &lieux.modeles)
     } else {
         demande_nom
     };
@@ -823,7 +823,7 @@ pub fn preparer_reecriture(
     reglages_workflow: Option<&ReglagesWorkflow>,
     images: &Images<'_>,
 ) -> Result<Ecriture, String> {
-    let demande_nom = llm::nom(&lieux.modeles, modele);
+    let demande_nom = llm::nom(&lieux.dossier, &lieux.modeles, modele);
     // Le spécialiste ne réécrit qu'une idée seule (ni références, ni vidéo), comme en v2.
     if images.references == 0
         && let Some(s) = specialiste_pour(&demande_nom, "creation", workflow)
@@ -837,7 +837,7 @@ pub fn preparer_reecriture(
         });
     }
     let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
-        llm::defaut(&lieux.modeles)
+        llm::defaut(&lieux.dossier, &lieux.modeles)
     } else {
         demande_nom
     };
@@ -954,7 +954,7 @@ pub fn preparer_traduction(
     workflow: Option<&Workflow>,
     vue: Option<&Vue>,
 ) -> Result<Ecriture, String> {
-    let demande_nom = llm::nom(&lieux.modeles, modele);
+    let demande_nom = llm::nom(&lieux.dossier, &lieux.modeles, modele);
     if let Some(v) = vue
         && let Some(s) = specialiste_pour(&demande_nom, "retouche", workflow)
     {
@@ -967,7 +967,7 @@ pub fn preparer_traduction(
         });
     }
     let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
-        llm::defaut(&lieux.modeles)
+        llm::defaut(&lieux.dossier, &lieux.modeles)
     } else {
         demande_nom
     };
@@ -1019,9 +1019,9 @@ pub fn preparer_precisions(
     precisions: &str,
     modele: Option<&str>,
 ) -> Result<Ecriture, String> {
-    let demande_nom = llm::nom(&lieux.modeles, modele);
+    let demande_nom = llm::nom(&lieux.dossier, &lieux.modeles, modele);
     let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
-        llm::defaut(&lieux.modeles)
+        llm::defaut(&lieux.dossier, &lieux.modeles)
     } else {
         demande_nom
     };

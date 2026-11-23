@@ -758,7 +758,7 @@ fn etat_workflow(
 pub fn etat(dossier: &Dossier, modeles: &Path) -> EtatReglages {
     let (samplers, schedulers, de_comfyui) = options_sampler(dossier);
     let samplers = (samplers, schedulers);
-    let defaut = llm::defaut(modeles);
+    let defaut = llm::defaut(dossier, modeles);
     EtatReglages {
         llm: llm::disponibles(modeles)
             .iter()

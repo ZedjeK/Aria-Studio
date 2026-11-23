@@ -885,12 +885,10 @@ fn par_defaut(contexte: &Contexte, r: &Map<String, Value>) -> Option<String> {
     ws.contains_key(&id).then_some(id)
 }
 
-/// Le LLM par défaut retenu par un Casting LLM (`favoris.llama.modele`, comme en v2), sinon celui de l'appli.
+/// Le LLM par défaut aujourd'hui : celui retenu par un Casting LLM (`favoris.llama.modele`) s'il est installé, sinon
+/// celui de l'appli (comme `modeles.llm_defaut` de la v2).
 fn llm_par_defaut(contexte: &Contexte) -> String {
-    reglages::section(&contexte.dossier, "favoris")
-        .and_then(|f| f.get("llama")?.get("modele")?.as_str().map(str::to_owned))
-        .filter(|m| !m.is_empty())
-        .unwrap_or_else(|| llm::defaut(&contexte.modeles))
+    llm::defaut(&contexte.dossier, &contexte.modeles)
 }
 
 /// Les résultats présentables : noms, textes et mesures masqués tant que le casting est à l'aveugle.

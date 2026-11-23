@@ -371,7 +371,7 @@ pub fn usages(dossier: &Dossier, data: &Path, modeles_dir: &Path) -> Usages {
     let section = reglages::section(dossier, "workflows").unwrap_or_default();
     let favoris = generation(dossier);
     Usages {
-        llm_defaut: llm::defaut(modeles_dir),
+        llm_defaut: llm::defaut(dossier, modeles_dir),
         llm_choix: plateau::llm_au_choix(modeles_dir),
         usages: USAGES
             .iter()
