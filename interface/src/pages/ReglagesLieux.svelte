@@ -46,7 +46,8 @@
   /** Les dossiers de la v2 ne valent plus qu'au lancement en cours. */
   let abandonnee = $state(false);
 
-  const ORIGINES = { aria: 'Enregistrée dans Aria (chiffrée)', variable: "Variable d'environnement" };
+  /** La pastille d'une clé : où elle est lue, ou « aucune ». */
+  const ORIGINES = { aria: 'enregistrée', variable: "variable d'environnement" };
 
   async function relire() {
     try {
@@ -142,15 +143,17 @@
 </ASavoir>
 
 {#if lieux}
-  <Panneau titre="Dossiers">
+  <Panneau titre="Emplacements">
     <table>
       <tbody>
         {#each lieux.dossiers as d (d.cle)}
           <tr>
-            <td>{d.nom}</td>
+            <td><strong>{d.nom}</strong></td>
             <td class="code chemin">{d.chemin}</td>
-            <td class="discret">{lieux.libres[d.cle] != null ? `${octetsLisibles(lieux.libres[d.cle] ?? 0)} libres` : ''}</td>
-            <td><Bouton genre="discret" petit onclick={() => void ouvrir(d.cle)}>Ouvrir</Bouton></td>
+            <td>
+              {#if lieux.libres[d.cle] != null}<span class="puce">{octetsLisibles(lieux.libres[d.cle] ?? 0)} libres</span>{/if}
+            </td>
+            <td><Bouton genre="discret" petit onclick={() => void ouvrir(d.cle)}>📂 Ouvrir</Bouton></td>
           </tr>
         {/each}
       </tbody>
@@ -211,33 +214,33 @@
   </Panneau>
 {/if}
 
-<Panneau titre="Clés des sources de modèles">
+<Panneau titre="🔑 Clés d'accès">
   {#each cles as c (c.source)}
     <div class="cle">
-      <p>
-        <strong>{c.nom}</strong>
-        <span class="discret"> · {c.origine ? ORIGINES[c.origine] : 'aucune clé'}</span>
-      </p>
-      <p class="discret">{c.aide}. Repli : la variable d'environnement {c.variable}.</p>
       <div class="ligne">
+        <strong class="nom-cle">{c.nom}</strong>
         <input
           type="password"
+          class="saisie"
           autocomplete="off"
-          placeholder="Colle la clé ici"
+          placeholder="Colle ta clé"
           aria-label={`Clé ${c.nom}`}
           bind:value={saisies[c.source]}
         />
+        <span class="puce" class:cyan={c.origine !== null}>{c.origine ? ORIGINES[c.origine] : 'aucune'}</span>
         <Bouton petit desactive={(saisies[c.source] ?? '').trim() === ''} onclick={() => void enregistrer(c.source)}>Enregistrer</Bouton>
         <Bouton genre="discret" petit desactive={c.origine === null} onclick={() => void tester(c.source)}>Tester</Bouton>
         {#if c.origine === 'aria'}
-          <Bouton genre="discret" petit onclick={() => (aSupprimer = c)}>Retirer</Bouton>
+          <Bouton genre="discret" petit onclick={() => (aSupprimer = c)}>Supprimer</Bouton>
         {/if}
       </div>
+      <p class="discret">{c.aide}. Repli : la variable d'environnement {c.variable}.</p>
       {#if tests[c.source]}
         <p class:bon={tests[c.source]?.ok} class:ko={!tests[c.source]?.ok}>{tests[c.source]?.message}</p>
       {/if}
     </div>
   {/each}
+  <p class="discret">Les clés sont chiffrées par Windows pour ton compte, dans le dossier de données : elles ne sont jamais renvoyées à l'interface.</p>
 </Panneau>
 
 {#if confirmerAbandon}
@@ -255,14 +258,14 @@
 {/if}
 
 {#if aSupprimer}
-  <Dialogue titre={`Retirer la clé ${aSupprimer.nom} ?`} fermer={() => (aSupprimer = null)}>
+  <Dialogue titre={`Supprimer la clé ${aSupprimer.nom} ?`} fermer={() => (aSupprimer = null)}>
     <p>
       Elle est effacée du dossier de données ; il faudra la recoller pour télécharger depuis {aSupprimer.nom}. Celle que
       la version 2 gardait dans le Gestionnaire d'identification de Windows reste en place.
     </p>
     {#snippet pied()}
       <Bouton genre="discret" onclick={() => (aSupprimer = null)}>Annuler</Bouton>
-      <Bouton genre="principal" onclick={() => void supprimer()}>Retirer</Bouton>
+      <Bouton genre="principal" onclick={() => void supprimer()}>Supprimer</Bouton>
     {/snippet}
   </Dialogue>
 {/if}
@@ -305,6 +308,29 @@
     flex: 1;
     min-width: 260px;
     font-family: var(--police-code);
+  }
+
+  .puce {
+    padding: 1px 8px;
+    border: 1px solid var(--ligne);
+    color: var(--texte-2);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .puce.cyan {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  .nom-cle {
+    min-width: 110px;
+  }
+
+  .saisie {
+    flex: 1;
+    min-width: 220px;
   }
 
   .cle {

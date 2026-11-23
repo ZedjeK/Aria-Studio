@@ -5,7 +5,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { commandeMcp, messageErreur, type DeclarationMcp } from '../lib/api';
-  import { blocMcp } from '../lib/mcp';
+  import { blocMcp, OUTILS_MCP } from '../lib/mcp';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -43,58 +43,67 @@
   mineurs s'applique comme ici. Aria doit être lancée.
 </ASavoir>
 
-<Panneau titre="Claude (MCP)">
-  <p class="discret">
-    Ce que ces outils rendent (prompts, fiches des images) part vers ton compte Claude. Les images restent sur ton PC :
-    Claude ne reçoit que leur chemin.
-  </p>
+<Panneau titre="Brancher Claude Code">
   {#if declaration}
-    <h3>Avec la commande <code>claude</code></h3>
-    <div class="ligne">
-      <code class="commande">{declaration.commande}</code>
-      <Bouton petit onclick={() => void copier(declaration?.commande ?? '')}>Copier</Bouton>
-    </div>
-    <details>
-      <summary>Sans elle : le serveur à ajouter sous « mcpServers »</summary>
-      <p class="discret">
-        Dans <code>~/.claude.json</code> pour tous tes projets, ou dans le <code>.mcp.json</code> d'un projet. Puis relance
-        Claude.
-      </p>
-      <pre class="bloc">{bloc}</pre>
-      <Bouton petit onclick={() => void copier(bloc)}>Copier</Bouton>
-    </details>
+    <p class="discret">Colle cette commande dans un terminal, une seule fois :</p>
+    <pre class="bloc">{declaration.commande}</pre>
+    <div class="actions"><Bouton petit onclick={() => void copier(declaration?.commande ?? '')}>Copier</Bouton></div>
+    <p class="discret autre">
+      Ou, pour un autre client, ce bloc JSON, à ajouter sous « mcpServers » (dans <code>~/.claude.json</code> pour tous tes
+      projets, ou dans le <code>.mcp.json</code> d'un projet), puis relance Claude :
+    </p>
+    <pre class="bloc">{bloc}</pre>
+    <div class="actions"><Bouton petit onclick={() => void copier(bloc)}>Copier</Bouton></div>
   {:else}
     <p class="discret">Lecture…</p>
   {/if}
 </Panneau>
 
+<Panneau titre="Ce que Claude peut faire">
+  <div class="puces">
+    {#each OUTILS_MCP as outil (outil)}<span class="puce">{outil}</span>{/each}
+  </div>
+  <p class="discret">
+    Ce que ces outils rendent (prompts, fiches des images) part vers ton compte Claude. Les images restent sur ton PC :
+    Claude ne reçoit que leur chemin.
+  </p>
+</Panneau>
+
 <style>
-  h3 {
-    margin: 12px 0 6px;
-    font-size: 14px;
-  }
-
-  .ligne {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .commande,
   .bloc {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border: 1px solid var(--ligne);
+    background: var(--fond);
+    font-family: var(--police-code);
+    font-size: 12px;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
   }
 
-  .commande {
-    flex: 1;
-    min-width: 0;
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
   }
 
-  .bloc {
-    margin: 8px 0;
-    padding: 8px;
-    border: 1px solid var(--ligne);
+  .autre {
+    margin-top: 14px;
+  }
+
+  .puces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .puce {
+    padding: 2px 10px;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-family: var(--police-code);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
   }
 </style>
