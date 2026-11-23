@@ -325,6 +325,7 @@ pub fn consigne_d_origine(usage: &str) -> Option<String> {
     match usage {
         "reecriture" => Some(gabarit(&REECRITURE, &[])),
         "retouche" => Some(gabarit(&RETOUCHE, &[])),
+        "precisions" => Some(PRECISIONS.to_owned()),
         "references" => Some(gabarit(&REFERENCES, &[])),
         "video" => Some(gabarit(&VIDEO, &[])),
         "decoupage" => Some(crate::decoupage::CONSIGNE_DECOUPAGE.to_owned()),
@@ -1092,7 +1093,9 @@ pub fn preparer_precisions(
     };
     let lancement = llm::lancement(lieux, Some(&nom))?;
     let regle = llm::valeurs(&lieux.dossier, &nom);
-    let systeme = format!("{PRECISIONS}\n\n{CLAUSE_MINEURS}");
+    // Une consigne réécrite dans Réglages pour ce GGUF garde son texte, comme en v2.
+    let consigne = llm::consigne(&lieux.dossier, &nom, "precisions").unwrap_or_else(|| PRECISIONS.to_owned());
+    let systeme = format!("{}\n\n{CLAUSE_MINEURS}", consigne.trim_end());
     Ok(Ecriture {
         demande: Demande {
             messages: json!([
@@ -1210,6 +1213,7 @@ mod tests {
         let propre = consigne_video(Some("Write a clip."), None, &[], true, 5);
         assert!(propre.starts_with("Write a clip.") && propre.contains("exactly these three fields"));
         assert!(consigne_d_origine("video").is_some_and(|c| c.contains("audio-video generation model")));
+        assert_eq!(consigne_d_origine("precisions").as_deref(), Some(PRECISIONS));
     }
 
     #[test]

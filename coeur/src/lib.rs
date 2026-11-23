@@ -38,6 +38,7 @@ pub mod mises_a_jour;
 pub mod modeles;
 pub mod montage;
 pub mod moteurs;
+pub mod optimiseur;
 pub mod orchestrateur;
 pub mod paliers;
 pub mod personnages;

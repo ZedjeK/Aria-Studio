@@ -70,6 +70,8 @@
     "allow-modifier-reglages-llm",
     "allow-modifier-reglages-workflow",
     "allow-modifier-reglages-variante",
+    "allow-adapter-a-ma-machine",
+    "allow-recommander-workflow",
     "allow-etat-securite",
     "allow-essayer-securite",
     "allow-ajouter-terme-securite",

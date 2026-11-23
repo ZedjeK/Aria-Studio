@@ -23,7 +23,14 @@ use crate::{Dossier, prompt, reglages};
 /// Une consigne réécrite fait au plus 4 000 caractères.
 pub const LONGUEUR_CONSIGNE: usize = 4000;
 /// Les usages dont la consigne se réécrit déjà dans cette version.
-pub const CONSIGNES: [&str; 5] = ["reecriture", "retouche", "references", "video", "decoupage"];
+pub const CONSIGNES: [&str; 6] = [
+    "reecriture",
+    "retouche",
+    "precisions",
+    "references",
+    "video",
+    "decoupage",
+];
 /// Samplers et ordonnanceurs de secours, tant que ComfyUI n'a jamais annoncé les siens.
 pub const SAMPLERS_SECOURS: [&str; 14] = [
     "euler",
@@ -209,7 +216,7 @@ impl Def {
     }
 
     /// La valeur en vigueur, ou celle d'origine si la sienne n'est plus valable (choix disparu, type changé).
-    fn en_vigueur(&self, propre: Option<&Value>) -> Value {
+    pub fn en_vigueur(&self, propre: Option<&Value>) -> Value {
         propre
             .and_then(|v| self.valider(v).ok())
             .unwrap_or_else(|| self.defaut.clone())
@@ -651,6 +658,33 @@ pub struct EtatReglages {
     pub samplers_de_comfyui: bool,
 }
 
+/// Le nom d'un GGUF tel que l'onglet le montre : celui des favoris, sinon le fichier sans `.gguf`.
+pub fn nom_llm(fichier: &str) -> String {
+    llm::FAVORIS.iter().find(|(f, _)| *f == fichier).map_or_else(
+        || fichier.trim_end_matches(".gguf").to_owned(),
+        |(_, n)| (*n).to_owned(),
+    )
+}
+
+/// Les réglages en vigueur d'un GGUF, par clé : les siens s'ils sont valables, sinon ceux d'origine.
+pub fn valeurs_llm(dossier: &Dossier, modeles: &Path, fichier: &str) -> Map<String, Value> {
+    let section = sous_section(reglages::section(dossier, "llm"), fichier).unwrap_or_default();
+    defs_llm(modeles)
+        .iter()
+        .map(|d| (d.cle.clone(), d.en_vigueur(section.get(&d.cle))))
+        .collect()
+}
+
+/// Les réglages en vigueur d'un workflow, par clé : les siens s'ils sont valables, sinon ceux d'origine.
+pub fn valeurs_workflow(dossier: &Dossier, modeles: &Path, wf: &Workflow) -> Map<String, Value> {
+    let (samplers, schedulers, _) = options_sampler(dossier);
+    let section = reglages_workflow(dossier, &wf.id).unwrap_or_default();
+    defs_workflow(wf, modeles, dossier, &(samplers, schedulers))
+        .iter()
+        .map(|d| (d.cle.clone(), d.en_vigueur(section.get(&d.cle))))
+        .collect()
+}
+
 fn etat_llm(dossier: &Dossier, modeles: &Path, fichier: &str) -> EtatLlm {
     let section = sous_section(reglages::section(dossier, "llm"), fichier).unwrap_or_default();
     let (moteur, raison) = llm::moteur(dossier, modeles, fichier);
@@ -689,10 +723,7 @@ fn etat_llm(dossier: &Dossier, modeles: &Path, fichier: &str) -> EtatLlm {
             })
         })
         .collect();
-    let nom = llm::FAVORIS.iter().find(|(f, _)| *f == fichier).map_or_else(
-        || fichier.trim_end_matches(".gguf").to_owned(),
-        |(_, n)| (*n).to_owned(),
-    );
+    let nom = nom_llm(fichier);
     EtatLlm {
         fichier: fichier.to_owned(),
         nom,
