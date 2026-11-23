@@ -1,5 +1,6 @@
 <!--
-  Le journal de l'appli : ses dernières opérations, la plus récente en haut. Lecture seule.
+  Le journal de l'appli : ses dernières opérations, la plus récente en haut. Lecture seule. « Relire » est le bouton orange de
+  la page : le panneau du journal est donc accentué.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -33,7 +34,7 @@
 <p class="sous-titre">Ce que l'appli a fait, dans l'ordre.</p>
 <ASavoir>Les 500 dernières opérations sont gardées dans journal.json, dans le dossier de données.</ASavoir>
 
-<Panneau titre="Dernières opérations">
+<Panneau titre="Dernières opérations" accentue>
   {#if operations === null}
     <p class="discret">Lecture…</p>
   {:else if operations.length === 0}
@@ -65,7 +66,7 @@
       </tbody>
     </table>
   {/if}
-  <div class="actions"><Bouton onclick={() => void relire()}>Relire</Bouton></div>
+  <div class="actions"><Bouton genre="principal" onclick={() => void relire()}>Relire</Bouton></div>
 </Panneau>
 
 <style>
