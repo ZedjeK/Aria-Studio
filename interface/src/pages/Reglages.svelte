@@ -35,6 +35,7 @@
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import ReglagesLieux from './ReglagesLieux.svelte';
   import ReglagesLlm from './ReglagesLlm.svelte';
+  import ReglagesMcp from './ReglagesMcp.svelte';
   import ReglagesSecurite from './ReglagesSecurite.svelte';
   import ReglagesWorkflows from './ReglagesWorkflows.svelte';
 
@@ -52,6 +53,7 @@
     { id: 'workflows', titre: 'Modèles image et vidéo' },
     { id: 'lieux', titre: 'Emplacements et clés' },
     { id: 'securite', titre: 'Sécurité' },
+    { id: 'mcp', titre: 'Claude (MCP)' },
   ];
   let onglet = $state('moteurs');
   let etat = $state<EtatMoteurs | null>(null);
@@ -137,6 +139,8 @@
 <SousOnglets {onglets} bind:actif={onglet} />
 {#if onglet === 'securite'}
   <ReglagesSecurite {signaler} />
+{:else if onglet === 'mcp'}
+  <ReglagesMcp {signaler} />
 {:else if onglet === 'lieux'}
   <ReglagesLieux {signaler} />
 {:else if onglet === 'llm'}

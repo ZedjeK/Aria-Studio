@@ -13,6 +13,7 @@ mod erreur_fatale;
 mod icone;
 mod installation;
 mod lieux;
+mod mcp;
 mod mise_a_jour;
 mod moteurs;
 mod plateau;
@@ -88,6 +89,11 @@ fn lancer() -> Result<(), String> {
     let emplacements = Emplacements::decider(&dossier_exe, &profil);
     let dossier = emplacements.dossier.clone();
     dossier.preparer().map_err(|e| e.to_string())?;
+    // Lancé par Claude : le relais MCP seul, sans fenêtre, sans journal de lancement ni instance unique.
+    if std::env::args().skip(1).any(|a| a == mcp::ARGUMENT) {
+        mcp::relayer(&dossier);
+        return Ok(());
+    }
     let portable = if emplacements.portable { " (portable)" } else { "" };
     journal::noter(
         &dossier,
@@ -114,6 +120,8 @@ fn lancer() -> Result<(), String> {
     moteurs::reprendre(&moteurs);
     let plateau = plateau::demarrer(&emplacements, &moteurs);
     let telechargeur = telechargements::demarrer(&emplacements);
+    // Le canal local du serveur MCP pour Claude (127.0.0.1, jeton neuf à chaque lancement).
+    let session_mcp = mcp::ouvrir(&dossier, &plateau, &moteurs);
 
     tauri::Builder::default()
         // Toujours le premier greffon : relancer l'exe ramène la fenêtre existante au lieu d'en ouvrir une autre.
@@ -242,6 +250,7 @@ fn lancer() -> Result<(), String> {
             plateau::supprimer_voix,
             plateau::importer_voix,
             plateau::son_voix,
+            mcp::commande_mcp,
             assistant::etat_assistant,
             assistant::plan_assistant,
             assistant::accepter_licences_assistant,
@@ -275,10 +284,13 @@ fn lancer() -> Result<(), String> {
         })
         .build(tauri::generate_context!())
         .map_err(|e| format!("l'interface n'a pas pu démarrer : {e}"))?
-        .run(|app, evenement| {
+        .run(move |app, evenement| {
             if let RunEvent::Exit = evenement {
-                // Les moteurs lancés par Aria s'arrêtent avec elle.
+                // Les moteurs lancés par Aria s'arrêtent avec elle, et le canal MCP se ferme.
                 moteurs::arreter(&app.state::<moteurs::Moteurs>());
+                if let Some(session) = &session_mcp {
+                    aria_coeur::mcp::fermer_canal(&app.state::<Etat>().dossier, session);
+                }
                 journal::noter(
                     &app.state::<Etat>().dossier,
                     "Aria fermée",

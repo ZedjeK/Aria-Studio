@@ -1828,3 +1828,15 @@ export const terminerAssistant = (packs: string[]): Promise<FinAssistant> =>
 
 /** Une image rapide (peu de steps) avec le favori « Créer une image » ; suivie par la file du Plateau. */
 export const essaiAssistant = (): Promise<Commande> => invoke<Commande>('essai_assistant');
+
+// --- Réglages → Claude (MCP) (appli/src/mcp.rs) ---
+
+/** De quoi déclarer le serveur MCP d'Aria dans Claude Code : la commande, et le serveur pour « mcpServers ». */
+export interface DeclarationMcp {
+  nom: string;
+  exe: string;
+  commande: string;
+  serveur: { type: string; command: string; args: string[] };
+}
+
+export const commandeMcp = (): Promise<DeclarationMcp> => invoke<DeclarationMcp>('commande_mcp');

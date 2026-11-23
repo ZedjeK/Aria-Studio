@@ -101,6 +101,7 @@
     "allow-supprimer-voix",
     "allow-importer-voix",
     "allow-son-voix",
+    "allow-commande-mcp",
     "allow-etat-assistant",
     "allow-plan-assistant",
     "allow-accepter-licences-assistant",

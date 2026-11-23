@@ -33,6 +33,7 @@ pub mod llama;
 pub mod llama_serveur;
 pub mod llm;
 pub mod local;
+pub mod mcp;
 pub mod mises_a_jour;
 pub mod modeles;
 pub mod montage;
