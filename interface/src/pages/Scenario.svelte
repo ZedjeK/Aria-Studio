@@ -58,6 +58,7 @@
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
+  import ScenarioEtape from './ScenarioEtape.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
   import ScenarioDirections from './ScenarioDirections.svelte';
   import ScenarioGuide from './ScenarioGuide.svelte';
@@ -85,11 +86,19 @@
   /** L'atelier : une image (Plateau), une retouche, un clip (Montage), ou une séquence découpée en plans (Montage). */
   let atelier = $state<Atelier>('image');
   const ateliers: { id: Atelier; titre: string }[] = [
-    { id: 'image', titre: 'Image' },
-    { id: 'retouche', titre: 'Retouche' },
-    { id: 'clip', titre: 'Clip' },
-    { id: 'sequence', titre: 'Séquence' },
+    { id: 'image', titre: '🖼️ Image' },
+    { id: 'retouche', titre: '🖌️ Retouche' },
+    { id: 'clip', titre: '🎬 Clip' },
+    { id: 'sequence', titre: '📽️ Séquence' },
   ];
+  /** Le commentaire de l'onglet actif, sous les ateliers. */
+  const TEXTES_ATELIER: Record<Atelier, string> = {
+    image:
+      "Chaque atelier garde son brouillon. Le LLM écrit pour le modèle cible : sa langue, sa longueur, ses règles. Chaque liste ajoute sa traduction anglaise, et le filtre AS-18 contrôle le prompt avant qu'il soit proposé.",
+    retouche: "Le LLM voit l'image à retoucher et écrit la consigne qui la transforme, rien de plus.",
+    clip: "Le prompt d'un clip dit le mouvement, la caméra, le son. La longueur suit la durée choisie.",
+    sequence: "Raconte une histoire : Aria la découpe en 2 à 12 plans, que le Montage tourne l'un après l'autre.",
+  };
   /** Le brouillon des autres ateliers : leur idée et leur prompt final. */
   let brouillons = $state<Record<string, { idee: string; final: string; finalRetouche: boolean }>>({});
   let workflowsRetouche = $state<ChoixWorkflow[]>([]);
@@ -101,6 +110,8 @@
   let imageAtelier = $state<string[]>([]);
   const proposesClip = $derived(montage ? (modeClip === 'animer' ? montage.animer : montage.texte) : null);
   const workflowClip = $derived(proposesClip ? (proposesClip.defaut ?? proposesClip.workflows[0]?.id ?? null) : null);
+  /** Le modèle vidéo du clip : le Montage le choisit, le Scénario écrit pour lui. */
+  const nomWorkflowClip = $derived(proposesClip?.workflows.find((w) => w.id === workflowClip)?.nom ?? null);
   /** L'atelier a besoin d'une image : celle à retoucher, ou le rush d'un clip animé. */
   const imageRequise = $derived(atelier === 'retouche' || (atelier === 'clip' && modeClip === 'animer'));
   /** Atelier Image : partir de rien, s'inspirer d'images de référence, ou en redessiner une (comme au Plateau). */
@@ -200,6 +211,9 @@
     ongletChoisi === 'decor' || ongletChoisi === 'scene' ? ongletChoisi : 'sujet',
   );
 
+  /** Le brouillon est-il gardé dans ce navigateur ? Faux si le stockage est refusé. */
+  let brouillonGarde = $state(true);
+
   function garder() {
     try {
       localStorage.setItem(
@@ -221,8 +235,10 @@
           dureeClip,
         }),
       );
+      brouillonGarde = true;
     } catch {
       // stockage indisponible : le brouillon vaut pour cette fois
+      brouillonGarde = false;
     }
   }
 
@@ -518,87 +534,16 @@
 </script>
 
 <h1>Scénario</h1>
-<p class="sous-titre">Compose ton prompt avec les listes guidées, puis envoie-le au Plateau.</p>
-<ASavoir>
-  Chaque liste ajoute sa traduction anglaise au prompt. Les règles (genre, âge, tenues qui se remplacent,
-  incompatibilités) guident le choix ici ; le prompt est contrôlé par le filtre AS-18 avant d'être proposé.
-  Retouche : le LLM écrit la consigne d'après l'image, qu'il voit. Clip : le prompt d'un clip avec le son, pour
-  animer un rush ou à partir du texte. L'atelier Séquence découpe une histoire en plans pour le Montage.
-</ASavoir>
-
-<Panneau titre="Sujet et modèle">
-  <div class="pastilles" role="group" aria-label="Atelier">
-    {#each ateliers as a (a.id)}
-      <button
-        type="button"
-        class="pastille"
-        aria-pressed={atelier === a.id}
-        onclick={() => changerAtelier(a.id)}
-      >
-        {a.titre}
-      </button>
-    {/each}
-  </div>
-  <div class="ligne">
-    <div class="pastilles" role="group" aria-label="Sujet">
-      {#each sujets as s (s.id)}
-        <button type="button" class="pastille" aria-pressed={sujet === s.id} onclick={() => void choisirSujet(s.id)}>
-          {s.nom}
-        </button>
-      {/each}
-    </div>
-    {#if atelier === 'retouche'}
-      <label>
-        <span class="etiquette">Modèle de retouche</span>
-        <select
-          value={workflowRetouche ?? ''}
-          onchange={(e) => {
-            workflowRetouche = e.currentTarget.value || null;
-            planifier();
-          }}
-        >
-          {#each workflowsRetouche as w (w.id)}
-            <option value={w.id}>{w.nom}</option>
-          {/each}
-        </select>
-      </label>
-    {:else if atelier === 'clip'}
-      <div class="pastilles" role="group" aria-label="Départ du clip">
-        <button
-          type="button"
-          class="pastille"
-          aria-pressed={modeClip === 'animer'}
-          onclick={() => {
-            modeClip = 'animer';
-            planifier();
-          }}
-        >
-          Animer un rush
-        </button>
-        <button
-          type="button"
-          class="pastille"
-          aria-pressed={modeClip === 'texte'}
-          onclick={() => {
-            modeClip = 'texte';
-            imageAtelier = [];
-            planifier();
-          }}
-        >
-          À partir du texte
-        </button>
-      </div>
-      <label>
-        <span class="etiquette">Durée</span>
-        <select bind:value={dureeClip} onchange={garder}>
-          {#each montage?.durees ?? [5] as d (d)}
-            <option value={d}>{d} s</option>
-          {/each}
-        </select>
-      </label>
-    {/if}
-    {#if atelier === 'image'}
-    <label>
+<p class="sous-titre">Du vague au prompt final, avec le LLM qui t'aide à préciser.</p>
+<SousOnglets onglets={ateliers} bind:actif={() => atelier, (a) => changerAtelier(a as Atelier)} />
+<ASavoir>{TEXTES_ATELIER[atelier]}</ASavoir>
+<div class="barre">
+  <span class="puce" class:ambre={!brouillonGarde}>
+    <i class="point" aria-hidden="true"></i>
+    {brouillonGarde ? 'Brouillon gardé' : 'Brouillon non gardé'}
+  </span>
+  {#if atelier === 'image'}
+    <label class="inline">
       <span class="etiquette">Modèle cible</span>
       <select
         value={workflowId ?? ''}
@@ -612,9 +557,37 @@
         {/each}
       </select>
     </label>
-    {/if}
-  </div>
-</Panneau>
+  {:else if atelier === 'retouche'}
+    <label class="inline">
+      <span class="etiquette">Modèle cible</span>
+      <select
+        value={workflowRetouche ?? ''}
+        onchange={(e) => {
+          workflowRetouche = e.currentTarget.value || null;
+          planifier();
+        }}
+      >
+        {#each workflowsRetouche as w (w.id)}
+          <option value={w.id}>{w.nom}</option>
+        {/each}
+      </select>
+    </label>
+  {:else if atelier === 'clip' && nomWorkflowClip}
+    <span class="inline">
+      <span class="etiquette">Modèle cible</span>
+      {nomWorkflowClip}
+    </span>
+  {/if}
+  <label class="inline">
+    <span class="etiquette">LLM</span>
+    <select bind:value={llmChoisi} disabled={llms.length === 0}>
+      <option value="">{atelier === 'sequence' ? 'Celui du modèle vidéo' : 'Celui du modèle cible'}</option>
+      {#each llms as l (l.fichier)}
+        <option value={l.fichier}>{l.specialiste ? '🎯 ' : ''}{l.nom}{l.favori ? ' ★' : ''}</option>
+      {/each}
+    </select>
+  </label>
+</div>
 
 {#if atelier === 'sequence'}
   <ScenarioSequence
@@ -630,11 +603,11 @@
     {versMontage}
   />
 {:else}
-<Panneau titre={atelier === 'retouche' ? 'Ce que tu veux changer' : 'Ton idée'}>
   {#if atelier === 'image'}
+    <ScenarioEtape numero={1} titre="Départ" />
     <div class="ligne" role="group" aria-label="Départ">
       {#each DEPARTS_IMAGE as [mode, texte] (texte)}
-        <Bouton genre={departImage === mode ? 'principal' : 'discret'} petit onclick={() => changerDepartImage(mode)}>
+        <Bouton genre={departImage === mode ? 'secondaire' : 'discret'} petit onclick={() => changerDepartImage(mode)}>
           {texte}
         </Bouton>
       {/each}
@@ -648,11 +621,55 @@
       <ChoixRushes max={Math.max(1, maxReferences)} bind:selection={referencesImage} {signaler} />
     {/if}
     <p class="discret">{aideReference('image', departImage, maxReferences)}</p>
-  {/if}
-  {#if imageRequise}
-    <p class="etiquette">{atelier === 'retouche' ? "L'image à retoucher" : 'Le rush à animer'}</p>
+  {:else if atelier === 'retouche'}
+    <ScenarioEtape numero={1} titre="L'image à retoucher" />
     <p class="discret">{aideReference(atelier, null, 1)}</p>
     <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
+  {:else}
+    <ScenarioEtape numero={1} titre="Départ" />
+    <div class="ligne" role="group" aria-label="Départ du clip">
+      <Bouton
+        genre={modeClip === 'animer' ? 'secondaire' : 'discret'}
+        petit
+        onclick={() => {
+          modeClip = 'animer';
+          planifier();
+        }}
+      >
+        Animer un rush
+      </Bouton>
+      <Bouton
+        genre={modeClip === 'texte' ? 'secondaire' : 'discret'}
+        petit
+        onclick={() => {
+          modeClip = 'texte';
+          imageAtelier = [];
+          planifier();
+        }}
+      >
+        À partir du texte
+      </Bouton>
+    </div>
+    {#if imageRequise}
+      <p class="etiquette">Le rush à animer</p>
+      <p class="discret">{aideReference(atelier, null, 1)}</p>
+      <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
+    {/if}
+  {/if}
+
+  <ScenarioEtape numero={2} titre={atelier === 'retouche' ? 'Ta consigne' : 'Ton idée'} />
+  <Panneau titre={atelier === 'retouche' ? 'Ce que tu veux changer' : atelier === 'clip' ? 'Ce que tu veux animer' : 'Ce que tu veux voir'}>
+  {#if atelier === 'clip'}
+    <div class="ligne">
+      <label class="inline">
+        <span class="etiquette">Durée du clip</span>
+        <select bind:value={dureeClip} onchange={garder}>
+          {#each montage?.durees ?? [5] as d (d)}
+            <option value={d}>{d} s</option>
+          {/each}
+        </select>
+      </label>
+    </div>
   {/if}
   <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
   {#if modeIdee === 'preciser'}
@@ -730,17 +747,6 @@
     bind:value={idee}
     oninput={garder}
   ></textarea>
-  <div class="ligne">
-    <label>
-      <span class="etiquette">LLM</span>
-      <select bind:value={llmChoisi} disabled={llms.length === 0}>
-        <option value="">Celui du modèle cible</option>
-        {#each llms as l (l.fichier)}
-          <option value={l.fichier}>{l.specialiste ? '🎯 ' : ''}{l.nom}{l.favori ? ' ★' : ''}</option>
-        {/each}
-      </select>
-    </label>
-  </div>
   <ScenarioDirections
     ecritureEnCours={ecriture === 'ecrire'}
     atelier={atelierDirections}
@@ -798,9 +804,22 @@
 </Panneau>
 {/if}
 
+{#if atelier !== 'sequence'}
+  <ScenarioEtape numero={3} titre="Compléments" />
+{/if}
 {#if structure && ctx}
-  <Panneau titre="Compléments">
+  <Panneau titre="Listes guidées">
     <SousOnglets onglets={ongletsAvecCompte} bind:actif={ongletChoisi} />
+    {#if onglet === 'sujet'}
+      <div class="ligne" role="group" aria-label="Type du sujet">
+        <span class="etiquette">Type</span>
+        {#each sujets as s (s.id)}
+          <button type="button" class="pastille" aria-pressed={sujet === s.id} onclick={() => void choisirSujet(s.id)}>
+            {s.nom}
+          </button>
+        {/each}
+      </div>
+    {/if}
     {#if onglet === 'sujet' && sujet === 'personnage'}
       <div class="ligne personnages">
         <label>
@@ -910,6 +929,7 @@
 {/if}
 
 {#if atelier !== 'sequence'}
+<ScenarioEtape numero={4} titre={atelier === 'retouche' ? 'Consigne finale' : 'Prompt final'} />
 <Panneau titre={atelier === 'retouche' ? 'Consigne finale' : 'Prompt final'} accentue>
   {#if erreurAssemblage}
     <p class="alerte">{erreurAssemblage}</p>
@@ -948,8 +968,7 @@
 
 <style>
   .ligne,
-  .actions,
-  .pastilles {
+  .actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -975,6 +994,45 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+
+  /* La barre sous les ateliers : brouillon, modèle cible, LLM, comme la maquette. */
+  .barre {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    margin-top: -4px;
+  }
+
+  .inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .puce {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .puce.ambre {
+    border-color: var(--ambre);
+    color: var(--ambre);
+  }
+
+  .point {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
   }
 
   .case {

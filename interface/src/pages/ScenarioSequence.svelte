@@ -451,15 +451,6 @@
           {/each}
         </select>
       </label>
-      <label>
-        <span class="etiquette">LLM</span>
-        <select bind:value={llmChoisi} disabled={llms.length === 0}>
-          <option value="">Celui du modèle vidéo</option>
-          {#each llms as l (l.fichier)}
-            <option value={l.fichier}>{l.nom}{l.favori ? ' ★' : ''}</option>
-          {/each}
-        </select>
-      </label>
     </div>
   </div>
   <div class="actions">
