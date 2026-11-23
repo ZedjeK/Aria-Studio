@@ -281,6 +281,8 @@ fn lancer() -> Result<(), String> {
             plateau::reveler_casting,
             plateau::favori_casting,
             plateau::source_depuis_casting,
+            plateau::importer_source_casting,
+            plateau::source_casting_depuis_rush,
             plateau::lancer_casting,
         ])
         .setup(move |app| {

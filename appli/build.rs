@@ -136,6 +136,8 @@ fn main() {
         "reveler_casting",
         "favori_casting",
         "source_depuis_casting",
+        "importer_source_casting",
+        "source_casting_depuis_rush",
         "lancer_casting",
     ]);
     let attributs = tauri_build::Attributes::new().app_manifest(commandes);

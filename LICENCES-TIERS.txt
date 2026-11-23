@@ -107,20 +107,10 @@ Graphes de workflow (workflows\<id>\api.json)
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 
-Images de départ du Casting (casting\sources\*.png)
-  Ce ne sont pas des fichiers fournis par un tiers : Aria les a produites avec
-  des modèles d'image, et leur provenance (modèle, réglages, seed) est écrite
-  dans casting\sources\origine.json.
-    dragon.png, jeu.png, neon.png, pilote.png, portrait.png : Qwen-Image 2.1,
-      sous Qwen Research License (usage non commercial)
-      https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE
-    miniature.png : Krea 2 Turbo, sous Krea 2 Community License
-      https://huggingface.co/krea/Krea-2-Turbo/blob/main/LICENSE.pdf
-  Ce que ces licences disent des images produites vaut pour elles.
-
 Le reste des données embarquées (catalogue\, prompt\, securite\,
 casting\idees.yaml et casting\prompts.yaml, le logo) a été écrit pour
-Aria Studio.
+Aria Studio. Les images de départ du Casting ne sont pas livrées : ce sont
+celles de l'utilisateur (data\bancs\sources\).
 
 2. Téléchargé à ta demande (jamais embarqué)
 --------------------------------------------

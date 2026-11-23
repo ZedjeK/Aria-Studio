@@ -551,3 +551,42 @@ pub async fn source_depuis_casting(
     })
     .await
 }
+
+/// Pose un fichier de l'utilisateur (data URL) comme image de départ `nom` des castings ; rend l'état du Casting.
+#[tauri::command]
+pub async fn importer_source_casting(
+    plateau: State<'_, Arc<Plateau>>,
+    nom: String,
+    image: String,
+    nom_origine: String,
+) -> Result<casting::EtatCasting, String> {
+    hors_interface(&plateau, move |p| {
+        let octets = images::depuis_data_url(&image)?;
+        let fichier: String = nom_origine.chars().take(120).collect();
+        casting::importer_source(
+            &p.contexte().data,
+            &nom,
+            &octets,
+            serde_json::json!({ "fichier": fichier }),
+        )?;
+        casting::etat(p.contexte(), p.dernier_casting().as_ref())
+    })
+    .await
+}
+
+/// Pose une image des Rushes comme image de départ `nom` des castings ; rend l'état du Casting.
+#[tauri::command]
+pub async fn source_casting_depuis_rush(
+    plateau: State<'_, Arc<Plateau>>,
+    nom: String,
+    rush: String,
+) -> Result<casting::EtatCasting, String> {
+    hors_interface(&plateau, move |p| {
+        let data = &p.contexte().data;
+        let chemin = creations::chemin_image(data, &rush)?;
+        let octets = std::fs::read(&chemin).map_err(|e| format!("Image de {rush} illisible : {e}"))?;
+        casting::importer_source(data, &nom, &octets, serde_json::json!({ "rush": rush }))?;
+        casting::etat(p.contexte(), p.dernier_casting().as_ref())
+    })
+    .await
+}

@@ -2,7 +2,9 @@
   Casting, comme en v2 (web/casting.js) : mêmes prompts et mêmes seeds sur plusieurs modèles d'une tâche, puis
   comparaison à l'aveugle. « Nouveau casting » dit ce qu'un casting comparerait et ce qui l'empêche de partir ;
   « Comparer » montre les castings faits : notes de 1 à 5, révélation (elle ne se défait pas), modèle par défaut, et
-  une image de texte vers image figée comme image de départ des retouches. Un casting passe par la file du Plateau :
+  une image de texte vers image figée comme image de départ des retouches. Les images de départ sont les tiennes :
+  figées depuis un casting, importées d'un fichier ou prises dans les Rushes (la v2 en livrait, pas la v3, pour une
+  raison de licence). Un casting passe par la file du Plateau :
   il se suit ici et s'annule. Le Casting LLM fait réécrire les idées par chaque candidat, contrôle les prompts, puis
   les fait rendre par le modèle par défaut de Texte vers image.
 -->
@@ -12,6 +14,7 @@
     annulerCommande,
     favoriCasting,
     imageCasting,
+    importerSourceCasting,
     lireCasting,
     lireCastings,
     lancerCasting,
@@ -19,6 +22,7 @@
     noterCasting,
     revelerCasting,
     sourceCasting,
+    sourceCastingDepuisRush,
     sourceDepuisCasting,
     type EtatCasting,
     type GenerationCasting,
@@ -44,6 +48,7 @@
   import MediaCasting from '../lib/composants/MediaCasting.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
+  import ChoixRushes from './ChoixRushes.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -61,6 +66,13 @@
   let lancement = $state(false);
   /** Le casting suivi était en cours au dernier relevé : sa fin se remarque. */
   let suivi = $state<string | null>(null);
+  /** L'image de départ qu'on ajoute (son nom), par un fichier ou depuis les Rushes. */
+  let sourceVisee = $state<string | null>(null);
+  let choixRush = $state(false);
+  let rushChoisi = $state<string[]>([]);
+  let fichierSource = $state<HTMLInputElement | null>(null);
+  /** Change quand une image de départ est remplacée : sa vignette se relit. */
+  let versionSources = $state(0);
 
   const preparation = $derived(etat?.preparation.taches.find((t) => t.tache === tache) ?? null);
   const aNoter = $derived(etat?.castings.filter((c) => !c.revele).length ?? 0);
@@ -170,6 +182,51 @@
     void agir((id) => revelerCasting(id));
   }
 
+  function importerSource(nom: string) {
+    sourceVisee = nom;
+    fichierSource?.click();
+  }
+
+  function sourceDepuisRushes(nom: string) {
+    sourceVisee = nom;
+    rushChoisi = [];
+    choixRush = true;
+  }
+
+  async function poserSource(action: (nom: string) => Promise<EtatCasting>, quoi: string) {
+    const nom = sourceVisee;
+    if (!nom) return;
+    try {
+      etat = await action(nom);
+      versionSources += 1;
+      signaler(`Image de départ « ${nom.replace(/\.png$/, '')} » ${quoi}.`);
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      sourceVisee = null;
+    }
+  }
+
+  function fichierChoisi(e: Event & { currentTarget: HTMLInputElement }) {
+    const fichier = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';
+    if (!fichier) return;
+    const lecteur = new FileReader();
+    lecteur.onload = () => {
+      if (typeof lecteur.result === 'string') {
+        const image = lecteur.result;
+        void poserSource((nom) => importerSourceCasting(nom, image, fichier.name), 'importée');
+      }
+    };
+    lecteur.readAsDataURL(fichier);
+  }
+
+  function rushValide() {
+    const rush = rushChoisi[0];
+    choixRush = false;
+    if (rush) void poserSource((nom) => sourceCastingDepuisRush(nom, rush), 'prise dans les Rushes');
+  }
+
   function sauter(prompt: string) {
     document.getElementById(`prompt-casting-${prompt}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
@@ -251,18 +308,35 @@
         </p>
         {#if preparation.sources.length > 0}
           <h3>Images de départ</h3>
+          <p class="discret">
+            Ce sont les tiennes. Chaque prompt du jeu d'essai retouche ou anime l'image de son nom : importe une image, prends-la
+            dans les Rushes, ou fige-en une depuis un casting Texte vers image (« Utiliser comme source »).
+          </p>
           <div class="sources">
             {#each preparation.sources as s (s.nom)}
               <figure>
                 {#if s.presente}
-                  <MediaCasting lire={() => sourceCasting(s.nom)} fichier={s.nom} titre={s.nom} />
+                  {#key versionSources}
+                    <MediaCasting lire={() => sourceCasting(s.nom)} fichier={s.nom} titre={s.nom} />
+                  {/key}
                 {:else}
-                  <span class="alerte">absente</span>
+                  <span class="alerte">à ajouter</span>
                 {/if}
+                <span class="ajout">
+                  <Bouton genre="discret" petit desactive={enCours} onclick={() => importerSource(s.nom)}>Importer…</Bouton>
+                  <Bouton genre="discret" petit desactive={enCours} onclick={() => sourceDepuisRushes(s.nom)}>Rushes…</Bouton>
+                </span>
                 <figcaption>{s.nom.replace(/\.png$/, '')}</figcaption>
               </figure>
             {/each}
           </div>
+          <input
+            bind:this={fichierSource}
+            class="cache"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onchange={fichierChoisi}
+          />
         {/if}
         {#if preparation.candidats.length >= 2}
           <p>
@@ -486,6 +560,16 @@
   </Dialogue>
 {/if}
 
+{#if choixRush}
+  <Dialogue titre={`Image de départ « ${(sourceVisee ?? '').replace(/\.png$/, '')} »`} fermer={() => (choixRush = false)}>
+    <ChoixRushes max={1} bind:selection={rushChoisi} {signaler} />
+    {#snippet pied()}
+      <Bouton genre="discret" onclick={() => (choixRush = false)}>Annuler</Bouton>
+      <Bouton genre="principal" desactive={rushChoisi.length === 0} onclick={rushValide}>Choisir</Bouton>
+    {/snippet}
+  </Dialogue>
+{/if}
+
 <style>
   .taches,
   .castings {
@@ -561,6 +645,15 @@
     padding: 2px 8px;
     border: 1px solid var(--ligne);
     font-size: 12px;
+  }
+
+  .cache {
+    display: none;
+  }
+
+  .ajout {
+    display: flex;
+    gap: 4px;
   }
 
   .sources {
