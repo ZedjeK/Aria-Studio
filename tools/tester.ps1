@@ -1,6 +1,7 @@
 ﻿<#
 .SYNOPSIS
-Lance les tests d'Aria Studio : interface (svelte-check, vitest), puis Rust (rustfmt, clippy, cargo test).
+Lance les tests d'Aria Studio : interface (svelte-check, vitest), puis Rust (rustfmt, clippy, cargo test), puis les
+licences tierces (tools\licences-tierces.ps1).
 
 .DESCRIPTION
 L'interface est compilée avant le Rust : l'exe l'embarque, et clippy compile l'appli telle qu'elle sera livrée.
@@ -49,6 +50,8 @@ try {
     Controler 'Mise en forme du Rust (rustfmt)' { cargo fmt --all --check }
     Controler 'Contrôles du Rust (clippy)' { cargo clippy --workspace --all-targets --all-features --locked -- -D warnings }
     Controler 'Tests du Rust' { cargo test --workspace --all-features --locked }
+    # Après les tests : les crates sont téléchargées et les paquets de l'interface installés.
+    Controler 'Licences tierces (LICENCES-TIERS.txt)' { & (Join-Path $PSScriptRoot 'licences-tierces.ps1') }
 }
 finally { Pop-Location }
 

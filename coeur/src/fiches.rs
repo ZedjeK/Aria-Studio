@@ -625,6 +625,26 @@ mod tests {
     }
 
     #[test]
+    fn chaque_licence_de_modele_est_dans_licences_tiers() {
+        // LICENCES-TIERS.txt, joint au zip, nomme la licence (nom et adresse) de chaque modèle et de chaque LLM
+        // proposé par Aria : un modèle ajouté au catalogue doit l'y ajouter.
+        let texte = include_str!("../../LICENCES-TIERS.txt");
+        let workflows = LIVRES.iter().map(|l| lire(l.fiche).unwrap());
+        let fiches: Vec<Value> = workflows.chain(catalogue_llm().unwrap()).collect();
+        assert!(fiches.len() >= 8);
+        for f in &fiches {
+            for champ in ["/licence/nom", "/licence/url"] {
+                let valeur = f.pointer(champ).and_then(Value::as_str).unwrap();
+                assert!(
+                    texte.contains(valeur),
+                    "LICENCES-TIERS.txt ne cite pas {champ} de {} : {valeur}",
+                    f["id"]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn une_fiche_de_llm_mal_formee_est_dite() {
         let mut f = catalogue_llm().unwrap()[0].clone();
         assert!(problemes_llm(&f).is_empty());
