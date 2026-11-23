@@ -18,7 +18,7 @@
     type Recommandations,
   } from '../lib/api';
   import { ecarts, parCible } from '../lib/optimiseur';
-  import { changements, type Saisies } from '../lib/reglages';
+  import { changements, texteChangements, type Saisies } from '../lib/reglages';
   import ApercuPropositions from '../lib/composants/ApercuPropositions.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
@@ -37,7 +37,21 @@
   let saisiesVariantes = $state<Record<string, Saisies>>({});
 
   const workflow = $derived(etat?.workflows.find((w) => w.id === id));
-  const aEnregistrer = $derived(workflow !== undefined && Object.keys(changements(workflow.params, saisies)).length > 0);
+  /** Les variantes qui ont des changements à enregistrer. */
+  const variantesModifiees = $derived(
+    (workflow?.variantes ?? []).filter((v) => Object.keys(changements(v.params, saisiesVariantes[v.fichier] ?? {})).length > 0),
+  );
+  /** Tout ce qui diffère de l'enregistré : les réglages du workflow et ceux de ses checkpoints. */
+  const nombreChangements = $derived(
+    workflow === undefined
+      ? 0
+      : Object.keys(changements(workflow.params, saisies)).length +
+          variantesModifiees.reduce(
+            (somme, v) => somme + Object.keys(changements(v.params, saisiesVariantes[v.fichier] ?? {})).length,
+            0,
+          ),
+  );
+  const parDefaut = $derived(workflow?.variantes.find((v) => v.origine));
   /** Les recommandations de la fiche du workflow affiché, le temps de l'aperçu. */
   let recommandations = $state<Recommandations | null>(null);
   const apercu = $derived(
@@ -88,26 +102,20 @@
     saisiesVariantes = {};
   }
 
+  /** Un seul « Enregistrer » : le workflow d'abord, puis chaque checkpoint modifié. */
   async function enregistrer() {
     if (!workflow) return;
     try {
-      remplacer(await modifierReglagesWorkflow(workflow.id, changements(workflow.params, saisies)));
-      saisies = {};
+      const aEnregistrerWorkflow = Object.keys(changements(workflow.params, saisies)).length > 0;
+      if (aEnregistrerWorkflow) {
+        remplacer(await modifierReglagesWorkflow(workflow.id, changements(workflow.params, saisies)));
+        saisies = {};
+      }
+      for (const v of variantesModifiees) {
+        remplacer(await modifierReglagesVariante(workflow.id, v.fichier, changements(v.params, saisiesVariantes[v.fichier] ?? {})));
+        saisiesVariantes = { ...saisiesVariantes, [v.fichier]: {} };
+      }
       signaler(`Réglages de ${workflow.nom} enregistrés.`);
-    } catch (e) {
-      signaler(messageErreur(e), true);
-    }
-  }
-
-  async function enregistrerVariante(fichier: string) {
-    const variante = workflow?.variantes.find((v) => v.fichier === fichier);
-    if (!workflow || !variante) return;
-    try {
-      remplacer(
-        await modifierReglagesVariante(workflow.id, fichier, changements(variante.params, saisiesVariantes[fichier] ?? {})),
-      );
-      saisiesVariantes = { ...saisiesVariantes, [fichier]: {} };
-      signaler(`Réglages de ${fichier} enregistrés.`);
     } catch (e) {
       signaler(messageErreur(e), true);
     }
@@ -125,20 +133,6 @@
 </ASavoir>
 
 {#if etat && workflow}
-  <div class="ligne">
-    <label>
-      Workflow
-      <select value={id} onchange={(e) => choisir(e.currentTarget.value)}>
-        {#each etat.workflows as w (w.id)}
-          <option value={w.id}>{w.nom}</option>
-        {/each}
-      </select>
-    </label>
-    <span class="discret">{workflow.famille} · modeles\{workflow.dossierModeles.replaceAll('/', '\\')}</span>
-    <Bouton onclick={() => void recommander()}>Recommander</Bouton>
-    <Bouton genre="principal" desactive={!aEnregistrer} onclick={() => void enregistrer()}>Enregistrer</Bouton>
-  </div>
-
   {#if recommandations && apercu}
     <ApercuPropositions
       titre={`Recommandations de la fiche · ${recommandations.nom}`}
@@ -158,7 +152,19 @@
     />
   {/if}
 
-  <Panneau titre="Réglages du workflow" accentue>
+  <Panneau titre="Réglages d'un modèle" accentue>
+    <div class="ligne">
+      <label class="choix">
+        Workflow
+        <select value={id} onchange={(e) => choisir(e.currentTarget.value)}>
+          {#each etat.workflows as w (w.id)}
+            <option value={w.id}>{w.nom}</option>
+          {/each}
+        </select>
+      </label>
+      <Bouton petit onclick={() => void recommander()}>Recommander</Bouton>
+    </div>
+    <p class="discret">{workflow.famille} · modeles\{workflow.dossierModeles.replaceAll('/', '\\')}</p>
     {#if workflow.params.length === 0}
       <p class="discret">Rien à régler pour ce workflow.</p>
     {:else}
@@ -168,32 +174,39 @@
         {/each}
       </div>
     {/if}
-  </Panneau>
 
-  {#each workflow.variantes as v (v.fichier)}
-    {#if v.params.length > 0}
-      <Panneau titre={`${v.fichier}${v.origine ? ' · origine' : ''}`}>
-        <div class="grille">
-          {#each v.params as p (p.cle)}
-            <ChampReglage
-              param={p}
-              bind:saisies={
-                () => saisiesVariantes[v.fichier] ?? {},
-                (nouvelles) => (saisiesVariantes = { ...saisiesVariantes, [v.fichier]: nouvelles })
-              }
-            />
-          {/each}
-        </div>
-        <div class="ligne">
-          <Bouton
-            petit
-            desactive={Object.keys(changements(v.params, saisiesVariantes[v.fichier] ?? {})).length === 0}
-            onclick={() => void enregistrerVariante(v.fichier)}>Enregistrer ce checkpoint</Bouton
-          >
-        </div>
-      </Panneau>
+    {#if workflow.variantes.length > 0}
+      <hr class="sep" />
+      {#if parDefaut}
+        <p class="etiquette">Checkpoint par défaut</p>
+        <p>★ <span class="code">{parDefaut.fichier}</span></p>
+      {/if}
+      <p class="etiquette">Checkpoints de la famille</p>
+      <div class="variantes">
+        {#each workflow.variantes as v (v.fichier)}
+          {#if v.params.length > 0}
+            <div class="variante">
+              <span class="code nom">{v.fichier}{v.origine ? ' · origine' : ''}</span>
+              {#each v.params as p (p.cle)}
+                <ChampReglage
+                  param={p}
+                  bind:saisies={
+                    () => saisiesVariantes[v.fichier] ?? {},
+                    (nouvelles) => (saisiesVariantes = { ...saisiesVariantes, [v.fichier]: nouvelles })
+                  }
+                />
+              {/each}
+            </div>
+          {/if}
+        {/each}
+      </div>
     {/if}
-  {/each}
+
+    <div class="pied">
+      <span class="discret">{texteChangements(nombreChangements)}</span>
+      <Bouton genre="principal" desactive={nombreChangements === 0} onclick={() => void enregistrer()}>Enregistrer</Bouton>
+    </div>
+  </Panneau>
 {:else}
   <p class="discret">Lecture…</p>
 {/if}
@@ -209,8 +222,58 @@
 
   .ligne label {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--texte-2);
+    font-size: 13px;
+  }
+
+  .choix {
+    min-width: 260px;
+  }
+
+  .sep {
+    margin: 14px 0;
+    border: 0;
+    border-top: 1px solid var(--ligne);
+  }
+
+  .etiquette {
+    margin: 0 0 8px;
+    color: var(--texte-2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .variantes {
+    display: grid;
     gap: 8px;
+  }
+
+  .variante {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+    padding: 8px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--ligne) 50%, transparent);
+  }
+
+  .variante .nom {
+    flex: 1;
+    min-width: 220px;
+    font-size: 12px;
+  }
+
+  .pied {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    justify-content: space-between;
+    margin-top: 16px;
   }
 
   .grille {
