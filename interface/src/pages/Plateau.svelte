@@ -1,20 +1,25 @@
 <!--
   Le Plateau : créer une image depuis une idée réécrite par le LLM, ou depuis un prompt écrit tel quel ; suivre la
-  file, voir les dernières créations. Les références, la retouche et la vidéo viendront ensuite. Le bouton orange
-  (Créer) agit sur le panneau accentué.
+  file, voir les dernières créations. Le LLM qui voit peut vérifier les images à la fin, puis les comparer pour
+  retenir les meilleures (nouveauté de la v3). Le bouton orange (Créer) agit sur le panneau accentué.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
     annulerCommande,
+    choisirMeilleures,
     commanderImage,
+    etatVision,
     lireCommandes,
     messageErreur,
     optionsPlateau,
     optionsRetouche,
     FORMAT_IMAGE,
+    IMAGES_MAX_VISION,
     validerCheckpoint,
+    verifierImages,
     type Commande,
+    type EtatVision,
     type EnvoiPlateau,
     type ModeReference,
     type OptionsPlateau,
@@ -41,6 +46,8 @@
   import Panneau from '../lib/composants/Panneau.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
   import PanneauRushes from './PanneauRushes.svelte';
+  import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
+  import { peutChoisir, texteChoix, texteVerifications } from '../lib/vision';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -75,6 +82,11 @@
   let envoi = $state(false);
   /** « Ranger dans » : le dossier des prochaines créations. */
   let dossier = $state<string | null>(null);
+  /** « Vérifier les images à la fin » : le LLM qui voit compare chaque image à l'intention. */
+  let verifierALaFin = $state(false);
+  let vision = $state<EtatVision | null>(null);
+  /** La commande dont les images sont en cours de vérification ou de comparaison. */
+  let lotEnCours = $state<string | null>(null);
 
   const proposes = $derived(options ? workflowsPour(modeReference, options, optionsInspirer) : []);
   const workflow = $derived(proposes.find((w) => w.id === workflowId));
@@ -175,6 +187,7 @@
         liberte,
         loras: lorasChoisies(workflow.loras, lignesLoras),
         dossier,
+        verifier: verifierALaFin && Boolean(vision?.llm),
       });
       signaler(nombre > 1 ? `${nombre} images en file.` : 'Image en file.');
       await relireCommandes();
@@ -182,6 +195,30 @@
       signaler(messageErreur(e), true);
     } finally {
       envoi = false;
+    }
+  }
+
+  async function verifierLot(c: Commande) {
+    lotEnCours = c.id;
+    try {
+      signaler(texteVerifications(await verifierImages(c.images)));
+      rafraichir += 1;
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      lotEnCours = null;
+    }
+  }
+
+  async function choisirLot(c: Commande) {
+    lotEnCours = c.id;
+    try {
+      signaler(texteChoix(await choisirMeilleures(c.images.slice(0, IMAGES_MAX_VISION))));
+      rafraichir += 1;
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      lotEnCours = null;
     }
   }
 
@@ -206,9 +243,18 @@
     }
   }
 
+  async function relireVision() {
+    try {
+      vision = await etatVision();
+    } catch {
+      vision = null;
+    }
+  }
+
   onMount(() => {
     void relireOptions();
     void relireCommandes();
+    void relireVision();
     const minuterie = setInterval(() => {
       if (commandes.some(estActive)) void relireCommandes();
     }, 1000);
@@ -356,6 +402,17 @@
         Aucun LLM dans modeles\llm : ton texte part tel quel. Les LLM téléchargés par la version 2 sont repris.
       </p>
     {/if}
+    <div class="ligne reecriture">
+      <label>
+        <input type="checkbox" bind:checked={verifierALaFin} disabled={!vision?.llm} />
+        Vérifier les images à la fin
+      </label>
+      <span class="discret">
+        {vision?.llm
+          ? `Le LLM qui voit (${vision.llm}) compare chaque image à ton intention et propose un prompt corrigé.`
+          : (vision?.explication ?? '')}
+      </span>
+    </div>
 
     <label class="prompt">
       <span class="etiquette">{reecrire ? 'Idée' : 'Prompt'}</span>
@@ -394,6 +451,20 @@
           </div>
           {#if estActive(c) && !c.annulee}
             <Bouton genre="discret" petit onclick={() => void annuler(c.id)}>✕ Annuler</Bouton>
+          {:else if c.type === 'creation' && c.etat === 'termine' && c.images.length > 0 && vision?.llm}
+            {#if lotEnCours === c.id}
+              <span class="discret">Le LLM regarde…</span>
+              <AnnulerEcriture />
+            {:else}
+              <Bouton petit desactive={lotEnCours !== null} onclick={() => void verifierLot(c)}>
+                {c.images.length > 1 ? 'Vérifier les images' : 'Vérifier l’image'}
+              </Bouton>
+              {#if peutChoisir(c.images.length)}
+                <Bouton petit desactive={lotEnCours !== null} onclick={() => void choisirLot(c)}>
+                  ★ Choisir les meilleures
+                </Bouton>
+              {/if}
+            {/if}
           {/if}
         </li>
       {/each}
@@ -401,7 +472,7 @@
   </Panneau>
 {/if}
 
-<PanneauRushes {signaler} {rafraichir} />
+<PanneauRushes {signaler} {rafraichir} enFile={() => void relireCommandes()} />
 
 <style>
   .grille {

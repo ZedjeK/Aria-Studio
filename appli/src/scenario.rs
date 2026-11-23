@@ -18,7 +18,7 @@ use tauri::State;
 use crate::moteurs::Moteurs;
 
 /// Une écriture du Scénario, que ✕ Annuler arrête ; une nouvelle écriture repart sans annulation.
-fn ecriture(moteurs: &Moteurs) -> EcritureAnnulable {
+pub(crate) fn ecriture(moteurs: &Moteurs) -> EcritureAnnulable {
     moteurs.ecriture_annulee.store(false, Ordering::Relaxed);
     EcritureAnnulable {
         orchestrateur: Arc::clone(&moteurs.orchestrateur),

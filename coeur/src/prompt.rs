@@ -330,6 +330,8 @@ pub fn consigne_d_origine(usage: &str) -> Option<String> {
         "video" => Some(gabarit(&VIDEO, &[])),
         "decoupage" => Some(crate::decoupage::CONSIGNE_DECOUPAGE.to_owned()),
         "directions" => Some(crate::directions::CONSIGNE_DIRECTIONS.to_owned()),
+        "verification" => Some(crate::verification::CONSIGNE_VERIFICATION.to_owned()),
+        "choix" => Some(crate::verification::CONSIGNE_CHOIX.to_owned()),
         _ => None,
     }
 }
@@ -1177,7 +1179,7 @@ fn note_vue(usage: &str) -> &'static str {
     }
 }
 
-fn image_url(png: &[u8]) -> Value {
+pub(crate) fn image_url(png: &[u8]) -> Value {
     json!({"type": "image_url", "image_url": {"url": format!("data:image/png;base64,{}", images::base64(png))}})
 }
 

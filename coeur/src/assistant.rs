@@ -628,6 +628,7 @@ pub fn demande_essai(dossier: &Dossier, modeles_dir: &Path) -> Result<(Demande, 
         liberte: LIBERTE_DEFAUT,
         loras: Vec::new(),
         dossier: None,
+        verifier: false,
     };
     let mut imposees = Map::new();
     imposees.insert("steps".to_owned(), json!(10));

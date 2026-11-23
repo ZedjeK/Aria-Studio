@@ -2,12 +2,15 @@
   Les Rushes du Plateau et les Bobines du Montage, comme en v2 (mêmes gestes, dossiers à part) : onglets (Tous, Non
   rangés, dossiers, Archives, Corbeille), sélection au clic, actions sur la sélection, dossiers créés, renommés ou
   supprimés. Rien n'est effacé pour de bon sauf « Vider la corbeille », confirmé dans un dialogue. Dans les Bobines,
-  un clip choisi seul se regarde. `rafraichir` change quand le Plateau a enregistré de nouvelles créations.
+  un clip choisi seul se regarde. Une création choisie seule se vérifie (le LLM qui voit la compare à l'intention) ;
+  un lot de 2 à 8 se compare pour en retenir les meilleures (badge ★). `rafraichir` change quand le Plateau a
+  enregistré de nouvelles créations.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
     agirRushes,
+    choisirMeilleures,
     creerDossier,
     etatRushes,
     imageCreation,
@@ -23,9 +26,12 @@
     type GenreRushes,
   } from '../lib/api';
   import { accord, actions, basculer, compteRendu, images, libelleAction, ongletDe, onglets } from '../lib/rushes';
+  import { badgeMeilleure, badgeVerification, peutChoisir, texteChoix } from '../lib/vision';
+  import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Dialogue from '../lib/composants/Dialogue.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import VerificationCreation from '../lib/composants/VerificationCreation.svelte';
   import VideoCreation from '../lib/composants/VideoCreation.svelte';
 
   interface Props {
@@ -35,9 +41,14 @@
     genre?: GenreRushes;
     /** Bobines : Variante, Réutiliser le prompt, ou Ouvrir la séquence d'un clip choisi seul. */
     agirClip?: (clip: Creation, action: ActionClip) => void;
+    /** Une commande vient d'entrer dans la file (relancée avec un prompt corrigé). */
+    enFile?: () => void;
   }
 
-  let { signaler, rafraichir, genre = 'images', agirClip }: Props = $props();
+  let { signaler, rafraichir, genre = 'images', agirClip, enFile }: Props = $props();
+
+  /** Le LLM qui voit compare la sélection (Choisir les meilleures). */
+  let compare = $state(false);
 
   const bobines = $derived(genre === 'clips');
   /** Le clip regardé (Bobines). */
@@ -104,6 +115,18 @@
       signaler(messageErreur(e), true);
     } finally {
       occupe = false;
+    }
+  }
+
+  async function choisir() {
+    compare = true;
+    try {
+      signaler(texteChoix(await choisirMeilleures(selection)));
+      await relire();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      compare = false;
     }
   }
 
@@ -199,6 +222,13 @@
           {/if}
         {/if}
       {/if}
+      {#if peutChoisir(selection.length) && onglet.vue !== 'corbeille'}
+        <Bouton petit desactive={compare} onclick={() => void choisir()}>★ Choisir les meilleures</Bouton>
+        {#if compare}
+          <span class="discret">Le LLM compare les images…</span>
+          <AnnulerEcriture />
+        {/if}
+      {/if}
       {#each proposees as action (action)}
         {#if action === 'ranger'}
           <select bind:value={rangerDans} aria-label="Dossier où ranger">
@@ -224,6 +254,12 @@
     <VideoCreation id={regarde} />
   {/if}
 
+  {#if seul && onglet.vue !== 'corbeille'}
+    {#key seul.id}
+      <VerificationCreation creation={seul} {signaler} apres={() => void relire()} {enFile} />
+    {/key}
+  {/if}
+
   {#if rushes.length === 0}
     <p class="discret">{bobines && onglet.vue === 'tous' && !onglet.dossier ? "Aucun clip pour l'instant : silence, on tourne !" : "Rien ici pour l'instant."}</p>
   {:else}
@@ -242,6 +278,12 @@
             <span class="vide" aria-hidden="true"></span>
           {/if}
           <span class="legende">
+            {#if badgeMeilleure(rush) || badgeVerification(rush)}
+              <span class="badges">
+                {#if badgeMeilleure(rush)}<span class="badge meilleure" title={rush.meilleure?.raison ?? ''}>{badgeMeilleure(rush)}</span>{/if}
+                {#if badgeVerification(rush)}<span class="badge" class:ecarts={!rush.verification?.fidele} title={rush.verification?.verdict ?? ''}>{badgeVerification(rush)}</span>{/if}
+              </span>
+            {/if}
             <span class="prompt-court">{rush.idee || rush.prompt || 'Sans prompt'}</span>
             <span class="discret code">{rush.largeur}×{rush.hauteur}{rush.seed != null ? ` · seed ${rush.seed}` : ''}</span>
           </span>
@@ -374,5 +416,28 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .badge {
+    padding: 0 6px;
+    border: 1px solid var(--cyan);
+    font-size: 11px;
+    color: var(--cyan);
+  }
+
+  .badge.meilleure {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .badge.ecarts {
+    border-color: var(--orange);
+    color: var(--orange);
   }
 </style>
