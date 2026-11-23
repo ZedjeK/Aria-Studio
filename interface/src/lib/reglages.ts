@@ -43,6 +43,8 @@ export function nomConsigne(cle: string): string {
     video: 'Prompt d’un clip',
     decoupage: 'Découpage d’une séquence',
     directions: 'Directions proposées',
+    verification: 'Vérification d’une image',
+    choix: 'Choix des meilleures images',
   };
   return noms[cle] ?? cle;
 }

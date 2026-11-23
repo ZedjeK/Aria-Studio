@@ -60,6 +60,7 @@ pub mod sequences;
 pub mod suggestions;
 pub mod telechargement;
 pub mod usages;
+pub mod verification;
 pub mod voix;
 pub mod workflows;
 

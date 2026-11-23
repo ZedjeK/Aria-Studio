@@ -399,7 +399,13 @@
 
 <MontageVoix {signaler} enFile={() => void relireCommandes()} {rafraichir} />
 
-<PanneauRushes genre="clips" {signaler} {rafraichir} agirClip={(clip, action) => void agirClip(clip, action)} />
+<PanneauRushes
+  genre="clips"
+  {signaler}
+  {rafraichir}
+  agirClip={(clip, action) => void agirClip(clip, action)}
+  enFile={() => void relireCommandes()}
+/>
 
 <style>
   .pastilles,

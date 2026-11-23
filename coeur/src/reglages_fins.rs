@@ -23,7 +23,7 @@ use crate::{Dossier, prompt, reglages};
 /// Une consigne réécrite fait au plus 4 000 caractères.
 pub const LONGUEUR_CONSIGNE: usize = 4000;
 /// Les usages dont la consigne se réécrit déjà dans cette version.
-pub const CONSIGNES: [&str; 7] = [
+pub const CONSIGNES: [&str; 9] = [
     "reecriture",
     "retouche",
     "precisions",
@@ -31,6 +31,8 @@ pub const CONSIGNES: [&str; 7] = [
     "video",
     "decoupage",
     "directions",
+    "verification",
+    "choix",
 ];
 /// Samplers et ordonnanceurs de secours, tant que ComfyUI n'a jamais annoncé les siens.
 pub const SAMPLERS_SECOURS: [&str; 14] = [

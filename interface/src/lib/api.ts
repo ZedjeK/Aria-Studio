@@ -221,6 +221,8 @@ export interface DemandeImage {
   loras: ChoixLora[];
   /** Le dossier où ranger les résultats (« Ranger dans ») ; null : non rangés. */
   dossier?: string | null;
+  /** « Vérifier les images à la fin » : le LLM qui voit compare chaque image à l'intention. */
+  verifier?: boolean;
 }
 
 /** Partir de rushes : s'en inspirer, ou en redessiner un. */
@@ -278,8 +280,10 @@ export interface Commande {
   plans: number[];
   /** Le dossier où ranger les résultats ; null : non rangés. */
   dossier: string | null;
-  /** La réécriture : prompt redemandé au LLM par le contrôle qualité, ou repli sur l'idée telle quelle. */
+  /** La réécriture (prompt redemandé, meilleur essai imparfait, repli sur l'idée), puis le bilan de la vérification. */
   note: string | null;
+  /** Les images seront vérifiées par le LLM qui voit, après la génération. */
+  verifier: boolean;
   /** Casting : son identifiant, et les générations faites (sur `nombre`). */
   banc: string | null;
   fait: number;
@@ -316,6 +320,10 @@ export interface Creation {
   dossier?: string;
   archive?: boolean;
   corbeille?: string;
+  /** Vérifiée par le LLM qui voit (Vérifier l'image). */
+  verification?: Verification | null;
+  /** Retenue parmi les meilleures d'un lot (Choisir les meilleures). */
+  meilleure?: Meilleure | null;
 }
 
 export const optionsPlateau = (): Promise<OptionsPlateau> => invoke<OptionsPlateau>('options_plateau');
@@ -1930,3 +1938,76 @@ export interface DeclarationMcp {
 }
 
 export const commandeMcp = (): Promise<DeclarationMcp> => invoke<DeclarationMcp>('commande_mcp');
+
+// --- Le LLM regarde ce qui est sorti (aria_coeur::verification, nouveauté de la v3) ---
+
+/** La vérification d'une création, gardée sur sa fiche (clés en snake_case, comme la fiche). */
+export interface Verification {
+  fidele: boolean;
+  verdict: string;
+  ecarts: string[];
+  /** Le prompt corrigé, si l'image n'est pas fidèle. */
+  prompt: string | null;
+  alertes: string[];
+  llm: string;
+  date: string;
+}
+
+/** Une image retenue parmi les meilleures d'un lot, gardée sur sa fiche. */
+export interface Meilleure {
+  rang: number;
+  raison: string;
+  lot: string[];
+  llm: string;
+  date: string;
+}
+
+/** Le LLM qui regarderait, ou pourquoi il n'y en a pas (et quoi installer). */
+export interface EtatVision {
+  llm: string | null;
+  explication: string | null;
+}
+
+export interface Verifiee {
+  id: string;
+  verification: Verification | null;
+  erreur: string | null;
+}
+
+export interface Verifications {
+  resultats: Verifiee[];
+  llm: string;
+  dureeS: number;
+}
+
+export interface Retenue {
+  id: string;
+  rang: number;
+  raison: string;
+}
+
+export interface Choix {
+  meilleures: Retenue[];
+  redemandee: string | null;
+  llm: string;
+  dureeS: number;
+}
+
+/** Les images d'un lot, au plus (aria_coeur::verification::IMAGES_MAX), et le minimum pour en choisir les meilleures. */
+export const IMAGES_MAX_VISION = 8;
+export const CHOIX_MIN = 2;
+
+export const etatVision = (workflow: string | null = null): Promise<EtatVision> =>
+  invoke<EtatVision>('etat_vision', { workflow });
+
+/** Le LLM qui voit compare chaque image à l'intention (✕ Annuler l'arrête). */
+export const verifierImages = (ids: string[], llm: string | null = null): Promise<Verifications> =>
+  invoke<Verifications>('verifier_images', { ids, llm });
+
+/** Le LLM qui voit retient, dans un lot de 2 à 8 images, celles qui respectent le mieux l'intention. */
+export const choisirMeilleures = (ids: string[], llm: string | null = null): Promise<Choix> =>
+  invoke<Choix>('choisir_meilleures', { ids, llm });
+
+/** La même demande que la création, avec ce prompt, remise en file. */
+export const relancerAvecPrompt = (id: string, prompt: string): Promise<Commande> =>
+  invoke<Commande>('relancer_avec_prompt', { id, prompt });

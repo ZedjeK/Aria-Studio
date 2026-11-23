@@ -21,6 +21,7 @@ mod reglages_fins;
 mod scenario;
 mod securite;
 mod telechargements;
+mod vision;
 
 use std::path::{Path, PathBuf};
 
@@ -203,6 +204,10 @@ fn lancer() -> Result<(), String> {
             scenario::traduire_precisions,
             scenario::decouper_sequence,
             scenario::proposer_directions,
+            vision::etat_vision,
+            vision::verifier_images,
+            vision::choisir_meilleures,
+            vision::relancer_avec_prompt,
             scenario::annuler_ecriture,
             scenario::lire_personnages,
             scenario::enregistrer_personnage,

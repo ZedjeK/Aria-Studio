@@ -94,6 +94,7 @@ function commande(changements: Partial<Commande>): Commande {
     plans: [],
     dossier: null,
     note: null,
+    verifier: false,
     banc: null,
     fait: 0,
     ...changements,

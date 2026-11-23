@@ -91,6 +91,9 @@ pub struct Demande {
     /// Le dossier où ranger les résultats (« Ranger dans ») ; absent : non rangés.
     #[serde(default)]
     pub dossier: Option<String>,
+    /// « Vérifier les images à la fin » : le LLM qui voit compare chaque image à l'intention, après la génération.
+    #[serde(default)]
+    pub verifier: bool,
 }
 
 const fn liberte_defaut() -> f64 {
@@ -183,8 +186,10 @@ pub struct Commande {
     /// de sa source).
     pub dossier: Option<String>,
     /// Ce qui s'est passé à la réécriture, à montrer dans la file : prompt redemandé au LLM, meilleur essai imparfait, ou
-    /// repli sur l'idée.
+    /// repli sur l'idée ; puis le bilan de la vérification des images.
     pub note: Option<String>,
+    /// Les images seront vérifiées par le LLM qui voit, après la génération.
+    pub verifier: bool,
     /// Des valeurs imposées au workflow (l'essai de l'assistant : peu de steps, petite image) ; seules celles
     /// qu'il reçoit servent.
     #[serde(skip)]
@@ -235,6 +240,7 @@ impl Commande {
             plans: Vec::new(),
             dossier: None,
             note: None,
+            verifier: false,
             imposees: Map::new(),
             banc: None,
             fait: 0,
@@ -1083,6 +1089,7 @@ impl Plateau {
         commande.loras = validee.loras;
         commande.dossier =
             crate::rushes::valider_dossier(&self.contexte.data, demande.dossier.as_deref(), "images")?;
+        commande.verifier = demande.verifier;
         if !demande.references.is_empty() {
             commande.references.clone_from(&demande.references);
             commande.mode_reference.clone_from(&demande.mode_reference);
@@ -1441,6 +1448,7 @@ fn executer(
     };
     // Les rushes de départ sont téléversés une seule fois pour toutes les images.
     let mut noms = Vec::new();
+    let mut faites: Vec<String> = Vec::new();
     for (i, png) in sources.iter().enumerate() {
         noms.push(generateur.televerser(&format!("aria_{}_{}.png", c.id, i + 1), png)?);
     }
@@ -1534,11 +1542,50 @@ fn executer(
             r.noter(&mut infos);
         }
         let id_creation = creations::enregistrer(&contexte.data, &png, &infos)?;
+        faites.push(id_creation.clone());
         partage.modifier(&c.id, |cmd| {
             cmd.images.push(id_creation);
             cmd.progression = 1.0;
         });
     }
+    if c.verifier && !faites.is_empty() {
+        verifier_a_la_fin(contexte, generateur, partage, c, &faites)?;
+    }
+    Ok(())
+}
+
+/// « Vérifier les images à la fin » : le LLM qui voit compare chaque image à l'intention. Les images restent
+/// enregistrées quoi qu'il arrive : un échec de la vérification se lit dans la file, sans mettre la commande en
+/// erreur ; ✕ Annuler l'arrête.
+fn verifier_a_la_fin(
+    contexte: &Contexte,
+    generateur: &mut impl Generateur,
+    partage: &Partage,
+    c: &Commande,
+    ids: &[String],
+) -> Result<(), String> {
+    let bilan = crate::verification::verifier(contexte, generateur, ids, None, |fait, total| {
+        partage.modifier(&c.id, |cmd| {
+            cmd.etape = if total > 1 {
+                format!("Vérification des images {}/{total}", fait + 1)
+            } else {
+                "Vérification de l'image".to_owned()
+            };
+            cmd.progression = 0.0;
+        });
+        !partage.annule.load(Ordering::Relaxed)
+    });
+    let ligne = match bilan {
+        Ok(v) => v.resume(),
+        Err(e) if e == ANNULEE => return Err(e),
+        Err(e) => format!("Vérification impossible : {e}"),
+    };
+    partage.modifier(&c.id, |cmd| {
+        cmd.note = Some(match cmd.note.take() {
+            Some(avant) => format!("{avant} · {ligne}"),
+            None => ligne.clone(),
+        });
+    });
     Ok(())
 }
 
@@ -1602,6 +1649,7 @@ mod tests {
             liberte: LIBERTE_DEFAUT,
             loras: Vec::new(),
             dossier: None,
+            verifier: false,
         }
     }
 
