@@ -29,6 +29,7 @@ const krea: ChoixWorkflow = {
   variation: true,
   reserveRetouche: false,
   loras: [],
+  rubriquesIgnorees: [],
 };
 
 const edit: ChoixWorkflow = {

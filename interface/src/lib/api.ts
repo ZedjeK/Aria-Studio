@@ -153,6 +153,8 @@ export interface ChoixWorkflow {
   reserveRetouche: boolean;
   /** Les LoRA de sa famille. */
   loras: LoraProposee[];
+  /** Les rubriques que ce modèle n'a pas à se faire demander : le guide ne pose pas leur question. */
+  rubriquesIgnorees: string[];
 }
 
 /** Une LoRA de la famille d'un workflow, avec ses mots et sa force retenus (aria_coeur::plateau::LoraProposee). */

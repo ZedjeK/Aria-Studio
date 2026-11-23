@@ -6,7 +6,7 @@
   « Utiliser ce prompt » le pose où il va.
 -->
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import {
     conversationScenario,
     estAnnulation,
@@ -15,6 +15,7 @@
     type FormeConversation,
   } from '../lib/api';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
+  import { ajouterLignes } from '../lib/guide';
   import {
     ECRIRE,
     cleConversation,
@@ -48,6 +49,9 @@
     sequence?: DemandeDecoupage | null;
     /** Le libellé du bouton qui pose le prompt. */
     libelleUtiliser?: string;
+    /** Des lignes à ajouter au champ (les réponses du 🧭 guide) ; `amorceLue` les retire une fois posées. */
+    amorce?: string;
+    amorceLue?: () => void;
   }
 
   let {
@@ -66,12 +70,24 @@
     sansSujet = false,
     sequence = null,
     libelleUtiliser = 'Utiliser ce prompt',
+    amorce = '',
+    amorceLue,
   }: Props = $props();
 
   const CLE = $derived(cleConversation(forme, sequence?.plan ?? null));
 
   let messages = $state<MessageConversation[]>([]);
   let saisie = $state('');
+
+  // Les réponses du guide arrivent dans le champ, sans doublon, prêtes à envoyer.
+  $effect(() => {
+    const lignes = amorce;
+    if (lignes.trim() === '') return;
+    untrack(() => {
+      saisie = ajouterLignes(saisie, lignes.split('\n'));
+      amorceLue?.();
+    });
+  });
   let enCours = $state(false);
 
   function garder() {

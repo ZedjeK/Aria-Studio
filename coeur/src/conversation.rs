@@ -497,7 +497,7 @@ pub fn cadre_format(format: Option<&str>, forme: &str) -> String {
 }
 
 /// Les rubriques que le modèle cible n'a pas à se faire demander (`profil_prompt.rubriques_ignorees` de sa fiche).
-fn rubriques_ignorees(wf: Option<&workflows::Workflow>) -> Vec<String> {
+pub(crate) fn rubriques_ignorees(wf: Option<&workflows::Workflow>) -> Vec<String> {
     wf.and_then(|w| w.fiche.pointer("/profil_prompt/rubriques_ignorees"))
         .and_then(Value::as_array)
         .into_iter()
