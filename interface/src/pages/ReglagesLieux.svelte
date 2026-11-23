@@ -6,10 +6,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
+    annulerRepriseV2,
     choisirDossierModeles,
     enregistrerCle,
     etatCles,
     etatEmplacements,
+    etatRepriseV2,
     messageErreur,
     ouvrirDossier,
     parcourirDossier,
@@ -17,7 +19,9 @@
     testerCle,
     type EtatCle,
     type EtatLieux,
+    type EtatReprise,
   } from '../lib/api';
+  import { enVigueur } from '../lib/reprise';
   import { octetsLisibles } from '../lib/jauge';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
@@ -36,13 +40,34 @@
   let saisies = $state<Record<string, string>>({});
   let tests = $state<Record<string, { ok: boolean; message: string }>>({});
   let aSupprimer = $state<EtatCle | null>(null);
+  /** La reprise d'une v2 pour cet essai portable, s'il y en a eu une. */
+  let reprise = $state<EtatReprise | null>(null);
+  let confirmerAbandon = $state(false);
+  /** Les dossiers de la v2 ne valent plus qu'au lancement en cours. */
+  let abandonnee = $state(false);
 
   const ORIGINES = { aria: 'Enregistrée dans Aria (chiffrée)', variable: "Variable d'environnement" };
 
   async function relire() {
     try {
-      [lieux, cles] = await Promise.all([etatEmplacements(), etatCles()]);
+      [lieux, cles, reprise] = await Promise.all([etatEmplacements(), etatCles(), etatRepriseV2()]);
       chemin = lieux.modelesChoisi ?? '';
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
+  async function abandonnerV2() {
+    confirmerAbandon = false;
+    try {
+      const retires = await annulerRepriseV2();
+      abandonnee = retires.length > 0;
+      signaler(
+        retires.length > 0
+          ? "Dossiers de la version 2 laissés : l'essai reprend les siens au prochain lancement."
+          : 'Plus rien de la version 2 n’était utilisé.',
+      );
+      await relire();
     } catch (e) {
       signaler(messageErreur(e), true);
     }
@@ -151,6 +176,41 @@
   </Panneau>
 {/if}
 
+{#if reprise?.bilan}
+  {@const bilan = reprise.bilan}
+  <Panneau titre="Repris de la version 2">
+    <p class="discret">
+      Au premier lancement de cet essai ({bilan.date.replace('T', ' ')}), Aria a repris ces dossiers de la version 2
+      (<span class="code">{bilan.depuis}</span>), sans rien copier ni rien écrire chez elle.
+    </p>
+    <table>
+      <tbody>
+        {#each bilan.repris as e (e.cle)}
+          <tr>
+            <td>{e.nom}</td>
+            <td class="code chemin">{e.chemin}</td>
+            <td class="discret">{enVigueur(reprise, e.cle) ? 'utilisé' : 'plus utilisé'}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+    {#if bilan.enVigueur.length > 0}
+      <div class="ligne">
+        <Bouton genre="discret" petit onclick={() => (confirmerAbandon = true)}>Ne plus utiliser la version 2</Bouton>
+      </div>
+    {:else if abandonnee}
+      <p class="attention">Au prochain lancement, l'essai reprend ses propres dossiers.</p>
+    {/if}
+  </Panneau>
+{:else if reprise?.v2Lancee}
+  <Panneau titre="Version 2">
+    <p class="attention">
+      Une version 2 tournait au lancement : rien n'a été repris. Ferme-la, puis relance cet essai pour reprendre ses
+      modèles et ses moteurs.
+    </p>
+  </Panneau>
+{/if}
+
 <Panneau titre="Clés des sources de modèles">
   {#each cles as c (c.source)}
     <div class="cle">
@@ -179,6 +239,20 @@
     </div>
   {/each}
 </Panneau>
+
+{#if confirmerAbandon}
+  <Dialogue titre="Ne plus utiliser la version 2 ?" fermer={() => (confirmerAbandon = false)}>
+    <p>
+      Au prochain lancement, l'essai reprend ses propres dossiers : ses modèles à côté de l'exe, et ses moteurs dans
+      services (à installer depuis Réglages → Moteurs). Rien n'est supprimé, ni chez la version 2 ni ici, et la reprise
+      ne se refera pas toute seule.
+    </p>
+    {#snippet pied()}
+      <Bouton genre="discret" onclick={() => (confirmerAbandon = false)}>Annuler</Bouton>
+      <Bouton genre="principal" onclick={() => void abandonnerV2()}>Ne plus l'utiliser</Bouton>
+    {/snippet}
+  </Dialogue>
+{/if}
 
 {#if aSupprimer}
   <Dialogue titre={`Retirer la clé ${aSupprimer.nom} ?`} fermer={() => (aSupprimer = null)}>

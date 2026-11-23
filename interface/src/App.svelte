@@ -9,11 +9,14 @@
     ecouter,
     enregistrerReglages,
     etatAssistant,
+    etatRepriseV2,
     identite as lireIdentite,
     lireReglages,
     messageErreur,
     miseAJourDisponible,
     quitter,
+    repriseV2Vue,
+    type EtatReprise,
     type Identite,
     type InfosMiseAJour,
     type Reglages,
@@ -23,6 +26,7 @@
     type Sequence,
   } from './lib/api';
   import type { Pastille } from './lib/menu';
+  import { texteBandeau } from './lib/reprise';
   import Bandeau from './lib/composants/Bandeau.svelte';
   import BarreTitre from './lib/composants/BarreTitre.svelte';
   import Bouton from './lib/composants/Bouton.svelte';
@@ -92,6 +96,13 @@
   let mesure = $state('');
   let miseAJour = $state<InfosMiseAJour | null>(null);
   let bandeauRange = $state(false);
+  /** La reprise d'une v2 pour un essai portable : annoncée une fois au premier lancement. */
+  let reprise = $state<EtatReprise | null>(null);
+  let repriseRangee = $state(false);
+  const bandeauReprise = $derived(reprise && !repriseRangee ? texteBandeau(reprise) : null);
+  /** L'onglet des Réglages à ouvrir d'abord, et de quoi rouvrir la page quand il change. */
+  let ongletReglages = $state<string | undefined>(undefined);
+  let ouvertureReglages = $state(0);
   let dialogueMiseAJour = $state(false);
   let etat = $state('');
   let erreur = $state(false);
@@ -127,6 +138,7 @@
         [identite, reglages] = await Promise.all([lireIdentite(), lireReglages()]);
         miseAJour ??= await miseAJourDisponible();
         if ((await etatAssistant()).ouvrir) assistant = true;
+        reprise = await etatRepriseV2();
       } catch (e) {
         signaler(`Démarrage incomplet : ${messageErreur(e)}`, true);
       }
@@ -145,6 +157,19 @@
       void arretMiseAJour.then((f) => f());
     };
   });
+
+  /** Le bandeau de la reprise vu : il ne revient plus (une v2 lancée, lui, revient tant qu'elle tourne). */
+  function rangerReprise(voir: boolean) {
+    repriseRangee = true;
+    if (reprise?.bilan && !reprise.bilan.annonce) {
+      void repriseV2Vue().catch((e: unknown) => signaler(messageErreur(e), true));
+    }
+    if (voir) {
+      ongletReglages = 'lieux';
+      ouvertureReglages += 1;
+      page = 'reglages';
+    }
+  }
 
   async function enregistrer() {
     if (!reglages) return;
@@ -185,6 +210,13 @@
       >
         <Bouton genre="discret" petit onclick={() => (bandeauRange = true)}>Plus tard</Bouton>
         <Bouton petit onclick={() => (dialogueMiseAJour = true)}>Voir</Bouton>
+      </Bandeau>
+    {/if}
+
+    {#if bandeauReprise}
+      <Bandeau etiquette={bandeauReprise.etiquette} texte={bandeauReprise.texte}>
+        <Bouton genre="discret" petit onclick={() => rangerReprise(false)}>Compris</Bouton>
+        <Bouton petit onclick={() => rangerReprise(true)}>Voir dans Emplacements</Bouton>
       </Bandeau>
     {/if}
 
@@ -234,8 +266,8 @@
       {:else if page === 'casting'}
         <Casting {signaler} />
       {:else if page === 'reglages'}
-        {#key apresAssistant}
-          <PageReglages {signaler} ouvrirAssistant={() => (assistant = true)} />
+        {#key `${apresAssistant}-${ouvertureReglages}`}
+          <PageReglages {signaler} ouvrirAssistant={() => (assistant = true)} ongletInitial={ongletReglages} />
         {/key}
       {:else if page === 'journal'}
         <Journal {signaler} />

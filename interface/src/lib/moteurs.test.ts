@@ -43,6 +43,7 @@ describe('moteurs', () => {
   it('dit chaque statut en mots', () => {
     expect(libelleStatut('a_jour')).toBe('à jour');
     expect(libelleStatut('externe')).toBe('ton ComfyUI');
+    expect(libelleStatut('externe', 'llama.cpp officiel (CUDA 13.4)')).toBe('ton llama.cpp officiel');
   });
 
   it('propose d’installer seulement ce qui n’est pas à jour', () => {

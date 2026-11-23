@@ -49,6 +49,7 @@ pub mod presence;
 pub mod prompt;
 pub mod reglages;
 pub mod reglages_fins;
+pub mod reprise;
 pub mod retouche;
 pub mod retrouver;
 pub mod rushes;

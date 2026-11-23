@@ -8,6 +8,7 @@ use std::time::Duration;
 use aria_coeur::Dossier;
 use aria_coeur::cles::{self, EtatCle, Source};
 use aria_coeur::emplacements::{Emplacements, EtatEmplacements};
+use aria_coeur::reprise::{self, Bilan};
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
@@ -21,6 +22,21 @@ pub struct EtatLieux {
     #[serde(flatten)]
     pub emplacements: EtatEmplacements,
     pub libres: BTreeMap<String, Option<u64>>,
+}
+
+/// La reprise d'une v2 pour cet essai : ce qui a été repris, ou une v2 trouvée mais lancée en même temps.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EtatReprise {
+    pub bilan: Option<Bilan>,
+    /// Une v2 est installée mais tournait au lancement : rien n'a été repris.
+    pub v2_lancee: bool,
+}
+
+/// Ce que le lancement a constaté de la v2 (une v2 lancée en même temps ne se voit qu'au lancement).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RepriseAuLancement {
+    pub v2_lancee: bool,
 }
 
 /// Le résultat d'un test de clé.
@@ -58,6 +74,48 @@ async fn hors_interface<T: Send + 'static>(
 pub async fn etat_emplacements(lieux: State<'_, Emplacements>) -> Result<EtatLieux, String> {
     let lieux = lieux.inner().clone();
     hors_interface(move || Ok(etat_lieux(&lieux))).await
+}
+
+/// La reprise d'une v2 faite pour cet essai portable, s'il y en a eu une.
+#[tauri::command]
+pub async fn etat_reprise_v2(
+    lieux: State<'_, Emplacements>,
+    lancement: State<'_, RepriseAuLancement>,
+) -> Result<EtatReprise, String> {
+    let dossier = lieux.dossier.clone();
+    let v2_lancee = lancement.v2_lancee;
+    hors_interface(move || {
+        Ok(EtatReprise {
+            bilan: reprise::bilan(&dossier),
+            v2_lancee,
+        })
+    })
+    .await
+}
+
+/// Le bandeau de la reprise a été vu : il ne revient plus.
+#[tauri::command]
+pub async fn reprise_v2_vue(lieux: State<'_, Emplacements>) -> Result<(), String> {
+    let dossier = lieux.dossier.clone();
+    hors_interface(move || reprise::marquer_annoncee(&dossier)).await
+}
+
+/// Ne plus utiliser les dossiers de la v2 : l'essai revient aux siens au prochain lancement.
+#[tauri::command]
+pub async fn annuler_reprise_v2(lieux: State<'_, Emplacements>) -> Result<Vec<String>, String> {
+    let dossier = lieux.dossier.clone();
+    hors_interface(move || {
+        let retires = reprise::annuler(&dossier)?;
+        aria_coeur::journal::noter(
+            &dossier,
+            "Dossiers de la version 2 laissés",
+            &retires.join(", "),
+            aria_coeur::journal::Resultat::Ok,
+            Some("l'essai reprend ses propres dossiers au prochain lancement"),
+        );
+        Ok(retires)
+    })
+    .await
 }
 
 /// Ouvre un dossier connu dans l'Explorateur de Windows.

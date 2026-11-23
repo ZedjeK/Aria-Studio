@@ -802,6 +802,39 @@ export interface TestCle {
 
 export const etatEmplacements = (): Promise<EtatLieux> => invoke<EtatLieux>('etat_emplacements');
 
+/** Un dossier d'une v2 repris pour un essai portable (aria_coeur::reprise::Element). */
+export interface ElementRepris {
+  /** `modeles`, `comfyui`, `llama` ou `llama-prism`. */
+  cle: string;
+  nom: string;
+  chemin: string;
+}
+
+/** Ce qui a été repris d'une v2 installée (aria_coeur::reprise::Bilan). */
+export interface Bilan {
+  depuis: string;
+  date: string;
+  repris: ElementRepris[];
+  /** Le bandeau du premier lancement a été vu. */
+  annonce: boolean;
+  /** Les clés reprises qui valent encore (ni changées ni retirées depuis). */
+  enVigueur: string[];
+}
+
+export interface EtatReprise {
+  bilan: Bilan | null;
+  /** Une v2 installée tournait au lancement : rien n'a été repris. */
+  v2Lancee: boolean;
+}
+
+export const etatRepriseV2 = (): Promise<EtatReprise> => invoke<EtatReprise>('etat_reprise_v2');
+
+/** Le bandeau de la reprise a été vu : il ne revient plus. */
+export const repriseV2Vue = (): Promise<void> => invoke<void>('reprise_v2_vue');
+
+/** Ne plus utiliser les dossiers de la v2 (au prochain lancement) ; rend les clés retirées. */
+export const annulerRepriseV2 = (): Promise<string[]> => invoke<string[]>('annuler_reprise_v2');
+
 /** Ouvre un dossier connu dans l'Explorateur (`sous` : un sous-dossier connu des modèles). */
 export const ouvrirDossier = (cle: string, sous: string | null = null): Promise<void> =>
   invoke<void>('ouvrir_dossier', { cle, sous });

@@ -301,12 +301,13 @@ pub fn noeuds_manquants(connus: &[String]) -> Vec<String> {
 
 /// L'état de chaque moteur du catalogue, dans l'ordre du catalogue.
 ///
-/// `externe` : le ComfyUI de l'utilisateur, s'il en a choisi un. `occupe` dit si un programme écoute sur un port
-/// (`comfyui`, `llama`), une seule fois par port.
+/// `externes` : les moteurs pris ailleurs que dans le dossier d'Aria, par identifiant (le ComfyUI de l'utilisateur,
+/// les moteurs d'une v2 reprise pour un essai). `occupe` dit si un programme écoute sur un port (`comfyui`, `llama`),
+/// une seule fois par port.
 pub fn etat(
     catalogue: &Catalogue,
     moteurs: &Path,
-    externe: Option<&Path>,
+    externes: &BTreeMap<String, PathBuf>,
     extracteurs: &Extracteurs,
     occupe: impl Fn(&str) -> bool,
 ) -> Vec<EtatMoteur> {
@@ -318,9 +319,10 @@ pub fn etat(
         .map(|(id, m)| {
             let dossier = moteurs.join(&m.dossier);
             let pris = *ports.entry(m.port.as_str()).or_insert_with(|| occupe(&m.port));
-            let externe = if id == "comfyui" { externe } else { None };
+            let externe = externes.get(id).map(PathBuf::as_path);
             let (statut, version_installee) = match externe {
-                Some(chemin) => (Statut::Externe, version_comfyui(chemin)),
+                Some(chemin) if id == "comfyui" => (Statut::Externe, version_comfyui(chemin)),
+                Some(_) => (Statut::Externe, None),
                 None if !dossier.join(&m.preuve).is_file() => (Statut::Absent, None),
                 None => match fiche(&dossier) {
                     None => (Statut::Manuel, None),
@@ -1004,7 +1006,9 @@ moteurs:
         let serveur = zip(&[("llama-server.exe", "serveur"), ("ggml.dll", "ggml")]);
         let runtime = zip(&[("cudart64_13.dll", "cuda")]);
         let cat = catalogue(&serveur, &runtime, None);
-        let avant = etat(&cat, moteurs, None, &Extracteurs::default(), |_| false);
+        let avant = etat(&cat, moteurs, &BTreeMap::new(), &Extracteurs::default(), |_| {
+            false
+        });
         assert_eq!(avant[0].statut, Statut::Absent);
         assert_eq!(avant[0].a_telecharger, (serveur.len() + runtime.len()) as u64);
 
@@ -1013,7 +1017,9 @@ moteurs:
         for nom in ["llama-server.exe", "ggml.dll", "cudart64_13.dll", FICHE] {
             assert!(moteurs.join("llama").join(nom).is_file(), "{nom}");
         }
-        let apres = etat(&cat, moteurs, None, &Extracteurs::default(), |_| false);
+        let apres = etat(&cat, moteurs, &BTreeMap::new(), &Extracteurs::default(), |_| {
+            false
+        });
         assert_eq!(apres[0].statut, Statut::AJour);
         assert_eq!(apres[0].a_telecharger, 0);
         assert!(restes(moteurs).is_empty(), "{:?}", restes(moteurs));
@@ -1165,12 +1171,20 @@ moteurs:
         fs::create_dir_all(moteurs.join("llama")).unwrap();
         fs::write(moteurs.join("llama").join("llama-server.exe"), "v1").unwrap();
         assert_eq!(
-            etat(&cat, moteurs, None, &Extracteurs::default(), |_| false)[0].statut,
+            etat(&cat, moteurs, &BTreeMap::new(), &Extracteurs::default(), |_| {
+                false
+            })[0]
+                .statut,
             Statut::Manuel
         );
 
         installer(&cat, moteurs, &github(&serveur, &runtime)).unwrap();
-        assert!(etat(&cat, moteurs, None, &Extracteurs::default(), |_| false)[0].precedente);
+        assert!(
+            etat(&cat, moteurs, &BTreeMap::new(), &Extracteurs::default(), |_| {
+                false
+            })[0]
+                .precedente
+        );
         assert_eq!(revenir(&cat, "llama", moteurs, false).unwrap(), None);
         assert_eq!(
             fs::read_to_string(moteurs.join("llama").join("llama-server.exe")).unwrap(),
@@ -1193,7 +1207,9 @@ moteurs:
             r#"{"id": "llama", "version": "b1", "installe_le": "2026-11-01T10:00:00", "archives": {}}"#,
         )
         .unwrap();
-        let e = &etat(&cat, moteurs, None, &Extracteurs::default(), |_| false)[0];
+        let e = &etat(&cat, moteurs, &BTreeMap::new(), &Extracteurs::default(), |_| {
+            false
+        })[0];
         assert_eq!(e.statut, Statut::Different);
         assert_eq!(e.version_installee.as_deref(), Some("b1"));
     }
@@ -1364,9 +1380,13 @@ moteurs:
     fn le_catalogue_du_depot_donne_un_etat_pour_chaque_moteur() {
         let temp = tempfile::tempdir().unwrap();
         let cat = Catalogue::embarque().unwrap();
-        let etats = etat(&cat, temp.path(), None, &Extracteurs::default(), |port| {
-            port == "llama"
-        });
+        let etats = etat(
+            &cat,
+            temp.path(),
+            &BTreeMap::new(),
+            &Extracteurs::default(),
+            |port| port == "llama",
+        );
         assert_eq!(etats.len(), 3);
         assert!(etats.iter().all(|e| e.statut == Statut::Absent));
         let comfyui = etats.iter().find(|e| e.id == "comfyui").unwrap();
@@ -1377,6 +1397,18 @@ moteurs:
                 .iter()
                 .filter(|e| e.id.starts_with("llama"))
                 .all(|e| e.occupe)
+        );
+        // Les moteurs d'une v2 repris : externes, jamais à installer.
+        let externes = BTreeMap::from([("llama".to_owned(), temp.path().join("v2").join("llama"))]);
+        let etats = etat(&cat, temp.path(), &externes, &Extracteurs::default(), |_| false);
+        let llama = etats.iter().find(|e| e.id == "llama").unwrap();
+        assert_eq!(
+            (llama.statut, llama.externe, llama.prerequis.clone()),
+            (Statut::Externe, true, None)
+        );
+        assert_eq!(
+            llama.chemin,
+            temp.path().join("v2").join("llama").display().to_string()
         );
     }
 

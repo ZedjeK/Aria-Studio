@@ -11,8 +11,9 @@ const LIBELLES: Record<StatutMoteur, string> = {
   externe: 'ton ComfyUI',
 };
 
-/** Le statut d'un moteur, en mots. */
-export function libelleStatut(statut: StatutMoteur): string {
+/** Le statut d'un moteur, en mots. Un moteur pris ailleurs que chez Aria : « ton ComfyUI », « ton llama.cpp »… */
+export function libelleStatut(statut: StatutMoteur, nom?: string): string {
+  if (statut === 'externe' && nom) return `ton ${nom.split(' (')[0]}`;
   return LIBELLES[statut];
 }
 

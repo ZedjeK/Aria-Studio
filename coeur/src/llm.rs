@@ -406,7 +406,10 @@ pub fn lancement(lieux: &Lieux, modele: Option<&str>) -> Result<Lancement, Strin
     }
     let (moteur, _) = moteur(&lieux.dossier, &lieux.modeles, &nom);
     Ok(Lancement {
-        serveur: lieux.moteurs.join(&moteur).join(EXECUTABLE),
+        // Le llama.cpp choisi ailleurs (celui d'une v2 repris pour un essai), sinon celui d'Aria.
+        serveur: crate::emplacements::moteur_externe(&lieux.dossier, &moteur)
+            .unwrap_or_else(|| lieux.moteurs.join(&moteur))
+            .join(EXECUTABLE),
         modele: llm.join(&nom),
         port: lieux.port,
         contexte,
@@ -651,6 +654,16 @@ mod tests {
         let l = lancement(&b.lieux, None).unwrap();
         assert_eq!(l.serveur, b.lieux.moteurs.join("llama-prism").join(EXECUTABLE));
         assert_eq!(l.modele, b.modeles().join("llm").join(LLM_ORIGINE));
+
+        // Un llama.cpp pris ailleurs (celui d'une v2 reprise pour un essai) : son llama-server.
+        let ailleurs = b.lieux.moteurs.with_file_name("v2-llama-prism");
+        b.regler(&format!(
+            r#"{{"emplacements": {{"llama-prism": {}}}}}"#,
+            serde_json::to_string(&ailleurs.display().to_string()).unwrap()
+        ));
+        let l = lancement(&b.lieux, None).unwrap();
+        assert_eq!(l.serveur, ailleurs.join(EXECUTABLE));
+        b.regler("{}");
 
         // Un spécialiste : ses réglages d'entraînement.
         b.poser(T2I, &essai::gguf(&[12]));
