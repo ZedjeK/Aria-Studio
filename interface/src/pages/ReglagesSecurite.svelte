@@ -31,6 +31,9 @@
   let phrase = $state('');
   let essai = $state<EssaiSecurite | null>(null);
   let saisies = $state<Record<string, string>>({});
+  /** La liste à laquelle le terme tapé s'ajoute (une seule ligne d'ajout pour les trois listes). */
+  let listeChoisie = $state('');
+  const listeAjout = $derived(etat?.listes.find((l) => l.cle === listeChoisie) ?? etat?.listes[0]);
   let confirmation = $state<{ liste: string; terme: string; message: string } | null>(null);
 
   const echecs = $derived(etat?.temoins.filter((t) => !t.ok).length ?? 0);
@@ -108,59 +111,78 @@
   <p class="ko" role="alert">{etat.erreur}. Tant que ce n'est pas corrigé, toute génération est refusée.</p>
 {/if}
 
-<Panneau titre="Essayer une phrase">
-  <textarea rows="2" bind:value={phrase} placeholder="Une idée ou un prompt, pour voir ce que le filtre en dit"></textarea>
+<Panneau titre="Listes du filtre">
+  <div class="listes">
+    {#each etat?.listes ?? [] as liste (liste.cle)}
+      <div class="liste">
+        <div class="entete">
+          <strong class="nom">{liste.nom}</strong>
+          <span class="puce">socle : {liste.socle.length} termes</span>
+          <span class="puce cyan">mes ajouts : {liste.ajouts.length}</span>
+        </div>
+        <details>
+          <summary class="discret">Lire le socle livré</summary>
+          <p class="socle code">{liste.socle.join(' · ')}</p>
+        </details>
+        {#if liste.ajouts.length > 0}
+          <ul class="ajouts">
+            {#each liste.ajouts as terme (terme)}
+              <li>
+                <span>{terme}</span>
+                <button type="button" class="retirer" aria-label={`Retirer ${terme}`} onclick={() => void retirer(liste.cle, terme)}>✕</button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/each}
+  </div>
+  {#if listeAjout}
+    <div class="ligne">
+      <select aria-label="Liste à compléter" value={listeAjout.cle} onchange={(e) => (listeChoisie = e.currentTarget.value)}>
+        {#each etat?.listes ?? [] as liste (liste.cle)}
+          <option value={liste.cle}>{liste.nom}</option>
+        {/each}
+      </select>
+      <input
+        type="text"
+        aria-label={`Ajouter à : ${listeAjout.nom}`}
+        placeholder={`Un terme (${etat?.longueurMin ?? 3} lettres au moins)`}
+        bind:value={saisies[listeAjout.cle]}
+      />
+      <Bouton petit desactive={(saisies[listeAjout.cle] ?? '').trim() === ''} onclick={() => void ajouter(listeAjout.cle)}>＋ Ajouter</Bouton>
+    </div>
+  {/if}
+  <p class="discret note">Le socle se lit seul : il est livré dans l'exe. Tes ajouts s'y ajoutent et se retirent d'un clic.</p>
+</Panneau>
+
+<Panneau titre="Essayer une phrase" accentue>
+  <textarea rows="2" bind:value={phrase} placeholder="Écris une phrase : le filtre dit s'il bloquerait"></textarea>
   <div class="ligne">
-    <Bouton petit desactive={phrase.trim() === ''} onclick={() => void essayer()}>Essayer</Bouton>
+    <Bouton genre="principal" desactive={phrase.trim() === ''} onclick={() => void essayer()}>Essayer</Bouton>
     {#if essai}
-      <span class:ko={essai.bloque} class:bon={!essai.bloque}>
+      <span class="verdict" class:ko={essai.bloque} class:bon={!essai.bloque} role="status">
         {essai.bloque ? `Bloquée : ${essai.termes.map((t) => t.terme).join(', ')}` : 'Elle passe.'}
       </span>
-      <Bouton genre="discret" petit desactive={phrase.trim() === ''} onclick={() => void garderTemoin('bloque')}>
-        Garder : doit bloquer
-      </Bouton>
-      <Bouton genre="discret" petit desactive={phrase.trim() === ''} onclick={() => void garderTemoin('passe')}>
-        Garder : doit passer
-      </Bouton>
     {/if}
+  </div>
+  <div class="ligne">
+    <Bouton genre="discret" petit desactive={phrase.trim() === ''} onclick={() => void garderTemoin('bloque')}>
+      ＋ témoin « doit bloquer »
+    </Bouton>
+    <Bouton genre="discret" petit desactive={phrase.trim() === ''} onclick={() => void garderTemoin('passe')}>
+      ＋ témoin « doit passer »
+    </Bouton>
   </div>
 </Panneau>
 
-{#each etat?.listes ?? [] as liste (liste.cle)}
-  <Panneau titre={liste.nom}>
-    <details>
-      <summary class="discret">Socle livré : {liste.socle.length} termes</summary>
-      <p class="socle code">{liste.socle.join(' · ')}</p>
-    </details>
-    <p class="etiquette">Tes ajouts</p>
-    {#if liste.ajouts.length === 0}
-      <p class="discret">Aucun.</p>
-    {:else}
-      <ul class="ajouts">
-        {#each liste.ajouts as terme (terme)}
-          <li>
-            <span>{terme}</span>
-            <button type="button" class="retirer" aria-label={`Retirer ${terme}`} onclick={() => void retirer(liste.cle, terme)}>✕</button>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-    <div class="ligne">
-      <input
-        type="text"
-        aria-label={`Ajouter à : ${liste.nom}`}
-        placeholder={`Un terme (${etat?.longueurMin ?? 3} lettres au moins)`}
-        bind:value={saisies[liste.cle]}
-      />
-      <Bouton petit desactive={(saisies[liste.cle] ?? '').trim() === ''} onclick={() => void ajouter(liste.cle)}>Ajouter</Bouton>
-    </div>
-  </Panneau>
-{/each}
-
 {#if etat && etat.temoins.length > 0}
   <Panneau titre="Phrases témoins">
-    <p class:ko={echecs > 0} class="discret">
-      {echecs === 0 ? 'Toutes donnent le résultat attendu.' : `${echecs} ne donne${echecs > 1 ? 'nt' : ''} pas le résultat attendu.`}
+    <p class:ko={echecs > 0} class:bon={echecs === 0} class="verdict-temoins">
+      {echecs === 0
+        ? '✓ Tous les témoins donnent le résultat attendu (rejoués à l’instant).'
+        : `${echecs} témoin${echecs > 1 ? 's ne donnent' : ' ne donne'} pas le résultat attendu.`}
+      <span class="discret"> Revérifiées à chaque changement.</span>
     </p>
     <table>
       <thead><tr><th>Phrase</th><th>Attendu</th><th>Obtenu</th><th></th></tr></thead>
@@ -215,13 +237,47 @@
     margin-top: 10px;
   }
 
-  .etiquette {
-    margin: 12px 0 6px;
+  .listes {
+    display: grid;
+    gap: 4px;
+  }
+
+  .liste {
+    padding: 8px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--ligne) 50%, transparent);
+  }
+
+  .entete {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+  }
+
+  .nom {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .puce {
+    padding: 1px 8px;
+    border: 1px solid var(--ligne);
     color: var(--texte-2);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .puce.cyan {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  .note {
+    margin: 8px 0 0;
+  }
+
+  .verdict-temoins {
+    margin: 0 0 8px;
   }
 
   .socle {
@@ -235,7 +291,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin: 0;
+    margin: 8px 0 0;
     padding: 0;
     list-style: none;
   }
