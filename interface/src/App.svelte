@@ -11,11 +11,13 @@
     etatAssistant,
     etatRepriseV2,
     identite as lireIdentite,
+    lireMoteurs,
     lireReglages,
     messageErreur,
     miseAJourDisponible,
     quitter,
     repriseV2Vue,
+    type EtatMoteur,
     type EtatReprise,
     type Identite,
     type InfosMiseAJour,
@@ -25,7 +27,7 @@
     type EnvoiRetouche,
     type Sequence,
   } from './lib/api';
-  import type { Pastille } from './lib/menu';
+  import { pastillesMoteurs, type Pastille } from './lib/menu';
   import { texteBandeau } from './lib/reprise';
   import Bandeau from './lib/composants/Bandeau.svelte';
   import BarreTitre from './lib/composants/BarreTitre.svelte';
@@ -35,7 +37,6 @@
   import MenuLateral from './lib/composants/MenuLateral.svelte';
   import DialogueAssistant from './dialogues/Assistant.svelte';
   import DialogueMiseAJour from './dialogues/MiseAJour.svelte';
-  import Accueil from './pages/Accueil.svelte';
   import Casting from './pages/Casting.svelte';
   import Journal from './pages/Journal.svelte';
   import Modeles from './pages/Modeles.svelte';
@@ -46,14 +47,13 @@
   import Scenario from './pages/Scenario.svelte';
   import PageReglages from './pages/Reglages.svelte';
 
-  type Page = 'accueil' | 'scenario' | 'plateau' | 'retouche' | 'montage' | 'modeles' | 'casting' | 'reglages' | 'journal' | 'parametres';
+  type Page = 'scenario' | 'plateau' | 'retouche' | 'montage' | 'modeles' | 'casting' | 'reglages' | 'journal' | 'parametres';
 
-  // Les familles de pages : le travail de l'appli d'abord, puis l'appli elle-même. À adapter.
+  // Les familles de pages : ce qu'on crée, ce qu'on prépare, puis l'appli elle-même. Aria Studio s'ouvre sur le Plateau.
   const familles: { titre: string; pages: { id: Page; titre: string }[] }[] = [
     {
-      titre: 'Travail',
+      titre: 'Création',
       pages: [
-        { id: 'accueil', titre: 'Accueil' },
         { id: 'scenario', titre: 'Scénario' },
         { id: 'plateau', titre: 'Plateau' },
         { id: 'retouche', titre: 'Retouche' },
@@ -79,7 +79,7 @@
 
   let identite = $state<Identite | null>(null);
   let reglages = $state<Reglages | null>(null);
-  let page = $state<Page>('accueil');
+  let page = $state<Page>('plateau');
   /** L'assistant de premier lancement : ouvert tout seul tant qu'il manque de quoi générer, ou depuis Réglages. */
   let assistant = $state(false);
   /** Change quand l'assistant a fini : les pages relisent leurs listes (favoris, moteurs). */
@@ -92,8 +92,8 @@
   /** Une consigne de retouche, ou le prompt d'un clip, écrits au Scénario. */
   let versRetouche = $state<EnvoiRetouche | null>(null);
   let versClip = $state<EnvoiClip | null>(null);
-  let fraction = $state<number | null>(null);
-  let mesure = $state('');
+  /** L'état des moteurs, relu toutes les quelques secondes pour les pastilles du haut. */
+  let moteurs = $state<EtatMoteur[] | null>(null);
   let miseAJour = $state<InfosMiseAJour | null>(null);
   let bandeauRange = $state(false);
   /** La reprise d'une v2 pour un essai portable : annoncée une fois au premier lancement. */
@@ -110,22 +110,16 @@
   const nomCourt = $derived(identite?.nom.replace(/^Aria\s+/, '') ?? '');
   const famille = $derived(familles.find((f) => f.pages.some((p) => p.id === page)));
   const titrePage = $derived(famille?.pages.find((p) => p.id === page)?.titre ?? '');
-  const pastilles: Pastille[] = $derived([
-    {
-      nom: 'Disque',
-      detail: fraction === null ? 'à tester' : `${Math.round(fraction * 100)} % libre`,
-      ton: fraction === null ? 'repos' : fraction < 0.1 ? 'attention' : 'actif',
-    },
-    {
-      nom: 'Mises à jour',
-      detail: miseAJour
-        ? `${miseAJour.version} disponible`
-        : reglages?.chercherMisesAJour === false
-          ? 'désactivées'
-          : 'aucune connue',
-      ton: miseAJour ? 'information' : 'repos',
-    },
-  ]);
+  const pastilles: Pastille[] = $derived(pastillesMoteurs(moteurs));
+
+  /** Relit l'état des moteurs ; une lecture ratée garde la précédente (la page Moteurs, elle, dit l'erreur). */
+  async function relireMoteurs() {
+    try {
+      moteurs = (await lireMoteurs()).moteurs;
+    } catch {
+      // Les pastilles gardent leur dernier état.
+    }
+  }
 
   function signaler(texte: string, estErreur = false) {
     etat = texte;
@@ -143,6 +137,11 @@
         signaler(`Démarrage incomplet : ${messageErreur(e)}`, true);
       }
     })();
+    // Les pastilles ComfyUI et LLM : une lecture au lancement, puis toutes les 5 secondes tant que la fenêtre est visible.
+    void relireMoteurs();
+    const minuteurMoteurs = setInterval(() => {
+      if (!document.hidden) void relireMoteurs();
+    }, 5000);
     // « Paramètres » et « Voir la mise à jour » dans le menu de l'icône.
     const arretAllerA = ecouter<string>('aller-a', (cible) => {
       if (cible === 'parametres') page = 'parametres';
@@ -153,6 +152,7 @@
       void miseAJourDisponible().then((infos) => (miseAJour = infos));
     });
     return () => {
+      clearInterval(minuteurMoteurs);
       void arretAllerA.then((f) => f());
       void arretMiseAJour.then((f) => f());
     };
@@ -221,9 +221,7 @@
     {/if}
 
     <div class="page">
-      {#if page === 'accueil'}
-        <Accueil {identite} bind:fraction bind:mesure {signaler} />
-      {:else if page === 'scenario'}
+      {#if page === 'scenario'}
         <Scenario
           {signaler}
           envoyer={(prompt, workflow, references, modeReference) => {
