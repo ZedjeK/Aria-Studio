@@ -4,6 +4,7 @@
 //! `cfg(windows)` et testés par la CI Windows.
 
 pub mod carte;
+pub mod casting;
 pub mod catalogue;
 pub mod cles;
 pub mod collection;

@@ -1588,3 +1588,113 @@ export interface Decoupe {
 /** Le LLM écrit les prompts des plans ; les garde-fous du cœur les contrôlent. */
 export const decouperSequence = (demande: DemandeDecoupage): Promise<Decoupe> =>
   invoke<Decoupe>('decouper_sequence', { demande });
+
+// --- Casting (aria_coeur::casting, data\bancs\ au format de la v2) ---
+
+export type TacheCasting = 'texte_vers_image' | 'retouche' | 'reecriture' | 'image_vers_video' | 'texte_vers_video';
+
+export interface EssaiCasting {
+  id: string;
+  teste: string;
+  prompt: string;
+  source?: string;
+}
+
+export interface CandidatCasting {
+  id: string;
+  nom: string;
+  /** Les fichiers qui lui manquent. */
+  manquants: number;
+}
+
+export interface PreparationCasting {
+  tache: TacheCasting;
+  candidats: CandidatCasting[];
+  /** Casting LLM : le modèle qui rend les prompts. */
+  rendu: CandidatCasting | null;
+  sources: { nom: string; presente: boolean }[];
+  essais: EssaiCasting[];
+  seeds: number[];
+  total: number;
+  /** Ce qui empêche le casting de partir ; null s'il peut partir. */
+  blocage: string | null;
+}
+
+/** Un casting fait (snake_case : format de la v2). */
+export interface ResumeCasting {
+  id: string;
+  tache: TacheCasting;
+  date: string;
+  revele: boolean;
+  nb_workflows: number;
+  favori: string | null;
+  notees: number;
+  total: number;
+}
+
+export interface EtatCasting {
+  /** Le casting en cours (le lancement vient avec la suite du portage). */
+  actif: { id: string; tache: TacheCasting; etat: string; erreur: string | null; fait: number; total: number; courant: string } | null;
+  castings: ResumeCasting[];
+  preparation: { vramMaxOccupeeGo: number; taches: PreparationCasting[] };
+}
+
+export interface GenerationCasting {
+  prompt: string;
+  seed: number;
+  fichier: string;
+  note: number | null;
+  peut_servir_de_source: boolean;
+  est_la_source: boolean;
+  /** Révélé seulement : le prompt écrit par le LLM, et ses contrôles. */
+  texte: string | null;
+  controles: Record<string, boolean | number | null> | null;
+}
+
+export interface ModeleCasting {
+  /** Une lettre à l'aveugle, l'identifiant ensuite. */
+  cle: string;
+  nom: string;
+  generations: GenerationCasting[];
+  resume: Record<string, number | string | null> | null;
+  liberation: { vram_avant_go?: number; vram_apres_go?: number; duree_s?: number } | null;
+}
+
+export interface VueCasting {
+  id: string;
+  tache: TacheCasting;
+  date: string;
+  seeds: number[];
+  prompts: EssaiCasting[];
+  vram_base_go: number | null;
+  revele: boolean;
+  favori: string | null;
+  par_defaut: string | null;
+  notees: number;
+  total: number;
+  modeles: ModeleCasting[];
+}
+
+export const lireCastings = (): Promise<EtatCasting> => invoke<EtatCasting>('lire_castings');
+
+export const lireCasting = (id: string): Promise<VueCasting> => invoke<VueCasting>('lire_casting', { id });
+
+/** Une image (ou un clip) d'un casting, en octets. */
+export const imageCasting = (id: string, cle: string, fichier: string): Promise<ArrayBuffer> =>
+  invoke<ArrayBuffer>('image_casting', { id, cle, fichier });
+
+/** Une image de départ des castings de retouche et d'image vers vidéo, en octets. */
+export const sourceCasting = (nom: string): Promise<ArrayBuffer> => invoke<ArrayBuffer>('source_casting', { nom });
+
+export const noterCasting = (id: string, cle: string, fichier: string, note: number): Promise<VueCasting> =>
+  invoke<VueCasting>('noter_casting', { id, cle, fichier, note });
+
+/** Révèle les modèles : ça ne se défait pas. */
+export const revelerCasting = (id: string): Promise<VueCasting> => invoke<VueCasting>('reveler_casting', { id });
+
+export const favoriCasting = (id: string, workflow: string): Promise<VueCasting> =>
+  invoke<VueCasting>('favori_casting', { id, workflow });
+
+/** Fige l'image comme image de départ des castings de retouche. */
+export const sourceDepuisCasting = (id: string, cle: string, fichier: string): Promise<VueCasting> =>
+  invoke<VueCasting>('source_depuis_casting', { id, cle, fichier });

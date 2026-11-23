@@ -30,6 +30,7 @@
   import MenuLateral from './lib/composants/MenuLateral.svelte';
   import DialogueMiseAJour from './dialogues/MiseAJour.svelte';
   import Accueil from './pages/Accueil.svelte';
+  import Casting from './pages/Casting.svelte';
   import Journal from './pages/Journal.svelte';
   import Modeles from './pages/Modeles.svelte';
   import Montage from './pages/Montage.svelte';
@@ -39,7 +40,7 @@
   import Scenario from './pages/Scenario.svelte';
   import PageReglages from './pages/Reglages.svelte';
 
-  type Page = 'accueil' | 'scenario' | 'plateau' | 'retouche' | 'montage' | 'modeles' | 'reglages' | 'journal' | 'parametres';
+  type Page = 'accueil' | 'scenario' | 'plateau' | 'retouche' | 'montage' | 'modeles' | 'casting' | 'reglages' | 'journal' | 'parametres';
 
   // Les familles de pages : le travail de l'appli d'abord, puis l'appli elle-même. À adapter.
   const familles: { titre: string; pages: { id: Page; titre: string }[] }[] = [
@@ -57,6 +58,7 @@
       titre: 'Préparation',
       pages: [
         { id: 'modeles', titre: 'Modèles' },
+        { id: 'casting', titre: 'Casting' },
         { id: 'reglages', titre: 'Réglages' },
       ],
     },
@@ -222,6 +224,8 @@
         />
       {:else if page === 'modeles'}
         <Modeles {signaler} />
+      {:else if page === 'casting'}
+        <Casting {signaler} />
       {:else if page === 'reglages'}
         <PageReglages {signaler} />
       {:else if page === 'journal'}

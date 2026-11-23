@@ -10,8 +10,8 @@ use aria_coeur::montage::{self, DemandeClip, OptionsMontage};
 use aria_coeur::plateau::{Commande, Contexte, Demande, Options, Plateau};
 use aria_coeur::retouche::{self, DemandeAgrandissement, DemandeRetouche};
 use aria_coeur::rushes::{self, EtatRushes};
+use aria_coeur::{casting, sequences, voix};
 use aria_coeur::{creations, journal};
-use aria_coeur::{sequences, voix};
 use serde_json::Value;
 use tauri::State;
 use tauri::ipc::Response;
@@ -411,4 +411,99 @@ pub async fn tourner_sequence(
     plans: Vec<usize>,
 ) -> Result<Commande, String> {
     hors_interface(&plateau, move |p| p.commander_sequence(&id, &plans)).await
+}
+
+/// Le Casting : les castings faits, et ce que ferait un casting de chaque tâche.
+#[tauri::command]
+pub async fn lire_castings(plateau: State<'_, Arc<Plateau>>) -> Result<casting::EtatCasting, String> {
+    hors_interface(&plateau, move |p| casting::etat(p.contexte())).await
+}
+
+/// Les résultats d'un casting, à l'aveugle tant qu'il n'est pas révélé.
+#[tauri::command]
+pub async fn lire_casting(plateau: State<'_, Arc<Plateau>>, id: String) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| casting::vue(p.contexte(), &id)).await
+}
+
+/// Une image (ou un clip) d'un casting, en octets.
+#[tauri::command]
+pub async fn image_casting(
+    plateau: State<'_, Arc<Plateau>>,
+    id: String,
+    cle: String,
+    fichier: String,
+) -> Result<Response, String> {
+    hors_interface(&plateau, move |p| {
+        let chemin = casting::chemin_image(&p.contexte().data, &id, &cle, &fichier)?;
+        std::fs::read(&chemin)
+            .map(Response::new)
+            .map_err(|e| format!("{fichier} illisible : {e}"))
+    })
+    .await
+}
+
+/// Une image de départ des castings de retouche et d'image vers vidéo, en octets.
+#[tauri::command]
+pub async fn source_casting(plateau: State<'_, Arc<Plateau>>, nom: String) -> Result<Response, String> {
+    hors_interface(&plateau, move |p| {
+        casting::source(&p.contexte().data, &nom)
+            .map(Response::new)
+            .ok_or_else(|| format!("Image de départ inconnue : {nom}"))
+    })
+    .await
+}
+
+/// Note une image de 1 à 5 ; rend le casting.
+#[tauri::command]
+pub async fn noter_casting(
+    plateau: State<'_, Arc<Plateau>>,
+    id: String,
+    cle: String,
+    fichier: String,
+    note: u8,
+) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| {
+        casting::noter(&p.contexte().data, &id, &cle, &fichier, note)?;
+        casting::vue(p.contexte(), &id)
+    })
+    .await
+}
+
+/// Révèle les modèles d'un casting (ça ne se défait pas) ; rend le casting.
+#[tauri::command]
+pub async fn reveler_casting(plateau: State<'_, Arc<Plateau>>, id: String) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| {
+        casting::reveler(&p.contexte().data, &id)?;
+        casting::vue(p.contexte(), &id)
+    })
+    .await
+}
+
+/// Fait d'un modèle du casting le modèle par défaut de sa tâche ; rend le casting.
+#[tauri::command]
+pub async fn favori_casting(
+    plateau: State<'_, Arc<Plateau>>,
+    id: String,
+    workflow: String,
+) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| {
+        casting::choisir_favori(p.contexte(), &id, &workflow)?;
+        casting::vue(p.contexte(), &id)
+    })
+    .await
+}
+
+/// Fige une image d'un casting texte vers image comme image de départ des castings de retouche ; rend le casting.
+#[tauri::command]
+pub async fn source_depuis_casting(
+    plateau: State<'_, Arc<Plateau>>,
+    id: String,
+    cle: String,
+    fichier: String,
+) -> Result<Value, String> {
+    hors_interface(&plateau, move |p| {
+        casting::utiliser_comme_source(&p.contexte().data, &id, &cle, &fichier)?;
+        casting::vue(p.contexte(), &id)
+    })
+    .await
 }
