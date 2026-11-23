@@ -10,6 +10,7 @@
   import {
     creerSequence,
     decouperSequence,
+    estAnnulation,
     lireSequences,
     messageErreur,
     modifierSequence,
@@ -44,6 +45,7 @@
     traductionValide,
     type EtatDecoupage,
   } from '../lib/decoupage';
+  import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Dialogue from '../lib/composants/Dialogue.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -151,7 +153,7 @@
           : `${r.llm} · plan ${plan + 1} écrit en ${r.dureeS} s.`,
       );
     } catch (err) {
-      signaler(messageErreur(err), true);
+      signaler(estAnnulation(err) ? 'Écriture annulée.' : messageErreur(err), !estAnnulation(err));
     } finally {
       ecriture = null;
     }
@@ -392,6 +394,9 @@
     <Bouton genre="principal" desactive={occupe || llms.length === 0} onclick={toutEcrire}>
       {ecriture === 'tout' ? 'Le LLM écrit…' : '✨ Tout écrire'}
     </Bouton>
+    {#if ecriture !== null}
+      <AnnulerEcriture />
+    {/if}
   </div>
 </Panneau>
 

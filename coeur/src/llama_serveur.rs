@@ -5,9 +5,12 @@
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::process::Child;
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
-use crate::llama::{Demande, Lancement, Reponse, VARIABLE_CLE, erreur_http, lire_flux, nouvelle_cle};
+use crate::llama::{
+    Demande, Lancement, Reponse, VARIABLE_CLE, erreur_http, lire_flux_annulable, nouvelle_cle,
+};
 use crate::local;
 
 /// Le délai de démarrage par défaut.
@@ -131,6 +134,14 @@ impl ServeurLlama {
     /// llama-server n'est pas lancé ou ne répond pas, refuse la demande, ou rend une réponse vide : le message dit
     /// quoi faire.
     pub fn generer(&self, demande: &Demande) -> Result<Reponse, String> {
+        self.generer_annulable(demande, &AtomicBool::new(false))
+    }
+
+    /// Comme [`Self::generer`], mais s'arrête dès que `annule` passe à vrai (✕ Annuler du Scénario).
+    ///
+    /// # Errors
+    /// Voir [`Self::generer`] ; ou l'annulation ([`crate::comfy_serveur::ANNULEE`]).
+    pub fn generer_annulable(&self, demande: &Demande, annule: &AtomicBool) -> Result<Reponse, String> {
         let actif = self
             .actif
             .as_ref()
@@ -152,7 +163,7 @@ impl ServeurLlama {
             let texte = corps.read_to_string().unwrap_or_default();
             return Err(erreur_http(statut, &texte, actif.contexte));
         }
-        lire_flux(BufReader::new(corps.into_reader()), &envoi)
+        lire_flux_annulable(BufReader::new(corps.into_reader()), &envoi, annule)
     }
 }
 

@@ -372,6 +372,50 @@ impl Generateur for Arc<Mutex<Orchestrateur>> {
     }
 }
 
+/// L'écriture du Scénario, que ✕ Annuler arrête : le drapeau est lu avant de prendre la carte, après l'avoir prise,
+/// et à chaque morceau de la réponse. Il vit hors du verrou de l'orchestrateur, qu'une écriture garde tout du long.
+pub struct EcritureAnnulable {
+    pub orchestrateur: Arc<Mutex<Orchestrateur>>,
+    pub annule: Arc<AtomicBool>,
+}
+
+impl EcritureAnnulable {
+    fn verifier(&self) -> Result<(), String> {
+        if self.annule.load(Ordering::Relaxed) {
+            Err(ANNULEE.to_owned())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Generateur for EcritureAnnulable {
+    fn ecrire(&mut self, lancement: Lancement, demande: &llama::Demande) -> Result<llama::Reponse, String> {
+        self.verifier()?;
+        let mut orchestrateur = self
+            .orchestrateur
+            .lock()
+            .map_err(|_| "orchestrateur des moteurs indisponible".to_owned())?;
+        self.verifier()?;
+        let serveur = orchestrateur.llm(lancement)?;
+        self.verifier()?;
+        serveur.generer_annulable(demande, &self.annule)
+    }
+
+    fn televerser(&mut self, nom: &str, octets: &[u8]) -> Result<String, String> {
+        self.orchestrateur.televerser(nom, octets)
+    }
+
+    fn generer(
+        &mut self,
+        api: &Value,
+        progression: &mut dyn FnMut(u64, u64),
+        annule: &AtomicBool,
+    ) -> Result<Vec<Fichier>, String> {
+        self.orchestrateur.generer(api, progression, annule)
+    }
+}
+
 /// Les réglages de l'utilisateur pour ce workflow (`reglages.json`, `workflows.<id>`).
 fn reglages_workflow(dossier: &Dossier, id: &str) -> Option<ReglagesWorkflow> {
     reglages::section(dossier, "workflows")?

@@ -1090,6 +1090,17 @@ export function messageErreur(erreur: unknown): string {
   return 'erreur inconnue';
 }
 
+/** Le message d'une écriture ou d'une génération arrêtée par ✕ Annuler (aria_coeur::comfy_serveur::ANNULEE). */
+export const ANNULEE = 'Annulé';
+
+/** L'erreur vient de ✕ Annuler : ce n'est pas une panne. */
+export function estAnnulation(erreur: unknown): boolean {
+  return messageErreur(erreur) === ANNULEE;
+}
+
+/** ✕ Annuler : l'écriture en cours du Scénario s'arrête (le LLM cesse d'écrire). */
+export const annulerEcriture = (): Promise<void> => invoke<void>('annuler_ecriture');
+
 // --- Scénario : listes guidées et assemblage (aria_coeur::listes) ---
 
 export interface SujetScenario {

@@ -11,6 +11,7 @@
 use std::ffi::OsString;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde_json::{Map, Value, json};
 
@@ -215,11 +216,27 @@ pub struct Reponse {
 /// # Errors
 /// Une ligne `error:`, une lecture qui échoue, ou une réponse vide (avec ce qu'il faut faire).
 pub fn lire_flux(flux: impl BufRead, envoi: &Envoi) -> Result<Reponse, String> {
+    lire_flux_annulable(flux, envoi, &AtomicBool::new(false))
+}
+
+/// Comme [`lire_flux`], mais s'arrête dès que `annule` passe à vrai (✕ Annuler) : la lecture cesse, la connexion se
+/// ferme quand l'appelant la lâche, et llama-server arrête d'écrire.
+///
+/// # Errors
+/// Voir [`lire_flux`] ; ou l'annulation ([`crate::comfy_serveur::ANNULEE`]).
+pub fn lire_flux_annulable(
+    flux: impl BufRead,
+    envoi: &Envoi,
+    annule: &AtomicBool,
+) -> Result<Reponse, String> {
     let mut texte = String::new();
     let mut fin: Option<String> = None;
     let mut usage: Option<Value> = None;
     let mut timings: Option<Value> = None;
     for ligne in flux.lines() {
+        if annule.load(Ordering::Relaxed) {
+            return Err(crate::comfy_serveur::ANNULEE.to_owned());
+        }
         let ligne = ligne.map_err(|e| format!("Génération interrompue : {e}"))?;
         let ligne = ligne.trim();
         if let Some(reste) = ligne.strip_prefix("error:") {
@@ -492,6 +509,19 @@ mod tests {
 
     fn flux(lignes: &[&str]) -> Cursor<Vec<u8>> {
         Cursor::new(lignes.join("\n").into_bytes())
+    }
+
+    #[test]
+    fn une_ecriture_annulee_s_arrete() {
+        let envoi = Demande::default().envoi(false);
+        let lignes = [r#"data: {"choices": [{"delta": {"content": "Bon"}}]}"#];
+        let annule = AtomicBool::new(true);
+        assert_eq!(
+            lire_flux_annulable(flux(&lignes), &envoi, &annule).unwrap_err(),
+            crate::comfy_serveur::ANNULEE
+        );
+        let r = lire_flux_annulable(flux(&lignes), &envoi, &AtomicBool::new(false)).unwrap();
+        assert_eq!(r.texte, "Bon");
     }
 
     #[test]
