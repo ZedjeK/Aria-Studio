@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANCRAGES, pointsDuTrait, problemeTaille, tailleProposee, versImage } from './retouche';
+import { ANCRAGES, pointsDuTrait, problemeTaille, tailleProposee, texteCadre, versImage } from './retouche';
 
 describe('Retouche', () => {
   it('range les ancrages en grille 3 × 3', () => {
@@ -17,6 +17,16 @@ describe('Retouche', () => {
     expect(problemeTaille(source, 1536.5, 768)).toBe('La taille est un nombre entier de pixels.');
     expect(tailleProposee(source)).toEqual({ largeur: 1536, hauteur: 768 });
     expect(tailleProposee({ largeur: 4000, hauteur: 100 })).toEqual({ largeur: 4096, hauteur: 100 });
+  });
+
+  it('dit le cadre d’un agrandissement, avec son ancrage', () => {
+    const source = { largeur: 1344, hauteur: 768 };
+    const espace = ' ';
+    expect(texteCadre(source, 1792, 768, 'gauche')).toBe(
+      `Cadre agrandi : 1${espace}344 × 768 → 1${espace}792 × 768, ancré à gauche.`,
+    );
+    expect(texteCadre(source, 2000, 900, 'centre')).toContain('ancré au centre.');
+    expect(texteCadre(source, 2000, 900, 'inconnu')).toContain('ancré inconnu.');
   });
 
   it('ramène le pointeur aux pixels de l’image', () => {
