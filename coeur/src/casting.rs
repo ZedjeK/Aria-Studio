@@ -2,8 +2,9 @@
 //! comparaison à l'aveugle (notes de 1 à 5, révélation, modèle par défaut).
 //!
 //! Ce module tient le jeu d'essai livré (`casting/`), ce qu'un casting comparerait avant de partir (la préparation),
-//! son lancement (une commande de la file du Plateau : générations et mesures) et ses résultats, au format de la v2
-//! (`data\bancs\<id>\resultats.json`). Le Casting LLM (réécriture puis rendu) viendra avec la suite du portage.
+//! son lancement (une commande de la file du Plateau : générations et mesures ; pour le Casting LLM, réécriture des
+//! idées par chaque candidat, contrôles, puis rendu) et ses résultats, au format de la v2
+//! (`data\bancs\<id>\resultats.json`).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -19,8 +20,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::plateau::{self, Commande, Contexte, Generateur, Suivi};
+use crate::securite::{self, Filtre};
 use crate::workflows::{self, Workflow};
-use crate::{carte, comfy_serveur, fiches, llm, montage, reglages, retouche, securite};
+use crate::{carte, comfy_serveur, fiches, llm, montage, prompt, reglages, retouche};
 
 /// Le jeu de prompts des castings de génération, et celui des idées du Casting LLM (livrés avec l'appli).
 pub const PROMPTS: &str = include_str!("../../casting/prompts.yaml");
@@ -451,33 +453,51 @@ pub fn commande(
     ids: &[String],
     id_commande: String,
 ) -> Result<Commande, String> {
-    if tache == "reecriture" {
-        return Err("Le Casting LLM arrive avec la suite du portage".to_owned());
-    }
     if !TACHES.contains(&tache) {
         return Err(format!("Tâche inconnue : {tache}"));
     }
-    let candidats = candidats(tache, ids);
-    if let Some(blocage) = blocage_candidats(&candidats, &contexte.modeles, !ids.is_empty()) {
-        return Err(blocage);
-    }
     let essais = jeu_de_prompts(tache)?;
-    if let Some(blocage) = blocage_sources(&contexte.data, tache, &essais) {
-        return Err(blocage);
-    }
+    let mut ws = Map::new();
+    let (seeds, total, rendu) = if tache == "reecriture" {
+        // Casting LLM : chaque candidat réécrit les idées, puis le modèle par défaut de Texte vers image les rend.
+        let rendu = rendu_llm(contexte)?;
+        let candidats = candidats_llm(&contexte.modeles, &rendu.id);
+        if candidats.len() < 2 {
+            return Err("Il faut au moins deux candidats à comparer".to_owned());
+        }
+        if !rendu.manquants(&contexte.modeles).is_empty() {
+            return Err(pas_complets(&[nom_workflow(&rendu)]));
+        }
+        for c in &candidats {
+            let fichier = if c == TEMOIN { Value::Null } else { json!(c) };
+            ws.insert(
+                cle_llm(c),
+                json!({"nom": nom_llm(c), "fichier": fichier, "generations": [], "liberation": null, "resume": null}),
+            );
+        }
+        (vec![SEED_LLM], 2 * candidats.len() * essais.len(), Some(rendu.id)) // réécriture puis rendu
+    } else {
+        let candidats = candidats(tache, ids);
+        if let Some(blocage) = blocage_candidats(&candidats, &contexte.modeles, !ids.is_empty()) {
+            return Err(blocage);
+        }
+        if let Some(blocage) = blocage_sources(&contexte.data, tache, &essais) {
+            return Err(blocage);
+        }
+        for wf in &candidats {
+            ws.insert(
+                wf.id.clone(),
+                json!({"nom": nom_workflow(wf), "generations": [], "liberation": null, "resume": null}),
+            );
+        }
+        (SEEDS.to_vec(), candidats.len() * essais.len() * SEEDS.len(), None)
+    };
     let maintenant = Local::now();
     let id = format!("{}_{tache}", maintenant.format("%Y-%m-%d_%H%M%S"));
     if dossier_bancs(&contexte.data).join(&id).exists() {
         return Err("Un casting de cette tâche vient de partir : attends une seconde".to_owned());
     }
-    let mut ws = Map::new();
-    for wf in &candidats {
-        ws.insert(
-            wf.id.clone(),
-            json!({"nom": nom_workflow(wf), "generations": [], "liberation": null, "resume": null}),
-        );
-    }
-    let total = candidats.len() * essais.len() * SEEDS.len();
+    let cles: Vec<String> = ws.keys().cloned().collect();
     let mut r = Map::new();
     r.insert("id".to_owned(), json!(id));
     r.insert("tache".to_owned(), json!(tache));
@@ -485,14 +505,14 @@ pub fn commande(
         "date".to_owned(),
         json!(maintenant.format("%Y-%m-%dT%H:%M:%S").to_string()),
     );
-    r.insert("seeds".to_owned(), json!(SEEDS));
+    r.insert("seeds".to_owned(), json!(seeds));
     r.insert("prompts".to_owned(), json!(essais));
+    if let Some(rendu) = &rendu {
+        r.insert("rendu".to_owned(), json!(rendu));
+    }
     r.insert("vram_base_go".to_owned(), Value::Null);
     r.insert("workflows".to_owned(), Value::Object(ws));
-    r.insert(
-        "aveugle".to_owned(),
-        json!(melanger(candidats.iter().map(|w| w.id.clone()).collect())?),
-    );
+    r.insert("aveugle".to_owned(), json!(melanger(cles)?));
     r.insert("revele".to_owned(), json!(false));
     r.insert("notes".to_owned(), json!({}));
     r.insert("favori".to_owned(), Value::Null);
@@ -612,6 +632,15 @@ pub fn executer(
         .map_err(|e| format!("Casting illisible : {e}"))?;
     let ordre = aveugle(&r);
     let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
+    if tache == "reecriture" {
+        let banc = BancLlm {
+            essais: &essais,
+            seed: seeds.first().copied().unwrap_or(SEED_LLM),
+            ordre: &ordre,
+            filtre: &filtre,
+        };
+        return executer_llm(contexte, generateur, suivi, &mut r, &banc);
+    }
     let mut fait: u32 = 0;
     let ids: Vec<String> = workflows_de(&r).keys().cloned().collect();
     for wid in &ids {
@@ -1079,6 +1108,233 @@ pub fn utiliser_comme_source(
     Ok(nom)
 }
 
+// --- Casting LLM ----------------------------------------------------------------------------------------------------
+
+/// Ce que partagent les deux phases du Casting LLM.
+struct BancLlm<'a> {
+    essais: &'a [Essai],
+    seed: u64,
+    ordre: &'a [String],
+    filtre: &'a Filtre,
+}
+
+impl BancLlm<'_> {
+    /// La lettre d'un candidat : jamais son nom, le casting est à l'aveugle.
+    fn lettre(&self, cle: &str) -> char {
+        self.ordre
+            .iter()
+            .position(|o| o == cle)
+            .and_then(|i| LETTRES.chars().nth(i))
+            .unwrap_or('?')
+    }
+}
+
+/// Le temps qu'ont pris ces tokens à ce débit ; rien sans débit connu.
+fn temps(tokens: u64, par_seconde: f64) -> f64 {
+    if par_seconde > 0.0 {
+        #[allow(clippy::cast_precision_loss)] // quelques milliers de tokens
+        let t = tokens as f64 / par_seconde;
+        t
+    } else {
+        0.0
+    }
+}
+
+fn moyenne(valeurs: &[f64]) -> Option<f64> {
+    #[allow(clippy::cast_precision_loss)] // quelques idées
+    let n = valeurs.len() as f64;
+    (!valeurs.is_empty()).then(|| valeurs.iter().sum::<f64>() / n)
+}
+
+fn nombres(gens: &[Value], cle: &str) -> Vec<f64> {
+    gens.iter()
+        .filter_map(|g| g.get(cle).and_then(Value::as_f64))
+        .collect()
+}
+
+/// « 21/24 » : les contrôles réussis sur ceux faits (le nombre de mots n'en est pas un), comme en v2.
+fn controles_reussis(gens: &[Value]) -> String {
+    let resultats: Vec<bool> = gens
+        .iter()
+        .filter_map(|g| g.get("controles").and_then(Value::as_object))
+        .flat_map(|c| {
+            c.iter()
+                .filter(|(cle, _)| cle.as_str() != "mots")
+                .filter_map(|(_, v)| v.as_bool())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    format!("{}/{}", resultats.iter().filter(|r| **r).count(), resultats.len())
+}
+
+/// Remplace un champ d'un candidat dans les résultats.
+fn poser_champ(r: &mut Map<String, Value>, cle: &str, champ: &str, valeur: Value) {
+    if let Some(w) = r
+        .get_mut("workflows")
+        .and_then(|ws| ws.get_mut(cle))
+        .and_then(Value::as_object_mut)
+    {
+        w.insert(champ.to_owned(), valeur);
+    }
+}
+
+/// Le Casting LLM, comme `BancLLM` de la v2 : chaque candidat réécrit les idées comme ✨ Écrire le prompt pour le
+/// modèle de rendu (ses règles et sa longueur, ou la consigne du spécialiste), les prompts sont contrôlés, puis le
+/// modèle de rendu les tourne tous avec la même seed. Le témoin envoie l'idée brute, sans LLM.
+#[allow(clippy::too_many_lines)] // le banc de la v2, gardé d'un tenant pour se relire à côté de lui
+fn executer_llm(
+    contexte: &Contexte,
+    generateur: &mut impl Generateur,
+    suivi: &Suivi<'_>,
+    r: &mut Map<String, Value>,
+    b: &BancLlm<'_>,
+) -> Result<(), String> {
+    let id = r.get("id").and_then(Value::as_str).unwrap_or_default().to_owned();
+    let id_rendu = r
+        .get("rendu")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let rendu = workflows::obtenir(&id_rendu)?;
+    let reglage = reglages::section(&contexte.dossier, "workflows")
+        .and_then(|s| s.get(&id_rendu).and_then(Value::as_object).cloned());
+    let mots_max = prompt::mots_max_de(Some(&rendu), reglage.as_ref());
+    let lieux = contexte.lieux();
+    let d_banc = dossier_bancs(&contexte.data).join(&id);
+    let cles: Vec<String> = workflows_de(r).keys().cloned().collect();
+    let mut fait: u32 = 0;
+
+    // 1. La réécriture, candidat après candidat (chacun chargé une fois).
+    for cle in &cles {
+        let fichier = workflows_de(r)
+            .get(cle)
+            .and_then(|w| w.get("fichier"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let d = d_banc.join(cle);
+        fs::create_dir_all(&d).map_err(|e| format!("{} : {e}", d.display()))?;
+        let mut gens: Vec<Value> = Vec::new();
+        let mut chargement: Option<f64> = None;
+        for essai in b.essais {
+            if suivi.annulee() {
+                return Err(comfy_serveur::ANNULEE.to_owned());
+            }
+            let image = format!("{cle}/{}_{}.png", essai.id, b.seed);
+            let Some(candidat) = &fichier else {
+                // Le témoin : l'idée brute, telle quelle.
+                gens.push(json!({
+                    "prompt": essai.id, "seed": b.seed, "image": image, "texte": essai.prompt,
+                    "controles": prompt::controler(&essai.prompt, &essai.prompt, mots_max),
+                }));
+                fait += 1;
+                suivi.fait(fait);
+                continue;
+            };
+            suivi.etape(&format!("Modèle {} · réécriture · {}", b.lettre(cle), essai.id));
+            b.filtre
+                .verifier(&[essai.prompt.as_str()])
+                .map_err(|e| e.to_string())?;
+            let mut ecriture = prompt::preparer_reecriture(
+                &lieux,
+                &essai.prompt,
+                Some(candidat),
+                Some(&rendu),
+                reglage.as_ref(),
+                &prompt::Images {
+                    references: 0,
+                    vues: &[],
+                },
+            )?;
+            ecriture.demande.seed = Some(b.seed);
+            let sondeur = Sondeur::lancer();
+            let debut = Instant::now();
+            let reponse = generateur.ecrire(ecriture.lancement.clone(), &ecriture.demande);
+            let mut duree = debut.elapsed().as_secs_f64();
+            let pic = sondeur.arreter();
+            let reponse = reponse?;
+            if chargement.is_none() {
+                // Le premier appel charge le GGUF : la génération seule se déduit des débits de llama-server, le
+                // reste est le chargement (la v2 le mesurait à part).
+                let generation = temps(reponse.tokens_entree, reponse.lecture_tps)
+                    + temps(reponse.tokens_sortie, reponse.ecriture_tps);
+                let seule = if generation > 0.0 && generation < duree {
+                    generation
+                } else {
+                    duree
+                };
+                chargement = Some(duree - seule);
+                duree = seule;
+            }
+            let ecrit = prompt::lire_reecriture(&ecriture, &essai.prompt, &reponse.texte, b.filtre)?;
+            b.filtre
+                .verifier(&[essai.prompt.as_str(), ecrit.as_str()])
+                .map_err(|e| e.to_string())?;
+            gens.push(json!({
+                "prompt": essai.id, "seed": b.seed, "image": image, "texte": ecrit,
+                "controles": prompt::controler(&ecrit, &essai.prompt, mots_max),
+                "duree_s": arrondi(duree), "ecriture_tps": (reponse.ecriture_tps * 10.0).round() / 10.0,
+                "pic_vram_go": go(pic),
+            }));
+            poser_champ(r, cle, "generations", Value::Array(gens.clone()));
+            ecrire(&contexte.data, r)?;
+            fait += 1;
+            suivi.fait(fait);
+        }
+        let resume = if fichier.is_none() {
+            json!({"controles_reussis": controles_reussis(&gens)})
+        } else {
+            json!({
+                "chargement_s": chargement.map(arrondi),
+                "duree_moyenne_s": moyenne(&nombres(&gens, "duree_s")).map(arrondi),
+                "ecriture_tps_moyen": moyenne(&nombres(&gens, "ecriture_tps")).map(|v| (v * 10.0).round() / 10.0),
+                "pic_vram_go": nombres(&gens, "pic_vram_go").into_iter().fold(0.0_f64, f64::max),
+                "controles_reussis": controles_reussis(&gens),
+            })
+        };
+        poser_champ(r, cle, "generations", Value::Array(gens));
+        poser_champ(r, cle, "resume", resume);
+        ecrire(&contexte.data, r)?;
+    }
+
+    // 2. Le rendu : ComfyUI prend la carte (llama-server s'arrête) et tourne chaque prompt avec la même seed.
+    for cle in &cles {
+        let lus = workflows_de(r).get(cle).map(generations).unwrap_or_default();
+        let mut gens = lus.clone();
+        for (i, g) in lus.iter().enumerate() {
+            if suivi.annulee() {
+                return Err(comfy_serveur::ANNULEE.to_owned());
+            }
+            let (essai, ecrit, image) = (texte(g, "prompt"), texte(g, "texte"), texte(g, "image"));
+            suivi.etape(&format!("Modèle {} · rendu · {essai}", b.lettre(cle)));
+            suivi.progression(0.0);
+            let mut valeurs = Map::new();
+            valeurs.insert("prompt".to_owned(), json!(ecrit));
+            valeurs.insert("seed".to_owned(), json!(b.seed));
+            valeurs.insert("prefixe".to_owned(), json!(format!("aria_banc/{id}/{cle}")));
+            let api = rendu.preparer(&valeurs, &contexte.modeles, reglage.as_ref(), b.filtre)?;
+            let debut = Instant::now();
+            let fichiers =
+                generateur.generer(&api, &mut |v, m| suivi.progression_de(v, m), suivi.drapeau())?;
+            let (_, octets) =
+                sortie(fichiers).ok_or_else(|| format!("Aucune image rendue pour {cle} · {essai}"))?;
+            fs::write(d_banc.join(&image), octets).map_err(|e| format!("{image} : {e}"))?;
+            if let Some(g) = gens.get_mut(i).and_then(Value::as_object_mut) {
+                g.insert(
+                    "rendu_s".to_owned(),
+                    json!(arrondi(debut.elapsed().as_secs_f64())),
+                );
+            }
+            poser_champ(r, cle, "generations", Value::Array(gens.clone()));
+            ecrire(&contexte.data, r)?;
+            fait += 1;
+            suivi.fait(fait);
+        }
+    }
+    generateur.liberer()?;
+    suivi.etape("");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1233,19 +1489,29 @@ mod tests {
         assert_eq!(krea["generations"][0]["est_la_source"], true);
     }
 
-    /// Un ComfyUI de test : rend une image par graphe, compte les libérations.
+    /// Un ComfyUI et un llama-server de test : rendent une image par graphe et un prompt par demande, comptent les
+    /// libérations.
     struct Faux {
         graphes: usize,
         liberations: usize,
+        ecrits: usize,
     }
 
     impl Generateur for Faux {
         fn ecrire(
             &mut self,
             _lancement: crate::llama::Lancement,
-            _demande: &crate::llama::Demande,
+            demande: &crate::llama::Demande,
         ) -> Result<crate::llama::Reponse, String> {
-            Err("pas de LLM ici".to_owned())
+            self.ecrits += 1;
+            assert_eq!(demande.seed, Some(SEED_LLM));
+            Ok(crate::llama::Reponse {
+                texte: "**A red fox** sitting in fresh snow".to_owned(),
+                tokens_entree: 900,
+                tokens_sortie: 12,
+                lecture_tps: 900.0,
+                ecriture_tps: 12.0,
+            })
         }
 
         fn televerser(&mut self, nom: &str, _octets: &[u8]) -> Result<String, String> {
@@ -1321,6 +1587,7 @@ mod tests {
         let mut faux = Faux {
             graphes: 0,
             liberations: 0,
+            ecrits: 0,
         };
         executer(&ctx, &mut faux, &suivi, &c).unwrap();
         assert_eq!(faux.graphes, total);
@@ -1348,5 +1615,67 @@ mod tests {
             (banc.as_str(), "texte_vers_image")
         );
         assert_eq!(vue(&ctx, &banc).unwrap()["total"], json!(total));
+    }
+
+    #[test]
+    fn casting_llm() {
+        if carte::vram_utilisee().is_some_and(|v| go(v) > VRAM_MAX_OCCUPEE_GO) {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        assert_eq!(
+            commande(&ctx, "reecriture", &[], "c0".to_owned()).unwrap_err(),
+            "Il faut au moins deux candidats à comparer"
+        );
+        texte_vers_image_complet(&ctx);
+        let d = ctx.modeles.join("llm");
+        fs::create_dir_all(&d).unwrap();
+        for candidat in CANDIDATS_LLM {
+            fs::write(d.join(candidat), b"gguf").unwrap();
+        }
+        let c = commande(&ctx, "reecriture", &[], "c1".to_owned()).unwrap();
+        let idees = jeu_de_prompts("reecriture").unwrap().len();
+        let total = 2 * CANDIDATS_LLM.len() * idees; // réécriture puis rendu
+        assert_eq!(c.nombre as usize, total);
+        let banc = c.banc.clone().unwrap();
+        let partage = plateau::Partage::default();
+        partage.ajouter(c.clone());
+        let suivi = Suivi::de(&partage, "c1");
+        let mut faux = Faux {
+            graphes: 0,
+            liberations: 0,
+            ecrits: 0,
+        };
+        executer(&ctx, &mut faux, &suivi, &c).unwrap();
+        assert_eq!(faux.ecrits, CANDIDATS_LLM.len() * idees);
+        assert_eq!(faux.graphes, CANDIDATS_LLM.len() * idees);
+        assert_eq!(partage.commande("c1").unwrap().fait as usize, total);
+        let r = charger(&ctx.data, &banc).unwrap();
+        assert_eq!(r["rendu"], json!(plateau::workflow_defaut(&ctx.dossier)));
+        for candidat in CANDIDATS_LLM {
+            let w = &r["workflows"][&cle_llm(candidat)];
+            assert_eq!(w["fichier"], candidat);
+            let gens = w["generations"].as_array().unwrap();
+            assert_eq!(gens.len(), idees);
+            // Le prompt lu comme ✨ (Markdown retiré), contrôlé, puis rendu.
+            assert_eq!(gens[0]["texte"], "A red fox sitting in fresh snow");
+            assert_eq!(gens[0]["controles"]["anglais"], true);
+            assert!(gens[0]["rendu_s"].is_number() && gens[0]["ecriture_tps"] == json!(12.0));
+            let image = gens[0]["image"].as_str().unwrap();
+            assert!(
+                dossier_bancs(&ctx.data).join(&banc).join(image).is_file(),
+                "{image}"
+            );
+            assert!(w["resume"]["controles_reussis"].as_str().unwrap().contains('/'));
+            assert!(w["resume"]["chargement_s"].is_number());
+        }
+        // Révélé, le texte écrit et ses contrôles se lisent.
+        reveler(&ctx.data, &banc).unwrap();
+        let v = vue(&ctx, &banc).unwrap();
+        assert_eq!(
+            v["modeles"][0]["generations"][0]["texte"],
+            "A red fox sitting in fresh snow"
+        );
     }
 }

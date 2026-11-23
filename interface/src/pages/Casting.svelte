@@ -3,7 +3,8 @@
   comparaison à l'aveugle. « Nouveau casting » dit ce qu'un casting comparerait et ce qui l'empêche de partir ;
   « Comparer » montre les castings faits : notes de 1 à 5, révélation (elle ne se défait pas), modèle par défaut, et
   une image de texte vers image figée comme image de départ des retouches. Un casting passe par la file du Plateau :
-  il se suit ici et s'annule. Le Casting LLM vient avec la suite du portage.
+  il se suit ici et s'annule. Le Casting LLM fait réécrire les idées par chaque candidat, contrôle les prompts, puis
+  les fait rendre par le modèle par défaut de Texte vers image.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -194,7 +195,8 @@
 {#if sousOnglet === 'lancer'}
   <ASavoir>
     Tous les modèles de la tâche passent, dans un ordre tiré au hasard que tu ne vois pas. Le casting passe par la file
-    du Plateau, qui tourne une chose à la fois. Le Casting LLM arrive avec la suite du portage.
+    du Plateau, qui tourne une chose à la fois. Au Casting LLM, les prompts écrits et leurs contrôles se lisent après la
+    révélation.
   </ASavoir>
   {#if actif && enCours}
     <Panneau titre={`Casting en cours · ${NOMS_TACHES[actif.tache] ?? actif.tache}`}>
@@ -283,7 +285,7 @@
         <div class="actions">
           <Bouton
             genre="principal"
-            desactive={enCours || lancement || preparation.blocage !== null || preparation.tache === 'reecriture'}
+            desactive={enCours || lancement || preparation.blocage !== null}
             onclick={() => void lancer()}
           >
             Lancer le casting
