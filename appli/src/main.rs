@@ -232,6 +232,7 @@ fn lancer() -> Result<(), String> {
             plateau::supprimer_dossier,
             plateau::image_creation,
             plateau::options_montage,
+            plateau::estimer_tournage,
             plateau::commander_clip,
             plateau::video_creation,
             plateau::lire_voix,

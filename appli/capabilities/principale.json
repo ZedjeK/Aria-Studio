@@ -92,6 +92,7 @@
     "allow-supprimer-dossier",
     "allow-image-creation",
     "allow-options-montage",
+    "allow-estimer-tournage",
     "allow-commander-clip",
     "allow-video-creation",
     "allow-lire-voix",

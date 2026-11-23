@@ -9,6 +9,7 @@
   import {
     annulerCommande,
     commanderClip,
+    estimerTournage,
     FORMAT_IMAGE,
     lireCommandes,
     messageErreur,
@@ -16,12 +17,13 @@
     type ActionClip,
     type Commande,
     type Creation,
+    type EstimationTournage,
     type OptionsMontage,
     type EnvoiClip,
     type Sequence,
   } from '../lib/api';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
-  import { dureeLisible, estimationClips } from '../lib/montage';
+  import { estimationClips, texteEstimation } from '../lib/montage';
   import { estActive, lireSeed, modeleInitial, nomCheckpoint, texteAvancement, texteCommande } from '../lib/plateau';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
@@ -72,9 +74,34 @@
   const workflow = $derived(proposes?.workflows.find((w) => w.id === proposes.defaut) ?? proposes?.workflows[0]);
   const seed = $derived(lireSeed(seedTexte));
   const choisie = $derived(options?.qualites.find((q) => q.cle === qualite));
+  /** Le calcul du cœur (VRAM libre, steps et poids du checkpoint), pour les réglages qui l'ont demandé. */
+  let calcul = $state<{ cle: string; resultat: EstimationTournage } | null>(null);
+  let derniereDemande = 0;
+  const cleCalcul = $derived([mode, modele, qualite, duree, nombre].join('|'));
   const estimation = $derived(
-    options && choisie ? dureeLisible(estimationClips(choisie, duree, nombre, options.exposantDuree)) : '',
+    options && choisie
+      ? texteEstimation(
+          calcul?.cle === cleCalcul ? calcul.resultat : null,
+          estimationClips(choisie, duree, nombre, options.exposantDuree),
+          choisie.nom,
+          duree,
+        )
+      : '',
   );
+
+  // Les réglages changent : le cœur refait le calcul ; seule la dernière demande compte (le tableau en attendant).
+  $effect(() => {
+    const cle = cleCalcul;
+    if (!options) return;
+    const rang = ++derniereDemande;
+    estimerTournage(mode, qualite, duree, nombre, modele || null)
+      .then((resultat) => {
+        if (rang === derniereDemande) calcul = { cle, resultat };
+      })
+      .catch(() => {
+        if (rang === derniereDemande) calcul = null;
+      });
+  });
   const clips = $derived(commandes.filter((c) => c.type === 'clip' || c.type === 'voix' || c.type === 'sequence'));
   /** Le workflow qui anime un rush : celui de tous les plans des séquences. */
   const animer = $derived(
@@ -236,7 +263,8 @@
 <p class="sous-titre">Tourne des clips avec le son, en animant un rush ou à partir d'un texte.</p>
 <ASavoir>
   Le prompt est tourné tel quel : écris-le au Scénario pour qu'un LLM le prépare, ou directement ici. Un clip prend la
-  carte graphique plusieurs minutes ; l'estimation vient des mesures de la version 2, sur une RTX 4080. Une séquence
+  carte graphique plusieurs minutes ; l'estimation part des mesures de la version 2 (une RTX 4080) et tient compte de
+  ta VRAM libre et du checkpoint. Une séquence
   enchaîne plusieurs plans et les assemble en un film ; les voix gardées lui servent de référence.
 </ASavoir>
 
@@ -328,7 +356,7 @@
     {/if}
     <div class="actions">
       <RangerDans genre="clips" bind:dossier {rafraichir} />
-      <span class="discret">≈ {estimation} sur la carte de la mesure</span>
+      <span class="discret">{estimation}</span>
       <Bouton genre="principal" desactive={!peutTourner} onclick={() => void tourner()}>Tourner</Bouton>
     </div>
   </Panneau>

@@ -91,6 +91,27 @@ pub fn vram_utilisee() -> Option<u64> {
     Some(nvml.device_by_index(0).ok()?.memory_info().ok()?.used)
 }
 
+/// La VRAM totale de la première carte, en octets ; rien sans NVML.
+pub fn vram_totale() -> Option<u64> {
+    let nvml = nvml()?;
+    Some(nvml.device_by_index(0).ok()?.memory_info().ok()?.total)
+}
+
+/// Ce que les autres programmes (bureau, navigateur…) peuvent occuper au plus dans le calcul de la VRAM libre : au-delà,
+/// c'est sans doute un moteur d'Aria déjà chargé, qui se videra (comme en v2 : `casting.vram_max_occupee_go`).
+pub const AUTRES_MAX: u64 = 5 << 29;
+
+/// La VRAM libre pour Aria, en octets, comme en v2 (`optimiseur.profil_materiel`) : la totale moins ce qu'occupent
+/// les autres programmes, plafonné à [`AUTRES_MAX`] ; rien sans NVML.
+pub fn vram_libre() -> Option<u64> {
+    let totale = vram_totale()?;
+    Some(libre(totale, vram_utilisee().unwrap_or(0)))
+}
+
+fn libre(totale: u64, utilisee: u64) -> u64 {
+    totale.saturating_sub(utilisee.min(AUTRES_MAX))
+}
+
 /// La RAM du PC, en octets (0 si elle ne se lit pas).
 pub fn ram_totale() -> u64 {
     let Ok(mut systeme) = sysinfo::System::new() else {
@@ -103,6 +124,14 @@ pub fn ram_totale() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vram_libre_plafonnee() {
+        // Le bureau compte ; un moteur d'Aria déjà chargé (au-delà de 2,5 Gio) ne compte pas.
+        assert_eq!(libre(16 * GIO, GIO), 15 * GIO);
+        assert_eq!(libre(16 * GIO, 12 * GIO), 16 * GIO - AUTRES_MAX);
+        assert_eq!(libre(GIO, 0), GIO);
+    }
 
     #[test]
     fn sans_nvidia_la_carte_est_dite_absente() {

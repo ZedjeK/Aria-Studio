@@ -5,12 +5,13 @@
 use std::sync::Arc;
 
 use aria_coeur::emplacements::Emplacements;
+use aria_coeur::estimation::{self, Estimation};
 use aria_coeur::images;
 use aria_coeur::montage::{self, DemandeClip, OptionsMontage};
 use aria_coeur::plateau::{Commande, Contexte, Demande, Options, Plateau};
 use aria_coeur::retouche::{self, DemandeAgrandissement, DemandeRetouche};
 use aria_coeur::rushes::{self, EtatRushes};
-use aria_coeur::{casting, sequences, voix};
+use aria_coeur::{carte, casting, sequences, voix};
 use aria_coeur::{creations, journal};
 use serde_json::Value;
 use tauri::State;
@@ -252,6 +253,33 @@ pub async fn image_creation(plateau: State<'_, Arc<Plateau>>, id: String) -> Res
 #[tauri::command]
 pub async fn options_montage(plateau: State<'_, Arc<Plateau>>) -> Result<OptionsMontage, String> {
     hors_interface(&plateau, |p| Ok(montage::options(p.contexte()))).await
+}
+
+/// Le temps estimé d'un tournage du Montage : checkpoint (steps, poids), résolution, durée, nombre de clips et VRAM
+/// libre, lue ici (sans carte NVIDIA : le tableau d'origine).
+#[tauri::command]
+pub async fn estimer_tournage(
+    plateau: State<'_, Arc<Plateau>>,
+    mode: String,
+    qualite: String,
+    duree: u32,
+    nombre: u32,
+    modele: Option<String>,
+) -> Result<Estimation, String> {
+    hors_interface(&plateau, move |p| {
+        #[allow(clippy::cast_precision_loss)] // des Go de VRAM : la précision d'un f64 suffit
+        let libre = carte::vram_libre().map(|o| o as f64 / 1_073_741_824.0);
+        estimation::estimer(
+            p.contexte(),
+            &mode,
+            modele.as_deref(),
+            &qualite,
+            duree,
+            nombre,
+            libre,
+        )
+    })
+    .await
 }
 
 /// Contrôle une demande de clip et la met en file.
