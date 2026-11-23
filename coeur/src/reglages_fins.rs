@@ -23,7 +23,7 @@ use crate::{Dossier, prompt, reglages};
 /// Une consigne réécrite fait au plus 4 000 caractères.
 pub const LONGUEUR_CONSIGNE: usize = 4000;
 /// Les usages dont la consigne se réécrit déjà dans cette version.
-pub const CONSIGNES: [&str; 4] = ["reecriture", "retouche", "references", "decoupage"];
+pub const CONSIGNES: [&str; 5] = ["reecriture", "retouche", "references", "video", "decoupage"];
 /// Samplers et ordonnanceurs de secours, tant que ComfyUI n'a jamais annoncé les siens.
 pub const SAMPLERS_SECOURS: [&str; 14] = [
     "euler",
@@ -1042,7 +1042,7 @@ mod tests {
                 &modeles,
                 "mistral.gguf",
                 &Map::new(),
-                &changements(json!({"video": "x"}))
+                &changements(json!({"libre": "x"}))
             )
             .is_err()
         );

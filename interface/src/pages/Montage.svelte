@@ -17,6 +17,7 @@
     type Commande,
     type Creation,
     type OptionsMontage,
+    type EnvoiClip,
     type Sequence,
   } from '../lib/api';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
@@ -39,9 +40,12 @@
     recuLu: () => void;
     /** Une séquence repart au Scénario pour être retravaillée. */
     retravailler: (s: Sequence) => void;
+    /** Le prompt d'un clip écrit au Scénario, à tourner ici. */
+    recuClip?: EnvoiClip | null;
+    recuClipLu?: () => void;
   }
 
-  let { signaler, recu, recuLu, retravailler }: Props = $props();
+  let { signaler, recu, recuLu, retravailler, recuClip = null, recuClipLu = () => {} }: Props = $props();
 
   let options = $state<OptionsMontage | null>(null);
   let mode = $state<'animer' | 'texte'>('animer');
@@ -207,7 +211,19 @@
       sequenceAOuvrir = recu;
       recuLu();
     }
-    void relireOptions();
+    void (async () => {
+      await relireOptions();
+      // Un clip écrit au Scénario : son prompt, son mode, son rush et sa durée.
+      if (recuClip) {
+        const envoi = recuClip;
+        recuClipLu();
+        choisirMode(envoi.mode);
+        prompt = envoi.prompt;
+        source = envoi.source ? [envoi.source] : [];
+        if (options?.durees.includes(envoi.duree)) duree = envoi.duree;
+        signaler('Prompt du Scénario posé : vérifie les réglages et tourne.');
+      }
+    })();
     void relireCommandes();
     const minuterie = setInterval(() => {
       if (commandes.some(estActive)) void relireCommandes();

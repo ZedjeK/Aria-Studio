@@ -1190,13 +1190,22 @@ export const assemblerPrompt = (demande: DemandeAssemblage): Promise<Assemblage>
   invoke<Assemblage>('assembler_prompt', { demande });
 
 /** « ✨ Écrire le prompt » (aria_coeur::scenario::DemandeEcriture). */
+/** Les ateliers du Scénario où ✨ écrit un prompt (aria_coeur::scenario::ATELIERS). */
+export type AtelierEcriture = 'image' | 'retouche' | 'clip';
+
 export interface DemandeEcriture {
-  atelier: 'image';
+  atelier: AtelierEcriture;
   idee: string;
   /** Ce que les compléments imposent (le prompt assemblé des listes), déjà fixé. */
   complements: string;
   workflow: string | null;
   llm: string | null;
+  /** L'image à retoucher, ou le rush à animer. */
+  images?: string[];
+  /** `animer` pour un clip qui anime son rush. */
+  role?: string | null;
+  /** La durée d'un clip, en secondes. */
+  duree?: number | null;
 }
 
 export interface PromptEcrit {
@@ -1204,6 +1213,23 @@ export interface PromptEcrit {
   mots: number;
   dureeS: number;
   llm: string;
+  /** Clip : les heures de coupe hors du clip ou dans le désordre. */
+  alertes: string[];
+}
+
+/** Une consigne écrite au Scénario, en route vers la page Retouche avec son image. */
+export interface EnvoiRetouche {
+  source: string;
+  instruction: string;
+  workflow: string | null;
+}
+
+/** Le prompt d'un clip écrit au Scénario, en route vers le Montage. */
+export interface EnvoiClip {
+  prompt: string;
+  mode: 'animer' | 'texte';
+  source: string | null;
+  duree: number;
 }
 
 /** Le LLM écrit le prompt pour le modèle cible (il prend la carte, comme au Plateau). */

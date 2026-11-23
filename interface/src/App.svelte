@@ -16,6 +16,8 @@
     type Identite,
     type InfosMiseAJour,
     type Reglages,
+    type EnvoiClip,
+    type EnvoiRetouche,
     type Sequence,
   } from './lib/api';
   import type { Pastille } from './lib/menu';
@@ -74,6 +76,9 @@
   /** Une séquence écrite au Scénario, à ouvrir au Montage ; une séquence du Montage, à retravailler au Scénario. */
   let versMontage = $state<string | null>(null);
   let versScenario = $state<Sequence | null>(null);
+  /** Une consigne de retouche, ou le prompt d'un clip, écrits au Scénario. */
+  let versRetouche = $state<EnvoiRetouche | null>(null);
+  let versClip = $state<EnvoiClip | null>(null);
   let fraction = $state<number | null>(null);
   let mesure = $state('');
   let miseAJour = $state<InfosMiseAJour | null>(null);
@@ -189,16 +194,26 @@
           }}
           recuSequence={versScenario}
           recuLu={() => (versScenario = null)}
+          envoyerRetouche={(envoi) => {
+            versRetouche = envoi;
+            page = 'retouche';
+          }}
+          envoyerClip={(envoi) => {
+            versClip = envoi;
+            page = 'montage';
+          }}
         />
       {:else if page === 'plateau'}
         <Plateau {signaler} recu={versPlateau} recuLu={() => (versPlateau = null)} />
       {:else if page === 'retouche'}
-        <Retouche {signaler} />
+        <Retouche {signaler} recu={versRetouche} recuLu={() => (versRetouche = null)} />
       {:else if page === 'montage'}
         <Montage
           {signaler}
           recu={versMontage}
           recuLu={() => (versMontage = null)}
+          recuClip={versClip}
+          recuClipLu={() => (versClip = null)}
           retravailler={(s) => {
             versScenario = s;
             page = 'scenario';

@@ -44,6 +44,7 @@ describe('Réglages', () => {
     expect(libelleChoix(moteur, 'llama')).toBe('llama');
     expect(nomConsigne('retouche')).toBe('Consigne de retouche');
     expect(nomConsigne('decoupage')).toBe('Découpage d’une séquence');
+    expect(nomConsigne('video')).toBe('Prompt d’un clip');
     expect(nomConsigne('autre')).toBe('autre');
   });
 });

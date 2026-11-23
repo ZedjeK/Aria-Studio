@@ -1,8 +1,9 @@
 <!--
-  Scénario, comme en v2. L'atelier Image : ton idée, que le LLM écrit en prompt pour le modèle cible (✨ Écrire le
-  prompt), et des compléments : listes à cliquer rangées en trois onglets (Sujet, Décor et ambiance, Mise en scène),
+  Scénario, comme en v2. Les ateliers Image, Retouche et Clip : ton idée, que le LLM écrit en prompt pour le modèle
+  cible (✨ Écrire le prompt ; il voit l'image à retoucher ou le rush à animer), et des compléments : listes à cliquer rangées en trois onglets (Sujet, Décor et ambiance, Mise en scène),
   âge précis, texte dans l'image et précisions traduites par le LLM. Le prompt assemblé suit les compléments en
-  direct (règles des listes et filtre AS-18) ; le prompt final, modifiable, part tel quel au Plateau. L'atelier
+  direct (règles des listes et filtre AS-18) ; le prompt final, modifiable, part tel quel au Plateau, à la Retouche
+  ou au Montage. Chaque atelier garde son idée et son prompt final. L'atelier
   Séquence (ScenarioSequence) découpe une histoire en plans, le personnage et le décor tirés des mêmes compléments, et
   l'envoie au Montage. Les règles sont appliquées ici pour guider ; c'est le cœur qui fait foi.
 -->
@@ -14,7 +15,9 @@
     enregistrerPersonnage,
     lirePersonnages,
     messageErreur,
+    optionsMontage,
     optionsPlateau,
+    optionsRetouche,
     structureScenario,
     sujetsScenario,
     supprimerPersonnage,
@@ -23,6 +26,9 @@
     type ChoixLlm,
     type ChoixListes,
     type ChoixWorkflow,
+    type EnvoiClip,
+    type EnvoiRetouche,
+    type OptionsMontage,
     type Personnage,
     type Sequence,
     type OngletScenario,
@@ -43,6 +49,7 @@
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
+  import ChoixRushes from './ChoixRushes.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
   import ScenarioSequence from './ScenarioSequence.svelte';
 
@@ -55,16 +62,38 @@
     /** Une séquence du Montage à retravailler ici. */
     recuSequence: Sequence | null;
     recuLu: () => void;
+    /** Envoie une consigne de retouche à la page Retouche, avec son image. */
+    envoyerRetouche: (envoi: EnvoiRetouche) => void;
+    /** Envoie le prompt d'un clip au Montage. */
+    envoyerClip: (envoi: EnvoiClip) => void;
   }
 
-  let { signaler, envoyer, versMontage, recuSequence, recuLu }: Props = $props();
+  let { signaler, envoyer, versMontage, recuSequence, recuLu, envoyerRetouche, envoyerClip }: Props = $props();
 
-  /** L'atelier : une image (Plateau), ou une séquence découpée en plans (Montage). */
-  let atelier = $state<'image' | 'sequence'>('image');
-  const ateliers: { id: 'image' | 'sequence'; titre: string }[] = [
+  type Atelier = 'image' | 'retouche' | 'clip' | 'sequence';
+  const ATELIERS: Atelier[] = ['image', 'retouche', 'clip', 'sequence'];
+  /** L'atelier : une image (Plateau), une retouche, un clip (Montage), ou une séquence découpée en plans (Montage). */
+  let atelier = $state<Atelier>('image');
+  const ateliers: { id: Atelier; titre: string }[] = [
     { id: 'image', titre: 'Image' },
+    { id: 'retouche', titre: 'Retouche' },
+    { id: 'clip', titre: 'Clip' },
     { id: 'sequence', titre: 'Séquence' },
   ];
+  /** Le brouillon des autres ateliers : leur idée et leur prompt final. */
+  let brouillons = $state<Record<string, { idee: string; final: string; finalRetouche: boolean }>>({});
+  let workflowsRetouche = $state<ChoixWorkflow[]>([]);
+  let workflowRetouche = $state<string | null>(null);
+  let montage = $state<OptionsMontage | null>(null);
+  let modeClip = $state<'animer' | 'texte'>('animer');
+  let dureeClip = $state(5);
+  /** L'image à retoucher, ou le rush à animer. */
+  let imageAtelier = $state<string[]>([]);
+  const proposesClip = $derived(montage ? (modeClip === 'animer' ? montage.animer : montage.texte) : null);
+  const workflowClip = $derived(proposesClip ? (proposesClip.defaut ?? proposesClip.workflows[0]?.id ?? null) : null);
+  /** L'atelier a besoin d'une image : celle à retoucher, ou le rush d'un clip animé. */
+  const imageRequise = $derived(atelier === 'retouche' || (atelier === 'clip' && modeClip === 'animer'));
+  const imageManquante = $derived(imageRequise && imageAtelier.length === 0);
 
   const BROUILLON = 'aria-scenario';
 
@@ -78,6 +107,8 @@
   let toutes = $state(false);
   let workflows = $state<ChoixWorkflow[]>([]);
   let workflowId = $state<string | null>(null);
+  /** Le modèle cible de l'atelier affiché. */
+  const cible = $derived(atelier === 'retouche' ? workflowRetouche : atelier === 'clip' ? workflowClip : workflowId);
   let llms = $state<ChoixLlm[]>([]);
   let llmParWorkflow = $state<Record<string, string>>({});
   /** Le LLM choisi ; vide : celui du modèle cible. */
@@ -125,7 +156,22 @@
     try {
       localStorage.setItem(
         BROUILLON,
-        JSON.stringify({ sujet, choixParSujet, age, texte, toutes, workflowId, idee, precisions, traduction, atelier }),
+        JSON.stringify({
+          sujet,
+          choixParSujet,
+          age,
+          texte,
+          toutes,
+          workflowId,
+          idee,
+          precisions,
+          traduction,
+          atelier,
+          brouillons,
+          workflowRetouche,
+          modeClip,
+          dureeClip,
+        }),
       );
     } catch {
       // stockage indisponible : le brouillon vaut pour cette fois
@@ -139,7 +185,23 @@
       const d: unknown = JSON.parse(brut);
       if (typeof d !== 'object' || d === null) return;
       if ('sujet' in d && typeof d.sujet === 'string') sujet = d.sujet;
-      if ('atelier' in d && (d.atelier === 'image' || d.atelier === 'sequence')) atelier = d.atelier;
+      if ('atelier' in d && typeof d.atelier === 'string') {
+        const lu = ATELIERS.find((a) => a === d.atelier);
+        if (lu) atelier = lu;
+      }
+      if ('brouillons' in d && typeof d.brouillons === 'object' && d.brouillons !== null) {
+        for (const [nom, b] of Object.entries(d.brouillons)) {
+          if (typeof b !== 'object' || b === null) continue;
+          brouillons[nom] = {
+            idee: 'idee' in b && typeof b.idee === 'string' ? b.idee : '',
+            final: 'final' in b && typeof b.final === 'string' ? b.final : '',
+            finalRetouche: 'finalRetouche' in b && b.finalRetouche === true,
+          };
+        }
+      }
+      if ('workflowRetouche' in d && typeof d.workflowRetouche === 'string') workflowRetouche = d.workflowRetouche;
+      if ('modeClip' in d && (d.modeClip === 'animer' || d.modeClip === 'texte')) modeClip = d.modeClip;
+      if ('dureeClip' in d && typeof d.dureeClip === 'number') dureeClip = d.dureeClip;
       if ('choixParSujet' in d) choixParSujet = choixDuBrouillon(d.choixParSujet);
       if ('age' in d && typeof d.age === 'number') age = d.age;
       if ('texte' in d && typeof d.texte === 'string') texte = d.texte;
@@ -244,7 +306,7 @@
         age,
         texte,
         precisions: traductionValide ? (traduction?.en ?? '') : '',
-        workflow: workflowId,
+        workflow: cible,
         action: '',
         replique: '',
         dialogue: null,
@@ -261,7 +323,21 @@
   }
 
   /** Le LLM de l'atelier : celui choisi, sinon celui du modèle cible. */
-  const llmEffectif = $derived(llmChoisi || (workflowId ? (llmParWorkflow[workflowId] ?? null) : null));
+  const llmEffectif = $derived(llmChoisi || (cible ? (llmParWorkflow[cible] ?? null) : null));
+
+  /** Change d'atelier : celui qu'on quitte garde son idée et son prompt final, celui qu'on ouvre retrouve les siens. */
+  function changerAtelier(nouvel: Atelier) {
+    if (nouvel === atelier) return;
+    brouillons = { ...brouillons, [atelier]: { idee, final, finalRetouche } };
+    atelier = nouvel;
+    const b = brouillons[nouvel];
+    idee = b?.idee ?? '';
+    final = b?.final ?? '';
+    finalRetouche = b?.finalRetouche ?? false;
+    imageAtelier = [];
+    if (nouvel !== 'image') modeIdee = 'ecrire';
+    planifier();
+  }
   const traductionValide = $derived(traduction !== null && traduction.de === precisions.trim());
   /** Ce que les compléments imposent : le prompt assemblé, s'il y a un choix. */
   const complements = $derived(
@@ -289,19 +365,42 @@
     ecriture = 'ecrire';
     try {
       const r = await ecrirePromptScenario({
-        atelier: 'image',
+        atelier: atelier === 'retouche' || atelier === 'clip' ? atelier : 'image',
         idee,
         complements,
-        workflow: workflowId,
+        workflow: cible,
         llm: llmChoisi || null,
+        images: imageRequise ? imageAtelier : [],
+        role: atelier === 'clip' && modeClip === 'animer' ? 'animer' : null,
+        duree: atelier === 'clip' ? dureeClip : null,
       });
       final = r.prompt;
       finalRetouche = true;
-      signaler(`Prompt écrit par ${r.llm} en ${r.dureeS} s.`);
+      const coupes = r.alertes.length > 0 ? ` · ⚠ ${r.alertes.join(' ')}` : '';
+      signaler(`Prompt écrit par ${r.llm} en ${r.dureeS} s.${coupes}`, r.alertes.length > 0);
     } catch (e) {
       signaler(messageErreur(e), true);
     } finally {
       ecriture = null;
+    }
+  }
+
+  /** Le prompt final part tel quel : au Plateau, à la Retouche (avec son image) ou au Montage. */
+  function envoyerFinal() {
+    const texteFinal = final.trim();
+    if (texteFinal === '') return;
+    if (atelier === 'retouche') {
+      const image = imageAtelier[0];
+      if (image) envoyerRetouche({ source: image, instruction: texteFinal, workflow: workflowRetouche });
+    } else if (atelier === 'clip') {
+      envoyerClip({
+        prompt: texteFinal,
+        mode: modeClip,
+        source: modeClip === 'animer' ? (imageAtelier[0] ?? null) : null,
+        duree: dureeClip,
+      });
+    } else {
+      envoyer(texteFinal, workflowId);
     }
   }
 
@@ -327,6 +426,11 @@
         llmParWorkflow = options.llmParWorkflow;
         await relirePersonnages();
         if (!workflows.some((w) => w.id === workflowId)) workflowId = options.defaut;
+        const retouche = await optionsRetouche();
+        workflowsRetouche = retouche.workflows;
+        if (!workflowsRetouche.some((w) => w.id === workflowRetouche)) workflowRetouche = retouche.defaut;
+        montage = await optionsMontage();
+        if (!montage.durees.includes(dureeClip)) dureeClip = montage.durees[0] ?? 5;
       } catch (e) {
         signaler(messageErreur(e), true);
       }
@@ -341,8 +445,8 @@
 <ASavoir>
   Chaque liste ajoute sa traduction anglaise au prompt. Les règles (genre, âge, tenues qui se remplacent,
   incompatibilités) guident le choix ici ; le prompt est contrôlé par le filtre AS-18 avant d'être proposé.
-  L'atelier Séquence découpe une histoire en plans pour le Montage. Les ateliers Retouche et Clip viennent avec la
-  suite du portage.
+  Retouche : le LLM écrit la consigne d'après l'image, qu'il voit. Clip : le prompt d'un clip avec le son, pour
+  animer un rush ou à partir du texte. L'atelier Séquence découpe une histoire en plans pour le Montage.
 </ASavoir>
 
 <Panneau titre="Sujet et modèle">
@@ -352,10 +456,7 @@
         type="button"
         class="pastille"
         aria-pressed={atelier === a.id}
-        onclick={() => {
-          atelier = a.id;
-          garder();
-        }}
+        onclick={() => changerAtelier(a.id)}
       >
         {a.titre}
       </button>
@@ -369,6 +470,56 @@
         </button>
       {/each}
     </div>
+    {#if atelier === 'retouche'}
+      <label>
+        <span class="etiquette">Modèle de retouche</span>
+        <select
+          value={workflowRetouche ?? ''}
+          onchange={(e) => {
+            workflowRetouche = e.currentTarget.value || null;
+            planifier();
+          }}
+        >
+          {#each workflowsRetouche as w (w.id)}
+            <option value={w.id}>{w.nom}</option>
+          {/each}
+        </select>
+      </label>
+    {:else if atelier === 'clip'}
+      <div class="pastilles" role="group" aria-label="Départ du clip">
+        <button
+          type="button"
+          class="pastille"
+          aria-pressed={modeClip === 'animer'}
+          onclick={() => {
+            modeClip = 'animer';
+            planifier();
+          }}
+        >
+          Animer un rush
+        </button>
+        <button
+          type="button"
+          class="pastille"
+          aria-pressed={modeClip === 'texte'}
+          onclick={() => {
+            modeClip = 'texte';
+            imageAtelier = [];
+            planifier();
+          }}
+        >
+          À partir du texte
+        </button>
+      </div>
+      <label>
+        <span class="etiquette">Durée</span>
+        <select bind:value={dureeClip} onchange={garder}>
+          {#each montage?.durees ?? [5] as d (d)}
+            <option value={d}>{d} s</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
     {#if atelier === 'image'}
     <label>
       <span class="etiquette">Modèle cible</span>
@@ -401,9 +552,15 @@
     {versMontage}
   />
 {:else}
-<Panneau titre="Ton idée">
-  <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
-  {#if modeIdee === 'preciser'}
+<Panneau titre={atelier === 'retouche' ? 'Ce que tu veux changer' : 'Ton idée'}>
+  {#if imageRequise}
+    <p class="etiquette">{atelier === 'retouche' ? "L'image à retoucher" : 'Le rush à animer'}</p>
+    <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
+  {/if}
+  {#if atelier === 'image'}
+    <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
+  {/if}
+  {#if modeIdee === 'preciser' && atelier === 'image'}
     <ScenarioConversation
       workflow={workflowId}
       llm={llmChoisi || null}
@@ -421,7 +578,11 @@
   <textarea
     rows="3"
     maxlength="2000"
-    placeholder="Un renard roux assis dans la neige fraîche, lumière dorée du soir"
+    placeholder={atelier === 'retouche'
+      ? 'Remplace le ciel par un coucher de soleil orangé'
+      : atelier === 'clip'
+        ? 'Le renard lève la tête, la neige tombe doucement, le vent souffle au loin'
+        : 'Un renard roux assis dans la neige fraîche, lumière dorée du soir'}
     bind:value={idee}
     oninput={garder}
   ></textarea>
@@ -436,7 +597,7 @@
       </select>
     </label>
     <Bouton
-      desactive={ecriture !== null || llms.length === 0 || (idee.trim() === '' && complements === '')}
+      desactive={ecriture !== null || llms.length === 0 || imageManquante || (idee.trim() === '' && complements === '')}
       onclick={() => void ecrire()}
     >
       {ecriture === 'ecrire' ? 'Le LLM écrit…' : '✨ Écrire le prompt'}
@@ -499,7 +660,7 @@
         </label>
       </div>
     {/if}
-    {#each structure.blocs.filter((b) => !b.video) as b (b.id)}
+    {#each structure.blocs.filter((b) => atelier === 'clip' || !b.video) as b (b.id)}
       {#each b.groupes.filter((g) => g.onglet === onglet) as g (g.nom)}
         {@const visibles = g.sousListes.filter((s) => sousListeVisible(b.id, s, ctx))}
         {#if visibles.length > 0}
@@ -562,8 +723,8 @@
   <p class="discret">Lecture…</p>
 {/if}
 
-{#if atelier === 'image'}
-<Panneau titre="Prompt final" accentue>
+{#if atelier !== 'sequence'}
+<Panneau titre={atelier === 'retouche' ? 'Consigne finale' : 'Prompt final'} accentue>
   {#if erreurAssemblage}
     <p class="alerte">{erreurAssemblage}</p>
   {/if}
@@ -582,12 +743,15 @@
     {/if}
   </div>
   <div class="actions">
+    {#if imageManquante}
+      <span class="discret">{atelier === 'retouche' ? "Choisis l'image à retoucher." : 'Choisis le rush à animer.'}</span>
+    {/if}
     <Bouton
       genre="principal"
-      desactive={final.trim() === '' || erreurAssemblage !== null}
-      onclick={() => envoyer(final.trim(), workflowId)}
+      desactive={final.trim() === '' || erreurAssemblage !== null || imageManquante}
+      onclick={envoyerFinal}
     >
-      Envoyer au Plateau
+      {atelier === 'retouche' ? 'Envoyer à la Retouche' : atelier === 'clip' ? 'Envoyer au Montage' : 'Envoyer au Plateau'}
     </Bouton>
   </div>
 </Panneau>

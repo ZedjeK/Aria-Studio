@@ -1,6 +1,6 @@
 //! Le travail du LLM sur les prompts, comme en v2 (`app/prompt.py`) : la réécriture d'une idée en prompt d'image, et
-//! la traduction d'une consigne de retouche (le LLM voit l'image s'il a sa vision). Les références, la vidéo, le
-//! découpage et la conversation viendront ensuite.
+//! la traduction d'une consigne de retouche (le LLM voit l'image s'il a sa vision), le prompt d'un clip (consigne
+//! vidéo, trois champs de H3, heures de coupe contrôlées).
 //!
 //! La consigne suit le gabarit de la v2 : rôle, priorité de l'utilisateur, sections d'écriture (plan, contenu,
 //! dialogue, texte, interdits) où se rangent les règles du modèle cible (`profil_prompt.consigne` de sa fiche), puis le
@@ -322,6 +322,7 @@ pub fn consigne_d_origine(usage: &str) -> Option<String> {
         "reecriture" => Some(gabarit(&REECRITURE, &[])),
         "retouche" => Some(gabarit(&RETOUCHE, &[])),
         "references" => Some(gabarit(&REFERENCES, &[])),
+        "video" => Some(gabarit(&VIDEO, &[])),
         "decoupage" => Some(crate::decoupage::CONSIGNE_DECOUPAGE.to_owned()),
         _ => None,
     }
@@ -375,6 +376,260 @@ fn consigne(
         .replace("{mots_max}", &mots_max.unwrap_or(MOTS_MAX_REECRITURE).to_string())
         .replace("{mots_min}", &MOTS_MIN.to_string());
     format!("{texte}\n\n{CLAUSE_MINEURS}")
+}
+
+/// Les sons d'un clip en prose : à la fin de la description.
+const SONS: &str = "Sounds: end with the concrete sounds of what is seen (footsteps, rain, fabric, breath...). No background music unless the user asks for it.";
+/// Les sons d'un clip en trois champs (H3) : dans leur champ.
+const SONS_CHAMPS: &str = "Sounds: the concrete sounds of what is seen (footsteps, rain, fabric, breath...) go in overall_soundscape only, never in the description. No background music unless the user asks for it.";
+
+const VIDEO_ROLE: &str = "You write prompts for an audio-video generation model: it creates the picture AND the sound together.\nThe user describes, often in French, a short video clip. Rewrite it as ONE English prompt.";
+const VIDEO_PLAN: &[&str] = &[
+    "A short production brief in the present tense, following the timeline: opening state, the action as it starts, how it develops, the result.",
+];
+const VIDEO_CAMERA: &str = "Camera: use the user's camera choice if there is one (a fixed shot stays fixed). Otherwise one simple named movement, or a static shot, whichever serves the action.";
+const VIDEO_PRISE: &str = "One continuous take: no cuts, no fade to black, unless the user asks for them. A cut is only worth it when it brings new information about the subject, the space, the state, the viewpoint or the time; if only the distance or a slight angle changes, use a camera movement instead.";
+const VIDEO_DUREE: &str = "Fit the clip duration: few actions, at most one or two short lines of dialogue. If the user asks you to invent a line, write one short line in the language they ask for, written like any other spoken line.";
+const VIDEO_DIALOGUE: &[&str] = &[
+    "Describe the speaker the first time (role, age range, gender, voice pitch, timbre, pace or accent) and give them an ID in parentheses, (S1), kept for that speaker.",
+    "Write every spoken line inside a <d> tag that starts with its language: The young woman with a quiet, breathy voice (S1) says: <d>[French] Je descends ici.</d> Keep each line EXACTLY as the user wrote it, words and punctuation, in its original language; never translate it, no ellipses.",
+];
+const VIDEO_TEXTE: &[&str] =
+    &["Double quotes are only for text visible on screen (a sign), never for a spoken line."];
+
+/// Vidéo, d'après le guide d'écriture de MiniMax H3, comme en v2 : la chronologie, la caméra de l'utilisateur ou une
+/// seule simple, les sons de ce qu'on voit, la musique seulement si elle est demandée, les répliques mot pour mot.
+const VIDEO: Gabarit = Gabarit {
+    role: VIDEO_ROLE,
+    priorite: None,
+    remplace: &["plan", "dialogue", "texte"],
+    plan: VIDEO_PLAN,
+    contenu: &[VIDEO_CAMERA, VIDEO_PRISE, VIDEO_DUREE, SONS],
+    dialogue: VIDEO_DIALOGUE,
+    texte: VIDEO_TEXTE,
+    interdits: &[],
+    format: &[
+        "{mots_min} to {mots_max} words, plain prose, no lists, no headings, no markdown.",
+        "Output only the prompt: no preamble, no explanation.",
+    ],
+};
+
+/// La même, pour un modèle qui lit son prompt en trois champs (H3) : les sons ont leur champ.
+const VIDEO_CHAMPS: Gabarit = Gabarit {
+    contenu: &[VIDEO_CAMERA, VIDEO_PRISE, VIDEO_DUREE, SONS_CHAMPS],
+    format: &[
+        "{mots_min} to {mots_max} words for the three fields together, no lists, no headings, no markdown.",
+        "Exactly these three fields, one per paragraph, in this order, with these exact labels:\nintegrated_multimodal_description: [Shot 1] then the whole picture-and-action brief with the dialogue, as described above, but without the sounds: they go in overall_soundscape. No timestamp on Shot 1. Add a second shot only if the user asks for a cut: \"[Shot 2] At 00:03.500, the camera cuts to ...\".\noverall_soundscape: one paragraph of 1 to 4 sentences: ambient sounds, sounds of the actions, non-verbal human sounds. Never put dialogue or music in it. Write N/A only if the user asks for silence.\nnon_diegetic_music: the background score only if the user asks for it (1 to 3 sentences: instruments, tempo, rhythm, dynamics, no mood words); otherwise N/A.",
+        "Output only the prompt: no preamble, no explanation.",
+    ],
+    ..VIDEO
+};
+
+/// La longueur d'un prompt vidéo sans modèle cible, en mots (pour un clip de 5 s).
+pub const MOTS_MAX_VIDEO: u64 = 110;
+/// La ligne d'alignement de l'image à animer, en tête d'un prompt H3 en champs (guide de H3).
+pub const ALIGNEMENT_I2V: &str = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
+
+/// Ce modèle lit son prompt en trois champs (`profil_prompt.format_champs` de sa fiche).
+pub fn champs_video(workflow: Option<&Workflow>) -> bool {
+    profil_oui(workflow, "format_champs")
+}
+
+/// Ce modèle lit les répliques dans une balise `<d>[Langue] …</d>` (`profil_prompt.balise_dialogue`).
+pub fn dialogue_en_balise(workflow: Option<&Workflow>) -> bool {
+    profil_oui(workflow, "balise_dialogue")
+}
+
+fn profil_oui(workflow: Option<&Workflow>, cle: &str) -> bool {
+    workflow
+        .and_then(|w| w.fiche.pointer(&format!("/profil_prompt/{cle}")))
+        .is_some_and(|v| v.as_bool() == Some(true))
+}
+
+/// La durée du clip, dite au LLM. Avec les champs de H3, les heures de coupe doivent tomber dedans.
+pub fn longueur_du_clip(duree: u32, champs: bool) -> String {
+    let mut texte = format!("Clip length: {duree} seconds.");
+    if champs {
+        texte.push_str(&format!(
+            " If you write cuts, their times (\"At 00:03.500\") strictly increase and all fall inside these {duree} seconds; Shot 1 has no time."
+        ));
+    }
+    texte
+}
+
+/// La consigne d'un prompt de clip pour ce modèle cible, toujours suivie de la clause verrouillée. `reecrite` : celle
+/// de Réglages pour ce GGUF (les règles du modèle cible et, en champs, le format des champs s'y ajoutent).
+pub fn consigne_video(
+    reecrite: Option<&str>,
+    mots_max: Option<u64>,
+    regles: &[(String, Vec<String>)],
+    champs: bool,
+    duree: u32,
+) -> String {
+    let texte = match reecrite {
+        Some(propre) => {
+            let mut t = propre.trim_end().to_owned();
+            let bloc = bloc_modele(regles);
+            if !bloc.is_empty() {
+                t.push_str("\n\n");
+                t.push_str(&bloc);
+            }
+            if champs {
+                t.push_str("\n\n");
+                t.push_str(crate::decoupage::FORMAT_CHAMPS);
+            }
+            t
+        }
+        None => gabarit(if champs { &VIDEO_CHAMPS } else { &VIDEO }, regles),
+    };
+    let texte = texte
+        .replace("{mots_max}", &mots_max.unwrap_or(MOTS_MAX_VIDEO).to_string())
+        .replace("{mots_min}", &MOTS_MIN.to_string());
+    format!(
+        "{texte}\n\n{}\n\n{CLAUSE_MINEURS}",
+        longueur_du_clip(duree, champs)
+    )
+}
+
+/// Prépare l'écriture du prompt d'un clip (atelier Clip du Scénario) : le LLM demandé (un spécialiste d'image cède la
+/// place au LLM par défaut), la consigne vidéo du modèle cible, et l'image à animer s'il y en a une.
+///
+/// # Errors
+/// Nom de GGUF invalide.
+pub fn preparer_video(
+    lieux: &Lieux,
+    idee: &str,
+    modele: Option<&str>,
+    workflow: Option<&Workflow>,
+    reglages_workflow: Option<&ReglagesWorkflow>,
+    duree: u32,
+    vue: Option<&Vue>,
+) -> Result<Ecriture, String> {
+    let demande_nom = llm::nom(&lieux.modeles, modele);
+    let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
+        llm::defaut(&lieux.modeles)
+    } else {
+        demande_nom
+    };
+    let lancement = llm::lancement(lieux, Some(&nom))?;
+    let regle = llm::valeurs(&lieux.dossier, &nom);
+    let champs = champs_video(workflow);
+    let mots = Some(crate::decoupage::mots_pour_duree(
+        mots_max_de(workflow, reglages_workflow).unwrap_or(MOTS_MAX_VIDEO),
+        duree,
+    ));
+    let reecrite = llm::consigne(&lieux.dossier, &nom, "video");
+    let systeme = consigne_video(
+        reecrite.as_deref(),
+        mots,
+        &sections_prompt(workflow),
+        champs,
+        duree,
+    );
+    let cadre = if vue.is_some() {
+        "animate the provided image"
+    } else {
+        "from text only"
+    };
+    let texte = format!("{idee}\n\n(Clip: {duree} s, {cadre})");
+    let contenu = montrer(
+        &texte,
+        vue.map(std::slice::from_ref).unwrap_or_default(),
+        "animer",
+        lancement.vision.is_some(),
+        None,
+    );
+    let (temperature, echantillonnage) = regle.ecriture(lancement.reflexion);
+    Ok(Ecriture {
+        demande: Demande {
+            messages: json!([
+                {"role": "system", "content": systeme},
+                {"role": "user", "content": contenu},
+            ]),
+            temperature,
+            max_tokens: regle.max_tokens.max(tokens_pour_mots(mots)),
+            echantillonnage,
+            ..Demande::default()
+        },
+        lancement,
+        specialiste: None,
+    })
+}
+
+/// Un prompt H3 en trois champs, un par paragraphe : le premier champ et `[Shot 1]` garantis, et la ligne
+/// d'alignement de l'image à animer en tête. Rien n'est inventé : un champ omis reste omis.
+pub fn mettre_en_champs(texte: &str, animer: bool) -> String {
+    let texte = texte.trim();
+    let texte = texte.strip_prefix(ALIGNEMENT_I2V).map_or(texte, str::trim);
+    let (description, ambiance, musique) = crate::h3::separer_champs(texte);
+    let champs = crate::h3::assembler_champs(&description, ambiance.as_deref(), musique.as_deref());
+    if animer {
+        format!("{ALIGNEMENT_I2V}\n\n{champs}")
+    } else {
+        champs
+    }
+}
+
+/// Une heure de coupe lisible : 00:03.500.
+fn heure_lisible(t: f64) -> String {
+    let minutes = (t / 60.0).floor();
+    format!("{minutes:02}:{:06.3}", t - minutes * 60.0)
+}
+
+/// Alertes sur les heures de coupe d'un prompt en plans (« [Shot 2] At 00:03.500, … ») : le premier plan sans heure,
+/// chaque plan suivant avec une heure plus grande que la précédente et avant la fin du clip, comme en v2.
+pub fn controler_coupes(texte: &str, duree: u32) -> Vec<String> {
+    let Ok(motif) = Regex::new(r"(?i)\[Shot\s+(\d+)\]\s*(?:At\s+(\d+):(\d{2})(?:\.(\d{1,3}))?)?") else {
+        return Vec::new();
+    };
+    let mut alertes = Vec::new();
+    let mut precedente: Option<f64> = None;
+    for c in motif.captures_iter(texte) {
+        let n: u32 = c.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
+        let heure = match (c.get(2), c.get(3)) {
+            (Some(m), Some(s)) => {
+                let minutes: f64 = m.as_str().parse().unwrap_or(0.0);
+                let secondes: f64 = s.as_str().parse().unwrap_or(0.0);
+                let fraction: f64 = c
+                    .get(4)
+                    .and_then(|f| format!("0.{}", f.as_str()).parse().ok())
+                    .unwrap_or(0.0);
+                Some(minutes * 60.0 + secondes + fraction)
+            }
+            _ => None,
+        };
+        if n == 1 {
+            if heure.is_some() {
+                alertes.push(
+                    "Plan 1 : le premier plan n'a pas d'heure de coupe (« [Shot 1] » seul).".to_owned(),
+                );
+            }
+            continue;
+        }
+        let Some(t) = heure else {
+            alertes.push(format!(
+                "Plan {n} : une coupe doit avoir son heure (« [Shot {n}] At 00:03.500, … »)."
+            ));
+            continue;
+        };
+        if let Some(p) = precedente
+            && t <= p
+        {
+            alertes.push(format!(
+                "Plan {n} : coupe à {}, pas après celle du plan précédent ({}).",
+                heure_lisible(t),
+                heure_lisible(p)
+            ));
+        }
+        if t >= f64::from(duree) {
+            alertes.push(format!(
+                "Plan {n} : coupe à {}, après la fin du clip ({duree} s).",
+                heure_lisible(t)
+            ));
+        }
+        precedente = Some(t);
+    }
+    alertes
 }
 
 /// La longueur conseillée par le modèle cible : celle de Réglages, sinon celle de sa fiche.
@@ -837,6 +1092,45 @@ mod tests {
 
     fn systeme(e: &Ecriture) -> String {
         e.demande.messages[0]["content"].as_str().unwrap().to_owned()
+    }
+
+    #[test]
+    fn consigne_d_un_clip() {
+        let prose = consigne_video(None, Some(150), &[], false, 10);
+        assert!(prose.contains("150 words") && prose.contains("Sounds: end with"));
+        assert!(prose.contains("Clip length: 10 seconds.") && prose.ends_with(CLAUSE_MINEURS));
+        let champs = consigne_video(None, None, &[], true, 8);
+        assert!(
+            champs.contains("overall_soundscape only") && champs.contains("110 words for the three fields")
+        );
+        assert!(champs.contains("fall inside these 8 seconds"));
+        let propre = consigne_video(Some("Write a clip."), None, &[], true, 5);
+        assert!(propre.starts_with("Write a clip.") && propre.contains("exactly these three fields"));
+        assert!(consigne_d_origine("video").is_some_and(|c| c.contains("audio-video generation model")));
+    }
+
+    #[test]
+    fn champs_d_un_clip() {
+        let t = "integrated_multimodal_description: A fox runs. overall_soundscape: wind";
+        let en_champs = mettre_en_champs(t, false);
+        assert_eq!(
+            en_champs,
+            "integrated_multimodal_description: [Shot 1] A fox runs.\n\noverall_soundscape: wind"
+        );
+        let anime = mettre_en_champs(&mettre_en_champs(t, true), true);
+        assert!(anime.starts_with(ALIGNEMENT_I2V) && anime.matches(ALIGNEMENT_I2V).count() == 1);
+    }
+
+    #[test]
+    fn heures_de_coupe() {
+        assert!(controler_coupes("[Shot 1] A fox. [Shot 2] At 00:03.500, the camera cuts.", 5).is_empty());
+        let alertes = controler_coupes(
+            "[Shot 1] At 00:01, a fox. [Shot 2] the camera cuts. [Shot 3] At 00:06.000, x. [Shot 4] At 00:04, y.",
+            5,
+        );
+        assert_eq!(alertes.len(), 4, "{alertes:?}");
+        assert!(alertes[2].contains("00:06.000") && alertes[2].contains("après la fin du clip"));
+        assert!(alertes[3].contains("pas après celle du plan précédent"));
     }
 
     #[test]

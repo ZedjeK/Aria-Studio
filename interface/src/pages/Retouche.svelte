@@ -18,6 +18,7 @@
     optionsRetouche,
     type Commande,
     type Creation,
+    type EnvoiRetouche,
     type OptionsPlateau,
   } from '../lib/api';
   import { estActive, lireSeed, llmInitial, modeleInitial, nomCheckpoint, texteAvancement, texteCommande } from '../lib/plateau';
@@ -40,9 +41,12 @@
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
+    /** Une consigne écrite au Scénario, avec son image. */
+    recu?: EnvoiRetouche | null;
+    recuLu?: () => void;
   }
 
-  let { signaler }: Props = $props();
+  let { signaler, recu = null, recuLu = () => {} }: Props = $props();
 
   type Mode = 'retouche' | 'agrandissement';
 
@@ -264,8 +268,21 @@
   }
 
   onMount(() => {
-    void relireOptions();
-    void relireRushes();
+    void (async () => {
+      await Promise.all([relireOptions(), relireRushes()]);
+      // Une consigne écrite au Scénario : son image, sa consigne (déjà en anglais) et son modèle.
+      if (recu) {
+        const envoi = recu;
+        recuLu();
+        const rush = rushes.find((r) => r.id === envoi.source);
+        if (rush) prendre(rush);
+        changerMode('retouche');
+        consigne = envoi.instruction;
+        reecrire = false;
+        if (envoi.workflow && options?.workflows.some((w) => w.id === envoi.workflow)) choisirWorkflow(envoi.workflow);
+        signaler('Consigne du Scénario posée : vérifie le masque et lance la retouche.');
+      }
+    })();
     void relireCommandes();
     const minuterie = setInterval(() => {
       if (commandes.some(estActive)) void relireCommandes();
