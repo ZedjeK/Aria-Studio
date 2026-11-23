@@ -44,9 +44,11 @@
     signaler: (texte: string, erreur?: boolean) => void;
     /** Relance l'assistant de premier lancement. */
     ouvrirAssistant?: () => void;
+    /** L'onglet à ouvrir d'abord (le bandeau de la reprise de la v2 ouvre Emplacements). */
+    ongletInitial?: string | undefined;
   }
 
-  let { signaler, ouvrirAssistant }: Props = $props();
+  let { signaler, ouvrirAssistant, ongletInitial }: Props = $props();
 
   const onglets = [
     { id: 'moteurs', titre: 'Moteurs' },
@@ -130,6 +132,7 @@
   }
 
   onMount(() => {
+    if (ongletInitial && onglets.some((o) => o.id === ongletInitial)) onglet = ongletInitial;
     void relire();
     return () => clearTimeout(minuteur);
   });
@@ -179,7 +182,7 @@
         <li>
           <div class="entete">
             <strong>{m.nom}</strong>
-            <span class="badge" class:bon={m.statut === 'a_jour' || m.statut === 'externe'}>{libelleStatut(m.statut)}</span>
+            <span class="badge" class:bon={m.statut === 'a_jour' || m.statut === 'externe'}>{libelleStatut(m.statut, m.nom)}</span>
             {#if m.facultatif}<span class="badge">facultatif</span>{/if}
             {#if m.occupe}<span class="badge">en marche</span>{/if}
           </div>

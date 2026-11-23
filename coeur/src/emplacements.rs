@@ -192,6 +192,16 @@ impl Emplacements {
     }
 }
 
+/// Le dossier d'un moteur pris ailleurs que dans celui d'Aria (`emplacements.comfyui`, `emplacements.llama`,
+/// `emplacements.llama-prism` de `reglages.json`) : « J'ai déjà ComfyUI », ou les moteurs d'une v2 repris pour un essai
+/// ([`crate::reprise`]). Un chemin relatif ou vide est ignoré.
+pub fn moteur_externe(dossier: &Dossier, id: &str) -> Option<PathBuf> {
+    let section = reglages::section(dossier, SECTION)?;
+    let texte = section.get(id)?.as_str()?.trim();
+    let chemin = PathBuf::from(texte);
+    (!texte.is_empty() && chemin.is_absolute()).then_some(chemin)
+}
+
 /// Un `data\` à côté de l'exe, et l'exe ailleurs que dans le dossier du profil lui-même.
 fn est_portable(dossier_exe: &Path, profil: &Dossier) -> bool {
     dossier_exe.join(DOSSIER_DATA).is_dir() && !meme_dossier(dossier_exe, profil.racine())

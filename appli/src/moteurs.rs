@@ -114,11 +114,25 @@ impl Moteurs {
     }
 }
 
-/// Le ComfyUI de l'utilisateur, s'il en a choisi un (`emplacements.comfyui` de `reglages.json`, comme en v2).
+/// Le ComfyUI de l'utilisateur, s'il en a choisi un (`emplacements.comfyui` de `reglages.json`, comme en v2), ou
+/// celui d'une v2 reprise pour un essai.
 fn comfyui_externe(dossier: &Dossier) -> Option<PathBuf> {
-    let section = reglages::section(dossier, "emplacements")?;
-    let chemin = section.get("comfyui")?.as_str()?.trim();
-    (!chemin.is_empty()).then(|| PathBuf::from(chemin))
+    aria_coeur::emplacements::moteur_externe(dossier, "comfyui")
+}
+
+/// Les moteurs pris ailleurs que dans le dossier d'Aria : le ComfyUI choisi, et les moteurs d'une v2 reprise.
+fn externes(dossier: &Dossier) -> std::collections::BTreeMap<String, PathBuf> {
+    ["comfyui", "llama", "llama-prism"]
+        .into_iter()
+        .filter_map(|id| aria_coeur::emplacements::moteur_externe(dossier, id).map(|c| (id.to_owned(), c)))
+        .collect()
+}
+
+/// Une v2 lancée en même temps : ses ports sont ceux d'Aria.
+pub fn ports_pris() -> bool {
+    [PORT_COMFYUI, PORT_LLAMA]
+        .into_iter()
+        .any(|p| local::port_pris(p, Duration::from_millis(100)))
 }
 
 /// Les outils d'extraction des 7z de ce PC, et leur lancement.
@@ -189,15 +203,9 @@ pub(crate) fn lecteur_etats(etat: &Moteurs) -> impl FnOnce() -> Vec<EtatMoteur> 
     let dossier_moteurs = etat.dossier_moteurs.clone();
     let dossier = etat.dossier.clone();
     move || {
-        let externe = comfyui_externe(&dossier);
+        let externes = externes(&dossier);
         let (extracteurs, _) = outils();
-        moteurs::etat(
-            &catalogue,
-            &dossier_moteurs,
-            externe.as_deref(),
-            &extracteurs,
-            port_occupe,
-        )
+        moteurs::etat(&catalogue, &dossier_moteurs, &externes, &extracteurs, port_occupe)
     }
 }
 
@@ -210,17 +218,11 @@ pub async fn lire_moteurs(moteurs: State<'_, Moteurs>) -> Result<EtatMoteurs, St
     let tache = moteurs.tache.lock().ok().and_then(|t| t.clone());
     // NVML, tar --version et les ports : à faire hors du fil de l'interface.
     tauri::async_runtime::spawn_blocking(move || {
-        let externe = comfyui_externe(&dossier);
+        let externes = externes(&dossier);
         let (extracteurs, _) = outils();
         EtatMoteurs {
             carte: carte::lire(catalogue.pilote_min),
-            moteurs: moteurs::etat(
-                &catalogue,
-                &dossier_moteurs,
-                externe.as_deref(),
-                &extracteurs,
-                port_occupe,
-            ),
+            moteurs: moteurs::etat(&catalogue, &dossier_moteurs, &externes, &extracteurs, port_occupe),
             tache,
         }
     })

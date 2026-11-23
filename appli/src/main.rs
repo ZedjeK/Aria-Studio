@@ -69,6 +69,66 @@ fn reprendre_les_cles(dossier: &Dossier) {
     }
 }
 
+/// Un essai portable sur un PC qui a la v2 : ses modèles, son ComfyUI et ses llama-server repris sans rien copier
+/// ni rien écrire chez elle (`aria_coeur::reprise`). Rend les emplacements à utiliser, et si une v2 tournait.
+fn reprendre_la_v2(emplacements: Emplacements, dossier_exe: &Path, profil: &Dossier) -> (Emplacements, bool) {
+    use aria_coeur::reprise::{self, Issue};
+
+    if !emplacements.portable {
+        return (emplacements, false);
+    }
+    let Ok(catalogue) = aria_coeur::catalogue::Catalogue::embarque() else {
+        return (emplacements, false);
+    };
+    let dossier = emplacements.dossier.clone();
+    let v2 = profil.racine();
+    match reprise::reprendre(
+        &dossier,
+        v2,
+        &catalogue,
+        &emplacements.moteurs,
+        moteurs::ports_pris,
+    ) {
+        Ok(Issue::Reprise(bilan)) => {
+            let liste: Vec<String> = bilan
+                .repris
+                .iter()
+                .map(|e| format!("{} : {}", e.nom, e.chemin))
+                .collect();
+            journal::noter(
+                &dossier,
+                "Version 2 reprise pour l'essai",
+                &bilan.depuis,
+                journal::Resultat::Ok,
+                Some(&format!("lue sans y écrire ; {}", liste.join(" ; "))),
+            );
+            // Le dossier des modèles est décidé au lancement : on le relit.
+            (Emplacements::decider(dossier_exe, profil), false)
+        }
+        Ok(Issue::V2Lancee) => {
+            journal::noter(
+                &dossier,
+                "Version 2 non reprise",
+                &v2.display().to_string(),
+                journal::Resultat::Partiel,
+                Some("elle tourne en même temps (ports 8195 ou 8095 pris) : ferme-la, puis relance l'essai"),
+            );
+            (emplacements, true)
+        }
+        Ok(Issue::Rien) => (emplacements, false),
+        Err(e) => {
+            journal::noter(
+                &dossier,
+                "Version 2 non reprise",
+                &v2.display().to_string(),
+                journal::Resultat::Erreur,
+                Some(&e),
+            );
+            (emplacements, false)
+        }
+    }
+}
+
 /// Hors de Windows, il n'y a ni Gestionnaire d'identification ni DPAPI : rien à reprendre.
 #[cfg(not(windows))]
 fn reprendre_les_cles(_dossier: &Dossier) {}
@@ -104,6 +164,7 @@ fn lancer() -> Result<(), String> {
         None,
     );
     reprendre_les_cles(&dossier);
+    let (emplacements, v2_lancee) = reprendre_la_v2(emplacements, &dossier_exe, &profil);
     // Restes d'un remplacement précédent, maintenant que l'ancienne version est arrêtée.
     aria_coeur::installation::nettoyer(&dossier.programme());
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -133,6 +194,7 @@ fn lancer() -> Result<(), String> {
             }
         }))
         .manage(emplacements.clone())
+        .manage(lieux::RepriseAuLancement { v2_lancee })
         .manage(Etat {
             dossier,
             cache_webview,
@@ -215,6 +277,9 @@ fn lancer() -> Result<(), String> {
             scenario::supprimer_personnage,
             scenario::conversation_scenario,
             lieux::etat_emplacements,
+            lieux::etat_reprise_v2,
+            lieux::reprise_v2_vue,
+            lieux::annuler_reprise_v2,
             lieux::ouvrir_dossier,
             lieux::parcourir_dossier,
             lieux::choisir_dossier_modeles,

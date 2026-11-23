@@ -41,25 +41,41 @@ Deux façons de faire, selon ce que le PC a déjà.
 
 ### Le PC a déjà la v2, avec ses modèles et ses moteurs
 
-On fait pointer l'essai vers les dossiers de la v2 sans les déplacer. Dans le dossier de l'exe, créer
-`reglages.json` (chemins complets ; ceux-ci sont ceux d'une v2 installée par défaut, à adapter si les modèles ou
-ComfyUI sont ailleurs) :
+C'est automatique. Au premier lancement de l'essai, la v3 cherche la v2 installée au chemin standard
+(`%USERPROFILE%\.Aria-Studio`) et pointe vers ses dossiers, sans rien copier ni déplacer :
+
+- **ses modèles** : le dossier `modeles` de la v2 (ou celui qu'elle avait choisi ailleurs), qui contient `image\`,
+  `video\` et `llm\` ;
+- **son ComfyUI** (`moteurs\comfyui`, ou celui qu'elle avait choisi) : traité comme « ton ComfyUI », lancé mais
+  jamais mis à jour ;
+- **ses llama-server** (`moteurs\llama` et `moteurs\llama-prism`) : pris là où ils sont, jamais mis à jour.
+
+Un bandeau le dit au premier lancement, le Journal note les chemins repris, et Réglages → Emplacements les montre,
+avec « Ne plus utiliser la version 2 » pour revenir aux dossiers de l'essai (au lancement suivant). La reprise ne
+se fait qu'une fois : un emplacement changé ensuite, ou une reprise annulée, n'est jamais réécrit.
+
+La v2 n'est que lue : rien n'est écrit dans ses réglages, son journal ni ses créations. Seule exception, comme
+avant : la v3 peut créer dans ses modèles un dossier de famille vide qui manque. Tes créations, rushes,
+personnages et voix de la v2 ne sont pas repris : l'essai part de zéro dans son propre `data\`.
+
+Si la v2 tourne au lancement de l'essai (ses ports sont pris), rien n'est repris et un bandeau demande de la fermer
+puis de relancer l'essai.
+
+**À la main**, si la v2 est ailleurs qu'au chemin standard : dans le dossier de l'exe, créer `reglages.json`
+(chemins complets) :
 
 ```json
 {
     "emplacements": {
         "modeles": "C:\\Users\\<nom>\\.Aria-Studio\\modeles",
-        "comfyui": "C:\\Users\\<nom>\\.Aria-Studio\\moteurs\\comfyui"
+        "comfyui": "C:\\Users\\<nom>\\.Aria-Studio\\moteurs\\comfyui",
+        "llama": "C:\\Users\\<nom>\\.Aria-Studio\\moteurs\\llama",
+        "llama-prism": "C:\\Users\\<nom>\\.Aria-Studio\\moteurs\\llama-prism"
     }
 }
 ```
 
-- `modeles` : le dossier des modèles de la v2 (il contient `image\`, `video\`, `llm\`). La v3 y crée seulement les
-  dossiers de famille manquants.
-- `comfyui` : le dossier de ComfyUI de la v2, celui qui contient `python_embeded` et `ComfyUI`. La v3 le traite
-  comme « ton ComfyUI » : elle le lance sans le mettre à jour.
-- llama-server : copier les dossiers `llama` et `llama-prism` de `.Aria-Studio\moteurs\` de la v2 dans un dossier
-  `services\` à côté de l'exe, ou les installer depuis Réglages → Moteurs (section 4).
+Un emplacement réglé à la main empêche la reprise automatique.
 
 ### Le PC n'a pas la v2
 
