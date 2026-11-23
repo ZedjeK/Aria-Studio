@@ -2,19 +2,25 @@
 //! comparaison à l'aveugle (notes de 1 à 5, révélation, modèle par défaut).
 //!
 //! Ce module tient le jeu d'essai livré (`casting/`), ce qu'un casting comparerait avant de partir (la préparation),
-//! et les résultats d'un casting fini, au format de la v2 (`data\bancs\<id>\resultats.json`). Le lancement des bancs
-//! (générations et mesures) viendra avec la suite du portage.
+//! son lancement (une commande de la file du Plateau : générations et mesures) et ses résultats, au format de la v2
+//! (`data\bancs\<id>\resultats.json`). Le Casting LLM (réécriture puis rendu) viendra avec la suite du portage.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+use chrono::Local;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
-use crate::plateau::{self, Contexte};
+use crate::plateau::{self, Commande, Contexte, Generateur, Suivi};
 use crate::workflows::{self, Workflow};
-use crate::{fiches, llm, montage, reglages, retouche};
+use crate::{carte, comfy_serveur, fiches, llm, montage, reglages, retouche, securite};
 
 /// Le jeu de prompts des castings de génération, et celui des idées du Casting LLM (livrés avec l'appli).
 pub const PROMPTS: &str = include_str!("../../casting/prompts.yaml");
@@ -373,25 +379,344 @@ pub fn preparation(contexte: &Contexte) -> Result<Preparations, String> {
     })
 }
 
-/// Ce que lit la page Casting : le casting en cours (le lancement vient avec la suite du portage), les castings
-/// faits, et la préparation de chaque tâche.
+/// Le dernier casting lancé, tel que la page le suit (comme `etat_public` de la v2).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Actif {
+    /// L'identifiant du casting, et celui de sa commande (pour ✕ Annuler).
+    pub id: String,
+    pub commande: String,
+    pub tache: String,
+    /// `attente`, `en_cours`, `termine`, `erreur` ou `annule`.
+    pub etat: Value,
+    pub erreur: Option<String>,
+    pub fait: u32,
+    pub total: u32,
+    pub courant: String,
+}
+
+/// Ce que lit la page Casting : le dernier casting lancé, les castings faits, et la préparation de chaque tâche.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EtatCasting {
-    pub actif: Option<Value>,
+    pub actif: Option<Actif>,
     pub castings: Vec<Value>,
     pub preparation: Preparations,
 }
 
-/// Ce que lit la page Casting.
+/// Ce que lit la page Casting ; `dernier` : le dernier casting lancé dans la file du Plateau.
 ///
 /// # Errors
 /// Jeu d'essai illisible.
-pub fn etat(contexte: &Contexte) -> Result<EtatCasting, String> {
+pub fn etat(contexte: &Contexte, dernier: Option<&Commande>) -> Result<EtatCasting, String> {
     Ok(EtatCasting {
-        actif: None,
+        actif: dernier.and_then(|c| {
+            Some(Actif {
+                id: c.banc.clone()?,
+                commande: c.id.clone(),
+                tache: c.mode_video.clone().unwrap_or_default(),
+                etat: serde_json::to_value(c.etat).unwrap_or(Value::Null),
+                erreur: c.erreur.clone(),
+                fait: c.fait,
+                total: c.nombre,
+                courant: c.etape.clone(),
+            })
+        }),
         castings: liste(&contexte.data),
         preparation: preparation(contexte)?,
     })
+}
+
+// --- lancement ------------------------------------------------------------------------------------------------------
+
+const GO: f64 = 1_073_741_824.0;
+
+fn go(octets: u64) -> f64 {
+    #[allow(clippy::cast_precision_loss)] // des gigaoctets arrondis au centième
+    let g = octets as f64 / GO;
+    (g * 100.0).round() / 100.0
+}
+
+fn arrondi(secondes: f64) -> f64 {
+    (secondes * 100.0).round() / 100.0
+}
+
+/// Contrôle une demande de casting comme la v2, écrit ses résultats vides (ordre à l'aveugle tiré) et rend la
+/// commande à mettre en file. `workflows` : les modèles choisis, sinon tous ceux de la tâche.
+///
+/// # Errors
+/// Casting LLM (pas encore porté), tâche inconnue, moins de deux modèles, modèle incomplet, image de départ absente,
+/// ou fichier qui ne s'écrit pas.
+pub fn commande(
+    contexte: &Contexte,
+    tache: &str,
+    ids: &[String],
+    id_commande: String,
+) -> Result<Commande, String> {
+    if tache == "reecriture" {
+        return Err("Le Casting LLM arrive avec la suite du portage".to_owned());
+    }
+    if !TACHES.contains(&tache) {
+        return Err(format!("Tâche inconnue : {tache}"));
+    }
+    let candidats = candidats(tache, ids);
+    if let Some(blocage) = blocage_candidats(&candidats, &contexte.modeles, !ids.is_empty()) {
+        return Err(blocage);
+    }
+    let essais = jeu_de_prompts(tache)?;
+    if let Some(blocage) = blocage_sources(&contexte.data, tache, &essais) {
+        return Err(blocage);
+    }
+    let maintenant = Local::now();
+    let id = format!("{}_{tache}", maintenant.format("%Y-%m-%d_%H%M%S"));
+    if dossier_bancs(&contexte.data).join(&id).exists() {
+        return Err("Un casting de cette tâche vient de partir : attends une seconde".to_owned());
+    }
+    let mut ws = Map::new();
+    for wf in &candidats {
+        ws.insert(
+            wf.id.clone(),
+            json!({"nom": nom_workflow(wf), "generations": [], "liberation": null, "resume": null}),
+        );
+    }
+    let total = candidats.len() * essais.len() * SEEDS.len();
+    let mut r = Map::new();
+    r.insert("id".to_owned(), json!(id));
+    r.insert("tache".to_owned(), json!(tache));
+    r.insert(
+        "date".to_owned(),
+        json!(maintenant.format("%Y-%m-%dT%H:%M:%S").to_string()),
+    );
+    r.insert("seeds".to_owned(), json!(SEEDS));
+    r.insert("prompts".to_owned(), json!(essais));
+    r.insert("vram_base_go".to_owned(), Value::Null);
+    r.insert("workflows".to_owned(), Value::Object(ws));
+    r.insert(
+        "aveugle".to_owned(),
+        json!(melanger(candidats.iter().map(|w| w.id.clone()).collect())?),
+    );
+    r.insert("revele".to_owned(), json!(false));
+    r.insert("notes".to_owned(), json!({}));
+    r.insert("favori".to_owned(), Value::Null);
+    ecrire(&contexte.data, &r)?;
+    let nom = TACHES_NOMMEES
+        .iter()
+        .find(|(t, _)| *t == tache)
+        .map_or(tache, |(_, n)| *n);
+    let mut c = Commande::nouvelle(
+        id_commande,
+        "casting",
+        format!("Casting · {nom}"),
+        String::new(),
+        "",
+    );
+    c.nombre = u32::try_from(total).unwrap_or(u32::MAX);
+    c.banc = Some(id);
+    c.mode_video = Some(tache.to_owned());
+    Ok(c)
+}
+
+/// Les noms des tâches, pour la file du Plateau.
+const TACHES_NOMMEES: [(&str, &str); 5] = [
+    ("texte_vers_image", "Texte vers image"),
+    ("retouche", "Retouche"),
+    ("reecriture", "Écriture (LLM)"),
+    ("image_vers_video", "Image vers vidéo"),
+    ("texte_vers_video", "Texte vers vidéo"),
+];
+
+/// Le pic de VRAM pendant une génération, relevé toutes les 100 ms (NVML, toute la carte).
+struct Sondeur {
+    pic: Arc<AtomicU64>,
+    arret: Arc<AtomicBool>,
+    fil: Option<JoinHandle<()>>,
+}
+
+impl Sondeur {
+    fn lancer() -> Self {
+        let pic = Arc::new(AtomicU64::new(carte::vram_utilisee().unwrap_or(0)));
+        let arret = Arc::new(AtomicBool::new(false));
+        let (p, a) = (Arc::clone(&pic), Arc::clone(&arret));
+        let fil = thread::spawn(move || {
+            while !a.load(Ordering::Relaxed) {
+                if let Some(v) = carte::vram_utilisee() {
+                    p.fetch_max(v, Ordering::Relaxed);
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+        });
+        Self {
+            pic,
+            arret,
+            fil: Some(fil),
+        }
+    }
+
+    fn arreter(mut self) -> u64 {
+        self.arret.store(true, Ordering::Relaxed);
+        if let Some(f) = self.fil.take() {
+            let _ = f.join();
+        }
+        self.pic.load(Ordering::Relaxed)
+    }
+}
+
+/// Le fichier rendu d'une génération : la vidéo s'il y en a une, sinon la première image.
+fn sortie(fichiers: Vec<(String, Vec<u8>)>) -> Option<(String, Vec<u8>)> {
+    let video = |n: &str| {
+        let n = n.to_ascii_lowercase();
+        n.ends_with(".mp4") || n.ends_with(".webm")
+    };
+    let mut premiere = None;
+    for (nom, octets) in fichiers {
+        if video(&nom) {
+            return Some((nom, octets));
+        }
+        if premiere.is_none() {
+            premiere = Some((nom, octets));
+        }
+    }
+    premiere
+}
+
+/// Exécute un casting de génération : chaque modèle part d'une VRAM vide (sa première génération est « à froid »),
+/// tous les prompts avec toutes les seeds, mesures de durée et de pic de VRAM, puis la libération mesurée.
+///
+/// # Errors
+/// VRAM déjà occupée, filtre AS-18, workflow inconnu, ComfyUI qui échoue ou ne rend rien, annulation, ou fichiers
+/// qui ne s'écrivent pas. Les générations faites restent dans les résultats.
+#[allow(clippy::too_many_lines)] // le banc de la v2, gardé d'un tenant pour se relire à côté de lui
+pub fn executer(
+    contexte: &Contexte,
+    generateur: &mut impl Generateur,
+    suivi: &Suivi<'_>,
+    c: &Commande,
+) -> Result<(), String> {
+    let id = c.banc.as_deref().ok_or_else(|| "Casting manquant".to_owned())?;
+    let mut r = charger(&contexte.data, id)?;
+    let tache = r
+        .get("tache")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    // Refuse de partir si d'autres applis occupent déjà la VRAM (sans NVML, rien ne se mesure).
+    let base = carte::vram_utilisee();
+    if let Some(b) = base
+        && go(b) > VRAM_MAX_OCCUPEE_GO
+    {
+        return Err(format!("VRAM déjà occupée : {} Go", go(b)).replace('.', ","));
+    }
+    r.insert("vram_base_go".to_owned(), json!(base.map(go)));
+    ecrire(&contexte.data, &r)?;
+    let essais: Vec<Essai> = serde_json::from_value(r.get("prompts").cloned().unwrap_or_default())
+        .map_err(|e| format!("Casting illisible : {e}"))?;
+    let seeds: Vec<u64> = serde_json::from_value(r.get("seeds").cloned().unwrap_or_default())
+        .map_err(|e| format!("Casting illisible : {e}"))?;
+    let ordre = aveugle(&r);
+    let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
+    let mut fait: u32 = 0;
+    let ids: Vec<String> = workflows_de(&r).keys().cloned().collect();
+    for wid in &ids {
+        let wf = workflows::obtenir(wid)?;
+        let reglage = reglages::section(&contexte.dossier, "workflows")
+            .and_then(|s| s.get(wid).and_then(Value::as_object).cloned());
+        let lettre = ordre
+            .iter()
+            .position(|o| o == wid)
+            .and_then(|i| LETTRES.chars().nth(i))
+            .unwrap_or('?');
+        let d = dossier_bancs(&contexte.data).join(id).join(wid);
+        fs::create_dir_all(&d).map_err(|e| format!("{} : {e}", d.display()))?;
+        generateur.liberer()?; // chaque modèle part d'une VRAM vide : sa 1re génération est « à froid »
+        let mut gens: Vec<Value> = Vec::new();
+        for essai in &essais {
+            for seed in &seeds {
+                if suivi.annulee() {
+                    return Err(comfy_serveur::ANNULEE.to_owned());
+                }
+                // Jamais le nom du modèle : le casting est à l'aveugle.
+                suivi.etape(&format!("Modèle {lettre} · {} · seed {seed}", essai.id));
+                suivi.progression(0.0);
+                let mut valeurs = Map::new();
+                valeurs.insert("prompt".to_owned(), json!(essai.prompt));
+                valeurs.insert("seed".to_owned(), json!(seed));
+                valeurs.insert("prefixe".to_owned(), json!(format!("aria_banc/{id}/{wid}")));
+                if AVEC_SOURCE.contains(&tache.as_str()) {
+                    let nom = essai.source.clone().unwrap_or_default();
+                    let octets = source(&contexte.data, &nom)
+                        .ok_or_else(|| format!("Image de départ absente : {nom}"))?;
+                    valeurs.insert(
+                        "image".to_owned(),
+                        json!(generateur.televerser(&format!("aria_banc_{nom}"), &octets)?),
+                    );
+                }
+                let api = wf.preparer(&valeurs, &contexte.modeles, reglage.as_ref(), &filtre)?;
+                let sondeur = Sondeur::lancer();
+                let debut = Instant::now();
+                let resultat =
+                    generateur.generer(&api, &mut |v, m| suivi.progression_de(v, m), suivi.drapeau());
+                let duree = debut.elapsed().as_secs_f64();
+                let pic = sondeur.arreter();
+                let (nom_sortie, octets) =
+                    sortie(resultat?).ok_or_else(|| format!("{wid} n'a rien produit pour {}", essai.id))?;
+                let extension = Path::new(&nom_sortie)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map_or_else(|| "png".to_owned(), str::to_ascii_lowercase);
+                let nom = format!("{}_{seed}.{extension}", essai.id);
+                fs::write(d.join(&nom), octets).map_err(|e| format!("{nom} : {e}"))?;
+                gens.push(json!({
+                    "prompt": essai.id, "seed": seed, "image": format!("{wid}/{nom}"), "froid": gens.is_empty(),
+                    "duree_s": arrondi(duree), "pic_vram_go": go(pic), "pic_ram_go": null,
+                }));
+                if let Some(w) = r
+                    .get_mut("workflows")
+                    .and_then(|ws| ws.get_mut(wid))
+                    .and_then(Value::as_object_mut)
+                {
+                    w.insert("generations".to_owned(), Value::Array(gens.clone()));
+                }
+                ecrire(&contexte.data, &r)?;
+                fait += 1;
+                suivi.fait(fait);
+            }
+        }
+        // La libération, mesurée : ce que la VRAM retrouve quand le modèle s'en va.
+        suivi.etape(&format!("Modèle {lettre} · libération"));
+        let avant = carte::vram_utilisee();
+        let debut = Instant::now();
+        generateur.liberer()?;
+        let liberation = json!({
+            "vram_avant_go": avant.map(go), "vram_apres_go": carte::vram_utilisee().map(go),
+            "duree_s": arrondi(debut.elapsed().as_secs_f64()),
+        });
+        let durees = |froid: bool| -> Vec<f64> {
+            gens.iter()
+                .filter(|g| g.get("froid").and_then(Value::as_bool) == Some(froid))
+                .filter_map(|g| g.get("duree_s").and_then(Value::as_f64))
+                .collect()
+        };
+        let chaud = durees(false);
+        #[allow(clippy::cast_precision_loss)] // quelques générations
+        let moyenne = (!chaud.is_empty()).then(|| arrondi(chaud.iter().sum::<f64>() / chaud.len() as f64));
+        let pic = gens
+            .iter()
+            .filter_map(|g| g.get("pic_vram_go").and_then(Value::as_f64))
+            .fold(0.0_f64, f64::max);
+        let resume = json!({
+            "temps_froid_s": durees(true).first(), "temps_chaud_moyen_s": moyenne,
+            "pic_vram_go": pic, "pic_ram_go": null,
+        });
+        if let Some(w) = r
+            .get_mut("workflows")
+            .and_then(|ws| ws.get_mut(wid))
+            .and_then(Value::as_object_mut)
+        {
+            w.insert("liberation".to_owned(), liberation);
+            w.insert("resume".to_owned(), resume);
+        }
+        ecrire(&contexte.data, &r)?;
+    }
+    suivi.etape("");
+    Ok(())
 }
 
 // --- résultats ------------------------------------------------------------------------------------------------------
@@ -908,5 +1233,122 @@ mod tests {
             .find(|m| m["cle"] == "krea2_turbo")
             .unwrap();
         assert_eq!(krea["generations"][0]["est_la_source"], true);
+    }
+
+    /// Un ComfyUI de test : rend une image par graphe, compte les libérations.
+    struct Faux {
+        graphes: usize,
+        liberations: usize,
+    }
+
+    impl Generateur for Faux {
+        fn ecrire(
+            &mut self,
+            _lancement: crate::llama::Lancement,
+            _demande: &crate::llama::Demande,
+        ) -> Result<crate::llama::Reponse, String> {
+            Err("pas de LLM ici".to_owned())
+        }
+
+        fn televerser(&mut self, nom: &str, _octets: &[u8]) -> Result<String, String> {
+            Ok(nom.to_owned())
+        }
+
+        fn generer(
+            &mut self,
+            _api: &Value,
+            _progression: &mut dyn FnMut(u64, u64),
+            _annule: &AtomicBool,
+        ) -> Result<Vec<crate::comfy_serveur::Fichier>, String> {
+            self.graphes += 1;
+            Ok(vec![("aria_banc_00001_.png".to_owned(), b"png".to_vec())])
+        }
+
+        fn liberer(&mut self) -> Result<(), String> {
+            self.liberations += 1;
+            Ok(())
+        }
+    }
+
+    /// Les fichiers des workflows texte vers image posés, et leurs checkpoints validés.
+    fn texte_vers_image_complet(ctx: &Contexte) -> Vec<String> {
+        let ids: Vec<String> = candidats("texte_vers_image", &[])
+            .into_iter()
+            .map(|w| w.id)
+            .collect();
+        for id in &ids {
+            let wf = workflows::obtenir(id).unwrap();
+            for f in wf.manquants(&ctx.modeles) {
+                let chemin = crate::modeles::destination(
+                    &ctx.modeles,
+                    f["dossier"].as_str().unwrap(),
+                    f["nom"].as_str().unwrap(),
+                )
+                .unwrap();
+                fs::create_dir_all(chemin.parent().unwrap()).unwrap();
+                fs::write(chemin, b"poids").unwrap();
+            }
+            if let Some(origine) = wf.modele_origine() {
+                let steps = wf.steps_suggeres().first().copied().unwrap_or(8);
+                let _ = workflows::valider_checkpoint(&ctx.dossier, &ctx.modeles, id, &origine, steps);
+            }
+        }
+        ids
+    }
+
+    #[test]
+    fn lancement_d_un_casting() {
+        // Une carte déjà occupée par d'autres applis refuse le casting : le test n'a de sens que sans elle.
+        if carte::vram_utilisee().is_some_and(|v| go(v) > VRAM_MAX_OCCUPEE_GO) {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        assert!(commande(&ctx, "reecriture", &[], "c0".to_owned()).is_err());
+        let ids = texte_vers_image_complet(&ctx);
+        assert_eq!(
+            commande(&ctx, "texte_vers_image", &ids[..1], "c0".to_owned()).unwrap_err(),
+            "Il faut au moins deux modèles à comparer"
+        );
+        let c = commande(&ctx, "texte_vers_image", &[], "c1".to_owned()).unwrap();
+        let essais = jeu_de_prompts("texte_vers_image").unwrap().len();
+        let total = ids.len() * essais * SEEDS.len();
+        assert_eq!(c.nombre as usize, total);
+        let banc = c.banc.clone().unwrap();
+        // À peine lancé, le casting est là, vide et à l'aveugle.
+        assert_eq!(liste(&ctx.data)[0]["total"], json!(0));
+        let partage = plateau::Partage::default();
+        partage.ajouter(c.clone());
+        let suivi = Suivi::de(&partage, "c1");
+        let mut faux = Faux {
+            graphes: 0,
+            liberations: 0,
+        };
+        executer(&ctx, &mut faux, &suivi, &c).unwrap();
+        assert_eq!(faux.graphes, total);
+        assert_eq!(faux.liberations, 2 * ids.len()); // avant chaque modèle, et sa libération mesurée
+        assert_eq!(partage.commande("c1").unwrap().fait as usize, total);
+        let r = charger(&ctx.data, &banc).unwrap();
+        for id in &ids {
+            let w = &r["workflows"][id];
+            let gens = w["generations"].as_array().unwrap();
+            assert_eq!(gens.len(), essais * SEEDS.len());
+            assert_eq!(gens[0]["froid"], true);
+            assert_eq!(gens[1]["froid"], false);
+            let image = gens[0]["image"].as_str().unwrap();
+            assert!(
+                dossier_bancs(&ctx.data).join(&banc).join(image).is_file(),
+                "{image}"
+            );
+            assert!(w["resume"]["temps_froid_s"].is_number() && !w["liberation"].is_null());
+        }
+        // La page suit le dernier casting lancé.
+        let e = etat(&ctx, partage.commande("c1").as_ref()).unwrap();
+        let actif = e.actif.unwrap();
+        assert_eq!(
+            (actif.id.as_str(), actif.tache.as_str()),
+            (banc.as_str(), "texte_vers_image")
+        );
+        assert_eq!(vue(&ctx, &banc).unwrap()["total"], json!(total));
     }
 }

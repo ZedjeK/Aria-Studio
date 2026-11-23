@@ -92,6 +92,8 @@ function commande(changements: Partial<Commande>): Commande {
     sequence: null,
     plans: [],
     dossier: null,
+    banc: null,
+    fait: 0,
     ...changements,
   };
 }
@@ -163,5 +165,9 @@ describe('Plateau', () => {
     expect(texteAvancement(commande({ etat: 'en_cours' }))).toBe('Préparation · 0 %');
     expect(texteAvancement(commande({ etat: 'erreur', erreur: 'ComfyUI ne répond pas' }))).toBe('ComfyUI ne répond pas');
     expect(texteAvancement(commande({ etat: 'termine', nombre: 2, images: ['a', 'b'] }))).toBe('terminée · 2/2 images');
+    // Un casting compte ses générations, rangées hors des créations.
+    expect(texteAvancement(commande({ type: 'casting', etat: 'termine', nombre: 24, fait: 24 }))).toBe(
+      'terminée · 24/24 générations',
+    );
   });
 });

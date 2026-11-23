@@ -229,7 +229,7 @@ export type EtatCommande = 'attente' | 'en_cours' | 'termine' | 'erreur' | 'annu
 
 /** Une commande du Plateau (aria_coeur::plateau::Commande). */
 /** Ce que fait une commande du Plateau. */
-export type GenreCommande = 'creation' | 'retouche' | 'agrandissement' | 'clip' | 'voix' | 'sequence';
+export type GenreCommande = 'creation' | 'retouche' | 'agrandissement' | 'clip' | 'voix' | 'sequence' | 'casting';
 
 export interface Commande {
   id: string;
@@ -276,6 +276,9 @@ export interface Commande {
   plans: number[];
   /** Le dossier où ranger les résultats ; null : non rangés. */
   dossier: string | null;
+  /** Casting : son identifiant, et les générations faites (sur `nombre`). */
+  banc: string | null;
+  fait: number;
 }
 
 /** La fiche d'une création (data\creations\<id>.json, au format de la v2 : clés en snake_case). */
@@ -1633,8 +1636,17 @@ export interface ResumeCasting {
 }
 
 export interface EtatCasting {
-  /** Le casting en cours (le lancement vient avec la suite du portage). */
-  actif: { id: string; tache: TacheCasting; etat: string; erreur: string | null; fait: number; total: number; courant: string } | null;
+  /** Le dernier casting lancé dans la file du Plateau (`commande` : pour ✕ Annuler). */
+  actif: {
+    id: string;
+    commande: string;
+    tache: TacheCasting;
+    etat: EtatCommande;
+    erreur: string | null;
+    fait: number;
+    total: number;
+    courant: string;
+  } | null;
   castings: ResumeCasting[];
   preparation: { vramMaxOccupeeGo: number; taches: PreparationCasting[] };
 }
@@ -1678,6 +1690,10 @@ export interface VueCasting {
 export const lireCastings = (): Promise<EtatCasting> => invoke<EtatCasting>('lire_castings');
 
 export const lireCasting = (id: string): Promise<VueCasting> => invoke<VueCasting>('lire_casting', { id });
+
+/** Lance un casting dans la file du Plateau ; `workflows` : les modèles choisis, sinon tous ceux de la tâche. */
+export const lancerCasting = (tache: TacheCasting, workflows: string[] | null = null): Promise<Commande> =>
+  invoke<Commande>('lancer_casting', { tache, workflows });
 
 /** Une image (ou un clip) d'un casting, en octets. */
 export const imageCasting = (id: string, cle: string, fichier: string): Promise<ArrayBuffer> =>

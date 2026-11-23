@@ -255,6 +255,7 @@ fn lancer() -> Result<(), String> {
             plateau::reveler_casting,
             plateau::favori_casting,
             plateau::source_depuis_casting,
+            plateau::lancer_casting,
         ])
         .setup(move |app| {
             if proposer {

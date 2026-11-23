@@ -182,6 +182,9 @@ pub struct Commande {
     /// Le dossier des Rushes ou des Bobines où ranger les résultats ; absent : non rangés (une retouche reste à côté
     /// de sa source).
     pub dossier: Option<String>,
+    /// Casting : l'identifiant du casting (`data\bancs\<id>`), et les générations faites (sur `nombre`).
+    pub banc: Option<String>,
+    pub fait: u32,
 }
 
 impl Commande {
@@ -224,6 +227,8 @@ impl Commande {
             sequence: None,
             plans: Vec::new(),
             dossier: None,
+            banc: None,
+            fait: 0,
         }
     }
 }
@@ -338,6 +343,14 @@ pub trait Generateur: Send + 'static {
         progression: &mut dyn FnMut(u64, u64),
         annule: &AtomicBool,
     ) -> Result<Vec<Fichier>, String>;
+
+    /// Vide la VRAM du moteur en marche (ComfyUI décharge ses modèles sans s'arrêter) ; rien à faire par défaut.
+    ///
+    /// # Errors
+    /// Le moteur ne répond pas.
+    fn liberer(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// ComfyUI, démarré au besoin par l'orchestrateur. L'orchestrateur reste pris pendant la génération : un autre
@@ -369,6 +382,12 @@ impl Generateur for Arc<Mutex<Orchestrateur>> {
         orchestrateur
             .comfyui()?
             .executer(api, &mut |valeur, maximum| progression(valeur, maximum), annule)
+    }
+
+    fn liberer(&mut self) -> Result<(), String> {
+        self.lock()
+            .map_err(|_| "orchestrateur des moteurs indisponible".to_owned())?
+            .liberer()
     }
 }
 
@@ -413,6 +432,10 @@ impl Generateur for EcritureAnnulable {
         annule: &AtomicBool,
     ) -> Result<Vec<Fichier>, String> {
         self.orchestrateur.generer(api, progression, annule)
+    }
+
+    fn liberer(&mut self) -> Result<(), String> {
+        self.orchestrateur.liberer()
     }
 }
 
@@ -938,6 +961,14 @@ impl Suivi<'_> {
         });
     }
 
+    /// Casting : une génération de plus est faite.
+    pub fn fait(&self, fait: u32) {
+        self.partage.modifier(self.id, |c| {
+            c.fait = fait;
+            c.progression = 1.0;
+        });
+    }
+
     /// ✕ Annuler a été demandé.
     pub fn annulee(&self) -> bool {
         self.partage.annule.load(Ordering::Relaxed)
@@ -1081,6 +1112,35 @@ impl Plateau {
         self.mettre_en_file(commande)
     }
 
+    /// Lance un casting (comparaison de modèles d'une tâche) ; un seul à la fois.
+    ///
+    /// # Errors
+    /// Un casting déjà en cours, voir [`crate::casting::commande`], ou le fil du Plateau est arrêté.
+    pub fn commander_casting(&self, tache: &str, workflows: &[String]) -> Result<Commande, String> {
+        if self.casting_en_cours().is_some() {
+            return Err("Un casting est déjà en cours".to_owned());
+        }
+        let commande = crate::casting::commande(&self.contexte, tache, workflows, nouvel_id()?)?;
+        self.mettre_en_file(commande)
+    }
+
+    /// Le dernier casting lancé (en cours ou fini) de ce lancement.
+    pub fn dernier_casting(&self) -> Option<Commande> {
+        self.partage
+            .file()
+            .commandes
+            .iter()
+            .rev()
+            .find(|c| c.genre == "casting")
+            .cloned()
+    }
+
+    /// Le casting en attente ou en cours, s'il y en a un.
+    pub fn casting_en_cours(&self) -> Option<Commande> {
+        self.dernier_casting()
+            .filter(|c| matches!(c.etat, EtatCommande::Attente | EtatCommande::EnCours))
+    }
+
     /// Les plans en cours de tournage, par séquence (pour l'interface).
     pub fn sequences_en_tournage(&self) -> Vec<String> {
         self.partage
@@ -1190,6 +1250,10 @@ fn executer(
     if c.genre == "sequence" {
         let suivi = Suivi { partage, id: &c.id };
         return crate::sequences::executer(contexte, generateur, &suivi, c);
+    }
+    if c.genre == "casting" {
+        let suivi = Suivi { partage, id: &c.id };
+        return crate::casting::executer(contexte, generateur, &suivi, c);
     }
     if c.genre != "creation" {
         let suivi = Suivi { partage, id: &c.id };

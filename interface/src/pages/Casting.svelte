@@ -2,16 +2,18 @@
   Casting, comme en v2 (web/casting.js) : mêmes prompts et mêmes seeds sur plusieurs modèles d'une tâche, puis
   comparaison à l'aveugle. « Nouveau casting » dit ce qu'un casting comparerait et ce qui l'empêche de partir ;
   « Comparer » montre les castings faits : notes de 1 à 5, révélation (elle ne se défait pas), modèle par défaut, et
-  une image de texte vers image figée comme image de départ des retouches. Le lancement des castings vient avec la
-  suite du portage.
+  une image de texte vers image figée comme image de départ des retouches. Un casting passe par la file du Plateau :
+  il se suit ici et s'annule. Le Casting LLM vient avec la suite du portage.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
+    annulerCommande,
     favoriCasting,
     imageCasting,
     lireCasting,
     lireCastings,
+    lancerCasting,
     messageErreur,
     noterCasting,
     revelerCasting,
@@ -55,6 +57,9 @@
   let casting = $state<VueCasting | null>(null);
   let confirmerRevelation = $state(false);
   let occupe = $state(false);
+  let lancement = $state(false);
+  /** Le casting suivi était en cours au dernier relevé : sa fin se remarque. */
+  let suivi = $state<string | null>(null);
 
   const preparation = $derived(etat?.preparation.taches.find((t) => t.tache === tache) ?? null);
   const aNoter = $derived(etat?.castings.filter((c) => !c.revele).length ?? 0);
@@ -65,14 +70,58 @@
   const moyennesModeles = $derived(casting ? moyennes(casting.modeles) : []);
   const meilleure = $derived(Math.max(...moyennesModeles.filter((m): m is number => m !== null)));
   const llm = $derived(casting?.tache === 'reecriture');
+  const actif = $derived(etat?.actif ?? null);
+  const enCours = $derived(actif !== null && (actif.etat === 'attente' || actif.etat === 'en_cours'));
 
   async function relire() {
     try {
       etat = await lireCastings();
+      remarquerFin();
       const ids = etat.castings.map((c) => c.id);
       if (!affiche || !ids.includes(affiche)) affiche = ids[0] ?? null;
       if (affiche) casting = await lireCasting(affiche);
       else casting = null;
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
+  /** Un casting suivi vient de finir : il se compare, ou son erreur se dit. */
+  function remarquerFin() {
+    const a = etat?.actif ?? null;
+    const encore = a !== null && (a.etat === 'attente' || a.etat === 'en_cours');
+    if (suivi && a && a.id === suivi && !encore) {
+      if (a.etat === 'termine') {
+        signaler(`Casting terminé · ${NOMS_TACHES[a.tache] ?? a.tache} : résultats à comparer.`);
+        affiche = a.id;
+        sousOnglet = 'comparer';
+      } else if (a.etat === 'erreur') {
+        signaler(a.erreur ?? 'Le casting a échoué.', true);
+      } else {
+        signaler('Casting annulé : les générations faites restent à comparer.');
+      }
+    }
+    suivi = encore && a ? a.id : null;
+  }
+
+  async function lancer() {
+    lancement = true;
+    try {
+      await lancerCasting(tache);
+      signaler(`Casting lancé : ${NOMS_TACHES[tache]}.`);
+      await relire();
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    } finally {
+      lancement = false;
+    }
+  }
+
+  async function annuler() {
+    if (!actif) return;
+    try {
+      await annulerCommande(actif.commande);
+      await relire();
     } catch (e) {
       signaler(messageErreur(e), true);
     }
@@ -131,6 +180,10 @@
 
   onMount(() => {
     void relire();
+    const minuterie = setInterval(() => {
+      if (enCours) void relire();
+    }, 2000);
+    return () => clearInterval(minuterie);
   });
 </script>
 
@@ -140,9 +193,18 @@
 
 {#if sousOnglet === 'lancer'}
   <ASavoir>
-    Tous les modèles de la tâche passent, dans un ordre tiré au hasard que tu ne vois pas. Le lancement des castings
-    arrive avec la suite du portage : en attendant, les castings faits avec la version 2 se comparent ici.
+    Tous les modèles de la tâche passent, dans un ordre tiré au hasard que tu ne vois pas. Le casting passe par la file
+    du Plateau, qui tourne une chose à la fois. Le Casting LLM arrive avec la suite du portage.
   </ASavoir>
+  {#if actif && enCours}
+    <Panneau titre={`Casting en cours · ${NOMS_TACHES[actif.tache] ?? actif.tache}`}>
+      <progress max={Math.max(actif.total, 1)} value={actif.fait}></progress>
+      <div class="actions">
+        <span class="discret">{actif.fait} / {actif.total} · {actif.courant || 'préparation…'}</span>
+        <Bouton genre="discret" petit onclick={() => void annuler()}>✕ Annuler</Bouton>
+      </div>
+    </Panneau>
+  {/if}
   {#if etat}
     <div class="taches" role="radiogroup" aria-label="Tâche du casting">
       {#each etat.preparation.taches as t (t.tache)}
@@ -214,12 +276,18 @@
           <p class="alerte">{preparation.blocage}.</p>
         {:else}
           <p class="discret">
-            Le casting démarrera si moins de {String(etat.preparation.vramMaxOccupeeGo).replace('.', ',')} Go de VRAM sont
+            Le casting démarre si moins de {String(etat.preparation.vramMaxOccupeeGo).replace('.', ',')} Go de VRAM sont
             occupés.
           </p>
         {/if}
         <div class="actions">
-          <Bouton genre="principal" desactive={true}>Lancer le casting</Bouton>
+          <Bouton
+            genre="principal"
+            desactive={enCours || lancement || preparation.blocage !== null || preparation.tache === 'reecriture'}
+            onclick={() => void lancer()}
+          >
+            Lancer le casting
+          </Bouton>
         </div>
       </Panneau>
     {/if}

@@ -101,9 +101,11 @@ export function texteStepsSuggeres(steps: number[]): string {
 
 /** L'avancement d'une commande, en une ligne. */
 export function texteAvancement(commande: Commande): string {
-  const faites = commande.images.length;
+  // Un casting compte ses générations (rangées dans data\bancs, pas parmi les créations).
+  const casting = commande.type === 'casting';
+  const faites = casting ? commande.fait : commande.images.length;
   const total = commande.nombre;
-  const compte = total > 1 ? ` · ${faites}/${total} images` : '';
+  const compte = total > 1 ? ` · ${faites}/${total} ${casting ? 'générations' : 'images'}` : '';
   if (commande.etat === 'en_cours') {
     const etape = commande.etape || 'Préparation';
     return `${etape} · ${Math.round(commande.progression * 100)} %${compte}`;
