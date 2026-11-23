@@ -16,7 +16,9 @@ gh workflow run Release --repo ZedjeK/Aria-Studio --ref refonte/v3
 ```
 
   Une fois le run terminé, l'artefact `release` de sa page contient `Aria-Studio-3.0.0.zip` et son empreinte. Il est
-  gardé 7 jours.
+  gardé 7 jours. Le même essai à blanc se lance aussi sur la copie de la v3, le dépôt `ZedjeK/Aria-Studio_refonte`
+  (`--repo ZedjeK/Aria-Studio_refonte --ref main`), où une release de test peut ensuite être publiée sans jamais être
+  proposée aux utilisateurs.
 
 ## 2. Préparer le dossier d'essai
 
@@ -63,11 +65,29 @@ ComfyUI sont ailleurs) :
 
 - Moteurs : les installer depuis Réglages → Moteurs (téléchargés depuis leurs releases GitHub officielles, empreinte
   SHA-256 vérifiée ; environ 2 Go pour ComfyUI, 0,6 Go pour llama.cpp).
-- Modèles : la v3 ne les télécharge pas encore. Les déposer à la main dans `modeles\` à côté de l'exe, rangés comme
-  en v2 (les noms et les dossiers attendus sont dans la fiche de chaque workflow, `workflows\<id>\fiche.yaml`,
-  section `fichiers`), ou copier ceux d'une autre machine.
+- Modèles : l'assistant de premier lancement propose les packs de la v2 (licences à accepter, place vérifiée), et
+  Modèles les télécharge aussi un par un. On peut encore les déposer à la main dans `modeles\` à côté de l'exe, rangés
+  comme en v2, ou copier ceux d'une autre machine.
 
-## 4. Le parcours à vérifier
+## 4. L'essai rapide
+
+Le premier passage, pour voir si l'essentiel tient debout avant le parcours complet. Noter l'heure de ce qui ne va
+pas.
+
+1. **Lancement** : la fenêtre s'ouvre ; s'il manque de quoi générer, l'assistant de premier lancement s'ouvre aussi
+   (« Plus tard » le ferme).
+2. **Réglages → Moteurs** : la carte et sa VRAM sont lues, ComfyUI et llama.cpp sont prêts (ou s'installent).
+3. **Une image sans réécriture** : au Plateau, un prompt anglais, Créer ; l'image arrive dans les Rushes.
+4. **Une image avec réécriture** : une idée en français, « Réécrire mon idée » cochée ; la réécriture passe, puis
+   l'image. La fiche porte l'idée, le prompt et le LLM.
+5. **Le Scénario** : atelier Image, ✨ Écrire le prompt, puis l'envoyer au Plateau.
+6. **Un clip** : valider d'abord les steps du checkpoint MiniMax H3 (Modèles → Ma collection), puis au Montage,
+   animer un rush de 5 s en résolution rapide. Le clip arrive dans les Bobines, avec le son.
+7. **Fermer** : ComfyUI et llama-server s'arrêtent.
+
+Si ces sept points passent, enchaîner sur le parcours complet.
+
+## 5. Le parcours complet
 
 Cocher au fur et à mesure ; noter l'heure de ce qui ne va pas.
 
@@ -93,15 +113,39 @@ Cocher au fur et à mesure ; noter l'heure de ce qui ne va pas.
     restaurer, puis vider la corbeille (dialogue de confirmation ; image et fiche supprimées).
 11. **Libérer la carte** (Réglages → Moteurs) : la VRAM redescend.
 12. **Fermer** : ComfyUI et llama-server lancés par la v3 s'arrêtent ; Journal → « Aria fermée » au lancement suivant.
+13. **Retouche** : une retouche avec un masque peint, puis un agrandissement ; « Ranger dans » range le résultat.
+14. **Scénario** : les quatre ateliers (Image, Retouche, Clip, Séquence), « 💬 M'aider à préciser », ✕ Annuler pendant
+    que le LLM écrit.
+15. **Séquence** : découper une histoire de 3 plans au Scénario, l'envoyer au Montage, la tourner ; chaque plan
+    arrive dans les Bobines, puis le film assemblé.
+16. **Voix** : un essai de voix, le garder sous un nom, s'en servir comme voix d'une séquence.
+17. **Casting** : un casting d'images de deux modèles, comparé à l'aveugle.
+18. **Claude (MCP)** : brancher Claude avec la commande de Réglages → Claude (MCP), puis lui demander l'état d'Aria.
 
-## 5. Pas encore dans la v3
+### Les nouveautés du LLM
 
-Ne pas le compter comme un défaut : téléchargement des modèles, références et variation, LoRA, retouche,
-agrandissement, Montage et vidéo, Scénario, Casting, assistant de premier lancement, Réglages → Sécurité et LLM,
-installation « J'ai déjà ComfyUI » par un sélecteur de dossier, pont de mise à jour depuis la v2. La liste complète
+Elles n'existaient pas en v2 : ce sont elles qui ont le plus besoin d'un vrai LLM pour être jugées.
+
+19. **Recommander et Adapter à ma machine** (Réglages) : les propositions s'affichent avant d'être appliquées, et
+    rien ne change sans confirmation.
+20. **Contrôle qualité** : écrire quelques prompts avec ✨ et au Plateau ; noter combien de fois « Prompt redemandé
+    au LLM » apparaît, et si les prompts gardés tiennent la longueur conseillée.
+21. **Repli** : couper llama-server pendant une réécriture au Plateau (Réglages → Moteurs) ; l'image part avec
+    l'idée telle quelle, et la file le dit.
+22. **Proposer des directions** : une envie vague au Scénario, 🧭 Proposer des directions ; les trois directions
+    sont-elles vraiment différentes ? « Proposer d'autres directions » s'en écarte-t-il ?
+23. **Vérifier l'image** (avec un LLM qui voit) : vérifier une image ratée exprès (un détail demandé absent) ; le
+    verdict le voit-il, et « Relancer avec ce prompt » corrige-t-il ? Noter le temps de la vérification.
+24. **Choisir les meilleures** : sur un lot de 4 images, les ★ tombent-elles sur les plus fidèles ?
+25. **Expliquer une erreur** : provoquer une erreur connue (un modèle retiré du dossier, puis Créer) et une erreur
+    inconnue ; 🩺 Expliquer donne-t-il la bonne cause et le bon geste ?
+
+## 6. Pas encore dans la v3
+
+Ne pas le compter comme un défaut : pont de mise à jour depuis la v2, licences tierces complètes. La liste complète
 et à jour est dans [PARITE.md](PARITE.md).
 
-## 6. Si quelque chose ne va pas
+## 7. Si quelque chose ne va pas
 
 Rapporter, pour chaque problème : l'étape du parcours, ce qui était attendu, ce qui s'est passé, l'heure, et joindre
 depuis le dossier de l'exe :
@@ -113,7 +157,7 @@ depuis le dossier de l'exe :
 Ces fichiers ne contiennent ni clé ni mot de passe, mais ils peuvent contenir des prompts : les relire avant de les
 partager.
 
-## 7. Retirer l'essai
+## 8. Retirer l'essai
 
 Fermer la v3, puis supprimer le dossier d'essai. Si `emplacements` pointait vers la v2 : dans ses modèles, seuls des
 dossiers de famille vides ont pu être ajoutés ; son ComfyUI a été lancé mais pas mis à jour (ComfyUI peut écrire ses
