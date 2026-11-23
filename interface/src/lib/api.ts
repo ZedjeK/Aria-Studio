@@ -1373,6 +1373,30 @@ export interface DemandeClip {
 
 export const optionsMontage = (): Promise<OptionsMontage> => invoke<OptionsMontage>('options_montage');
 
+/** Le temps estimé d'un tournage (aria_coeur::estimation::Estimation). */
+export interface EstimationTournage {
+  /** `calcul` (VRAM lue) ou `tableau_d_origine` (VRAM non lue). */
+  source: 'calcul' | 'tableau_d_origine';
+  clipS: number;
+  totalS: number;
+  nombre: number;
+  checkpoint: string;
+  poidsGo: number;
+  steps: number;
+  aValider: boolean;
+  vramLibreGo: number | null;
+  facteurVram: number;
+}
+
+/** Le temps d'un tournage du Montage d'après la VRAM libre, les steps et le poids du checkpoint (comme en v2). */
+export const estimerTournage = (
+  mode: 'animer' | 'texte',
+  qualite: string,
+  duree: number,
+  nombre: number,
+  modele: string | null,
+): Promise<EstimationTournage> => invoke<EstimationTournage>('estimer_tournage', { mode, qualite, duree, nombre, modele });
+
 /** Contrôle la demande (AS-18 compris) et la met en file. */
 export const commanderClip = (demande: DemandeClip): Promise<Commande> => invoke<Commande>('commander_clip', { demande });
 

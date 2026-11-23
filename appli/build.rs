@@ -97,6 +97,7 @@ fn main() {
         "supprimer_dossier",
         "image_creation",
         "options_montage",
+        "estimer_tournage",
         "commander_clip",
         "video_creation",
         "lire_voix",

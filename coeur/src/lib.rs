@@ -17,6 +17,7 @@ pub mod decouvrir;
 pub mod demarrage;
 pub mod donnees;
 pub mod emplacements;
+pub mod estimation;
 pub mod fiches;
 pub mod garde;
 pub mod gguf;
