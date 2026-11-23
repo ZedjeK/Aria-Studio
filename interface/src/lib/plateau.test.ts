@@ -93,6 +93,7 @@ function commande(changements: Partial<Commande>): Commande {
     sequence: null,
     plans: [],
     dossier: null,
+    note: null,
     banc: null,
     fait: 0,
     ...changements,

@@ -278,6 +278,8 @@ export interface Commande {
   plans: number[];
   /** Le dossier où ranger les résultats ; null : non rangés. */
   dossier: string | null;
+  /** La réécriture : prompt redemandé au LLM par le contrôle qualité, ou repli sur l'idée telle quelle. */
+  note: string | null;
   /** Casting : son identifiant, et les générations faites (sur `nombre`). */
   banc: string | null;
   fait: number;

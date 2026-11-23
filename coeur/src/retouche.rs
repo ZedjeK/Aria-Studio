@@ -14,7 +14,9 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use crate::images::{self, ANCRAGES, TAILLE_MAX};
-use crate::plateau::{self, ChoixLora, Commande, Contexte, Generateur, NOMBRE_MAX, Options, PREFIXE, Suivi};
+use crate::plateau::{
+    self, ChoixLora, Commande, Contexte, Generateur, NOMBRE_MAX, Options, PREFIXE, Reecriture, Suivi,
+};
 use crate::prompt::{self, Vue};
 use crate::workflows::{self, FORMATS, Workflow};
 use crate::{creations, llm, reglages, rushes, securite};
@@ -373,6 +375,23 @@ pub fn importer(
     creations::enregistrer(&contexte.data, &images::png(&image)?, &infos)
 }
 
+/// La traduction de la consigne, contrôlée : la consigne et le LLM qui l'a écrite.
+fn traduire_controle(
+    contexte: &Contexte,
+    generateur: &mut impl Generateur,
+    c: &Commande,
+    wf: &Workflow,
+    vue: Option<&Vue>,
+) -> Result<(prompt::Controle, String), String> {
+    let ecriture = prompt::preparer_traduction(&contexte.lieux(), &c.idee, c.llm.as_deref(), Some(wf), vue)?;
+    let attentes = ecriture.attentes(Some(wf));
+    let lancement = ecriture.lancement.clone();
+    let controle = prompt::ecrire_controle(&ecriture, &c.idee, &attentes, |d| {
+        generateur.ecrire(lancement.clone(), d).map(|r| r.texte)
+    })?;
+    Ok((controle, ecriture.modele()))
+}
+
 /// Exécute une retouche ou un agrandissement : traduction de la consigne s'il y a lieu, source téléversée une fois,
 /// une image par seed, recollage, fiche de la v2.
 ///
@@ -399,6 +418,7 @@ pub fn executer(
     let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
     let wf = workflows::obtenir(&c.workflow)?;
     let agrandir = c.genre == "agrandissement";
+    let mut reecriture: Option<Reecriture> = None;
     let (consigne, llm_utilise) = if c.reecrire {
         suivi.etape("Traduction de la consigne");
         let vue = if agrandir {
@@ -409,22 +429,41 @@ pub fn executer(
                 texte: creations::description(&contexte.data, &creations::fiche(&contexte.data, &parent)?, 3),
             })
         };
-        let ecriture = prompt::preparer_traduction(
-            &contexte.lieux(),
-            &c.idee,
-            c.llm.as_deref(),
-            Some(&wf),
-            vue.as_ref(),
-        )?;
-        let reponse = generateur.ecrire(ecriture.lancement.clone(), &ecriture.demande)?;
-        let traduction = prompt::lire_reecriture(&ecriture, &c.idee, &reponse.texte, &filtre)?;
+        let essai = traduire_controle(contexte, generateur, c, &wf, vue.as_ref());
+        if suivi.annulee() {
+            return Err(crate::comfy_serveur::ANNULEE.to_owned());
+        }
+        let (traduction, llm, faite) = match essai {
+            Ok((controle, modele)) if controle.reste.is_none() => {
+                let etat = if controle.redemande.is_some() {
+                    "redemandee"
+                } else {
+                    "faite"
+                };
+                (
+                    controle.texte,
+                    Some(modele),
+                    Reecriture::de(etat, controle.redemande),
+                )
+            }
+            // Repli : le LLM a raté deux fois, ou il a planté ; la consigne part telle quelle.
+            Ok((controle, _)) => (
+                c.idee.clone(),
+                None,
+                Reecriture::de("repli", controle.reste.map(|m| format!("contrôle qualité : {m}"))),
+            ),
+            Err(e) if e == crate::comfy_serveur::ANNULEE => return Err(e),
+            Err(e) => (c.idee.clone(), None, Reecriture::de("repli", Some(e))),
+        };
         let consigne = if agrandir {
             format!("{CONSIGNE_AGRANDISSEMENT} {traduction}")
         } else {
             traduction
         };
         suivi.prompt(&consigne);
-        (consigne, Some(ecriture.modele()))
+        suivi.note(faite.note().as_deref());
+        reecriture = Some(faite);
+        (consigne, llm)
     } else {
         (c.prompt.clone(), None)
     };
@@ -534,6 +573,9 @@ pub fn executer(
             }
             if let Some(d) = &dossier {
                 objet.insert("dossier".to_owned(), json!(d));
+            }
+            if let Some(r) = &reecriture {
+                r.noter(objet);
             }
         }
         let png = images::png(&final_)?;

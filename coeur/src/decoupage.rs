@@ -1127,6 +1127,15 @@ pub fn decouper(
                 k + 1
             ));
         }
+        // Le contrôle qualité de chaque plan (sa longueur est contrôlée juste au-dessus) : en alertes, le plan se
+        // réécrit seul avec ✨.
+        let attentes = prompt::Attentes {
+            mots_max: None,
+            anglais: true,
+        };
+        for defaut in prompt::defauts(&texte, "", &attentes) {
+            alertes.push(format!("Plan {} : {}", k + 1, defaut.pour_toi()));
+        }
         let mut plan = p.clone();
         plan.prompt = texte;
         sortie.push(PlanEcrit { plan, idee: fr });

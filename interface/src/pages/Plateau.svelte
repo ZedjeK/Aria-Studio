@@ -385,6 +385,9 @@
           <div class="texte">
             <span class="prompt-court">{texteCommande(c)}</span>
             <span class="discret">{texteAvancement(c)}</span>
+            {#if c.note}
+              <span class="note-reecriture">⚠ {c.note}</span>
+            {/if}
             {#if c.etat === 'en_cours'}
               <progress max="1" value={c.progression}></progress>
             {/if}
@@ -541,4 +544,8 @@
 
 
 
+  .note-reecriture {
+    color: var(--orange);
+    font-size: 12px;
+  }
 </style>

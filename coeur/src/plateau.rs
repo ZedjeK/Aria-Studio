@@ -182,6 +182,8 @@ pub struct Commande {
     /// Le dossier des Rushes ou des Bobines où ranger les résultats ; absent : non rangés (une retouche reste à côté
     /// de sa source).
     pub dossier: Option<String>,
+    /// Ce qui s'est passé à la réécriture, à montrer dans la file : prompt redemandé au LLM, ou repli sur l'idée.
+    pub note: Option<String>,
     /// Des valeurs imposées au workflow (l'essai de l'assistant : peu de steps, petite image) ; seules celles
     /// qu'il reçoit servent.
     #[serde(skip)]
@@ -231,6 +233,7 @@ impl Commande {
             sequence: None,
             plans: Vec::new(),
             dossier: None,
+            note: None,
             imposees: Map::new(),
             banc: None,
             fait: 0,
@@ -949,6 +952,12 @@ impl Suivi<'_> {
             .modifier(self.id, |c| prompt.clone_into(&mut c.prompt));
     }
 
+    /// Ce que la file montre de la réécriture : prompt redemandé au LLM, ou repli sur l'idée.
+    pub fn note(&self, note: Option<&str>) {
+        self.partage
+            .modifier(self.id, |c| c.note = note.map(str::to_owned));
+    }
+
     pub fn progression(&self, part: f64) {
         self.partage
             .modifier(self.id, |c| c.progression = part.clamp(0.0, 1.0));
@@ -1255,6 +1264,65 @@ fn boucle(
     }
 }
 
+/// Ce qui s'est passé à la réécriture d'une idée : `faite`, `redemandee` (le contrôle qualité a redemandé la réponse)
+/// ou `repli` (l'idée est partie telle quelle), et pourquoi. Noté sur la fiche et montré dans la file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reecriture {
+    pub etat: &'static str,
+    pub motif: Option<String>,
+}
+
+impl Reecriture {
+    pub fn de(etat: &'static str, motif: Option<String>) -> Self {
+        Self { etat, motif }
+    }
+
+    /// La ligne de la file.
+    pub fn note(&self) -> Option<String> {
+        let motif = self.motif.as_deref().unwrap_or("raison inconnue");
+        match self.etat {
+            "repli" => Some(format!(
+                "Prompt non réécrit ({motif}) : ton idée part telle quelle"
+            )),
+            "redemandee" => Some(format!("Prompt redemandé au LLM ({motif})")),
+            _ => None,
+        }
+    }
+
+    /// Sur la fiche de la création : `reecriture` et `reecriture_motif`.
+    pub fn noter(&self, infos: &mut Map<String, Value>) {
+        infos.insert("reecriture".to_owned(), json!(self.etat));
+        if let Some(m) = &self.motif {
+            infos.insert("reecriture_motif".to_owned(), json!(m));
+        }
+    }
+}
+
+/// La réécriture du Plateau, contrôlée : le prompt et le LLM qui l'a écrit.
+fn reecrire_controle(
+    contexte: &Contexte,
+    generateur: &mut impl Generateur,
+    c: &Commande,
+    wf: &Workflow,
+    reglages: Option<&ReglagesWorkflow>,
+    images: &prompt::Images<'_>,
+) -> Result<(prompt::Controle, String), String> {
+    let ecriture = prompt::preparer_reecriture(
+        &contexte.lieux(),
+        &c.idee,
+        c.llm.as_deref(),
+        Some(wf),
+        reglages,
+        images,
+    )?;
+    let attentes = ecriture.attentes(Some(wf));
+    let lancement = ecriture.lancement.clone();
+    let controle = prompt::ecrire_controle(&ecriture, &c.idee, &attentes, |d| {
+        generateur.ecrire(lancement.clone(), d).map(|r| r.texte)
+    })?;
+    Ok((controle, ecriture.modele()))
+}
+
 fn executer(
     contexte: &Contexte,
     generateur: &mut impl Generateur,
@@ -1300,6 +1368,7 @@ fn executer(
     let inspirer = c.mode_reference.as_deref() == Some("inspirer") && !sources.is_empty();
     let variation = c.mode_reference.as_deref() == Some("variation") && !sources.is_empty();
     let debut_reecriture = Instant::now();
+    let mut reecriture: Option<Reecriture> = None;
     let (texte_prompt, llm_utilise) = if c.reecrire {
         partage.modifier(&c.id, |cmd| cmd.etape = "Réécriture du prompt".to_owned());
         let vues = c
@@ -1317,18 +1386,39 @@ fn executer(
             references: if inspirer { sources.len() } else { 0 },
             vues: &vues,
         };
-        let ecriture = prompt::preparer_reecriture(
-            &contexte.lieux(),
-            &c.idee,
-            c.llm.as_deref(),
-            Some(&wf),
-            reglages.as_ref(),
-            &images,
-        )?;
-        let reponse = generateur.ecrire(ecriture.lancement.clone(), &ecriture.demande)?;
-        let texte = prompt::lire_reecriture(&ecriture, &c.idee, &reponse.texte, &filtre)?;
-        partage.modifier(&c.id, |cmd| cmd.prompt.clone_from(&texte));
-        (texte, Some(ecriture.modele()))
+        let essai = reecrire_controle(contexte, generateur, c, &wf, reglages.as_ref(), &images);
+        if partage.annule.load(Ordering::Relaxed) {
+            return Err(ANNULEE.to_owned());
+        }
+        let (texte, llm, faite) = match essai {
+            Ok((controle, modele)) if controle.reste.is_none() => {
+                let etat = if controle.redemande.is_some() {
+                    "redemandee"
+                } else {
+                    "faite"
+                };
+                (
+                    controle.texte,
+                    Some(modele),
+                    Reecriture::de(etat, controle.redemande),
+                )
+            }
+            // Repli : le LLM a raté deux fois, ou il a planté ; l'idée part telle quelle.
+            Ok((controle, _)) => (
+                c.idee.clone(),
+                None,
+                Reecriture::de("repli", controle.reste.map(|m| format!("contrôle qualité : {m}"))),
+            ),
+            Err(e) if e == ANNULEE => return Err(e),
+            Err(e) => (c.idee.clone(), None, Reecriture::de("repli", Some(e))),
+        };
+        let note = faite.note();
+        partage.modifier(&c.id, |cmd| {
+            cmd.prompt.clone_from(&texte);
+            cmd.note.clone_from(&note);
+        });
+        reecriture = Some(faite);
+        (texte, llm)
     } else {
         (c.prompt.clone(), None)
     };
@@ -1437,6 +1527,9 @@ fn executer(
         if let Some(d) = &c.dossier {
             infos.insert("dossier".to_owned(), json!(d));
         }
+        if let Some(r) = &reecriture {
+            r.noter(&mut infos);
+        }
         let id_creation = creations::enregistrer(&contexte.data, &png, &infos)?;
         partage.modifier(&c.id, |cmd| {
             cmd.images.push(id_creation);
@@ -1449,6 +1542,9 @@ fn executer(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// La suite d'un prompt réaliste : assez long pour passer le contrôle qualité (40 mots au moins).
+    const SUITE: &str = ", her breath visible in the cold air, soft golden hour light across the meadow, pine trees in the background, gentle snowflakes falling around her, shallow depth of field, a calm winter mood, a detailed natural photograph with fine texture on the fur and the snow";
     use std::fs;
     use std::time::Duration;
 
@@ -1504,6 +1600,28 @@ mod tests {
             loras: Vec::new(),
             dossier: None,
         }
+    }
+
+    #[test]
+    fn reecriture_notee_et_montree() {
+        let faite = Reecriture::de("faite", None);
+        assert_eq!(faite.note(), None);
+        let redemandee = Reecriture::de("redemandee", Some("commence par un préambule".to_owned()));
+        assert_eq!(
+            redemandee.note().as_deref(),
+            Some("Prompt redemandé au LLM (commence par un préambule)")
+        );
+        let repli = Reecriture::de("repli", Some("llama-server ne répond pas".to_owned()));
+        assert_eq!(
+            repli.note().as_deref(),
+            Some("Prompt non réécrit (llama-server ne répond pas) : ton idée part telle quelle")
+        );
+        let mut infos = Map::new();
+        repli.noter(&mut infos);
+        assert_eq!(
+            (infos["reecriture"].clone(), infos["reecriture_motif"].clone()),
+            (json!("repli"), json!("llama-server ne répond pas"))
+        );
     }
 
     #[test]
@@ -1579,7 +1697,7 @@ mod tests {
         ) -> Result<llama::Reponse, String> {
             self.ecrits.lock().unwrap().push((lancement, demande.clone()));
             Ok(llama::Reponse {
-                texte: "**A red fox** sitting in fresh snow".to_owned(),
+                texte: format!("**A red fox** sitting in fresh snow{SUITE}"),
                 tokens_entree: 900,
                 tokens_sortie: 12,
                 lecture_tps: 0.0,
@@ -1675,7 +1793,8 @@ mod tests {
         );
         let fin = attendre(&plateau, &c.id);
         assert_eq!(fin.etat, EtatCommande::Termine, "{:?}", fin.erreur);
-        assert_eq!(fin.prompt, "A red fox sitting in fresh snow");
+        assert_eq!(fin.prompt, format!("A red fox sitting in fresh snow{SUITE}"));
+        assert!(fin.note.is_none());
 
         let ecrits = ecrits.lock().unwrap();
         let (lancement, demande_llm) = &ecrits[0];
@@ -1690,11 +1809,15 @@ mod tests {
         let (noeud, entree) = wf.entree("prompt").unwrap();
         assert_eq!(
             recus.lock().unwrap()[0][noeud.as_str()]["inputs"][entree.as_str()],
-            json!("A red fox sitting in fresh snow")
+            json!(format!("A red fox sitting in fresh snow{SUITE}"))
         );
         let fiche = creations::fiche(&data, &fin.images[0]).unwrap();
         assert_eq!(fiche["idee"], json!("un renard dans la neige"));
-        assert_eq!(fiche["prompt"], json!("A red fox sitting in fresh snow"));
+        assert_eq!(
+            fiche["prompt"],
+            json!(format!("A red fox sitting in fresh snow{SUITE}"))
+        );
+        assert_eq!(fiche["reecriture"], json!("faite"));
         assert_eq!(fiche["llm"], json!("mistral.gguf"));
     }
 

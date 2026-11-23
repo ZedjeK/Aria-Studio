@@ -558,6 +558,7 @@ pub fn preparer_video(
         },
         lancement,
         specialiste: None,
+        mots,
     })
 }
 
@@ -643,6 +644,210 @@ pub fn controler(texte: &str, idee: &str, mots_max: Option<u64>) -> Controles {
         texte_conserve: (!citations.is_empty()).then(|| citations.iter().all(|c| texte.contains(c.as_str()))),
         mots: mots.len(),
     }
+}
+
+// --- contrôle qualité d'un prompt écrit (nouveauté de la v3) ---------------------------------------------------------
+
+/// Ce qu'on attend d'un prompt écrit par le LLM.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Attentes {
+    /// La longueur conseillée au LLM ; rien : la longueur n'est pas contrôlée.
+    pub mots_max: Option<u64>,
+    /// Le modèle cible lit l'anglais : le prompt doit être en anglais.
+    pub anglais: bool,
+}
+
+/// Un défaut d'un prompt écrit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Defaut {
+    Langue,
+    Longueur { mots: u64, min: u64, max: u64 },
+    Preambule,
+    TexteCite,
+}
+
+impl Defaut {
+    /// Ce que l'utilisateur lit.
+    pub fn pour_toi(&self) -> String {
+        match self {
+            Self::Langue => "pas en anglais".to_owned(),
+            Self::Longueur { mots, min, max } => format!("{mots} mots au lieu de {min} à {max}"),
+            Self::Preambule => "commence par un préambule".to_owned(),
+            Self::TexteCite => "le texte cité dans l'idée n'est pas repris mot pour mot".to_owned(),
+        }
+    }
+
+    /// Ce que le LLM lit quand sa réponse lui est redemandée.
+    fn pour_le_llm(&self) -> String {
+        match self {
+            Self::Langue => "it is not written in English".to_owned(),
+            Self::Longueur { mots, min, max } => {
+                format!("it has {mots} words, it must have between {min} and {max} words")
+            }
+            Self::Preambule => "it starts with a preamble instead of the prompt itself".to_owned(),
+            Self::TexteCite => "the text quoted in the idea is not kept word for word".to_owned(),
+        }
+    }
+}
+
+/// Au-delà de la longueur conseillée, la marge tolérée : 20 mots, ou un cinquième de plus pour un long prompt.
+fn marge(mots_max: u64) -> u64 {
+    20.max(mots_max / 5)
+}
+
+/// Le modèle cible lit l'anglais (`profil_prompt.langue`, l'anglais par défaut).
+pub fn lit_l_anglais(workflow: Option<&Workflow>) -> bool {
+    workflow
+        .and_then(|w| w.fiche.pointer("/profil_prompt/langue"))
+        .and_then(Value::as_str)
+        .is_none_or(|l| l.eq_ignore_ascii_case("en"))
+}
+
+impl Ecriture {
+    /// Ce qu'on attend de sa réponse pour ce modèle cible. Un spécialiste suit sa propre consigne : sa longueur n'est
+    /// pas contrôlée.
+    pub fn attentes(&self, workflow: Option<&Workflow>) -> Attentes {
+        Attentes {
+            mots_max: if self.specialiste.is_some() {
+                None
+            } else {
+                self.mots
+            },
+            anglais: lit_l_anglais(workflow),
+        }
+    }
+}
+
+/// Les défauts d'un prompt écrit depuis une idée, d'après [`controler`]. Les répliques (balise `<d>`, guillemets) ne
+/// comptent pas pour la langue : elles se disent dans la langue choisie.
+pub fn defauts(texte: &str, idee: &str, attentes: &Attentes) -> Vec<Defaut> {
+    let c = controler(texte, idee, attentes.mots_max);
+    let mut sortie = Vec::new();
+    if attentes.anglais {
+        let sans = Regex::new(r#"(?is)<d>.*?</d>|«[^»]*»|"[^"]*"|“[^”]*”"#)
+            .map(|r| r.replace_all(texte, " ").into_owned())
+            .unwrap_or_else(|_| texte.to_owned());
+        let reste = controler(&sans, idee, None);
+        // Trop peu de mots hors des répliques pour juger de la langue.
+        if reste.mots >= 8 && !reste.anglais {
+            sortie.push(Defaut::Langue);
+        }
+    }
+    if let Some(max) = attentes.mots_max {
+        let mots = u64::try_from(c.mots).unwrap_or(u64::MAX);
+        if !(MOTS_MIN..=max + marge(max)).contains(&mots) {
+            sortie.push(Defaut::Longueur {
+                mots,
+                min: MOTS_MIN,
+                max,
+            });
+        }
+    }
+    if !c.sans_preambule {
+        sortie.push(Defaut::Preambule);
+    }
+    if c.texte_conserve == Some(false) {
+        sortie.push(Defaut::TexteCite);
+    }
+    sortie
+}
+
+fn liste(defauts: &[Defaut]) -> String {
+    defauts
+        .iter()
+        .map(Defaut::pour_toi)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Un prompt écrit par le LLM, puis contrôlé.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Controle {
+    pub texte: String,
+    /// Les défauts du premier essai : la réponse a été redemandée au LLM.
+    pub redemande: Option<String>,
+    /// Les défauts qui restent après le second essai.
+    pub reste: Option<String>,
+}
+
+impl Controle {
+    /// Les lignes à montrer à l'utilisateur.
+    pub fn alertes(&self) -> Vec<String> {
+        let mut sortie = Vec::new();
+        if let Some(m) = &self.redemande {
+            sortie.push(format!("Contrôle qualité : réponse redemandée au LLM ({m})"));
+        }
+        if let Some(m) = &self.reste {
+            sortie.push(format!("Contrôle qualité : le prompt reste imparfait ({m})"));
+        }
+        sortie
+    }
+}
+
+/// Le prompt tiré d'une réponse, sans le filtre AS-18 (relu ensuite avec l'idée et les textes d'origine).
+///
+/// # Errors
+/// Sortie du spécialiste illisible.
+pub fn extraire(ecriture: &Ecriture, idee: &str, reponse: &str) -> Result<String, String> {
+    match &ecriture.specialiste {
+        Some(s) => lire_specialiste(reponse, s),
+        None => Ok(garde_cjk(&nettoyer_markdown(reponse), &[idee])),
+    }
+}
+
+/// Écrit un prompt et le contrôle : une réponse qui a des défauts est redemandée une fois, en disant au LLM ce qui
+/// n'allait pas ; des deux essais, celui qui a le moins de défauts est gardé. `appeler` envoie une demande au LLM et
+/// rend son texte. Une annulation (✕) arrête tout ; une panne au second essai garde le premier.
+///
+/// # Errors
+/// Le premier appel échoue, sa réponse est illisible, ou l'écriture est annulée.
+pub fn ecrire_controle(
+    ecriture: &Ecriture,
+    idee: &str,
+    attentes: &Attentes,
+    mut appeler: impl FnMut(&Demande) -> Result<String, String>,
+) -> Result<Controle, String> {
+    let premiere = appeler(&ecriture.demande)?;
+    let texte = extraire(ecriture, idee, &premiere)?;
+    let defauts_un = defauts(&texte, idee, attentes);
+    if defauts_un.is_empty() {
+        return Ok(Controle {
+            texte,
+            redemande: None,
+            reste: None,
+        });
+    }
+    let consigne: Vec<String> = defauts_un.iter().map(Defaut::pour_le_llm).collect();
+    let mut demande = ecriture.demande.clone();
+    if let Some(messages) = demande.messages.as_array_mut() {
+        messages.push(json!({"role": "assistant", "content": premiere}));
+        messages.push(json!({"role": "user", "content": format!(
+            "Your previous answer has these problems: {}. Write it again, fixing them. Answer with the prompt only, \
+             nothing before or after it.",
+            consigne.join("; ")
+        )}));
+    }
+    let second = match appeler(&demande) {
+        Ok(reponse) => extraire(ecriture, idee, &reponse).ok(),
+        Err(e) if e == crate::comfy_serveur::ANNULEE => return Err(e),
+        Err(_) => None,
+    };
+    let (garde, restants) = match second {
+        Some(t) => {
+            let defauts_deux = defauts(&t, idee, attentes);
+            if defauts_deux.len() <= defauts_un.len() {
+                (t, defauts_deux)
+            } else {
+                (texte, defauts_un.clone())
+            }
+        }
+        None => (texte, defauts_un.clone()),
+    };
+    Ok(Controle {
+        texte: garde,
+        redemande: Some(liste(&defauts_un)),
+        reste: (!restants.is_empty()).then(|| liste(&restants)),
+    })
 }
 
 /// Alertes sur les heures de coupe d'un prompt en plans (« [Shot 2] At 00:03.500, … ») : le premier plan sans heure,
@@ -863,6 +1068,8 @@ pub struct Ecriture {
     pub demande: Demande,
     /// Le bloc du LLM spécialisé, s'il réécrit avec sa propre consigne.
     pub specialiste: Option<Value>,
+    /// La longueur conseillée au LLM, en mots ; rien quand la consigne n'en donne pas.
+    pub mots: Option<u64>,
 }
 
 impl Ecriture {
@@ -900,6 +1107,7 @@ pub fn preparer_reecriture(
             lancement,
             demande,
             specialiste: Some(s),
+            mots: None,
         });
     }
     let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
@@ -937,6 +1145,7 @@ pub fn preparer_reecriture(
         },
         lancement,
         specialiste: None,
+        mots,
     })
 }
 
@@ -1030,6 +1239,7 @@ pub fn preparer_traduction(
             lancement,
             demande,
             specialiste: Some(s),
+            mots: None,
         });
     }
     let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
@@ -1062,6 +1272,7 @@ pub fn preparer_traduction(
         },
         lancement,
         specialiste: None,
+        mots: None,
     })
 }
 
@@ -1110,6 +1321,7 @@ pub fn preparer_precisions(
         },
         lancement,
         specialiste: None,
+        mots: None,
     })
 }
 
@@ -1125,10 +1337,7 @@ pub fn lire_reecriture(
     reponse: &str,
     filtre: &Filtre,
 ) -> Result<String, String> {
-    let prompt = match &ecriture.specialiste {
-        Some(s) => lire_specialiste(reponse, s)?,
-        None => garde_cjk(&nettoyer_markdown(reponse), &[idee]),
-    };
+    let prompt = extraire(ecriture, idee, reponse)?;
     filtre
         .verifier(&[idee, prompt.as_str()])
         .map_err(|e| e.to_string())?;
@@ -1141,6 +1350,157 @@ mod tests {
 
     fn texte_de(mots: usize) -> String {
         vec!["the fox in the snow"; mots / 5].join(" ")
+    }
+
+    fn ecriture_de_test(mots: Option<u64>) -> Ecriture {
+        Ecriture {
+            lancement: Lancement {
+                serveur: std::path::PathBuf::new(),
+                modele: std::path::PathBuf::new(),
+                port: 0,
+                contexte: 0,
+                reflexion: false,
+                vision: None,
+            },
+            demande: Demande {
+                messages: json!([{"role": "user", "content": "un renard"}]),
+                ..Demande::default()
+            },
+            specialiste: None,
+            mots,
+        }
+    }
+
+    #[test]
+    fn defauts_d_un_prompt() {
+        let anglais = Attentes {
+            mots_max: Some(60),
+            anglais: true,
+        };
+        assert!(defauts(&texte_de(50), "un renard", &anglais).is_empty());
+        let fr =
+            "Un renard roux dans la neige avec la lune et le vent dans les arbres de la forêt sous le ciel";
+        assert_eq!(
+            defauts(
+                fr,
+                "un renard",
+                &Attentes {
+                    mots_max: None,
+                    anglais: true
+                }
+            ),
+            [Defaut::Langue]
+        );
+        // Les répliques ne comptent pas pour la langue, ni un modèle qui lit une autre langue.
+        let replique = format!(
+            "{} <d>[French] Bonjour la forêt, je suis là avec le vent et la neige.</d>",
+            texte_de(20)
+        );
+        assert!(
+            defauts(
+                &replique,
+                "",
+                &Attentes {
+                    mots_max: None,
+                    anglais: true
+                }
+            )
+            .is_empty()
+        );
+        assert!(
+            defauts(
+                fr,
+                "",
+                &Attentes {
+                    mots_max: None,
+                    anglais: false
+                }
+            )
+            .is_empty()
+        );
+        // Longueur : 60 conseillés, 20 de marge.
+        assert!(defauts(&texte_de(80), "", &anglais).is_empty());
+        assert_eq!(
+            defauts(&texte_de(85), "", &anglais),
+            [Defaut::Longueur {
+                mots: 85,
+                min: MOTS_MIN,
+                max: 60
+            }]
+        );
+        let preambule = format!("Here is your prompt: {}", texte_de(50));
+        assert_eq!(defauts(&preambule, "", &anglais), [Defaut::Preambule]);
+        assert_eq!(
+            defauts(&texte_de(50), "un panneau « STOP »", &anglais),
+            [Defaut::TexteCite]
+        );
+    }
+
+    #[test]
+    fn ecriture_controlee() {
+        let e = ecriture_de_test(Some(60));
+        let attentes = Attentes {
+            mots_max: Some(60),
+            anglais: true,
+        };
+        // Bon du premier coup : un seul appel.
+        let mut appels = 0;
+        let c = ecrire_controle(&e, "un renard", &attentes, |_| {
+            appels += 1;
+            Ok(texte_de(50))
+        })
+        .unwrap();
+        assert_eq!(
+            (appels, c.redemande.is_none(), c.reste.is_none()),
+            (1, true, true)
+        );
+        // Un préambule : redemandé une fois, avec ce qui n'allait pas, et le second essai gardé.
+        let mut demandes = Vec::new();
+        let c = ecrire_controle(&e, "un renard", &attentes, |d| {
+            demandes.push(d.messages.clone());
+            Ok(if demandes.len() == 1 {
+                format!("Sure! {}", texte_de(50))
+            } else {
+                texte_de(50)
+            })
+        })
+        .unwrap();
+        assert_eq!(c.texte, texte_de(50));
+        assert_eq!(c.redemande.as_deref(), Some("commence par un préambule"));
+        assert!(c.reste.is_none());
+        let relance = demandes[1].as_array().unwrap();
+        assert_eq!(relance.len(), 3);
+        assert!(relance[2]["content"].as_str().unwrap().contains("preamble"));
+        assert_eq!(c.alertes().len(), 1);
+        // Toujours raté : le moins mauvais est gardé, avec ce qui reste.
+        let c = ecrire_controle(&e, "un renard", &attentes, |_| {
+            Ok(format!("Sure! {}", texte_de(50)))
+        })
+        .unwrap();
+        assert_eq!(c.reste.as_deref(), Some("commence par un préambule"));
+        assert_eq!(c.alertes().len(), 2);
+        // Une panne au second essai garde le premier ; une annulation arrête tout.
+        let mut n = 0;
+        let c = ecrire_controle(&e, "un renard", &attentes, |_| {
+            n += 1;
+            if n == 1 {
+                Ok(format!("Sure! {}", texte_de(50)))
+            } else {
+                Err("panne".to_owned())
+            }
+        })
+        .unwrap();
+        assert!(c.reste.is_some());
+        let mut n = 0;
+        let annulee = ecrire_controle(&e, "un renard", &attentes, |_| {
+            n += 1;
+            if n == 1 {
+                Ok(format!("Sure! {}", texte_de(50)))
+            } else {
+                Err(crate::comfy_serveur::ANNULEE.to_owned())
+            }
+        });
+        assert_eq!(annulee.unwrap_err(), crate::comfy_serveur::ANNULEE);
     }
 
     #[test]
