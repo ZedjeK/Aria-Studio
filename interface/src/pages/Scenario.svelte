@@ -13,6 +13,7 @@
     assemblerPrompt,
     ecrirePromptScenario,
     enregistrerPersonnage,
+    estAnnulation,
     lirePersonnages,
     messageErreur,
     optionsMontage,
@@ -45,6 +46,7 @@
     sousListeVisible,
     valeursProposees,
   } from '../lib/scenario';
+  import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -354,7 +356,7 @@
       traduction = { de, en: await traduirePrecisions(de, llmEffectif) };
       planifier();
     } catch (e) {
-      signaler(messageErreur(e), true);
+      signaler(estAnnulation(e) ? 'Traduction annulée.' : messageErreur(e), !estAnnulation(e));
     } finally {
       ecriture = null;
     }
@@ -379,7 +381,7 @@
       const coupes = r.alertes.length > 0 ? ` · ⚠ ${r.alertes.join(' ')}` : '';
       signaler(`Prompt écrit par ${r.llm} en ${r.dureeS} s.${coupes}`, r.alertes.length > 0);
     } catch (e) {
-      signaler(messageErreur(e), true);
+      signaler(estAnnulation(e) ? 'Écriture annulée.' : messageErreur(e), !estAnnulation(e));
     } finally {
       ecriture = null;
     }
@@ -602,6 +604,9 @@
     >
       {ecriture === 'ecrire' ? 'Le LLM écrit…' : '✨ Écrire le prompt'}
     </Bouton>
+    {#if ecriture === 'ecrire'}
+      <AnnulerEcriture />
+    {/if}
   </div>
   {#if llms.length === 0}
     <p class="discret">Aucun LLM dans modeles\llm : compose le prompt avec les compléments, il part tel quel.</p>
@@ -711,6 +716,9 @@
             <Bouton petit desactive={ecriture !== null || llms.length === 0} onclick={() => void traduire()}>
               {ecriture === 'traduire' ? 'Traduction…' : 'Traduire et ajouter'}
             </Bouton>
+            {#if ecriture === 'traduire'}
+              <AnnulerEcriture />
+            {/if}
           {/if}
         </div>
       {/if}

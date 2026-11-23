@@ -71,6 +71,8 @@ pub struct Moteurs {
     pub orchestrateur: Arc<Mutex<Orchestrateur>>,
     tache: Arc<Mutex<Option<Tache>>>,
     annuler: Arc<AtomicBool>,
+    /// ✕ Annuler d'une écriture du Scénario (le LLM écrit) : hors du verrou de l'orchestrateur.
+    pub ecriture_annulee: Arc<AtomicBool>,
 }
 
 impl Moteurs {
@@ -107,6 +109,7 @@ impl Moteurs {
             )),
             tache: Arc::new(Mutex::new(None)),
             annuler: Arc::new(AtomicBool::new(false)),
+            ecriture_annulee: Arc::new(AtomicBool::new(false)),
         })
     }
 }

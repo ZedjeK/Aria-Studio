@@ -3,17 +3,33 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use aria_coeur::conversation::{self, DemandeConversation, Tour};
 use aria_coeur::decoupage::{self, Decoupe, DemandeDecoupage};
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::listes::{self, Assemblage, DemandeAssemblage, Structure, Sujet};
 use aria_coeur::personnages::{self, Personnage};
-use aria_coeur::plateau::Plateau;
+use aria_coeur::plateau::{EcritureAnnulable, Plateau};
 use aria_coeur::scenario::{self, DemandeEcriture, Ecrit};
 use tauri::State;
 
 use crate::moteurs::Moteurs;
+
+/// Une écriture du Scénario, que ✕ Annuler arrête ; une nouvelle écriture repart sans annulation.
+fn ecriture(moteurs: &Moteurs) -> EcritureAnnulable {
+    moteurs.ecriture_annulee.store(false, Ordering::Relaxed);
+    EcritureAnnulable {
+        orchestrateur: Arc::clone(&moteurs.orchestrateur),
+        annule: Arc::clone(&moteurs.ecriture_annulee),
+    }
+}
+
+/// ✕ Annuler : l'écriture en cours s'arrête (le LLM cesse d'écrire, la connexion est coupée).
+#[tauri::command]
+pub fn annuler_ecriture(moteurs: State<'_, Moteurs>) {
+    moteurs.ecriture_annulee.store(true, Ordering::Relaxed);
+}
 
 /// Les sujets du Scénario.
 #[tauri::command]
@@ -48,7 +64,7 @@ pub async fn ecrire_prompt_scenario(
     demande: DemandeEcriture,
 ) -> Result<Ecrit, String> {
     let contexte = plateau.contexte().clone();
-    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    let mut orchestrateur = ecriture(&moteurs);
     tauri::async_runtime::spawn_blocking(move || {
         scenario::ecrire_prompt(&contexte, &mut orchestrateur, &demande)
     })
@@ -65,7 +81,7 @@ pub async fn traduire_precisions(
     llm: Option<String>,
 ) -> Result<String, String> {
     let contexte = plateau.contexte().clone();
-    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    let mut orchestrateur = ecriture(&moteurs);
     tauri::async_runtime::spawn_blocking(move || {
         scenario::traduire_precisions(&contexte, &mut orchestrateur, &texte, llm.as_deref())
     })
@@ -82,7 +98,7 @@ pub async fn decouper_sequence(
     demande: DemandeDecoupage,
 ) -> Result<Decoupe, String> {
     let contexte = plateau.contexte().clone();
-    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    let mut orchestrateur = ecriture(&moteurs);
     tauri::async_runtime::spawn_blocking(move || decoupage::decouper(&contexte, &mut orchestrateur, &demande))
         .await
         .map_err(|e| format!("Scénario indisponible : {e}"))?
@@ -119,7 +135,7 @@ pub async fn conversation_scenario(
     demande: DemandeConversation,
 ) -> Result<Tour, String> {
     let contexte = plateau.contexte().clone();
-    let mut orchestrateur = Arc::clone(&moteurs.orchestrateur);
+    let mut orchestrateur = ecriture(&moteurs);
     tauri::async_runtime::spawn_blocking(move || conversation::tour(&contexte, &mut orchestrateur, &demande))
         .await
         .map_err(|e| format!("Scénario indisponible : {e}"))?

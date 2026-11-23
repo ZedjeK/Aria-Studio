@@ -5,7 +5,8 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { conversationScenario, messageErreur } from '../lib/api';
+  import { conversationScenario, estAnnulation, messageErreur } from '../lib/api';
+  import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import {
     ECRIRE,
     conversationGardee,
@@ -67,7 +68,7 @@
       // Le message refusé revient dans la saisie, la conversation reste comme avant.
       messages = avant;
       saisie = propre === ECRIRE ? '' : propre;
-      signaler(messageErreur(e), true);
+      signaler(estAnnulation(e) ? 'Réponse annulée.' : messageErreur(e), !estAnnulation(e));
     } finally {
       enCours = false;
     }
@@ -128,7 +129,7 @@
     {/if}
   {/each}
   {#if enCours}
-    <p class="discret" role="status">Le LLM réfléchit…</p>
+    <p class="discret" role="status">Le LLM réfléchit… <AnnulerEcriture /></p>
   {/if}
 </div>
 
