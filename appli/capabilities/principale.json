@@ -134,6 +134,8 @@
     "allow-reveler-casting",
     "allow-favori-casting",
     "allow-source-depuis-casting",
+    "allow-importer-source-casting",
+    "allow-source-casting-depuis-rush",
     "allow-lancer-casting",
     "core:event:allow-listen",
     "core:event:allow-unlisten",

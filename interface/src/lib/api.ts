@@ -1915,9 +1915,17 @@ export const revelerCasting = (id: string): Promise<VueCasting> => invoke<VueCas
 export const favoriCasting = (id: string, workflow: string): Promise<VueCasting> =>
   invoke<VueCasting>('favori_casting', { id, workflow });
 
-/** Fige l'image comme image de départ des castings de retouche. */
+/** Fige l'image comme image de départ des castings de retouche et d'image vers vidéo. */
 export const sourceDepuisCasting = (id: string, cle: string, fichier: string): Promise<VueCasting> =>
   invoke<VueCasting>('source_depuis_casting', { id, cle, fichier });
+
+/** Pose un fichier (data URL) comme image de départ `nom` des castings ; rend l'état du Casting. */
+export const importerSourceCasting = (nom: string, image: string, nomOrigine: string): Promise<EtatCasting> =>
+  invoke<EtatCasting>('importer_source_casting', { nom, image, nomOrigine });
+
+/** Pose une image des Rushes comme image de départ `nom` des castings ; rend l'état du Casting. */
+export const sourceCastingDepuisRush = (nom: string, rush: string): Promise<EtatCasting> =>
+  invoke<EtatCasting>('source_casting_depuis_rush', { nom, rush });
 
 // --- Assistant de premier lancement (aria_coeur::assistant, catalogue/packs.yaml) ---
 

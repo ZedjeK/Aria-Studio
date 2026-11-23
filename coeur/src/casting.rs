@@ -1,7 +1,8 @@
 //! Le Casting, comme en v2 (`app/casting.py`) : mêmes prompts et mêmes seeds sur plusieurs modèles d'une tâche, puis
 //! comparaison à l'aveugle (notes de 1 à 5, révélation, modèle par défaut).
 //!
-//! Ce module tient le jeu d'essai livré (`casting/`), ce qu'un casting comparerait avant de partir (la préparation),
+//! Ce module tient le jeu d'essai livré (`casting/`, les prompts et les idées ; les images de départ sont celles de
+//! l'utilisateur, dans `data\bancs\sources\`), ce qu'un casting comparerait avant de partir (la préparation),
 //! son lancement (une commande de la file du Plateau : générations et mesures ; pour le Casting LLM, réécriture des
 //! idées par chaque candidat, contrôles, puis rendu) et ses résultats, au format de la v2
 //! (`data\bancs\<id>\resultats.json`).
@@ -27,23 +28,6 @@ use crate::{carte, comfy_serveur, fiches, llm, montage, prompt, reglages, retouc
 /// Le jeu de prompts des castings de génération, et celui des idées du Casting LLM (livrés avec l'appli).
 pub const PROMPTS: &str = include_str!("../../casting/prompts.yaml");
 pub const IDEES: &str = include_str!("../../casting/idees.yaml");
-/// D'où viennent les images de départ livrées (un banc texte vers image de l'auteur).
-const ORIGINE_LIVREE: &str = include_str!("../../casting/sources/origine.json");
-/// Les images de départ livrées des castings de retouche et d'image vers vidéo.
-const SOURCES_LIVREES: [(&str, &[u8]); 6] = [
-    ("dragon.png", include_bytes!("../../casting/sources/dragon.png")),
-    ("jeu.png", include_bytes!("../../casting/sources/jeu.png")),
-    (
-        "miniature.png",
-        include_bytes!("../../casting/sources/miniature.png"),
-    ),
-    ("neon.png", include_bytes!("../../casting/sources/neon.png")),
-    ("pilote.png", include_bytes!("../../casting/sources/pilote.png")),
-    (
-        "portrait.png",
-        include_bytes!("../../casting/sources/portrait.png"),
-    ),
-];
 
 /// Les tâches, dans l'ordre de la page.
 pub const TACHES: [&str; 5] = [
@@ -100,7 +84,10 @@ fn dossier_bancs(data: &Path) -> PathBuf {
     data.join("bancs")
 }
 
-/// Les images de départ choisies dans un casting (« Utiliser comme source ») : elles remplacent celles livrées.
+/// Les images de départ des castings de retouche et d'image vers vidéo : celles de l'utilisateur, figées depuis un
+/// casting texte vers image (« Utiliser comme source »), importées d'un fichier ou prises dans les Rushes. La v2 en
+/// livrait ; la v3 n'en livre plus : elles avaient été produites par des modèles dont la licence ne permet pas de les
+/// redistribuer dans un exe public.
 fn dossier_sources(data: &Path) -> PathBuf {
     dossier_bancs(data).join("sources")
 }
@@ -114,32 +101,64 @@ fn nom_source_valide(nom: &str) -> bool {
         && !nom.starts_with('.')
 }
 
-/// Une image de départ : celle choisie dans un casting, sinon celle livrée.
+/// Une image de départ de l'utilisateur.
 pub fn source(data: &Path, nom: &str) -> Option<Vec<u8>> {
     if !nom_source_valide(nom) {
         return None;
     }
-    fs::read(dossier_sources(data).join(nom)).ok().or_else(|| {
-        SOURCES_LIVREES
-            .iter()
-            .find(|(n, _)| *n == nom)
-            .map(|(_, o)| o.to_vec())
-    })
+    fs::read(dossier_sources(data).join(nom)).ok()
 }
 
 fn source_presente(data: &Path, nom: &str) -> bool {
-    nom_source_valide(nom)
-        && (dossier_sources(data).join(nom).is_file() || SOURCES_LIVREES.iter().any(|(n, _)| *n == nom))
+    nom_source_valide(nom) && dossier_sources(data).join(nom).is_file()
 }
 
-/// D'où vient chaque image de départ : `{"portrait.png": {"banc": …, "image": …}}`.
+/// D'où vient chaque image de départ : `{"portrait.png": {"banc": …, "image": …}}` pour une image figée depuis un
+/// casting, `{"fichier": …}` pour une image importée, `{"rush": …}` pour une image prise dans les Rushes.
 pub fn origine_sources(data: &Path) -> Map<String, Value> {
     let lu = fs::read_to_string(dossier_sources(data).join("origine.json")).ok();
-    let texte = lu.as_deref().unwrap_or(ORIGINE_LIVREE);
-    match serde_json::from_str::<Value>(texte) {
-        Ok(Value::Object(m)) => m,
+    match lu.as_deref().map(serde_json::from_str::<Value>) {
+        Some(Ok(Value::Object(m))) => m,
         _ => Map::new(),
     }
+}
+
+/// Les images de départ que les castings de retouche et d'image vers vidéo attendent, par leur nom.
+///
+/// # Errors
+/// Jeu d'essai illisible.
+pub fn noms_de_toutes_les_sources() -> Result<Vec<String>, String> {
+    let mut noms = Vec::new();
+    for tache in AVEC_SOURCE {
+        noms.extend(noms_sources(tache, &jeu_de_prompts(tache)?));
+    }
+    noms.sort();
+    noms.dedup();
+    Ok(noms)
+}
+
+/// Range une image de départ et note d'où elle vient.
+fn ranger_source(data: &Path, nom: &str, png: &[u8], origine_image: Value) -> Result<(), String> {
+    let d = dossier_sources(data);
+    fs::create_dir_all(&d).map_err(|e| format!("{} : {e}", d.display()))?;
+    fs::write(d.join(nom), png).map_err(|e| format!("{nom} : {e}"))?;
+    let mut origine = origine_sources(data);
+    origine.insert(nom.to_owned(), origine_image);
+    let texte_origine = serde_json::to_string_pretty(&origine).map_err(|e| e.to_string())?;
+    fs::write(d.join("origine.json"), texte_origine).map_err(|e| format!("origine.json : {e}"))
+}
+
+/// Pose une image de l'utilisateur comme image de départ `nom` (un fichier importé, ou une image des Rushes) : elle
+/// est relue et réécrite en PNG, et sa fiche d'origine est notée (`{"fichier": …}` ou `{"rush": …}`).
+///
+/// # Errors
+/// Nom qu'aucun casting n'attend, image illisible, ou fichier qui ne s'écrit pas.
+pub fn importer_source(data: &Path, nom: &str, octets: &[u8], origine_image: Value) -> Result<(), String> {
+    if !nom_source_valide(nom) || !noms_de_toutes_les_sources()?.iter().any(|n| n == nom) {
+        return Err(format!("Aucun casting n'attend d'image de départ « {nom} »"));
+    }
+    let png = crate::images::png(&crate::images::ouvrir(octets)?)?;
+    ranger_source(data, nom, &png, origine_image)
 }
 
 // --- préparation ----------------------------------------------------------------------------------------------------
@@ -241,9 +260,14 @@ fn blocage_sources(data: &Path, tache: &str, essais: &[Essai]) -> Option<String>
         .filter(|s| !source_presente(data, s))
         .collect();
     (!absentes.is_empty()).then(|| {
+        let noms: Vec<&str> = absentes
+            .iter()
+            .map(|n| n.strip_suffix(".png").unwrap_or(n))
+            .collect();
         format!(
-            "Images de départ absentes de casting/sources : {}",
-            absentes.join(", ")
+            "Images de départ à ajouter : {}. Pour chacune, importe une image ou prends-la dans les Rushes, ou fige-en \
+             une depuis un casting Texte vers image (« Utiliser comme source »)",
+            noms.join(", ")
         )
     })
 }
@@ -934,7 +958,7 @@ pub fn vue(contexte: &Contexte, id: &str) -> Result<Value, String> {
         .to_owned();
     let origine = origine_sources(&contexte.data);
     let sources_retouche: Vec<String> = if tache == "texte_vers_image" {
-        noms_sources("retouche", &jeu_de_prompts("retouche").unwrap_or_default())
+        noms_de_toutes_les_sources().unwrap_or_default()
     } else {
         Vec::new()
     };
@@ -1095,16 +1119,11 @@ pub fn utiliser_comme_source(
         .map(|g| texte(&g, "prompt"))
         .unwrap_or_default();
     let nom = format!("{prompt}.png");
-    if !noms_sources("retouche", &jeu_de_prompts("retouche")?).contains(&nom) {
-        return Err(format!("Aucune retouche n'utilise de source « {prompt} »"));
+    if !noms_de_toutes_les_sources()?.contains(&nom) {
+        return Err(format!("Aucun casting n'utilise de source « {prompt} »"));
     }
-    let d = dossier_sources(data);
-    fs::create_dir_all(&d).map_err(|e| format!("{} : {e}", d.display()))?;
-    fs::copy(&chemin, d.join(&nom)).map_err(|e| format!("{nom} : {e}"))?;
-    let mut origine = origine_sources(data);
-    origine.insert(nom.clone(), json!({"banc": id, "image": image}));
-    let texte_origine = serde_json::to_string_pretty(&origine).map_err(|e| e.to_string())?;
-    fs::write(d.join("origine.json"), texte_origine).map_err(|e| format!("origine.json : {e}"))?;
+    let png = fs::read(&chemin).map_err(|e| format!("{nom} : {e}"))?;
+    ranger_source(data, &nom, &png, json!({"banc": id, "image": image}))?;
     Ok(nom)
 }
 
@@ -1389,15 +1408,54 @@ mod tests {
             assert!(!jeu_de_prompts(tache).unwrap().is_empty(), "{tache}");
         }
         assert!(jeu_de_prompts("autre").is_err());
-        // Chaque image de départ des castings de retouche et d'image vers vidéo est livrée.
+        // Aucune image de départ n'est livrée : sans celles de l'utilisateur, il n'y en a pas.
         let temp = tempfile::tempdir().unwrap();
-        for tache in AVEC_SOURCE {
-            for nom in noms_sources(tache, &jeu_de_prompts(tache).unwrap()) {
-                assert!(source(temp.path(), &nom).is_some(), "{nom}");
-            }
+        let noms = noms_de_toutes_les_sources().unwrap();
+        assert!(noms.iter().any(|n| n == "portrait.png") && noms.iter().any(|n| n == "pilote.png"));
+        for nom in &noms {
+            assert!(source(temp.path(), nom).is_none(), "{nom}");
         }
         assert!(source(temp.path(), "../reglages.json").is_none());
-        assert!(origine_sources(temp.path()).contains_key("portrait.png"));
+        assert!(origine_sources(temp.path()).is_empty());
+    }
+
+    #[test]
+    fn images_de_depart_de_l_utilisateur() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = temp.path();
+        let essais = jeu_de_prompts("retouche").unwrap();
+        // Sans source, la préparation dit lesquelles ajouter et comment.
+        let blocage = blocage_sources(data, "retouche", &essais).unwrap();
+        assert!(blocage.contains("portrait") && blocage.contains("importe une image"));
+        // Un fichier importé : relu, réécrit en PNG, sa fiche d'origine notée.
+        let image = crate::images::png(&image::RgbImage::new(8, 6)).unwrap();
+        importer_source(data, "portrait.png", &image, json!({"fichier": "moi.jpg"})).unwrap();
+        assert_eq!(source(data, "portrait.png").unwrap(), image);
+        assert_eq!(
+            origine_sources(data)["portrait.png"],
+            json!({"fichier": "moi.jpg"})
+        );
+        // Une image des Rushes, pour une source de l'image vers vidéo seulement.
+        importer_source(
+            data,
+            "pilote.png",
+            &image,
+            json!({"rush": "20261123-101500-abcdef"}),
+        )
+        .unwrap();
+        assert_eq!(
+            origine_sources(data)["pilote.png"]["rush"],
+            "20261123-101500-abcdef"
+        );
+        // Un nom qu'aucun casting n'attend, ou une image illisible, sont refusés.
+        assert!(importer_source(data, "autre.png", &image, json!({})).is_err());
+        assert!(importer_source(data, "../x.png", &image, json!({})).is_err());
+        assert!(importer_source(data, "neon.png", b"rien", json!({})).is_err());
+        // Toutes là : plus de blocage.
+        for nom in noms_sources("retouche", &essais) {
+            importer_source(data, &nom, &image, json!({"fichier": "x.png"})).unwrap();
+        }
+        assert!(blocage_sources(data, "retouche", &essais).is_none());
     }
 
     #[test]
@@ -1422,7 +1480,7 @@ mod tests {
         );
         assert!(llm.rendu.is_some());
         let retouche = p.taches.iter().find(|t| t.tache == "retouche").unwrap();
-        assert!(!retouche.sources.is_empty() && retouche.sources.iter().all(|s| s.presente));
+        assert!(!retouche.sources.is_empty() && retouche.sources.iter().all(|s| !s.presente));
     }
 
     #[test]
