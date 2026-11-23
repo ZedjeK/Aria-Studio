@@ -146,3 +146,32 @@ export function choixDuBrouillon(v: unknown): Record<string, ChoixListes> {
   }
   return sortie;
 }
+
+/** L'aide du départ d'un atelier (« 1 · Départ » de la v2) : ce que font ses images. */
+export function aideReference(
+  atelier: 'image' | 'retouche' | 'clip' | 'sequence',
+  depart: 'inspirer' | 'variation' | null,
+  max: number,
+): string {
+  if (atelier === 'retouche') {
+    return "L'image à retoucher : le LLM la regarde pour écrire une consigne qui lui correspond. Le masque se dessine ensuite dans la page Retouche.";
+  }
+  if (atelier === 'clip') return "Le rush à animer : il devient la première image du clip. Sans lui, le clip part du texte seul.";
+  if (atelier === 'sequence') {
+    return 'Le personnage de référence de la séquence (facultatif) : son visage et sa tenue tiennent sur les plans.';
+  }
+  if (depart === 'inspirer') {
+    return (
+      `Tes images sont des ingrédients : le modèle d'édition les regarde et compose une nouvelle scène (format libre). ` +
+      `Jusqu'à ${max} images. Cite-les par numéro dans ton idée (« la femme de l'image 1 sur le dragon de l'image 2 »). ` +
+      "Le LLM écrit le prompt en gardant ce que chaque image montre, sauf si tu demandes de le changer."
+    );
+  }
+  if (depart === 'variation') {
+    return (
+      "Ton image est le point de départ : le modèle la redessine en partie. Composition, sujets et style sont gardés, " +
+      "ton idée dit ce qui change. La Liberté du Plateau décide de la force : plus elle monte, plus l'image change."
+    );
+  }
+  return "Pas d'image : le modèle crée tout à partir de ton idée et de tes compléments (sujet, décor, mise en scène).";
+}

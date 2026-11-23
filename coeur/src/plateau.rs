@@ -264,6 +264,9 @@ pub struct ChoixWorkflow {
     pub reserve_retouche: bool,
     /// Les LoRA de sa famille.
     pub loras: Vec<LoraProposee>,
+    /// Les rubriques que ce modèle n'a pas à se faire demander (`profil_prompt.rubriques_ignorees` de sa fiche) :
+    /// le guide du Scénario ne pose pas leur question.
+    pub rubriques_ignorees: Vec<String>,
 }
 
 /// Un LLM proposé pour réécrire.
@@ -502,6 +505,7 @@ pub fn options_pour(contexte: &Contexte, tache: &str, defaut: String) -> Options
             variation: wf.accepte_variation(),
             reserve_retouche: wf.reserve_retouche(),
             loras: loras_proposees(contexte, &wf),
+            rubriques_ignorees: crate::conversation::rubriques_ignorees(Some(&wf)),
             modeles,
             id: wf.id,
         });

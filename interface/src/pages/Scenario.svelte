@@ -38,8 +38,10 @@
     type StructureScenario,
     type SujetScenario,
   } from '../lib/api';
+  import { AIDES_GUIDE, guideVide, type EtatGuide } from '../lib/guide';
   import {
     ONGLETS,
+    aideReference,
     choixDansOnglet,
     choixDuBrouillon,
     contexteListes,
@@ -56,6 +58,7 @@
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
+  import ScenarioGuide from './ScenarioGuide.svelte';
   import ScenarioSequence from './ScenarioSequence.svelte';
 
   interface Props {
@@ -126,6 +129,12 @@
     optionsImage ? workflowsPour(departImage, optionsImage, optionsReferences) : workflows,
   );
   const maxReferences = $derived(rushesMax(departImage, proposesImage.find((w) => w.id === workflowId)));
+  /** Le modèle cible de l'atelier Image ou Clip, avec les rubriques qu'il ignore. */
+  const workflowGuide = $derived(
+    atelier === 'clip'
+      ? proposesClip?.workflows.find((w) => w.id === workflowClip)
+      : proposesImage.find((w) => w.id === workflowId),
+  );
   /** Le modèle cible de l'atelier affiché. */
   const cible = $derived(atelier === 'retouche' ? workflowRetouche : atelier === 'clip' ? workflowClip : workflowId);
   /** Les images que le LLM voit : l'image à retoucher, le rush à animer, ou les références de l'atelier Image. */
@@ -135,12 +144,19 @@
   /** Le LLM choisi ; vide : celui du modèle cible. */
   let llmChoisi = $state('');
   let idee = $state('');
-  /** « ✨ Écrire le prompt » d'après l'idée, ou « 💬 M'aider à préciser » en conversation. */
+  /** « ✨ Écrire le prompt » d'après l'idée, « 💬 M'aider à préciser » en conversation, ou « 🧭 Me guider » (Image et
+   * Clip) : des questions une à une, sans LLM. */
   let modeIdee = $state('ecrire');
-  const ongletsIdee = [
+  const guidable = $derived(atelier === 'image' || atelier === 'clip');
+  const ongletsIdee = $derived([
     { id: 'ecrire', titre: '✨ Écrire' },
     { id: 'preciser', titre: "💬 M'aider à préciser" },
-  ];
+    ...(guidable ? [{ id: 'guider', titre: '🧭 Me guider' }] : []),
+  ]);
+  /** Le déroulé du guide de chaque atelier. */
+  let guides = $state<{ image: EtatGuide; clip: EtatGuide }>({ image: guideVide(), clip: guideVide() });
+  /** Les réponses du guide, à poser dans le champ de la conversation. */
+  let amorce = $state('');
   let precisions = $state('');
   /** La traduction des précisions, et le texte qu'elle traduit (elle ne vaut plus s'il change). */
   let traduction = $state<{ de: string; en: string } | null>(null);
@@ -356,7 +372,7 @@
     final = b?.final ?? '';
     finalRetouche = b?.finalRetouche ?? false;
     imageAtelier = [];
-    if (nouvel === 'sequence') modeIdee = 'ecrire';
+    if (nouvel === 'sequence' || (modeIdee === 'guider' && nouvel !== 'image' && nouvel !== 'clip')) modeIdee = 'ecrire';
     planifier();
   }
   const traductionValide = $derived(traduction !== null && traduction.de === precisions.trim());
@@ -610,9 +626,11 @@
       </p>
       <ChoixRushes max={Math.max(1, maxReferences)} bind:selection={referencesImage} {signaler} />
     {/if}
+    <p class="discret">{aideReference('image', departImage, maxReferences)}</p>
   {/if}
   {#if imageRequise}
     <p class="etiquette">{atelier === 'retouche' ? "L'image à retoucher" : 'Le rush à animer'}</p>
+    <p class="discret">{aideReference(atelier, null, 1)}</p>
     <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
   {/if}
   <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
@@ -637,6 +655,8 @@
         disponible={llms.length > 0}
         {signaler}
         libelleUtiliser={atelier === 'retouche' ? 'Utiliser cette consigne' : 'Utiliser ce prompt'}
+        {amorce}
+        amorceLue={() => (amorce = '')}
         utiliser={(p, alertes) => {
           final = p;
           finalRetouche = true;
@@ -648,6 +668,34 @@
         }}
       />
     {/key}
+  {:else if modeIdee === 'guider' && guidable}
+    <ScenarioGuide
+      {structure}
+      {ctx}
+      {sujets}
+      options={{
+        sansSujet: atelier === 'image' && departImage !== null,
+        video: atelier === 'clip',
+        image: atelier === 'image',
+        ignorees: workflowGuide?.rubriquesIgnorees ?? [],
+      }}
+      aide={atelier === 'clip' ? AIDES_GUIDE.clip : AIDES_GUIDE[departImage ?? 'texte']}
+      bind:guide={guides[atelier === 'clip' ? 'clip' : 'image']}
+      {choisirSujet}
+      poser={changer}
+      poserTexte={(t) => {
+        texte = t;
+        planifier();
+      }}
+      poserAge={(a) => {
+        age = a;
+        planifier();
+      }}
+      utiliser={(lignes) => {
+        amorce = lignes.join('\n');
+        modeIdee = 'preciser';
+      }}
+    />
   {:else}
   <textarea
     rows="3"
