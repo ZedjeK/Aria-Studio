@@ -8,6 +8,7 @@
   import {
     ecouter,
     enregistrerReglages,
+    etatAssistant,
     identite as lireIdentite,
     lireReglages,
     messageErreur,
@@ -28,6 +29,7 @@
   import EtatDirect from './lib/composants/EtatDirect.svelte';
   import FondAnime from './lib/composants/FondAnime.svelte';
   import MenuLateral from './lib/composants/MenuLateral.svelte';
+  import DialogueAssistant from './dialogues/Assistant.svelte';
   import DialogueMiseAJour from './dialogues/MiseAJour.svelte';
   import Accueil from './pages/Accueil.svelte';
   import Casting from './pages/Casting.svelte';
@@ -74,6 +76,10 @@
   let identite = $state<Identite | null>(null);
   let reglages = $state<Reglages | null>(null);
   let page = $state<Page>('accueil');
+  /** L'assistant de premier lancement : ouvert tout seul tant qu'il manque de quoi générer, ou depuis Réglages. */
+  let assistant = $state(false);
+  /** Change quand l'assistant a fini : les pages relisent leurs listes (favoris, moteurs). */
+  let apresAssistant = $state(0);
   /** Un prompt écrit au Scénario, en route vers le Plateau. */
   let versPlateau = $state<EnvoiPlateau | null>(null);
   /** Une séquence écrite au Scénario, à ouvrir au Montage ; une séquence du Montage, à retravailler au Scénario. */
@@ -120,6 +126,7 @@
       try {
         [identite, reglages] = await Promise.all([lireIdentite(), lireReglages()]);
         miseAJour ??= await miseAJourDisponible();
+        if ((await etatAssistant()).ouvrir) assistant = true;
       } catch (e) {
         signaler(`Démarrage incomplet : ${messageErreur(e)}`, true);
       }
@@ -227,7 +234,9 @@
       {:else if page === 'casting'}
         <Casting {signaler} />
       {:else if page === 'reglages'}
-        <PageReglages {signaler} />
+        {#key apresAssistant}
+          <PageReglages {signaler} ouvrirAssistant={() => (assistant = true)} />
+        {/key}
       {:else if page === 'journal'}
         <Journal {signaler} />
       {:else if identite && reglages}
@@ -238,6 +247,15 @@
     </div>
   </main>
 </div>
+
+{#if assistant}
+  <DialogueAssistant
+    fermer={(termine) => {
+      assistant = false;
+      if (termine) apresAssistant += 1;
+    }}
+  />
+{/if}
 
 {#if dialogueMiseAJour && miseAJour}
   <DialogueMiseAJour infos={miseAJour} fermer={() => (dialogueMiseAJour = false)} />

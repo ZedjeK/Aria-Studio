@@ -1738,3 +1738,91 @@ export const favoriCasting = (id: string, workflow: string): Promise<VueCasting>
 /** Fige l'image comme image de départ des castings de retouche. */
 export const sourceDepuisCasting = (id: string, cle: string, fichier: string): Promise<VueCasting> =>
   invoke<VueCasting>('source_depuis_casting', { id, cle, fichier });
+
+// --- Assistant de premier lancement (aria_coeur::assistant, catalogue/packs.yaml) ---
+
+/** Une licence d'un pack, avec ce qu'il faut savoir avant de l'accepter. */
+export interface LicencePack {
+  nom: string;
+  url: string;
+  resume: string;
+  commercial: boolean | null;
+  territoiresExclus: string[];
+  /** « fichier : licence » des composants qui ont la leur. */
+  composants: string[];
+}
+
+/** Un pack, tel que l'écran « Ce que tu veux faire » le montre. */
+export interface Pack {
+  id: string;
+  nom: string;
+  usage: string;
+  conseille: boolean;
+  facultatif: boolean;
+  testee: string | null;
+  /** Octets de tous ses fichiers, et de ceux qui manquent. */
+  taille: number;
+  aTelecharger: number;
+  installe: boolean;
+  licences: LicencePack[];
+  /** La date où sa licence a été acceptée. */
+  licenceAcceptee: string | null;
+  moteursAbsents: string[];
+}
+
+/** Ce que coûte une sélection de packs. */
+export interface PlanAssistant {
+  fichiers: { dossier: string; nom: string; taille: number }[];
+  aTelecharger: number;
+  /** La place libre sur le disque des modèles ; null : inconnue. */
+  libre: number | null;
+  placeOk: boolean;
+  licencesAAccepter: string[];
+}
+
+export interface EtatAssistant {
+  /** S'ouvrir au lancement : pas encore terminé, et il manque de quoi générer. */
+  ouvrir: boolean;
+  termine: string | null;
+  packs: Pack[];
+}
+
+export interface EnvoiAssistant {
+  /** Les téléchargements ajoutés à la file. */
+  ajoutes: string[];
+  /** Les fichiers que la file avait déjà. */
+  dejaEnFile: string[];
+}
+
+/** Un usage du récapitulatif de fin et son modèle. */
+export interface RecapAssistant {
+  usage: string;
+  nom: string;
+}
+
+export interface FinAssistant {
+  /** « section.clé » → valeur. */
+  favoris: Record<string, string>;
+  regles: RecapAssistant[];
+  manquants: RecapAssistant[];
+  essai: boolean;
+}
+
+export const etatAssistant = (): Promise<EtatAssistant> => invoke<EtatAssistant>('etat_assistant');
+
+export const planAssistant = (packs: string[]): Promise<PlanAssistant> =>
+  invoke<PlanAssistant>('plan_assistant', { packs });
+
+/** « J'ai lu et j'accepte » pour chaque pack coché ; rend le plan à jour. */
+export const accepterLicencesAssistant = (packs: string[]): Promise<PlanAssistant> =>
+  invoke<PlanAssistant>('accepter_licences_assistant', { packs });
+
+export const telechargerAssistant = (packs: string[]): Promise<EnvoiAssistant> =>
+  invoke<EnvoiAssistant>('telecharger_assistant', { packs });
+
+/** Règle les favoris sur ce qui est installé et note la fin de l'assistant. */
+export const terminerAssistant = (packs: string[]): Promise<FinAssistant> =>
+  invoke<FinAssistant>('terminer_assistant', { packs });
+
+/** Une image rapide (peu de steps) avec le favori « Créer une image » ; suivie par la file du Plateau. */
+export const essaiAssistant = (): Promise<Commande> => invoke<Commande>('essai_assistant');

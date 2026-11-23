@@ -4,6 +4,7 @@
 // Pas de console derrière la fenêtre, sauf en débogage.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod assistant;
 mod commandes;
 mod decouvrir;
 mod demarrage_auto;
@@ -241,6 +242,12 @@ fn lancer() -> Result<(), String> {
             plateau::supprimer_voix,
             plateau::importer_voix,
             plateau::son_voix,
+            assistant::etat_assistant,
+            assistant::plan_assistant,
+            assistant::accepter_licences_assistant,
+            assistant::telecharger_assistant,
+            assistant::terminer_assistant,
+            assistant::essai_assistant,
             plateau::lire_sequences,
             plateau::creer_sequence,
             plateau::modifier_sequence,
