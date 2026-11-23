@@ -1,8 +1,9 @@
 <!--
-  Scénario → « 🧭 Me guider » (ateliers Image et Clip), comme en v2 (web/guide.js) : un déroulé fixe, en bulles, sans
-  LLM. Les questions s'enchaînent (le sujet, le décor et l'ambiance, la mise en scène) et les réponses vont dans les
-  mêmes choix que les compléments. À chaque étape : une puce, la liste complète, ta propre idée, Surprends-moi, Passer
-  ou Revenir. À la fin, « Utiliser dans la conversation » range les réponses dans le champ du 💬.
+  Scénario → « 🧭 Me guider » (ateliers Image et Clip), comme en v2 (web/guide.js) et la maquette : un déroulé fixe, sans
+  LLM, une question à la fois (« Question 2 sur 6 · Le décor »). Les questions s'enchaînent (le sujet, le décor et
+  l'ambiance, la mise en scène) et les réponses vont dans les mêmes choix que les compléments. À chaque question : une
+  pastille par réponse, la liste complète, ta propre idée, 🎲 Surprends-moi, Revenir ou Passer. « Utiliser dans la
+  conversation » range les réponses dans le champ du 💬 ; elles restent rappelées en puces.
 -->
 <script lang="ts">
   import type { StructureScenario, SujetScenario } from '../lib/api';
@@ -15,6 +16,7 @@
     guideVide,
     lignesGuide,
     nombreDans,
+    numeroQuestion,
     parcours,
     texteReponse,
     type EtapeGuide,
@@ -58,12 +60,6 @@
   const parCategorie = $derived(
     etape?.type === 'liste' && guide.toute[etape.id] === true && etape.valeurs.some((v) => v.categorie),
   );
-
-  /** L'en-tête de section, quand on passe d'une section à l'autre. */
-  function section(i: number, onglet: ReponseGuide['onglet']): string | null {
-    const avant = i === 0 ? null : guide.fait[i - 1]?.onglet;
-    return avant === onglet ? null : SECTIONS[onglet];
-  }
 
   async function repondre(e: EtapeGuide, genre: GenreReponse, valeur = '', texte = '') {
     if (e.type === 'sujet') {
@@ -163,166 +159,136 @@
 </script>
 
 <div class="guide">
-  <div class="bulle llm">
-    <p>{aide}</p>
-    <p class="discret">Je te pose les questions une à une. À chaque étape : une réponse de la liste, ta propre idée, ou Passer.</p>
-  </div>
+  <p class="discret">{aide}</p>
 
-  {#each guide.fait as f, i (f.id)}
-    {@const titreSection = section(i, f.onglet)}
-    {#if titreSection}<div class="section">{titreSection}</div>{/if}
-    <div class="bulle llm">
-      <p><strong>{f.titre}</strong>{#if f.groupe && f.groupe !== f.titre}<span class="discret"> · {f.groupe}</span>{/if}</p>
+  {#if lignes.length > 0}
+    <div class="puces" role="group" aria-label="Déjà noté">
+      <span class="petit-texte">Noté :</span>
+      {#each guide.fait as f (f.id)}
+        {#if f.genre !== 'passe' && !(options.sansSujet && f.onglet === 'sujet')}
+          <span class="puce">{texteReponse(f, sujets)}</span>
+        {/if}
+      {/each}
     </div>
-    <div class="bulle toi"><p>{texteReponse(f, sujets)}</p></div>
-  {/each}
+  {/if}
 
   {#if etape}
     {@const e = etape}
-    {#if section(guide.fait.length, e.onglet)}<div class="section">{SECTIONS[e.onglet]}</div>{/if}
-    <div class="bulle llm">
-      <p><strong>{e.titre}</strong>{#if e.groupe && e.groupe !== e.titre}<span class="discret"> · {e.groupe}</span>{/if}</p>
-      {#if e.type === 'liste' && e.sousListe.note}<p class="discret">{e.sousListe.note}</p>{/if}
+    {@const q = numeroQuestion(etapes, e)}
+    <p class="etiquette-champ">Question {q.numero} sur {q.total} · {SECTIONS[e.onglet]}{e.groupe && e.groupe !== e.titre ? ` · ${e.groupe}` : ''}</p>
+    <p class="question">{e.titre}</p>
+    {#if e.type === 'liste' && e.sousListe.note}<p class="discret">{e.sousListe.note}</p>{/if}
 
-      <div class="puces">
-        {#if e.type === 'sujet'}
-          {#each sujets as s (s.id)}
-            <button type="button" class="pastille" onclick={() => void repondre(e, 'valeur', s.id)}>{s.nom}</button>
-          {/each}
-        {:else if e.type === 'liste' && parcoursCourant}
-          {#if parcoursCourant.chemin.length > 0}
-            <span class="discret">{parcoursCourant.chemin.join(' › ')}</span>
-          {/if}
-          {#if parcoursCourant.prochaines.length > 0}
-            {#each parcoursCourant.prochaines as c (c)}
-              <button type="button" class="pastille" onclick={() => categorie(e, c)}>
-                {c} <span class="discret">{nombreDans(parcoursCourant.restantes, parcoursCourant.chemin.length, c)}</span>
-              </button>
-            {/each}
-            <button type="button" class="pastille" onclick={() => toute(e)}>Toute la liste</button>
-          {:else}
-            {#each vues.slice(0, PUCES_MAX) as v (v.nom)}
-              <button
-                type="button"
-                class="pastille"
-                aria-pressed={choix[e.bloc]?.[e.sousListe.nom] === v.nom}
-                onclick={() => void repondre(e, 'valeur', v.nom)}
-              >
-                {v.nom}
-              </button>
-            {/each}
-          {/if}
-          {#if parcoursCourant.chemin.length > 0}
-            <button type="button" class="pastille" onclick={() => retourCategorie(e)}>
-              ↩ {parcoursCourant.chemin.length > 1 ? parcoursCourant.chemin.at(-2) : 'Autre catégorie'}
+    <div class="choix-pastilles">
+      {#if e.type === 'sujet'}
+        {#each sujets as s (s.id)}
+          <button type="button" onclick={() => void repondre(e, 'valeur', s.id)}>{s.nom}</button>
+        {/each}
+      {:else if e.type === 'liste' && parcoursCourant}
+        {#if parcoursCourant.chemin.length > 0}
+          <span class="discret">{parcoursCourant.chemin.join(' › ')}</span>
+        {/if}
+        {#if parcoursCourant.prochaines.length > 0}
+          {#each parcoursCourant.prochaines as c (c)}
+            <button type="button" onclick={() => categorie(e, c)}>
+              {c} <span class="discret">{nombreDans(parcoursCourant.restantes, parcoursCourant.chemin.length, c)}</span>
             </button>
-          {:else if parCategorie}
-            <button type="button" class="pastille" onclick={() => retourCategorie(e)}>↩ Par catégorie</button>
-          {/if}
-          {#if vues.length > PUCES_MAX}
-            <select
-              aria-label={e.titre}
-              value=""
-              onchange={(ev) => {
-                const v = ev.currentTarget.value;
-                if (v) void repondre(e, 'valeur', v);
-              }}
+          {/each}
+          <button type="button" onclick={() => toute(e)}>Toute la liste</button>
+        {:else}
+          {#each vues.slice(0, PUCES_MAX) as v (v.nom)}
+            <button
+              type="button"
+              class:pris={choix[e.bloc]?.[e.sousListe.nom] === v.nom}
+              onclick={() => void repondre(e, 'valeur', v.nom)}
             >
-              <option value="" disabled>Toute la liste ({vues.length - PUCES_MAX} de plus)…</option>
-              {#each vues.slice(PUCES_MAX) as v (v.nom)}
-                <option value={v.nom}>{v.categorie ? `${v.categorie} · ` : ''}{v.nom}</option>
-              {/each}
-            </select>
-          {/if}
+              {v.nom}
+            </button>
+          {/each}
         {/if}
-      </div>
-
-      <form
-        class="libre"
-        onsubmit={(ev) => {
-          ev.preventDefault();
-          valider(e);
-        }}
-      >
-        <input type="text" maxlength="200" bind:value={libre} placeholder={indice(e)} aria-label="Ta propre idée" />
-        <Bouton petit type="submit" desactive={libre.trim() === ''}>Valider</Bouton>
-      </form>
-      <div class="actions">
-        {#if guide.fait.length > 0}
-          <Bouton petit genre="discret" onclick={revenir}>← Revenir</Bouton>
+        {#if parcoursCourant.chemin.length > 0}
+          <button type="button" onclick={() => retourCategorie(e)}>
+            ↩ {parcoursCourant.chemin.length > 1 ? parcoursCourant.chemin.at(-2) : 'Autre catégorie'}
+          </button>
+        {:else if parCategorie}
+          <button type="button" onclick={() => retourCategorie(e)}>↩ Par catégorie</button>
         {/if}
-        {#if e.type === 'liste'}
-          <Bouton petit genre="discret" onclick={() => hasard(e)}>🎲 Surprends-moi</Bouton>
+        {#if vues.length > PUCES_MAX}
+          <select
+            aria-label={e.titre}
+            value=""
+            onchange={(ev) => {
+              const v = ev.currentTarget.value;
+              if (v) void repondre(e, 'valeur', v);
+            }}
+          >
+            <option value="" disabled>Toute la liste ({vues.length - PUCES_MAX} de plus)…</option>
+            {#each vues.slice(PUCES_MAX) as v (v.nom)}
+              <option value={v.nom}>{v.categorie ? `${v.categorie} · ` : ''}{v.nom}</option>
+            {/each}
+          </select>
         {/if}
-        <Bouton petit genre="discret" onclick={() => void repondre(e, 'passe')}>Passer →</Bouton>
-      </div>
-    </div>
-  {:else}
-    <div class="bulle llm">
-      <p>{lignes.length > 0 ? "Voilà ce que j'ai noté :" : "Rien de noté pour l'instant."}</p>
-      {#if lignes.length > 0}
-        <ul>
-          {#each lignes as l (l)}<li>{l}</li>{/each}
-        </ul>
       {/if}
-      <div class="actions">
-        <Bouton petit genre="discret" onclick={revenir}>← Revenir</Bouton>
-        <Bouton petit genre="discret" onclick={refaire}>↺ Tout refaire</Bouton>
-        <Bouton petit genre="principal" desactive={lignes.length === 0} onclick={() => utiliser(lignes)}>
-          Utiliser dans la conversation
-        </Bouton>
-      </div>
     </div>
+
+    <form
+      class="libre"
+      onsubmit={(ev) => {
+        ev.preventDefault();
+        valider(e);
+      }}
+    >
+      <input type="text" maxlength="200" bind:value={libre} placeholder={indice(e)} aria-label="Ta propre idée" />
+      <Bouton petit genre="discret" type="submit" desactive={libre.trim() === ''}>Valider</Bouton>
+    </form>
+  {:else}
+    <p class="question">{lignes.length > 0 ? "Voilà ce que j'ai noté :" : "Rien de noté pour l'instant."}</p>
+    {#if lignes.length > 0}
+      <ul>
+        {#each lignes as l (l)}<li>{l}</li>{/each}
+      </ul>
+    {/if}
   {/if}
+
+  <div class="actions">
+    {#if etape && etape.type === 'liste'}
+      <Bouton petit onclick={() => hasard(etape)}>🎲 Surprends-moi</Bouton>
+    {/if}
+    <Bouton petit genre="discret" desactive={guide.fait.length === 0} onclick={revenir}>← Revenir</Bouton>
+    {#if etape}
+      <Bouton petit genre="discret" onclick={() => void repondre(etape, 'passe')}>Passer →</Bouton>
+    {/if}
+    <Bouton petit genre="discret" desactive={guide.fait.length === 0} onclick={refaire}>↺ Tout refaire</Bouton>
+    <Bouton petit desactive={lignes.length === 0} onclick={() => utiliser(lignes)}>Utiliser dans la conversation</Bouton>
+  </div>
 </div>
 
 <style>
   .guide {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin: 8px 0;
+    gap: 10px;
   }
 
-  .bulle {
-    max-width: 90%;
-    padding: 8px 12px;
-    border: 1px solid var(--ligne);
+  .guide p {
+    margin: 0;
   }
 
-  .bulle p {
-    margin: 4px 0;
+  .etiquette-champ {
+    color: var(--texte-2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
-  .llm {
-    align-self: flex-start;
+  .question {
+    font-size: 15px;
   }
 
-  .toi {
-    align-self: flex-end;
-    border-color: var(--cyan);
-  }
-
-  .section {
-    margin-top: 6px;
+  .petit-texte {
     font-size: 12px;
     color: var(--texte-2);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .pastille {
-    padding: 4px 12px;
-    border: 1px solid var(--ligne);
-    background: transparent;
-    color: var(--texte-2);
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .pastille[aria-pressed='true'] {
-    border-color: var(--cyan);
-    color: var(--texte);
   }
 
   .puces,
@@ -331,8 +297,45 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    gap: 8px;
+  }
+
+  .puces {
     gap: 6px;
-    margin: 6px 0;
+  }
+
+  .puce {
+    padding: 2px 10px;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .choix-pastilles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .choix-pastilles button {
+    padding: 6px 14px;
+    border: 1px solid var(--ligne);
+    background: var(--fond);
+    color: var(--texte);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .choix-pastilles button:hover {
+    border-color: var(--cyan);
+  }
+
+  .choix-pastilles button.pris {
+    border-color: var(--cyan);
+    background: color-mix(in srgb, var(--cyan) 10%, var(--fond));
+    color: var(--cyan);
   }
 
   .libre input {
@@ -341,7 +344,7 @@
   }
 
   ul {
-    margin: 4px 0;
+    margin: 0;
     padding-left: 18px;
   }
 </style>

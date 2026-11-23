@@ -156,6 +156,13 @@ export function etapeCourante(etapes: EtapeGuide[], guide: EtatGuide): EtapeGuid
   return etapes.find((e) => !guide.fait.some((f) => f.id === e.id));
 }
 
+/** « Question 2 sur 6 » : le rang de l'étape dans le déroulé (le total change si une réponse écarte des questions). */
+export function numeroQuestion(etapes: EtapeGuide[], etape: EtapeGuide): { numero: number; total: number } {
+  const rang = etapes.findIndex((e) => e.id === etape.id);
+  const numero = rang < 0 ? etapes.length + 1 : rang + 1;
+  return { numero, total: Math.max(etapes.length, numero) };
+}
+
 const niveaux = (v: ValeurListe): string[] => (v.categorie ? v.categorie.split(' / ') : []);
 
 /** Le parcours d'une longue liste rangée par catégories : la catégorie, puis le niveau suivant, puis les valeurs. */

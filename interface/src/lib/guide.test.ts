@@ -7,6 +7,7 @@ import {
   etapesGuide,
   guideVide,
   lignesGuide,
+  numeroQuestion,
   parcours,
   type EtatGuide,
   type OptionsGuide,
@@ -146,5 +147,20 @@ describe('guide du Scénario', () => {
     expect(aideReference('image', 'inspirer', 4)).toContain("Jusqu'à 4 images");
     expect(aideReference('image', null, 0)).toContain("Pas d'image");
     expect(aideReference('clip', null, 1)).toContain('première image du clip');
+  });
+});
+
+describe('Numéro de la question', () => {
+  const sujet = { type: 'sujet', id: 'sujet', onglet: 'sujet', titre: 'Sujet ?', groupe: '' } as const;
+  const texte = { type: 'texte', id: 'texte', onglet: 'scene', titre: 'Texte ?', groupe: '' } as const;
+
+  it('donne le rang de l’étape et le total du déroulé', () => {
+    expect(numeroQuestion([sujet, texte], sujet)).toEqual({ numero: 1, total: 2 });
+    expect(numeroQuestion([sujet, texte], texte)).toEqual({ numero: 2, total: 2 });
+  });
+
+  it('ne dépasse jamais le total quand l’étape n’est pas (ou plus) dans le déroulé', () => {
+    expect(numeroQuestion([sujet], texte)).toEqual({ numero: 2, total: 2 });
+    expect(numeroQuestion([], sujet)).toEqual({ numero: 1, total: 1 });
   });
 });
