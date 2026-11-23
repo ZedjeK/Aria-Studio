@@ -17,11 +17,25 @@ export function libelleStatut(statut: StatutMoteur, nom?: string): string {
   return LIBELLES[statut];
 }
 
-/** Le bouton d'installation d'un moteur, ou rien s'il est à jour ou si c'est le ComfyUI de l'utilisateur. */
+/**
+ * Le bouton d'installation d'un moteur, ou rien s'il est à jour ou si c'est le ComfyUI de l'utilisateur. La taille à
+ * télécharger s'y lit quand il y en a une : « Installer · 1,6 Mo ».
+ */
 export function texteInstaller(moteur: EtatMoteur): string | null {
-  if (moteur.statut === 'absent') return 'Installer';
-  if (moteur.statut === 'manuel' || moteur.statut === 'different') return `Installer la ${moteur.version}`;
+  const taille = moteur.aTelecharger > 0 ? ` · ${octetsLisibles(moteur.aTelecharger)}` : '';
+  if (moteur.statut === 'absent') return `Installer${taille}`;
+  if (moteur.statut === 'manuel' || moteur.statut === 'different') return `Installer la ${moteur.version}${taille}`;
   return null;
+}
+
+/** « Réinstaller » : refaire la version épinglée d'un moteur d'Aria qui est déjà à jour. */
+export function peutReinstaller(moteur: EtatMoteur): boolean {
+  return moteur.statut === 'a_jour' && !moteur.externe;
+}
+
+/** La couleur de la pastille d'un moteur : cyan quand il est prêt, ambre quand il manque ou diffère. */
+export function teintePastille(statut: StatutMoteur): 'cyan' | 'ambre' {
+  return statut === 'a_jour' || statut === 'externe' ? 'cyan' : 'ambre';
 }
 
 /** Ce que l'installation va faire, pour la confirmer. */
@@ -31,6 +45,16 @@ export function texteConfirmation(moteur: EtatMoteur): string {
       ? `Téléchargement : ${octetsLisibles(moteur.aTelecharger)} depuis sa release GitHub officielle, empreinte SHA-256 vérifiée.`
       : 'Les archives sont déjà là : rien à télécharger.';
   return `${source} Le moteur est arrêté le temps de l'échange ; la version actuelle reste à côté (Revenir).`;
+}
+
+/** Le détail de la carte, après son nom : « pilote 581.15 · 16 Go de VRAM · 64 Go de RAM ». Vide si la carte ne va pas. */
+export function detailCarte(carte: Carte): string {
+  if (!carte.nvidia || !carte.ok) return '';
+  const morceaux: string[] = [];
+  if (carte.pilote) morceaux.push(`pilote ${carte.pilote}`);
+  if (carte.vramGo !== null) morceaux.push(`${carte.vramGo} Go de VRAM`);
+  if (carte.ramGo > 0) morceaux.push(`${carte.ramGo} Go de RAM`);
+  return morceaux.join(' · ');
 }
 
 /** La carte graphique en une ligne, ou ce qui ne va pas. */

@@ -13,16 +13,20 @@
     libererCarte,
     lireMoteurs,
     messageErreur,
+    ouvrirDossier,
     parcourirDossier,
     revenirMoteur,
     type EtatMoteur,
     type EtatMoteurs,
   } from '../lib/api';
   import {
+    detailCarte,
     fractionTache,
     libelleStatut,
     manquants,
     mesureTache,
+    peutReinstaller,
+    teintePastille,
     texteCarte,
     texteConfirmation,
     texteInstaller,
@@ -60,8 +64,8 @@
   ];
   let onglet = $state('moteurs');
   let etat = $state<EtatMoteurs | null>(null);
-  /** Ce qu'on demande de confirmer : installer ou revenir, pour un moteur. */
-  let demande = $state<{ action: 'installer' | 'revenir'; moteur: EtatMoteur } | null>(null);
+  /** Ce qu'on demande de confirmer : installer, réinstaller ou revenir, pour un moteur. */
+  let demande = $state<{ action: 'installer' | 'reinstaller' | 'revenir'; moteur: EtatMoteur } | null>(null);
   let minuteur: ReturnType<typeof setTimeout> | undefined;
   /** « J'ai déjà ComfyUI » : le lancement d'essai en cours. */
   let verification = $state(false);
@@ -85,7 +89,7 @@
     demande = null;
     if (!d) return;
     try {
-      if (d.action === 'installer') {
+      if (d.action === 'installer' || d.action === 'reinstaller') {
         await installerMoteur(d.moteur.id);
       } else {
         const version = await revenirMoteur(d.moteur.id);
@@ -121,6 +125,14 @@
     await relire();
   }
 
+  async function ouvrirMoteurs() {
+    try {
+      await ouvrirDossier('moteurs');
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
   async function liberer() {
     try {
       await libererCarte();
@@ -139,7 +151,7 @@
 </script>
 
 <h1>Réglages</h1>
-<p class="sous-titre">Ce qui fait tourner Aria Studio : les moteurs, puis tes réglages.</p>
+<p class="sous-titre">Les moteurs, le LLM, les modèles, tes dossiers et tes clés.</p>
 <SousOnglets {onglets} bind:actif={onglet} />
 {#if onglet === 'securite'}
   <ReglagesSecurite {signaler} />
@@ -153,8 +165,9 @@
   <ReglagesWorkflows {signaler} />
 {:else}
 <ASavoir>
-  Versions épinglées et testées ensemble : téléchargées depuis leur release GitHub officielle, empreinte SHA-256
-  vérifiée. L'ancienne version reste à côté, pour revenir en arrière.
+  Un seul moteur tient la carte graphique à la fois : ComfyUI se vide quand le LLM écrit, puis reprend. Les versions
+  sont épinglées et testées ensemble, téléchargées depuis leur release GitHub officielle (empreinte SHA-256 vérifiée) ;
+  l'ancienne reste à côté, pour revenir en arrière.
 </ASavoir>
 
 {#if etat}
@@ -165,11 +178,20 @@
   {/if}
 
   <Panneau titre="Carte graphique">
-    <p class:ko={!etat.carte.ok}>{texteCarte(etat.carte)}</p>
+    {#if etat.carte.nvidia && etat.carte.ok}
+      <p class="carte">
+        <strong>{etat.carte.nom ?? 'NVIDIA'}</strong>
+        <span class="discret">· {detailCarte(etat.carte)}</span>
+      </p>
+    {:else}
+      <p class="ko">{texteCarte(etat.carte)}</p>
+    {/if}
+    <!-- Mesure en direct : une commande Tauri manque (issue « commande Tauri pour la VRAM utilisée »). Vide et « à tester » d'ici là. -->
+    <Jauge etiquette="VRAM" fraction={null} />
     <div class="actions">
-      <Bouton petit onclick={() => void liberer()}>Libérer la carte</Bouton>
+      <Bouton petit onclick={() => void liberer()}>Libérer la carte graphique</Bouton>
       {#if ouvrirAssistant}
-        <Bouton petit onclick={ouvrirAssistant}>Relancer l'assistant</Bouton>
+        <Bouton genre="discret" petit onclick={ouvrirAssistant}>🧭 Relancer l'assistant</Bouton>
       {/if}
     </div>
   </Panneau>
@@ -180,17 +202,45 @@
         {@const installer = texteInstaller(m)}
         {@const tache = etat.tache && etat.tache.id === m.id ? etat.tache : null}
         <li>
-          <div class="entete">
-            <strong>{m.nom}</strong>
-            <span class="badge" class:bon={m.statut === 'a_jour' || m.statut === 'externe'}>{libelleStatut(m.statut, m.nom)}</span>
-            {#if m.facultatif}<span class="badge">facultatif</span>{/if}
-            {#if m.occupe}<span class="badge">en marche</span>{/if}
+          <div class="moteur">
+            <div class="nom">
+              <strong>{m.nom}</strong>
+              <span class="puce {teintePastille(m.statut)}">{libelleStatut(m.statut, m.nom)}</span>
+              {#if m.facultatif}<span class="puce">facultatif</span>{/if}
+              {#if m.occupe}<span class="puce">en marche</span>{/if}
+              <span class="discret code">
+                {m.versionInstallee ?? m.version}{m.versionInstallee && m.versionInstallee !== m.version
+                  ? ` (épinglé ${m.version})`
+                  : ''}
+              </span>
+            </div>
+            <div class="actions">
+              {#if tache && !tache.fini && tache.etape.startsWith('Téléchargement')}
+                <Bouton genre="discret" petit onclick={() => void annuler()}>✕ Annuler</Bouton>
+              {/if}
+              {#if installer}
+                <Bouton
+                  petit
+                  desactive={enCours || m.prerequis !== null}
+                  onclick={() => (demande = { action: 'installer', moteur: m })}>{installer}</Bouton
+                >
+              {/if}
+              {#if peutReinstaller(m)}
+                <Bouton genre="discret" petit desactive={enCours} onclick={() => (demande = { action: 'reinstaller', moteur: m })}>
+                  Réinstaller
+                </Bouton>
+              {/if}
+              {#if m.precedente && !m.externe}
+                <Bouton genre="discret" petit desactive={enCours} onclick={() => (demande = { action: 'revenir', moteur: m })}>
+                  ↺ Revenir
+                </Bouton>
+              {/if}
+              {#if !m.externe && m.statut !== 'absent'}
+                <Bouton genre="discret" petit onclick={() => void ouvrirMoteurs()}>📂</Bouton>
+              {/if}
+            </div>
           </div>
-          <p class="discret">
-            {m.role} · épinglé {m.version}{m.versionInstallee && m.versionInstallee !== m.version
-              ? ` · installé ${m.versionInstallee}`
-              : ''}
-          </p>
+          <p class="discret">{m.role}</p>
           {#if m.externe}<p class="discret">Dossier : <code>{m.chemin}</code></p>{/if}
           {#if m.id === 'comfyui' && verification}
             <p class="discret" role="status">
@@ -215,36 +265,21 @@
               {/if}
             </div>
           {/if}
-          <div class="actions">
-            {#if tache && !tache.fini && tache.etape.startsWith('Téléchargement')}
-              <Bouton genre="discret" petit onclick={() => void annuler()}>Annuler</Bouton>
-            {/if}
-            {#if installer}
-              <Bouton
-                petit
-                desactive={enCours || m.prerequis !== null}
-                onclick={() => (demande = { action: 'installer', moteur: m })}>{installer}</Bouton
-              >
-            {/if}
-            {#if m.id === 'comfyui'}
-              <Bouton genre="discret" petit desactive={enCours || verification} onclick={() => void changerComfyui(true)}>
-                J'ai déjà ComfyUI…
-              </Bouton>
-              {#if m.externe}
-                <Bouton genre="discret" petit desactive={enCours || verification} onclick={() => void changerComfyui(false)}>
-                  Revenir au ComfyUI d'Aria
-                </Bouton>
-              {/if}
-            {/if}
-            {#if m.precedente && !m.externe}
-              <Bouton petit desactive={enCours} onclick={() => (demande = { action: 'revenir', moteur: m })}
-                >Revenir</Bouton
-              >
-            {/if}
-          </div>
         </li>
       {/each}
     </ul>
+    <hr class="sep" />
+    <div class="ligne">
+      <span class="discret">J'ai déjà ComfyUI :</span>
+      <Bouton genre="discret" petit desactive={enCours || verification} onclick={() => void changerComfyui(true)}>
+        Utiliser mon ComfyUI…
+      </Bouton>
+      {#if etat.moteurs.some((m) => m.id === 'comfyui' && m.externe)}
+        <Bouton genre="discret" petit desactive={enCours || verification} onclick={() => void changerComfyui(false)}>
+          Revenir à celui d'Aria
+        </Bouton>
+      {/if}
+    </div>
   </Panneau>
 {:else}
   <p class="discret">Lecture…</p>
@@ -255,18 +290,20 @@
   <Dialogue
     titre={demande.action === 'installer'
       ? `Installer ${demande.moteur.nom} ${demande.moteur.version} ?`
-      : `Revenir à la version précédente de ${demande.moteur.nom} ?`}
+      : demande.action === 'reinstaller'
+        ? `Réinstaller ${demande.moteur.nom} ${demande.moteur.version} ?`
+        : `Revenir à la version précédente de ${demande.moteur.nom} ?`}
     fermer={() => (demande = null)}
   >
     <p>
-      {demande.action === 'installer'
-        ? texteConfirmation(demande.moteur)
-        : 'Le moteur est arrêté le temps de l’échange ; un second « Revenir » redonne la version actuelle.'}
+      {demande.action === 'revenir'
+        ? 'Le moteur est arrêté le temps de l’échange ; un second « Revenir » redonne la version actuelle.'
+        : texteConfirmation(demande.moteur)}
     </p>
     {#snippet pied()}
       <Bouton genre="discret" onclick={() => (demande = null)}>Annuler</Bouton>
       <Bouton genre="principal" onclick={() => void confirmer()}
-        >{demande?.action === 'installer' ? 'Installer' : 'Revenir'}</Bouton
+        >{demande?.action === 'installer' ? 'Installer' : demande?.action === 'reinstaller' ? 'Réinstaller' : 'Revenir'}</Bouton
       >
     {/snippet}
   </Dialogue>
@@ -291,23 +328,67 @@
     border-bottom: none;
   }
 
-  .entete {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  .moteur {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 12px;
     align-items: center;
   }
 
-  .badge {
+  .nom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+  }
+
+  .nom .discret {
+    margin: 0;
+    font-family: var(--police-code);
+    font-size: 12px;
+  }
+
+  .moteur .actions {
+    margin-top: 0;
+  }
+
+  .puce {
     padding: 1px 8px;
     border: 1px solid var(--ligne);
     color: var(--texte-2);
-    font-size: 11px;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
   }
 
-  .badge.bon {
+  .puce.cyan {
     border-color: var(--cyan);
     color: var(--cyan);
+  }
+
+  .puce.ambre {
+    border-color: var(--ambre);
+    color: var(--ambre);
+  }
+
+  .carte {
+    margin: 0 0 10px;
+  }
+
+  .carte .discret {
+    margin: 0;
+  }
+
+  .sep {
+    margin: 14px 0;
+    border: 0;
+    border-top: 1px solid var(--ligne);
+  }
+
+  .ligne {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
   }
 
   .discret {

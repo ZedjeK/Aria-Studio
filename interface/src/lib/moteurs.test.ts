@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Carte, EtatMoteur, TacheMoteur } from './api';
 import {
+  detailCarte,
   fractionTache,
   libelleStatut,
   manquants,
   mesureTache,
+  peutReinstaller,
+  teintePastille,
   texteCarte,
   texteConfirmation,
   texteInstaller,
@@ -53,6 +56,24 @@ describe('moteurs', () => {
     expect(texteInstaller(moteur({ statut: 'externe' }))).toBeNull();
   });
 
+  it('lit la taille à télécharger sur le bouton d’installation', () => {
+    expect(texteInstaller(moteur({ aTelecharger: 1_677_722 }))).toBe('Installer · 1,6 Mo');
+    expect(texteInstaller(moteur({ statut: 'different', aTelecharger: 155144809 }))).toBe('Installer la b11734 · 148 Mo');
+  });
+
+  it('ne réinstalle que ce que le moteur d’Aria a déjà à jour', () => {
+    expect(peutReinstaller(moteur({ statut: 'a_jour' }))).toBe(true);
+    expect(peutReinstaller(moteur({ statut: 'a_jour', externe: true }))).toBe(false);
+    expect(peutReinstaller(moteur({ statut: 'absent' }))).toBe(false);
+  });
+
+  it('teinte la pastille : cyan quand c’est prêt, ambre sinon', () => {
+    expect(teintePastille('a_jour')).toBe('cyan');
+    expect(teintePastille('externe')).toBe('cyan');
+    expect(teintePastille('absent')).toBe('ambre');
+    expect(teintePastille('different')).toBe('ambre');
+  });
+
   it('annonce la taille du téléchargement, ou qu’il n’y en a pas', () => {
     expect(texteConfirmation(moteur({ aTelecharger: 155144809 }))).toContain('148 Mo');
     expect(texteConfirmation(moteur())).toContain('rien à télécharger');
@@ -61,6 +82,11 @@ describe('moteurs', () => {
   it('décrit la carte, ou ce qui ne va pas', () => {
     expect(texteCarte(carte())).toBe('RTX 4080 · pilote 581.15 · 16 Go de VRAM · 64 Go de RAM');
     expect(texteCarte(carte({ ok: false, message: 'Pilote 566.36 trop ancien' }))).toBe('Pilote 566.36 trop ancien');
+  });
+
+  it('sépare le détail de la carte de son nom', () => {
+    expect(detailCarte(carte())).toBe('pilote 581.15 · 16 Go de VRAM · 64 Go de RAM');
+    expect(detailCarte(carte({ ok: false, message: 'Pilote trop ancien' }))).toBe('');
   });
 
   it('suit l’avancement seulement quand il a un total', () => {
