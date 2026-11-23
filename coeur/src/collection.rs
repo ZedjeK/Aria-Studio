@@ -271,7 +271,7 @@ pub fn collection(dossier: &Dossier, data: &Path, modeles_dir: &Path) -> Collect
     let memoire = memoire_loras(dossier);
     let utilise = utilisations(modeles_dir);
     let steps = steps_des_checkpoints(dossier, modeles_dir);
-    let defaut = llm::defaut(modeles_dir);
+    let defaut = llm::defaut(dossier, modeles_dir);
     let mut groupes: BTreeMap<String, Vec<Element>> = BTreeMap::new();
     for dossier_fichier in modeles::dossiers() {
         for nom in modeles::fichiers(modeles_dir, &dossier_fichier, &EXTENSIONS) {

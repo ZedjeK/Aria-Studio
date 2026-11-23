@@ -1057,9 +1057,9 @@ pub fn decouper(
             .as_ref()
             .map(|(wf, _)| llm::de_workflow(&contexte.dossier, &contexte.modeles, &wf.id))
     });
-    let mut nom = llm::nom(&lieux.modeles, choisi.as_deref());
+    let mut nom = llm::nom(&lieux.dossier, &lieux.modeles, choisi.as_deref());
     if fiches::specialiste(&nom).is_some() {
-        nom = llm::defaut(&lieux.modeles);
+        nom = llm::defaut(&lieux.dossier, &lieux.modeles);
     }
     let lancement = llm::lancement(&lieux, Some(nom.as_str()))?;
     let regle = llm::valeurs(&contexte.dossier, &nom);

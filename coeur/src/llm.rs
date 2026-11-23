@@ -58,11 +58,21 @@ pub fn disponibles(modeles: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Le LLM par défaut : celui de la v2 s'il est installé, sinon le premier favori installé, sinon le premier GGUF
-/// installé qui n'est pas un spécialiste. Rien d'installé : celui de la v2, et le lancement dira qu'il manque.
-pub fn defaut(modeles: &Path) -> String {
+/// Le LLM retenu par l'utilisateur (`favoris.llama.modele`, écrit par un Casting LLM, comme en v2) ; rien s'il est
+/// vide (le témoin gagnant d'un Casting LLM).
+fn favori(dossier: &Dossier) -> Option<String> {
+    reglages::section(dossier, "favoris")
+        .and_then(|f| f.get("llama")?.get("modele")?.as_str().map(str::to_owned))
+        .filter(|m| !m.is_empty())
+}
+
+/// Le LLM par défaut, comme `llm_defaut` de la v2 : celui retenu par un Casting LLM, sinon celui de la v2, s'il est
+/// installé ; sinon le premier favori installé, sinon le premier GGUF installé qui n'est pas un spécialiste. Rien
+/// d'installé : le retenu (ou celui de la v2), et le lancement dira qu'il manque.
+pub fn defaut(dossier: &Dossier, modeles: &Path) -> String {
     let presents = disponibles(modeles);
-    std::iter::once(LLM_ORIGINE.to_owned())
+    let premier = favori(dossier).unwrap_or_else(|| LLM_ORIGINE.to_owned());
+    std::iter::once(premier.clone())
         .chain(FAVORIS.iter().map(|(f, _)| (*f).to_owned()))
         .chain(
             presents
@@ -71,14 +81,14 @@ pub fn defaut(modeles: &Path) -> String {
                 .cloned(),
         )
         .find(|f| presents.contains(f))
-        .unwrap_or_else(|| LLM_ORIGINE.to_owned())
+        .unwrap_or(premier)
 }
 
 /// Le GGUF demandé, ou le LLM par défaut.
-pub fn nom(modeles: &Path, modele: Option<&str>) -> String {
+pub fn nom(dossier: &Dossier, modeles: &Path, modele: Option<&str>) -> String {
     modele
         .filter(|m| !m.is_empty())
-        .map_or_else(|| defaut(modeles), str::to_owned)
+        .map_or_else(|| defaut(dossier, modeles), str::to_owned)
 }
 
 /// Le LLM choisi pour ce workflow (`reglages.json`, `divers.llm_par_workflow.<workflow>`, comme en v2) s'il est
@@ -92,7 +102,7 @@ pub fn de_workflow(dossier: &Dossier, modeles: &Path, workflow: &str) -> String 
                 .map(str::to_owned)
         })
         .filter(|choisi| disponibles(modeles).contains(choisi))
-        .unwrap_or_else(|| defaut(modeles))
+        .unwrap_or_else(|| defaut(dossier, modeles))
 }
 
 /// Un nom de fichier seul, qui ne sort pas de `modeles\llm`.
@@ -370,7 +380,7 @@ pub struct Lieux {
 /// # Errors
 /// Nom de GGUF invalide.
 pub fn lancement(lieux: &Lieux, modele: Option<&str>) -> Result<Lancement, String> {
-    let nom = nom(&lieux.modeles, modele);
+    let nom = nom(&lieux.dossier, &lieux.modeles, modele);
     nom_de_fichier(&nom)?;
     let regle = valeurs(&lieux.dossier, &nom);
     let llm = lieux.modeles.join(DOSSIER_LLM);
@@ -447,7 +457,7 @@ mod tests {
     fn llm_installes_et_defaut() {
         let b = Banc::new();
         assert!(disponibles(b.modeles()).is_empty());
-        assert_eq!(defaut(b.modeles()), LLM_ORIGINE);
+        assert_eq!(defaut(&b.lieux.dossier, b.modeles()), LLM_ORIGINE);
         b.poser(T2I, b"x");
         b.poser("mistral.gguf", b"x");
         b.poser("Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf", b"x");
@@ -457,11 +467,41 @@ mod tests {
             vec![T2I.to_owned(), "mistral.gguf".to_owned()]
         );
         // Un spécialiste ne sert pas de LLM par défaut.
-        assert_eq!(defaut(b.modeles()), "mistral.gguf");
+        assert_eq!(defaut(&b.lieux.dossier, b.modeles()), "mistral.gguf");
         b.poser(LLM_ORIGINE, b"x");
-        assert_eq!(defaut(b.modeles()), LLM_ORIGINE);
-        assert_eq!(nom(b.modeles(), Some("mistral.gguf")), "mistral.gguf");
-        assert_eq!(nom(b.modeles(), None), LLM_ORIGINE);
+        assert_eq!(defaut(&b.lieux.dossier, b.modeles()), LLM_ORIGINE);
+        assert_eq!(
+            nom(&b.lieux.dossier, b.modeles(), Some("mistral.gguf")),
+            "mistral.gguf"
+        );
+        assert_eq!(nom(&b.lieux.dossier, b.modeles(), None), LLM_ORIGINE);
+    }
+
+    #[test]
+    fn llm_retenu_par_un_casting() {
+        let b = Banc::new();
+        let retenir = |modele: &str| {
+            reglages::modifier_section(&b.lieux.dossier, "favoris", |f| {
+                f.insert("llama".to_owned(), json!({"modele": modele}));
+            })
+            .unwrap();
+        };
+        // Retenu mais pas installé : rien d'installé, c'est lui que le lancement dira manquant.
+        retenir("mistral.gguf");
+        assert_eq!(defaut(&b.lieux.dossier, b.modeles()), "mistral.gguf");
+        b.poser(LLM_ORIGINE, b"x");
+        assert_eq!(defaut(&b.lieux.dossier, b.modeles()), LLM_ORIGINE);
+        // Installé : il passe devant celui de la v2, partout où le LLM par défaut sert.
+        b.poser("mistral.gguf", b"x");
+        assert_eq!(defaut(&b.lieux.dossier, b.modeles()), "mistral.gguf");
+        assert_eq!(nom(&b.lieux.dossier, b.modeles(), None), "mistral.gguf");
+        assert_eq!(
+            de_workflow(&b.lieux.dossier, b.modeles(), "krea2_turbo"),
+            "mistral.gguf"
+        );
+        // Le témoin gagnant (pas de LLM) laisse un modèle vide : le défaut de l'appli reprend.
+        retenir("");
+        assert_eq!(defaut(&b.lieux.dossier, b.modeles()), LLM_ORIGINE);
     }
 
     #[test]

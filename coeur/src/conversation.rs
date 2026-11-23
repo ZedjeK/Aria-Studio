@@ -629,9 +629,9 @@ pub fn tour(
             .as_deref()
             .map(|w| llm::de_workflow(&contexte.dossier, &contexte.modeles, w))
     });
-    let nom = llm::nom(&contexte.modeles, demande_nom.as_deref());
+    let nom = llm::nom(&contexte.dossier, &contexte.modeles, demande_nom.as_deref());
     let nom = if crate::fiches::specialiste(&nom).is_some() {
-        llm::defaut(&contexte.modeles)
+        llm::defaut(&contexte.dossier, &contexte.modeles)
     } else {
         nom
     };
