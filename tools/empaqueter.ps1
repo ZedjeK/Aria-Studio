@@ -23,7 +23,7 @@ $ErrorActionPreference = 'Stop'
 $racine = Split-Path -Parent $PSScriptRoot
 $nom = 'Aria-Studio'
 $version = "$(& (Join-Path $PSScriptRoot 'version.ps1') | Select-Object -Last 1)".Trim()
-if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Version inattendue : « $version ». Attendu : X.Y.Z." }
+if ($version -notmatch '^\d+\.\d+\.\d+(-essai\.[1-9]\d*)?$') { throw "Version inattendue : « $version ». Attendu : X.Y.Z ou X.Y.Z-essai.N." }
 
 $sortie = Join-Path $racine '.work\sortie'
 if (-not (Test-Path -LiteralPath $sortie) -or -not (Get-ChildItem -LiteralPath $sortie -Force)) {

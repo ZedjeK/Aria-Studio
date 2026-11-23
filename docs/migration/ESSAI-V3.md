@@ -9,16 +9,21 @@ supprimant ce dossier.
 - Windows 10 ou 11, 64 bits, avec WebView2 (présent d'office sur Windows 11).
 - Une carte NVIDIA avec un pilote de la branche 580 ou plus récente (CUDA 13).
 - La v2 fermée pendant l'essai : la v3 utilise les mêmes ports (ComfyUI sur 8195, llama-server sur 8095).
-- Le zip de la v3, produit par l'essai à blanc du workflow Release sur la branche `refonte/v3` :
+- Le zip de la v3. Le plus simple : la dernière release d'essai de la copie de test, `ZedjeK/Aria-Studio_refonte`,
+  téléchargée depuis la page de ses [releases](https://github.com/ZedjeK/Aria-Studio_refonte/releases), sur le PC de
+  l'essai. Ses versions sont numérotées `3.0.0-essai.1`, `3.0.0-essai.2`, et ainsi de suite (le zip s'appelle
+  `Aria-Studio-3.0.0-essai.N.zip`). Ce sont des préversions : jamais proposées en mise à jour, et le vrai `v3.0.0`
+  reste pour la sortie dans `ZedjeK/Aria-Studio`.
+
+  Sans release d'essai à jour, l'essai à blanc du workflow Release produit le même zip en artefact, gardé 7 jours :
 
 ```powershell
-gh workflow run Release --repo ZedjeK/Aria-Studio --ref refonte/v3
+gh workflow run Release --repo ZedjeK/Aria-Studio_refonte --ref main
 ```
 
-  Une fois le run terminé, l'artefact `release` de sa page contient `Aria-Studio-3.0.0.zip` et son empreinte. Il est
-  gardé 7 jours. Le même essai à blanc se lance aussi sur la copie de la v3, le dépôt `ZedjeK/Aria-Studio_refonte`
-  (`--repo ZedjeK/Aria-Studio_refonte --ref main`), où une release de test peut ensuite être publiée sans jamais être
-  proposée aux utilisateurs.
+  Une release d'essai se fait comme une vraie : la version passe à `X.Y.Z-essai.N` dans `Cargo.toml`, ses notes vont
+  dans `docs/releases/vX.Y.Z-essai.N.md`, puis le tag `vX.Y.Z-essai.N` poussé dans la copie de test crée la release
+  en brouillon, en préversion.
 
 ## 2. Préparer le dossier d'essai
 

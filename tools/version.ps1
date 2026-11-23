@@ -1,5 +1,5 @@
 ﻿# Affiche la version sur sa dernière ligne, sans le « v ». Elle vit dans [workspace.package] de Cargo.toml, et nulle
-# part ailleurs.
+# part ailleurs. Forme : X.Y.Z, ou X.Y.Z-essai.N pour une release de test (préversion de la copie de test du dépôt).
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -16,7 +16,7 @@ foreach ($ligne in Get-Content -LiteralPath $cargo -Encoding UTF8) {
         break
     }
 }
-if (-not $version -or $version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Version introuvable ou mal formée dans [workspace.package] de Cargo.toml (attendu : X.Y.Z)."
+if (-not $version -or $version -notmatch '^\d+\.\d+\.\d+(-essai\.[1-9]\d*)?$') {
+    throw "Version introuvable ou mal formée dans [workspace.package] de Cargo.toml (attendu : X.Y.Z ou X.Y.Z-essai.N)."
 }
 $version

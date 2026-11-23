@@ -49,7 +49,7 @@ pub fn chercher_au_lancement(app: &AppHandle, dossier: &Dossier) {
     if !Reglages::charger(dossier).chercher_mises_a_jour {
         return;
     }
-    let Some(actuelle) = mises_a_jour::lire_version(identite::VERSION) else {
+    let Some(actuelle) = mises_a_jour::lire_actuelle(identite::VERSION) else {
         return;
     };
     let app = app.clone();
