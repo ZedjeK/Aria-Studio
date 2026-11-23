@@ -13,6 +13,7 @@
 use std::path::Path;
 
 use regex::{Regex, RegexBuilder};
+use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use crate::fiches::SECTIONS_CONSIGNE;
@@ -579,6 +580,70 @@ fn heure_lisible(t: f64) -> String {
     format!("{minutes:02}:{:06.3}", t - minutes * 60.0)
 }
 
+/// Les mots qui trahissent l'anglais et le français d'un prompt, comme `_MOTS_EN` et `_MOTS_FR` de la v2.
+const MOTS_EN: [&str; 15] = [
+    "the", "a", "an", "of", "with", "in", "and", "on", "is", "at", "her", "his", "its", "under", "by",
+];
+const MOTS_FR: [&str; 15] = [
+    "le", "la", "les", "un", "une", "des", "du", "de", "et", "avec", "dans", "sur", "sous", "est", "au",
+];
+
+/// Ce que vérifie le Casting LLM d'un prompt écrit, comme `controler` de la v2. `texte_conserve` : rien quand l'idée
+/// ne cite aucun texte entre guillemets.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Controles {
+    pub anglais: bool,
+    pub longueur: bool,
+    pub sans_preambule: bool,
+    pub texte_conserve: Option<bool>,
+    pub mots: usize,
+}
+
+impl Controles {
+    /// Les contrôles réussis et le nombre de contrôles faits (le nombre de mots n'en est pas un).
+    pub fn reussis(&self) -> (usize, usize) {
+        let faits: Vec<bool> = [
+            Some(self.anglais),
+            Some(self.longueur),
+            Some(self.sans_preambule),
+            self.texte_conserve,
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        (faits.iter().filter(|f| **f).count(), faits.len())
+    }
+}
+
+/// Contrôle un prompt écrit depuis une idée : en anglais, de la bonne longueur (`mots_max` : celle conseillée au LLM par
+/// le modèle de rendu ; sans elle, celle d'une réécriture sans modèle cible), sans préambule, et le texte cité entre
+/// guillemets dans l'idée gardé tel quel.
+pub fn controler(texte: &str, idee: &str, mots_max: Option<u64>) -> Controles {
+    let bas = texte.to_lowercase();
+    let mots: Vec<&str> = Regex::new(r"[a-zàâçéèêëîïôûùüÿœ']+")
+        .map(|r| r.find_iter(&bas).map(|m| m.as_str()).collect())
+        .unwrap_or_default();
+    let en = mots.iter().filter(|m| MOTS_EN.contains(m)).count();
+    let fr = mots.iter().filter(|m| MOTS_FR.contains(m)).count();
+    let preambule = Regex::new(r"(?i)^\s*(here('s| is)|sure|certainly|okay|voici|prompt\s*:)")
+        .is_ok_and(|r| r.is_match(texte));
+    let citations: Vec<String> = Regex::new(r#"[«"“]\s*([^»"”]+?)\s*[»"”]"#)
+        .map(|r| {
+            r.captures_iter(idee)
+                .filter_map(|c| c.get(1).map(|m| m.as_str().to_owned()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let nombre = u64::try_from(mots.len()).unwrap_or(u64::MAX);
+    Controles {
+        anglais: en > 2 * fr,
+        longueur: (MOTS_MIN..=mots_max.unwrap_or(MOTS_MAX_REECRITURE)).contains(&nombre),
+        sans_preambule: !preambule,
+        texte_conserve: (!citations.is_empty()).then(|| citations.iter().all(|c| texte.contains(c.as_str()))),
+        mots: mots.len(),
+    }
+}
+
 /// Alertes sur les heures de coupe d'un prompt en plans (« [Shot 2] At 00:03.500, … ») : le premier plan sans heure,
 /// chaque plan suivant avec une heure plus grande que la précédente et avant la fin du clip, comme en v2.
 pub fn controler_coupes(texte: &str, duree: u32) -> Vec<String> {
@@ -1070,6 +1135,41 @@ pub fn lire_reecriture(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn texte_de(mots: usize) -> String {
+        vec!["the fox in the snow"; mots / 5].join(" ")
+    }
+
+    #[test]
+    fn controles_d_un_prompt_ecrit() {
+        let idee = "Une renarde rousse dans la neige";
+        // La longueur suit celle du modèle de rendu (comme tests/test_casting_llm.py de la v2).
+        assert!(controler(&texte_de(150), idee, Some(200)).longueur);
+        assert!(!controler(&texte_de(150), idee, None).longueur); // sans modèle : 120 au plus
+        assert!(!controler(&texte_de(250), idee, Some(200)).longueur);
+        assert!(!controler(&texte_de(30), idee, Some(200)).longueur); // 40 au moins, comme la consigne
+        let c = controler(&texte_de(150), idee, Some(200));
+        assert_eq!(
+            (c.mots, c.anglais, c.sans_preambule, c.texte_conserve),
+            (150, true, true, None)
+        );
+        assert_eq!(c.reussis(), (3, 3));
+        // Un préambule, du français, et le texte cité perdu.
+        let c = controler(
+            "Voici le prompt : une enseigne de bar dans la nuit",
+            "une enseigne de bar où il est écrit « Chez René »",
+            None,
+        );
+        assert!(!c.anglais && !c.sans_preambule && !c.longueur);
+        assert_eq!(c.texte_conserve, Some(false));
+        assert_eq!(c.reussis(), (0, 4));
+        let garde = controler(
+            "A bar sign that reads \"Chez René\" at night",
+            "il est écrit « Chez René »",
+            None,
+        );
+        assert_eq!(garde.texte_conserve, Some(true));
+    }
     use crate::Dossier;
     use crate::gguf::essai;
     use crate::securite::Ajouts;
