@@ -329,6 +329,7 @@ pub fn consigne_d_origine(usage: &str) -> Option<String> {
         "references" => Some(gabarit(&REFERENCES, &[])),
         "video" => Some(gabarit(&VIDEO, &[])),
         "decoupage" => Some(crate::decoupage::CONSIGNE_DECOUPAGE.to_owned()),
+        "directions" => Some(crate::directions::CONSIGNE_DIRECTIONS.to_owned()),
         _ => None,
     }
 }

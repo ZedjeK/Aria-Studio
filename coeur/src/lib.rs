@@ -16,6 +16,7 @@ pub mod creations;
 pub mod decoupage;
 pub mod decouvrir;
 pub mod demarrage;
+pub mod directions;
 pub mod donnees;
 pub mod emplacements;
 pub mod estimation;

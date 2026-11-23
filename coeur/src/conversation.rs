@@ -130,7 +130,7 @@ const DEBUTS_VIDES: [&str; 6] = [
     "à définir",
 ];
 /// Le début d'un refus (repéré au début de la réponse seulement : un refus commence par lui).
-const REFUS: &str = r"(?i)\b(?:I\s+(?:can(?:no|['’])t|won['’]t|will\s+not|am\s+(?:not\s+able|unable|sorry))|I['’]m\s+(?:sorry|not\s+able|unable)|unable\s+to\s+(?:help|assist|comply|create|fulfil)|je\s+ne\s+(?:peux|vais)\s+pas|d[ée]sol[ée]e?)\b";
+pub(crate) const REFUS: &str = r"(?i)\b(?:I\s+(?:can(?:no|['’])t|won['’]t|will\s+not|am\s+(?:not\s+able|unable|sorry))|I['’]m\s+(?:sorry|not\s+able|unable)|unable\s+to\s+(?:help|assist|comply|create|fulfil)|je\s+ne\s+(?:peux|vais)\s+pas|d[ée]sol[ée]e?)\b";
 
 /// Un échange de la conversation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

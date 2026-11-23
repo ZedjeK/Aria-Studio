@@ -51,6 +51,7 @@
     valeursProposees,
   } from '../lib/scenario';
   import { rushesMax, workflowsPour } from '../lib/plateau';
+  import { etatVide, versIdee, type EtatDirections } from '../lib/directions';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
@@ -58,6 +59,7 @@
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
+  import ScenarioDirections from './ScenarioDirections.svelte';
   import ScenarioGuide from './ScenarioGuide.svelte';
   import ScenarioSequence from './ScenarioSequence.svelte';
 
@@ -157,6 +159,15 @@
   let guides = $state<{ image: EtatGuide; clip: EtatGuide }>({ image: guideVide(), clip: guideVide() });
   /** Les réponses du guide, à poser dans le champ de la conversation. */
   let amorce = $state('');
+  /** « 🧭 Proposer des directions » : celles de chaque atelier, gardées tant qu'on reste au Scénario. */
+  let directions = $state<Record<'image' | 'retouche' | 'clip', EtatDirections>>({
+    image: etatVide(),
+    retouche: etatVide(),
+    clip: etatVide(),
+  });
+  /** Le LLM propose des directions : ✨ attend. */
+  let directionsEnCours = $state(false);
+  const atelierDirections = $derived(atelier === 'retouche' || atelier === 'clip' ? atelier : 'image');
   let precisions = $state('');
   /** La traduction des précisions, et le texte qu'elle traduit (elle ne vaut plus s'il change). */
   let traduction = $state<{ de: string; en: string } | null>(null);
@@ -730,7 +741,11 @@
       </select>
     </label>
     <Bouton
-      desactive={ecriture !== null || llms.length === 0 || imageManquante || (idee.trim() === '' && complements === '')}
+      desactive={ecriture !== null ||
+        directionsEnCours ||
+        llms.length === 0 ||
+        imageManquante ||
+        (idee.trim() === '' && complements === '')}
       onclick={() => void ecrire()}
     >
       {ecriture === 'ecrire' ? 'Le LLM écrit…' : '✨ Écrire le prompt'}
@@ -739,6 +754,36 @@
       <AnnulerEcriture />
     {/if}
   </div>
+  <ScenarioDirections
+    atelier={atelierDirections}
+    envie={idee}
+    {complements}
+    workflow={cible}
+    llm={llmChoisi || null}
+    images={imagesLlm}
+    role={atelier === 'clip' && modeClip === 'animer'
+      ? 'animer'
+      : atelier === 'retouche'
+        ? 'retouche'
+        : atelier === 'image'
+          ? departImage
+          : null}
+    duree={atelier === 'clip' ? dureeClip : null}
+    disponible={llms.length > 0}
+    bloque={ecriture !== null}
+    bind:etat={directions[atelierDirections]}
+    bind:occupe={directionsEnCours}
+    {signaler}
+    prendre={(d) => {
+      idee = versIdee(d);
+      garder();
+      signaler('Direction posée dans ton idée : retouche-la si tu veux, puis ✨ Écrire le prompt ou 💬.');
+    }}
+    parler={(d) => {
+      amorce = versIdee(d);
+      modeIdee = 'preciser';
+    }}
+  />
   {#if llms.length === 0}
     <p class="discret">Aucun LLM dans modeles\llm : compose le prompt avec les compléments, il part tel quel.</p>
   {:else}

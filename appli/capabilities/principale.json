@@ -50,6 +50,7 @@
     "allow-ecrire-prompt-scenario",
     "allow-traduire-precisions",
     "allow-decouper-sequence",
+    "allow-proposer-directions",
     "allow-annuler-ecriture",
     "allow-lire-personnages",
     "allow-enregistrer-personnage",
