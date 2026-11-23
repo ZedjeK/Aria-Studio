@@ -10,9 +10,11 @@
     max: number;
     selection: string[];
     signaler: (texte: string, erreur?: boolean) => void;
+    /** Un rush vient d'être choisi ou retiré : le dialogue qui porte la liste peut se refermer. */
+    apresChoix?: () => void;
   }
 
-  let { max, selection = $bindable(), signaler }: Props = $props();
+  let { max, selection = $bindable(), signaler, apresChoix }: Props = $props();
 
   let rushes = $state<Creation[]>([]);
   let vignettes = $state<Record<string, string>>({});
@@ -23,6 +25,7 @@
     } else {
       selection = [...selection, id].slice(-Math.max(1, max));
     }
+    apresChoix?.();
   }
 
   // Un workflow qui en reçoit moins : la sélection est raccourcie.

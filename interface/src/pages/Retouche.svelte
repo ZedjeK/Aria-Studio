@@ -473,7 +473,7 @@
       {/if}
 
       <div class="actions">
-        <RangerDans genre="images" cle="aria.destination.retouche" bind:dossier />
+        <RangerDans genre="images" cle="aria.destination.retouche" vide="À côté de la source" bind:dossier />
         <Bouton genre="principal" desactive={!peutLancer || (peint && format !== FORMAT_IMAGE && mode === 'retouche')} onclick={() => void lancer()}>
           {mode === 'retouche' ? 'Retoucher' : 'Agrandir'}
         </Bouton>

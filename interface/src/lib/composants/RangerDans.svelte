@@ -14,9 +14,11 @@
     cle?: string;
     /** Change quand des dossiers ont pu être créés ou supprimés. */
     rafraichir?: number;
+    /** Ce que dit le choix sans dossier : « Aucun dossier » ; la Retouche dit « À côté de la source ». */
+    vide?: string;
   }
 
-  let { genre, dossier = $bindable(), cle, rafraichir = 0 }: Props = $props();
+  let { genre, dossier = $bindable(), cle, rafraichir = 0, vide = 'Aucun dossier' }: Props = $props();
 
   let noms = $state<string[]>([]);
   const memoire = $derived(cle ?? `aria.destination.${genre}`);
@@ -59,7 +61,7 @@
 
 {#if noms.length > 0}
   <label class="ranger">
-    <span class="etiquette">Ranger dans</span>
+    <span class="etiquette">📥 Ranger dans</span>
     <select
       value={dossier ?? ''}
       onchange={(e) => {
@@ -67,7 +69,7 @@
         retenir(dossier);
       }}
     >
-      <option value="">Non rangés</option>
+      <option value="">{vide}</option>
       {#each noms as nom (nom)}
         <option value={nom}>{nom}</option>
       {/each}
@@ -79,11 +81,15 @@
   .ranger {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
+  /* Comme l'étiquette des autres champs du formulaire où il se pose. */
   .etiquette {
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
     color: var(--texte-2);
   }
 </style>

@@ -9,6 +9,8 @@
     annulerCommande,
     choisirMeilleures,
     commanderImage,
+    ecrirePromptScenario,
+    estAnnulation,
     etatVision,
     lireCommandes,
     messageErreur,
@@ -40,15 +42,21 @@
   } from '../lib/plateau';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import CarteChoix from '../lib/composants/CarteChoix.svelte';
+  import Dialogue from '../lib/composants/Dialogue.svelte';
   import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import VignetteCreation from '../lib/composants/VignetteCreation.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
   import PanneauRushes from './PanneauRushes.svelte';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import { peutChoisir, texteChoix, texteVerifications } from '../lib/vision';
+
+  /** La carte « Références » choisie : aucune, mélanger des images (inspirer) ou redessiner une image (variation). */
+  type Depart = 'aucune' | ModeReference;
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -76,7 +84,13 @@
   let premiereLecture = true;
   // Partir de rushes : s'en inspirer (workflows de retouche à références), ou en redessiner un.
   let modeReference = $state<ModeReference | null>(null);
+  let carte = $state<Depart>('aucune');
   let references = $state<string[]>([]);
+  /** Le dialogue « Quel rush choisir ? » est ouvert. */
+  let choixRush = $state(false);
+  /** « Écrire avec le LLM » : l'idée d'avant, que « Retrouver mon texte » remet ; le LLM écrit en ce moment. */
+  let texteOrigine = $state<string | null>(null);
+  let ecriture = $state(false);
   let liberte = $state(LIBERTE.defaut);
   let optionsInspirer = $state<OptionsPlateau | null>(null);
   let stepsSaisis = $state<Record<string, number>>({});
@@ -153,10 +167,49 @@
 
   function changerDepart(mode: ModeReference | null) {
     modeReference = mode;
+    carte = mode ?? 'aucune';
     if (!options) return;
     const liste = workflowsPour(mode, options, optionsInspirer);
     const voulu = mode === 'inspirer' ? options.defautReferences : options.defaut;
     choisirWorkflow((liste.find((w) => w.id === voulu) ?? liste[0])?.id ?? '');
+  }
+
+  /** ✨ Écrire avec le LLM : le prompt s'écrit ici, dans le champ, avant la création ; il partira tel quel. */
+  async function ecrire() {
+    if (!workflow || ecriture || prompt.trim() === '') return;
+    ecriture = true;
+    try {
+      const ecrit = await ecrirePromptScenario({
+        atelier: 'image',
+        idee: prompt,
+        complements: '',
+        workflow: workflow.id,
+        llm: llmChoisi || null,
+        images: modeReference ? references : [],
+        role: modeReference,
+      });
+      texteOrigine = prompt;
+      prompt = ecrit.prompt;
+      reecrire = false;
+      signaler(`Prompt écrit par ${ecrit.llm} pour ${workflow.nom} (${ecrit.mots} mots, ${ecrit.dureeS} s) : il partira tel quel.`);
+    } catch (e) {
+      signaler(estAnnulation(e) ? 'Écriture annulée.' : messageErreur(e), !estAnnulation(e));
+    } finally {
+      ecriture = false;
+    }
+  }
+
+  /** ↩ Retrouver mon texte : l'idée d'avant l'écriture revient, et le LLM la réécrira à la création. */
+  function retrouver() {
+    if (texteOrigine === null) return;
+    prompt = texteOrigine;
+    texteOrigine = null;
+    reecrire = options !== null && options.llm.length > 0;
+    signaler('Ton texte d\'origine est revenu.');
+  }
+
+  function retirerReference(id: string) {
+    references = references.filter((r) => r !== id);
   }
 
   async function relireCommandes() {
@@ -288,41 +341,54 @@
     </p>
   </Panneau>
 {:else}
-  <Panneau titre="Créer" accentue>
-    <div class="depart" role="radiogroup" aria-label="Point de départ">
-      <button type="button" role="radio" aria-checked={modeReference === null} class:actif={modeReference === null} onclick={() => changerDepart(null)}>
-        Depuis une idée
-      </button>
-      <button type="button" role="radio" aria-checked={modeReference === 'inspirer'} class:actif={modeReference === 'inspirer'} onclick={() => changerDepart('inspirer')}>
-        S'inspirer de rushes
-      </button>
-      <button type="button" role="radio" aria-checked={modeReference === 'variation'} class:actif={modeReference === 'variation'} onclick={() => changerDepart('variation')}>
-        Redessiner un rush
-      </button>
-    </div>
-    {#if modeReference}
-      {#if proposes.length === 0}
-        <p class="discret">
-          {modeReference === 'inspirer'
-            ? "Aucun modèle prêt ne reçoit d'images de référence : il faut Qwen-Image 2.1 Edit."
-            : 'Aucun modèle prêt ne sait redessiner une image.'}
-        </p>
-      {:else}
-        <p class="discret">
-          {modeReference === 'inspirer'
-            ? `Choisis de 1 à ${maxRushes} rushes, dans l'ordre : le premier est l'image 1. Écris ce qui est nouveau (« le chat de l'image 1 sur le canapé de l'image 2 »).`
-            : 'Choisis le rush à redessiner, puis dis ce qui change.'}
-        </p>
-        <ChoixRushes max={maxRushes} bind:selection={references} {signaler} />
-        {#if modeReference === 'variation'}
-          <label class="ligne">
-            Liberté <input type="range" min={LIBERTE.min} max={LIBERTE.max} step="0.05" bind:value={liberte} />
-            <span class="code">{liberte.toFixed(2)}</span>
-            <span class="discret">0 : copie ; 1 : libre</span>
-          </label>
-        {/if}
+  <Panneau titre="Créer une image" accentue>
+    <div class="ligne reecriture">
+      <label>
+        <input type="checkbox" bind:checked={reecrire} disabled={options.llm.length === 0} />
+        Réécrire mon idée
+      </label>
+      {#if reecrire}
+        <label class="avec">
+          <span class="discret">avec</span>
+          <select bind:value={llmChoisi} aria-label="LLM qui réécrit">
+            {#each options.llm as choix (choix.fichier)}
+              <option value={choix.fichier}>{choix.nom}{choix.specialiste ? ' (spécialiste)' : ''}</option>
+            {/each}
+          </select>
+        </label>
       {/if}
+    </div>
+    {#if options.llm.length === 0}
+      <p class="discret">
+        Aucun LLM dans modeles\llm : ton texte part tel quel. Les LLM téléchargés par la version 2 sont repris.
+      </p>
     {/if}
+
+    <label class="prompt">
+      <span class="etiquette">{reecrire ? 'Idée' : 'Prompt'}</span>
+      <textarea
+        rows="4"
+        bind:value={prompt}
+        placeholder={reecrire
+          ? 'Un renard roux assis dans la neige fraîche, lumière dorée du soir'
+          : 'A red fox sitting in fresh snow, golden hour, 35 mm photo'}
+      ></textarea>
+    </label>
+    {#if seed === undefined}
+      <p class="erreur">La seed est un entier positif, ou rien pour la tirer au hasard.</p>
+    {/if}
+    <div class="actions-gauche">
+      {#if ecriture}
+        <span class="discret">Le LLM écrit…</span>
+        <AnnulerEcriture />
+      {:else}
+        <Bouton petit desactive={!workflow || options.llm.length === 0 || prompt.trim() === ''} onclick={() => void ecrire()}>
+          ✨ Écrire avec le LLM
+        </Bouton>
+        <Bouton genre="discret" petit desactive={texteOrigine === null} onclick={retrouver}>↩ Retrouver mon texte</Bouton>
+      {/if}
+    </div>
+
     <div class="grille">
       <label>
         <span class="etiquette">Modèle</span>
@@ -352,13 +418,14 @@
         </select>
       </label>
       <label>
-        <span class="etiquette">Images</span>
-        <input type="number" min="1" max={options.nombreMax} bind:value={nombre} />
-      </label>
-      <label>
         <span class="etiquette">Seed</span>
         <input type="text" inputmode="numeric" placeholder="au hasard" bind:value={seedTexte} class:invalide={seed === undefined} />
       </label>
+      <label>
+        <span class="etiquette">Images</span>
+        <input type="number" min="1" max={options.nombreMax} bind:value={nombre} />
+      </label>
+      <RangerDans genre="images" bind:dossier />
     </div>
 
     {#if workflow}
@@ -385,58 +452,63 @@
       </div>
     {/if}
 
-    <div class="ligne reecriture">
-      <label>
-        <input type="checkbox" bind:checked={reecrire} disabled={options.llm.length === 0} />
-        Réécrire mon idée avec le LLM
-      </label>
-      {#if reecrire}
-        <select bind:value={llmChoisi} aria-label="LLM qui réécrit">
-          {#each options.llm as choix (choix.fichier)}
-            <option value={choix.fichier}>{choix.nom}{choix.specialiste ? ' (spécialiste)' : ''}</option>
+    <p class="etiquette titre-champ">＋ Références</p>
+    <div class="cartes">
+      <CarteChoix groupe="references" valeur="aucune" titre="Aucune" bind:choisie={carte} onchange={() => changerDepart(null)}>
+        Seul le texte décide.
+      </CarteChoix>
+      <CarteChoix groupe="references" valeur="inspirer" titre="🧩 Mélanger des images" bind:choisie={carte} onchange={() => changerDepart('inspirer')}>
+        1 à {options.referencesMax} références nourrissent l'image.
+      </CarteChoix>
+      <CarteChoix groupe="references" valeur="variation" titre="🎨 Redessiner une image" bind:choisie={carte} onchange={() => changerDepart('variation')}>
+        Une image sert de base, tu règles la liberté.
+      </CarteChoix>
+    </div>
+    {#if modeReference}
+      {#if proposes.length === 0}
+        <p class="discret">
+          {modeReference === 'inspirer'
+            ? "Aucun modèle prêt ne reçoit d'images de référence : il faut Qwen-Image 2.1 Edit."
+            : 'Aucun modèle prêt ne sait redessiner une image.'}
+        </p>
+      {:else}
+        <p class="discret">
+          {modeReference === 'inspirer'
+            ? `Choisis de 1 à ${maxRushes} rushes, dans l'ordre : le premier est l'image 1. Écris ce qui est nouveau (« le chat de l'image 1 sur le canapé de l'image 2 »).`
+            : 'Choisis le rush à redessiner, puis dis ce qui change.'}
+        </p>
+        <div class="ligne cases">
+          {#each references as id, rang (id)}
+            <div class="case">
+              <VignetteCreation {id} titre={`Image ${rang + 1}`} />
+              {#if modeReference === 'inspirer'}<span class="rang">{rang + 1}</span>{/if}
+              <button type="button" class="retire" aria-label={`Retirer l'image ${rang + 1}`} onclick={() => retirerReference(id)}>✕</button>
+            </div>
           {/each}
-        </select>
+          {#if references.length < maxRushes}
+            <button type="button" class="case vide-case" aria-label="Choisir un rush" onclick={() => (choixRush = true)}>＋</button>
+          {/if}
+          {#if modeReference === 'variation'}
+            <label class="liberte">
+              Liberté <input type="range" min={LIBERTE.min} max={LIBERTE.max} step="0.05" bind:value={liberte} />
+              <span class="code">{liberte.toFixed(2)}</span>
+              <span class="discret">0 : copie ; 1 : libre</span>
+            </label>
+          {/if}
+        </div>
       {/if}
-    </div>
-    {#if options.llm.length === 0}
-      <p class="discret">
-        Aucun LLM dans modeles\llm : ton texte part tel quel. Les LLM téléchargés par la version 2 sont repris.
-      </p>
     {/if}
-    <div class="ligne reecriture">
-      <label>
-        <input type="checkbox" bind:checked={verifierALaFin} disabled={!vision?.llm} />
-        Vérifier les images à la fin
-      </label>
-      <span class="discret">
-        {vision?.llm
-          ? `Le LLM qui voit (${vision.llm}) compare chaque image à ton intention et propose un prompt corrigé.`
-          : (vision?.explication ?? '')}
-      </span>
-    </div>
 
-    <label class="prompt">
-      <span class="etiquette">{reecrire ? 'Idée' : 'Prompt'}</span>
-      <textarea
-        rows="4"
-        bind:value={prompt}
-        placeholder={reecrire
-          ? 'Un renard roux assis dans la neige fraîche, lumière dorée du soir'
-          : 'A red fox sitting in fresh snow, golden hour, 35 mm photo'}
-      ></textarea>
-    </label>
-    {#if seed === undefined}
-      <p class="erreur">La seed est un entier positif, ou rien pour la tirer au hasard.</p>
-    {/if}
     <div class="actions">
-      <RangerDans genre="images" bind:dossier />
       <Bouton genre="principal" desactive={!peutCreer} onclick={() => void creer()}>Créer</Bouton>
     </div>
   </Panneau>
 {/if}
 
-{#if commandes.length > 0}
-  <Panneau titre="File">
+<Panneau titre="Rendu">
+  {#if commandes.length === 0}
+    <p class="discret">Rien n'est en cours. Tes dernières créations apparaissent ici.</p>
+  {:else}
     <ul class="file">
       {#each commandes as c (c.id)}
         <li class:erreur={c.etat === 'erreur'}>
@@ -451,6 +523,13 @@
             {/if}
             {#if c.etat === 'en_cours'}
               <progress max="1" value={c.progression}></progress>
+            {/if}
+            {#if c.type === 'creation' && c.etat === 'termine' && c.images.length > 0}
+              <div class="vignettes">
+                {#each c.images as image (image)}
+                  <VignetteCreation id={image} titre={texteCommande(c)} />
+                {/each}
+              </div>
             {/if}
           </div>
           {#if estActive(c) && !c.annulee}
@@ -473,10 +552,37 @@
         </li>
       {/each}
     </ul>
-  </Panneau>
-{/if}
+  {/if}
+  <div class="ligne verification">
+    <label>
+      <input type="checkbox" bind:checked={verifierALaFin} disabled={!vision?.llm} />
+      Vérifier les images à la fin
+    </label>
+    <span class="discret">
+      {vision?.llm
+        ? `Le LLM qui voit (${vision.llm}) compare chaque image à ton intention et propose un prompt corrigé.`
+        : (vision?.explication ?? '')}
+    </span>
+  </div>
+</Panneau>
 
 <PanneauRushes {signaler} {rafraichir} enFile={() => void relireCommandes()} />
+
+{#if choixRush}
+  <Dialogue titre="Quel rush choisir ?" fermer={() => (choixRush = false)}>
+    <ChoixRushes
+      max={maxRushes}
+      bind:selection={references}
+      {signaler}
+      apresChoix={() => {
+        if (maxRushes <= 1) choixRush = false;
+      }}
+    />
+    {#snippet pied()}
+      <Bouton genre="discret" onclick={() => (choixRush = false)}>✕ Fermer</Bouton>
+    {/snippet}
+  </Dialogue>
+{/if}
 
 <style>
   .grille {
@@ -504,28 +610,103 @@
   }
 
   .reecriture {
-    margin-top: 14px;
+    margin-bottom: 10px;
   }
 
-  .depart {
+  .avec {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .actions-gauche {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 12px;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0 14px;
   }
 
-  .depart button {
+  .titre-champ {
+    margin: 14px 0 8px;
+  }
+
+  .cartes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .cases {
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  .case {
+    position: relative;
+    display: block;
+    width: 96px;
+    height: 96px;
+  }
+
+  .vide-case {
+    display: grid;
+    place-items: center;
     font: inherit;
+    font-size: 22px;
     color: var(--texte-2);
-    background: transparent;
-    border: 1px solid var(--ligne);
-    padding: 4px 12px;
+    background: var(--fond);
+    border: 1px dashed var(--ligne);
     cursor: pointer;
   }
 
-  .depart button.actif {
+  .vide-case:hover {
     color: var(--cyan);
     border-color: var(--cyan);
+  }
+
+  .retire {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    font: inherit;
+    font-size: 12px;
+    color: var(--texte);
+    background: color-mix(in srgb, var(--fond) 86%, transparent);
+    border: 1px solid var(--ligne);
+    cursor: pointer;
+  }
+
+  .rang {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fond);
+    background: var(--orange);
+  }
+
+  .liberte {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .vignettes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .verification {
+    flex-wrap: wrap;
+    margin-top: 14px;
   }
 
   textarea {
