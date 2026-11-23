@@ -17,7 +17,7 @@
     type Proposition,
   } from '../lib/api';
   import { parCible, texteMateriel } from '../lib/optimiseur';
-  import { changements, nomConsigne, type Saisies } from '../lib/reglages';
+  import { changements, groupesLlm, nomConsigne, texteChangements, type Saisies } from '../lib/reglages';
   import ApercuPropositions from '../lib/composants/ApercuPropositions.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
@@ -36,9 +36,14 @@
   let consignes = $state<Record<string, string | null>>({});
 
   const llm = $derived(etat?.llm.find((l) => l.fichier === fichier));
-  const aEnregistrer = $derived(
-    llm !== undefined && (Object.keys(changements(llm.params, saisies)).length > 0 || Object.keys(consignes).length > 0),
+  /** Les réglages et les consignes qui diffèrent de ce qui est enregistré. */
+  const nombreChangements = $derived(
+    llm === undefined ? 0 : Object.keys(changements(llm.params, saisies)).length + Object.keys(consignes).length,
   );
+  const groupes = $derived(llm ? groupesLlm(llm.params) : []);
+  /** La consigne affichée dans le panneau des consignes : une seule à la fois, choisie dans la liste. */
+  let consigneChoisie = $state('');
+  const consigne = $derived(llm?.consignes.find((c) => c.cle === consigneChoisie) ?? llm?.consignes[0]);
 
   async function relire() {
     try {
@@ -55,6 +60,11 @@
     fichier = nouveau;
     saisies = {};
     consignes = {};
+  }
+
+  /** Une consigne remise à l'origine, ou réécrite par rapport à son origine. */
+  function reecrite(c: { cle: string; defaut: string; modifie: boolean }): boolean {
+    return c.modifie || (consignes[c.cle] != null && consignes[c.cle] !== c.defaut);
   }
 
   async function enregistrer() {
@@ -106,23 +116,9 @@
 </ASavoir>
 
 {#if etat && etat.llm.length === 0}
-  <p class="discret">Aucun LLM dans modeles\llm. Les LLM téléchargés par la version 2 sont repris.</p>
+  <p class="discret">Aucun LLM dans modelesllm. Les LLM téléchargés par la version 2 sont repris.</p>
 {:else if etat && llm}
   {#if etat.noteDefaut}<p class="discret">{etat.noteDefaut}</p>{/if}
-  <div class="ligne">
-    <label>
-      LLM
-      <select value={fichier} onchange={(e) => choisir(e.currentTarget.value)}>
-        {#each etat.llm as l (l.fichier)}
-          <option value={l.fichier}>{l.nom}{l.fichier === etat.defautLlm ? ' (par défaut)' : ''}</option>
-        {/each}
-      </select>
-    </label>
-    <Bouton desactive={analyse} onclick={() => void adapter()}>
-      {analyse ? 'Analyse…' : '⚡ Adapter à ma machine'}
-    </Bouton>
-    <Bouton genre="principal" desactive={!aEnregistrer} onclick={() => void enregistrer()}>Enregistrer</Bouton>
-  </div>
 
   {#if adaptation}
     <ApercuPropositions
@@ -141,35 +137,63 @@
     />
   {/if}
 
-  <Panneau titre="Réglages" accentue>
-    <div class="grille">
-      {#each llm.params as p (p.cle)}
-        <ChampReglage param={p} bind:saisies />
-      {/each}
+  <Panneau titre="Cible" accentue>
+    <div class="ligne">
+      <label class="modele">
+        Modèle
+        <select value={fichier} onchange={(e) => choisir(e.currentTarget.value)}>
+          {#each etat.llm as l (l.fichier)}
+            <option value={l.fichier}>{l.nom}{l.fichier === etat.defautLlm ? ' (par défaut)' : ''}</option>
+          {/each}
+        </select>
+      </label>
+      <Bouton petit desactive={analyse} onclick={() => void adapter()}>
+        {analyse ? 'Analyse…' : '⚡ Adapter à ma machine'}
+      </Bouton>
+    </div>
+    {#each groupes as g (g.titre)}
+      <hr class="sep" />
+      <p class="etiquette">{g.titre}</p>
+      <div class="grille">
+        {#each g.params as p (p.cle)}
+          <ChampReglage param={p} bind:saisies />
+        {/each}
+      </div>
+    {/each}
+    <div class="pied">
+      <span class="discret">{texteChangements(nombreChangements)}</span>
+      <Bouton genre="principal" desactive={nombreChangements === 0} onclick={() => void enregistrer()}>Enregistrer</Bouton>
     </div>
   </Panneau>
 
-  {#each llm.consignes as c (c.cle)}
-    <Panneau titre={nomConsigne(c.cle)}>
+  {#if consigne}
+    <Panneau titre="Consignes du LLM">
+      <div class="ligne">
+        <label class="modele">
+          Consigne
+          <select value={consigne.cle} onchange={(e) => (consigneChoisie = e.currentTarget.value)}>
+            {#each llm.consignes as c (c.cle)}
+              <option value={c.cle}>{nomConsigne(c.cle)}{reecrite(c) ? ' · réécrite' : ''}</option>
+            {/each}
+          </select>
+        </label>
+        <Bouton genre="discret" petit desactive={!reecrite(consigne)} onclick={() => (consignes = { ...consignes, [consigne.cle]: null })}>
+          ↺ Consigne d'origine
+        </Bouton>
+      </div>
       <textarea
         rows="10"
-        value={c.cle in consignes ? (consignes[c.cle] ?? c.defaut) : c.valeur}
-        oninput={(e) => (consignes = { ...consignes, [c.cle]: e.currentTarget.value })}
+        aria-label={nomConsigne(consigne.cle)}
+        value={consigne.cle in consignes ? (consignes[consigne.cle] ?? consigne.defaut) : consigne.valeur}
+        oninput={(e) => (consignes = { ...consignes, [consigne.cle]: e.currentTarget.value })}
       ></textarea>
-      <div class="ligne">
-        {#if c.modifie || (consignes[c.cle] != null && consignes[c.cle] !== c.defaut)}
-          <span class="discret">Réécrite.</span>
-          <Bouton genre="discret" petit onclick={() => (consignes = { ...consignes, [c.cle]: null })}>Revenir à l'origine</Bouton>
-        {:else}
-          <span class="discret">Consigne d'origine.</span>
-        {/if}
-      </div>
+      <p class="discret verrou">🔒 Une clause sur les mineurs est ajoutée à la fin : elle n'est pas modifiable.</p>
+      <details>
+        <summary class="discret">Voir la clause</summary>
+        <p class="code clause">{etat.clauseMineurs}</p>
+      </details>
     </Panneau>
-  {/each}
-
-  <Panneau titre="Clause verrouillée">
-    <p class="code clause">{etat.clauseMineurs}</p>
-  </Panneau>
+  {/if}
 {:else}
   <p class="discret">Lecture…</p>
 {/if}
@@ -185,8 +209,42 @@
 
   .ligne label {
     display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--texte-2);
+    font-size: 13px;
+  }
+
+  .modele {
+    min-width: 280px;
+  }
+
+  .sep {
+    margin: 14px 0;
+    border: 0;
+    border-top: 1px solid var(--ligne);
+  }
+
+  .etiquette {
+    margin: 0 0 10px;
+    color: var(--texte-2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .pied {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 10px 16px;
+    justify-content: space-between;
+    margin-top: 16px;
+  }
+
+  .verrou {
+    margin: 8px 0 0;
   }
 
   .grille {

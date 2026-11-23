@@ -5,6 +5,7 @@
 <script lang="ts">
   import type { Proposition } from '../api';
   import { valeurLisible, type Ecart } from '../optimiseur';
+  import ASavoir from './ASavoir.svelte';
   import Bouton from './Bouton.svelte';
   import Dialogue from './Dialogue.svelte';
 
@@ -46,7 +47,9 @@
 </script>
 
 <Dialogue {titre} fermer={() => !occupe && fermer()}>
-  {#if entete}<p class="discret">{entete}</p>{/if}
+  <ASavoir>
+    {#if entete}{entete}. {/if}Rien n'est appliqué avant « Appliquer la sélection » ; chaque ligne se décoche.
+  </ASavoir>
   {#if alertes.length > 0}
     <ul class="alertes">
       {#each alertes as a (a)}<li>{a}</li>{/each}
@@ -55,39 +58,49 @@
   {#if lignes.length === 0}
     <p class="ok">{vide}</p>
   {:else}
-    <ul class="lignes">
-      {#each lignes as l, i (`${l.proposition.cible}|${l.proposition.cle}`)}
-        <li>
-          <label>
-            <input type="checkbox" checked={!decochees.includes(i)} onchange={() => basculer(i)} disabled={occupe} />
-            <span class="quoi">
+    <table>
+      <thead>
+        <tr><th></th><th>Réglage</th><th>Avant</th><th>Après</th><th>Pourquoi</th></tr>
+      </thead>
+      <tbody>
+        {#each lignes as l, i (`${l.proposition.cible}|${l.proposition.cle}`)}
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                aria-label={l.proposition.libelle}
+                checked={!decochees.includes(i)}
+                onchange={() => basculer(i)}
+                disabled={occupe}
+              />
+            </td>
+            <td>
               {#if plusieurs}<span class="discret">{l.proposition.nom} · </span>{/if}{l.proposition.libelle}
-            </span>
-            <span class="valeurs">
-              {valeurLisible(l.avant)} → <strong>{valeurLisible(l.proposition.propose)}</strong>
-            </span>
-          </label>
-          <span class="discret raison">
-            {l.proposition.raison}{#if l.proposition.source}
-              · <a href={l.proposition.source} target="_blank" rel="noopener noreferrer">source</a>{/if}
-          </span>
-        </li>
-      {/each}
-    </ul>
+            </td>
+            <td class="valeur">{valeurLisible(l.avant)}</td>
+            <td class="valeur"><strong>{valeurLisible(l.proposition.propose)}</strong></td>
+            <td class="discret">
+              {l.proposition.raison}{#if l.proposition.source}
+                · <a href={l.proposition.source} target="_blank" rel="noopener noreferrer">source</a>{/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
   {/if}
   {#each notes as n (n)}<p class="discret">{n}</p>{/each}
   {#snippet pied()}
     <Bouton genre="discret" desactive={occupe} onclick={fermer}>Fermer</Bouton>
     {#if lignes.length > 0}
+      <Bouton desactive={occupe || decochees.length === 0} onclick={() => (decochees = [])}>Tout cocher</Bouton>
       <Bouton genre="principal" desactive={occupe || choisies.length === 0} onclick={() => void confirmer()}>
-        Appliquer{choisies.length > 0 ? ` (${choisies.length})` : ''}
+        Appliquer la sélection{choisies.length > 0 ? ` (${choisies.length})` : ''}
       </Bouton>
     {/if}
   {/snippet}
 </Dialogue>
 
 <style>
-  .lignes,
   .alertes {
     display: flex;
     flex-direction: column;
@@ -101,30 +114,37 @@
     color: var(--orange);
   }
 
-  .lignes li {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  label {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .quoi {
-    min-width: 160px;
-  }
-
-  .valeurs {
-    font-family: var(--police-code);
+  table {
+    width: 100%;
+    margin: 8px 0;
+    border-collapse: collapse;
     font-size: 13px;
   }
 
-  .raison {
-    padding-left: 24px;
+  th {
+    padding: 6px 10px 6px 0;
+    border-bottom: 1px solid var(--ligne);
+    color: var(--texte-2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  td {
+    padding: 7px 10px 7px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--ligne) 50%, transparent);
+    vertical-align: top;
+  }
+
+  .valeur {
+    font-family: var(--police-code);
+    white-space: nowrap;
+  }
+
+  .discret {
+    color: var(--texte-2);
     font-size: 12px;
   }
 
