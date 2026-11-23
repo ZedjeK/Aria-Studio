@@ -18,6 +18,47 @@ export function reponse(question: string, choix: string): string {
   return `${question} → ${choix}`;
 }
 
+/** Un tour en arrière : la conversation d'avant ta dernière réponse (et celle du LLM qui l'a suivie). */
+export function unTourEnArriere(messages: MessageConversation[]): MessageConversation[] {
+  const sans = messages.at(-1)?.role === 'assistant' ? messages.slice(0, -1) : messages;
+  return sans.at(-1)?.role === 'user' ? sans.slice(0, -1) : sans;
+}
+
+/** ↻ Réessayer : la conversation d'avant la dernière réponse du LLM, et le message qui la demandait. */
+export function pourReessayer(messages: MessageConversation[]): { avant: MessageConversation[]; texte: string } | null {
+  if (messages.at(-1)?.role !== 'assistant') return null;
+  const demande = messages.at(-2);
+  if (demande?.role !== 'user') return null;
+  return { avant: messages.slice(0, -2), texte: demande.texte };
+}
+
+/** ✎ Modifier : le message n° `i` revient dans le champ ; la conversation reprend juste avant lui. */
+export function pourModifier(
+  messages: MessageConversation[],
+  i: number,
+): { avant: MessageConversation[]; texte: string } | null {
+  const m = messages[i];
+  if (m?.role !== 'user' || m.texte === ECRIRE) return null;
+  return { avant: messages.slice(0, i), texte: m.texte };
+}
+
+/** « Compris : » ce que le LLM a noté au dernier tour (rien tant qu'il n'a pas répondu). */
+export function comprisDernier(messages: MessageConversation[]): { nom: string; valeur: string }[] {
+  const dernier = messages.at(-1);
+  return dernier?.role === 'assistant' ? dernier.tour.fiche : [];
+}
+
+/** ✕ sur une puce « Compris » : la demande qui part au LLM pour qu'il l'oublie. */
+export function demandeRetrait(nom: string, valeur: string): string {
+  return `Retire ça de ce que tu as compris : ${nom} : ${valeur}`;
+}
+
+/** Le texte d'un message à copier : ce que tu as écrit, ou ce que le LLM a dit (avec le prompt, s'il en a écrit un). */
+export function texteACopier(m: MessageConversation): string {
+  if (m.role === 'user') return m.texte;
+  return m.tour.prompt ?? m.tour.message;
+}
+
 /** Le dernier prompt écrit dans la conversation, s'il y en a un. */
 export function dernierPrompt(messages: MessageConversation[]): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
