@@ -1228,6 +1228,15 @@ export interface PromptEcrit {
   alertes: string[];
 }
 
+/** Un prompt écrit au Scénario, en route vers le Plateau : son modèle cible et, pour s'inspirer ou redessiner, ses
+ * images de départ. */
+export interface EnvoiPlateau {
+  prompt: string;
+  workflow: string | null;
+  references: string[];
+  modeReference: ModeReference | null;
+}
+
 /** Une consigne écrite au Scénario, en route vers la page Retouche avec son image. */
 export interface EnvoiRetouche {
   source: string;

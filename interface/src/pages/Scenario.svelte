@@ -29,7 +29,9 @@
     type ChoixWorkflow,
     type EnvoiClip,
     type EnvoiRetouche,
+    type ModeReference,
     type OptionsMontage,
+    type OptionsPlateau,
     type Personnage,
     type Sequence,
     type OngletScenario,
@@ -46,6 +48,7 @@
     sousListeVisible,
     valeursProposees,
   } from '../lib/scenario';
+  import { rushesMax, workflowsPour } from '../lib/plateau';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
@@ -57,8 +60,8 @@
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
-    /** Envoie le prompt final au Plateau, avec le modèle cible. */
-    envoyer: (prompt: string, workflow: string | null) => void;
+    /** Envoie le prompt final au Plateau, avec le modèle cible et, pour s'inspirer ou redessiner, ses images. */
+    envoyer: (prompt: string, workflow: string | null, references: string[], modeReference: ModeReference | null) => void;
     /** Ouvre une séquence dans le Montage (atelier Séquence). */
     versMontage: (id: string) => void;
     /** Une séquence du Montage à retravailler ici. */
@@ -95,7 +98,15 @@
   const workflowClip = $derived(proposesClip ? (proposesClip.defaut ?? proposesClip.workflows[0]?.id ?? null) : null);
   /** L'atelier a besoin d'une image : celle à retoucher, ou le rush d'un clip animé. */
   const imageRequise = $derived(atelier === 'retouche' || (atelier === 'clip' && modeClip === 'animer'));
-  const imageManquante = $derived(imageRequise && imageAtelier.length === 0);
+  /** Atelier Image : partir de rien, s'inspirer d'images de référence, ou en redessiner une (comme au Plateau). */
+  let departImage = $state<ModeReference | null>(null);
+  let referencesImage = $state<string[]>([]);
+  let optionsImage = $state<OptionsPlateau | null>(null);
+  let optionsReferences = $state<OptionsPlateau | null>(null);
+  const imageManquante = $derived(
+    (imageRequise && imageAtelier.length === 0) ||
+      (atelier === 'image' && departImage !== null && referencesImage.length === 0),
+  );
 
   const BROUILLON = 'aria-scenario';
 
@@ -109,8 +120,16 @@
   let toutes = $state(false);
   let workflows = $state<ChoixWorkflow[]>([]);
   let workflowId = $state<string | null>(null);
+  /** Les modèles cibles de l'atelier Image, selon son départ : tous, ceux qui reçoivent des références, ou ceux qui
+   * savent redessiner. */
+  const proposesImage = $derived(
+    optionsImage ? workflowsPour(departImage, optionsImage, optionsReferences) : workflows,
+  );
+  const maxReferences = $derived(rushesMax(departImage, proposesImage.find((w) => w.id === workflowId)));
   /** Le modèle cible de l'atelier affiché. */
   const cible = $derived(atelier === 'retouche' ? workflowRetouche : atelier === 'clip' ? workflowClip : workflowId);
+  /** Les images que le LLM voit : l'image à retoucher, le rush à animer, ou les références de l'atelier Image. */
+  const imagesLlm = $derived(imageRequise ? imageAtelier : atelier === 'image' && departImage ? referencesImage : []);
   let llms = $state<ChoixLlm[]>([]);
   let llmParWorkflow = $state<Record<string, string>>({});
   /** Le LLM choisi ; vide : celui du modèle cible. */
@@ -372,8 +391,8 @@
         complements,
         workflow: cible,
         llm: llmChoisi || null,
-        images: imageRequise ? imageAtelier : [],
-        role: atelier === 'clip' && modeClip === 'animer' ? 'animer' : null,
+        images: imagesLlm,
+        role: atelier === 'clip' && modeClip === 'animer' ? 'animer' : atelier === 'image' ? departImage : null,
         duree: atelier === 'clip' ? dureeClip : null,
       });
       final = r.prompt;
@@ -402,8 +421,25 @@
         duree: dureeClip,
       });
     } else {
-      envoyer(texteFinal, workflowId);
+      envoyer(texteFinal, workflowId, departImage ? referencesImage : [], departImage);
     }
+  }
+
+  const DEPARTS_IMAGE: [ModeReference | null, string][] = [
+    [null, 'À partir de rien'],
+    ['inspirer', "S'inspirer d'images"],
+    ['variation', 'Redessiner une image'],
+  ];
+
+  /** Change le départ de l'atelier Image : les images repartent de zéro, le modèle cible suit (comme au Plateau). */
+  function changerDepartImage(mode: ModeReference | null) {
+    if (mode === departImage) return;
+    departImage = mode;
+    referencesImage = [];
+    const liste = optionsImage ? workflowsPour(mode, optionsImage, optionsReferences) : workflows;
+    const voulu = mode === 'inspirer' ? optionsImage?.defautReferences : optionsImage?.defaut;
+    workflowId = (liste.find((w) => w.id === voulu) ?? liste[0])?.id ?? null;
+    planifier();
   }
 
   function retoucherFinal(valeur: string) {
@@ -423,12 +459,14 @@
       try {
         sujets = await sujetsScenario();
         const options = await optionsPlateau();
+        optionsImage = options;
         workflows = options.workflows;
         llms = options.llm;
         llmParWorkflow = options.llmParWorkflow;
         await relirePersonnages();
         if (!workflows.some((w) => w.id === workflowId)) workflowId = options.defaut;
         const retouche = await optionsRetouche();
+        optionsReferences = retouche;
         workflowsRetouche = retouche.workflows;
         if (!workflowsRetouche.some((w) => w.id === workflowRetouche)) workflowRetouche = retouche.defaut;
         montage = await optionsMontage();
@@ -532,7 +570,7 @@
           planifier();
         }}
       >
-        {#each workflows as w (w.id)}
+        {#each proposesImage as w (w.id)}
           <option value={w.id}>{w.nom}</option>
         {/each}
       </select>
@@ -556,6 +594,23 @@
   />
 {:else}
 <Panneau titre={atelier === 'retouche' ? 'Ce que tu veux changer' : 'Ton idée'}>
+  {#if atelier === 'image'}
+    <div class="ligne" role="group" aria-label="Départ">
+      {#each DEPARTS_IMAGE as [mode, texte] (texte)}
+        <Bouton genre={departImage === mode ? 'principal' : 'discret'} petit onclick={() => changerDepartImage(mode)}>
+          {texte}
+        </Bouton>
+      {/each}
+    </div>
+    {#if departImage}
+      <p class="etiquette">
+        {departImage === 'inspirer'
+          ? `Les images de référence, dans l'ordre (${maxReferences} au plus pour ce modèle)`
+          : "L'image à redessiner"}
+      </p>
+      <ChoixRushes max={Math.max(1, maxReferences)} bind:selection={referencesImage} {signaler} />
+    {/if}
+  {/if}
   {#if imageRequise}
     <p class="etiquette">{atelier === 'retouche' ? "L'image à retoucher" : 'Le rush à animer'}</p>
     <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
@@ -569,8 +624,15 @@
         llm={llmChoisi || null}
         contexte={complements}
         {sujet}
-        images={imageRequise ? imageAtelier : []}
-        role={atelier === 'clip' && modeClip === 'animer' ? 'animer' : atelier === 'retouche' ? 'retouche' : null}
+        images={imagesLlm}
+        role={atelier === 'clip' && modeClip === 'animer'
+          ? 'animer'
+          : atelier === 'retouche'
+            ? 'retouche'
+            : atelier === 'image'
+              ? departImage
+              : null}
+        sansSujet={atelier === 'image' && departImage !== null}
         duree={atelier === 'clip' ? dureeClip : null}
         disponible={llms.length > 0}
         {signaler}

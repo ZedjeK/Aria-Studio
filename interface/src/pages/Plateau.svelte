@@ -15,6 +15,7 @@
     FORMAT_IMAGE,
     validerCheckpoint,
     type Commande,
+    type EnvoiPlateau,
     type ModeReference,
     type OptionsPlateau,
   } from '../lib/api';
@@ -43,8 +44,8 @@
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
-    /** Un prompt écrit au Scénario : il part tel quel, avec son modèle cible. */
-    recu?: { prompt: string; workflow: string | null } | null;
+    /** Un prompt écrit au Scénario : il part tel quel, avec son modèle cible et ses images de départ. */
+    recu?: EnvoiPlateau | null;
     /** Le prompt reçu est posé. */
     recuLu?: () => void;
   }
@@ -123,8 +124,12 @@
       if (recu) {
         prompt = recu.prompt;
         reecrire = false;
+        // S'inspirer ou redessiner : le départ, puis le modèle cible parmi ceux de ce départ, puis les images.
+        const depart = recu.modeReference;
+        if (depart !== modeReference) changerDepart(depart);
         const cible = recu.workflow;
-        if (cible && liste.some((w) => w.id === cible)) choisirWorkflow(cible);
+        if (cible && workflowsPour(depart, options, optionsInspirer).some((w) => w.id === cible)) choisirWorkflow(cible);
+        if (depart) references = [...recu.references];
         recuLu?.();
         signaler('Prompt du Scénario reçu : il partira tel quel.');
       }
