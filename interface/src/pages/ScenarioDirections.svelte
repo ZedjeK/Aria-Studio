@@ -1,14 +1,19 @@
 <!--
   « Proposer des directions » (nouveauté de la v3) : à partir d'une envie vague, le LLM propose trois directions
-  distinctes. « Prendre » pose la direction dans l'idée (ou le fil de l'histoire), à retoucher puis à écrire avec ✨ ;
-  « En parler » l'emmène dans 💬 M'aider à préciser. Les directions vues restent tant qu'on reste dans l'atelier, et
-  « Proposer d'autres directions » demande au LLM de s'en écarter. ✕ Annuler arrête l'écriture.
+  distinctes, en cartes à onglet (un choix exclusif : celle qui se coche). « Prendre cette direction » pose la carte
+  cochée dans l'idée (ou le fil de l'histoire), à retoucher puis à écrire avec ✨ ; « 💬 En parler » l'emmène dans
+  M'aider à préciser. Les directions vues restent tant qu'on reste dans l'atelier, et « Proposer d'autres directions »
+  demande au LLM de s'en écarter. ✕ Annuler arrête l'écriture. Les boutons sont secondaires : l'orange est celui du
+  prompt final. La rangée du haut reçoit ✨ Écrire de la page (snippet `avant`).
 -->
 <script lang="ts">
   import { estAnnulation, messageErreur, proposerDirections, type AtelierDirections, type Direction } from '../lib/api';
   import { aEcarter, alertesDe, apresProposition, type EtatDirections } from '../lib/directions';
+  import type { Snippet } from 'svelte';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import CarteChoix from '../lib/composants/CarteChoix.svelte';
+  import ScenarioAlerte from './ScenarioAlerte.svelte';
 
   interface Props {
     atelier: AtelierDirections;
@@ -34,6 +39,10 @@
     prendre: (d: Direction) => void;
     /** Emmène la direction dans 💬 M'aider à préciser. */
     parler?: ((d: Direction) => void) | null;
+    /** Ce que la page pose au début de la rangée de boutons (✨ Écrire le prompt). */
+    avant?: Snippet;
+    /** Une écriture de la page est en cours : ✕ Annuler la montre aussi. */
+    ecritureEnCours?: boolean;
   }
 
   let {
@@ -52,7 +61,13 @@
     signaler,
     prendre,
     parler = null,
+    avant,
+    ecritureEnCours = false,
   }: Props = $props();
+
+  /** La carte cochée (son rang parmi les directions proposées), vide tant qu'aucune ne l'est. */
+  let choisie = $state('');
+  const direction = $derived(choisie === '' ? undefined : etat.proposees[Number(choisie)]);
 
   const vide = $derived(envie.trim() === '' && complements.trim() === '' && images.length === 0);
 
@@ -73,6 +88,7 @@
       });
       const alertes = alertesDe(r.redemandee, r.alertes);
       etat = apresProposition(etat, r.directions, alertes);
+      choisie = '';
       const suite = alertes.length > 0 ? ` · ⚠ ${alertes.join(' ')}` : '';
       signaler(`${r.directions.length} directions proposées par ${r.llm} en ${r.dureeS} s.${suite}`, alertes.length > 0);
     } catch (e) {
@@ -85,14 +101,11 @@
 
 <div class="directions">
   <div class="ligne">
-    <Bouton genre="principal" desactive={!disponible || bloque || occupe || vide} onclick={() => void proposer()}>
-      {occupe
-        ? 'Le LLM cherche…'
-        : etat.proposees.length > 0
-          ? "🧭 Proposer d'autres directions"
-          : '🧭 Proposer des directions'}
+    {@render avant?.()}
+    <Bouton genre="secondaire" petit desactive={!disponible || bloque || occupe || vide} onclick={() => void proposer()}>
+      {occupe ? 'Le LLM cherche…' : '🧭 Proposer des directions'}
     </Bouton>
-    {#if occupe}
+    {#if occupe || ecritureEnCours}
       <AnnulerEcriture />
     {/if}
     {#if etat.ecartees.length > 0}
@@ -105,25 +118,32 @@
       💬.
     </p>
   {:else}
-    <ul class="cartes">
+    <p class="etiquette">Trois directions, vraiment différentes</p>
+    <div class="cartes">
       {#each etat.proposees as d, k (k)}
-        <li class="carte">
-          <span class="titre">{d.titre}</span>
-          <p>{d.texte}</p>
+        <CarteChoix groupe="direction" valeur={String(k)} titre={d.titre} bind:choisie>
+          {d.texte}
           {#if d.difference}
-            <p class="discret">{d.difference}</p>
+            <span class="difference">Se distingue par : {d.difference}</span>
           {/if}
-          <div class="ligne">
-            <Bouton petit desactive={occupe} onclick={() => prendre(d)}>Prendre cette direction</Bouton>
-            {#if parler}
-              <Bouton genre="discret" petit desactive={occupe} onclick={() => parler(d)}>💬 En parler</Bouton>
-            {/if}
-          </div>
-        </li>
+        </CarteChoix>
       {/each}
-    </ul>
+    </div>
+    <div class="ligne">
+      <Bouton petit desactive={occupe || !direction} onclick={() => direction && prendre(direction)}>
+        Prendre cette direction
+      </Bouton>
+      {#if parler}
+        <Bouton genre="discret" petit desactive={occupe || !direction} onclick={() => direction && parler(direction)}>
+          💬 En parler
+        </Bouton>
+      {/if}
+      <Bouton genre="discret" petit desactive={!disponible || bloque || occupe || vide} onclick={() => void proposer()}>
+        Proposer d'autres directions
+      </Bouton>
+    </div>
     {#each etat.alertes as a (a)}
-      <p class="alerte">⚠ {a}</p>
+      <ScenarioAlerte>{a}</ScenarioAlerte>
     {/each}
   {/if}
 </div>
@@ -132,7 +152,7 @@
   .directions {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     margin: 10px 0;
   }
 
@@ -140,36 +160,28 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+  }
+
+  .etiquette {
+    margin: 0;
+    color: var(--texte-2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
   .cartes {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    gap: 12px;
+    align-items: stretch;
   }
 
-  .carte {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px;
-    border: 1px solid var(--ligne);
-  }
-
-  .titre {
-    font-weight: 600;
-  }
-
-  .carte p {
-    margin: 0;
-  }
-
-  .alerte {
-    margin: 0;
-    color: var(--orange);
+  .difference {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
   }
 </style>

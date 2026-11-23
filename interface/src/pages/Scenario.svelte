@@ -740,21 +740,9 @@
         {/each}
       </select>
     </label>
-    <Bouton
-      desactive={ecriture !== null ||
-        directionsEnCours ||
-        llms.length === 0 ||
-        imageManquante ||
-        (idee.trim() === '' && complements === '')}
-      onclick={() => void ecrire()}
-    >
-      {ecriture === 'ecrire' ? 'Le LLM écrit…' : '✨ Écrire le prompt'}
-    </Bouton>
-    {#if ecriture === 'ecrire'}
-      <AnnulerEcriture />
-    {/if}
   </div>
   <ScenarioDirections
+    ecritureEnCours={ecriture === 'ecrire'}
     atelier={atelierDirections}
     envie={idee}
     {complements}
@@ -783,7 +771,21 @@
       amorce = versIdee(d);
       modeIdee = 'preciser';
     }}
-  />
+  >
+    {#snippet avant()}
+      <Bouton
+        petit
+        desactive={ecriture !== null ||
+          directionsEnCours ||
+          llms.length === 0 ||
+          imageManquante ||
+          (idee.trim() === '' && complements === '')}
+        onclick={() => void ecrire()}
+      >
+        {ecriture === 'ecrire' ? 'Le LLM écrit…' : '✨ Écrire le prompt'}
+      </Bouton>
+    {/snippet}
+  </ScenarioDirections>
   {#if llms.length === 0}
     <p class="discret">Aucun LLM dans modeles\llm : compose le prompt avec les compléments, il part tel quel.</p>
   {:else}
