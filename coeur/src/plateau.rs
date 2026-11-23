@@ -182,7 +182,8 @@ pub struct Commande {
     /// Le dossier des Rushes ou des Bobines où ranger les résultats ; absent : non rangés (une retouche reste à côté
     /// de sa source).
     pub dossier: Option<String>,
-    /// Ce qui s'est passé à la réécriture, à montrer dans la file : prompt redemandé au LLM, ou repli sur l'idée.
+    /// Ce qui s'est passé à la réécriture, à montrer dans la file : prompt redemandé au LLM, meilleur essai imparfait, ou
+    /// repli sur l'idée.
     pub note: Option<String>,
     /// Des valeurs imposées au workflow (l'essai de l'assistant : peu de steps, petite image) ; seules celles
     /// qu'il reçoit servent.
@@ -1264,8 +1265,9 @@ fn boucle(
     }
 }
 
-/// Ce qui s'est passé à la réécriture d'une idée : `faite`, `redemandee` (le contrôle qualité a redemandé la réponse)
-/// ou `repli` (l'idée est partie telle quelle), et pourquoi. Noté sur la fiche et montré dans la file.
+/// Ce qui s'est passé à la réécriture d'une idée : `faite`, `redemandee` (le contrôle qualité a redemandé la réponse),
+/// `imparfaite` (redemandée, toujours imparfaite : le meilleur essai est parti) ou `repli` (le LLM a manqué, l'idée est
+/// partie telle quelle), et pourquoi. Noté sur la fiche et montré dans la file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reecriture {
     pub etat: &'static str,
@@ -1277,6 +1279,15 @@ impl Reecriture {
         Self { etat, motif }
     }
 
+    /// D'après le contrôle qualité : faite, redemandée, ou imparfaite (le meilleur des deux essais part).
+    pub fn du_controle(controle: &prompt::Controle) -> Self {
+        match (&controle.redemande, &controle.reste) {
+            (_, Some(reste)) => Self::de("imparfaite", Some(format!("contrôle qualité : {reste}"))),
+            (Some(m), None) => Self::de("redemandee", Some(m.clone())),
+            (None, None) => Self::de("faite", None),
+        }
+    }
+
     /// La ligne de la file.
     pub fn note(&self) -> Option<String> {
         let motif = self.motif.as_deref().unwrap_or("raison inconnue");
@@ -1285,6 +1296,9 @@ impl Reecriture {
                 "Prompt non réécrit ({motif}) : ton idée part telle quelle"
             )),
             "redemandee" => Some(format!("Prompt redemandé au LLM ({motif})")),
+            "imparfaite" => Some(format!(
+                "Prompt redemandé au LLM, toujours imparfait ({motif}) : le meilleur essai part"
+            )),
             _ => None,
         }
     }
@@ -1391,25 +1405,14 @@ fn executer(
             return Err(ANNULEE.to_owned());
         }
         let (texte, llm, faite) = match essai {
-            Ok((controle, modele)) if controle.reste.is_none() => {
-                let etat = if controle.redemande.is_some() {
-                    "redemandee"
-                } else {
-                    "faite"
-                };
-                (
-                    controle.texte,
-                    Some(modele),
-                    Reecriture::de(etat, controle.redemande),
-                )
+            // Le prompt écrit part, même imparfait après deux essais : un prompt dans la langue du modèle vaut mieux
+            // que l'idée telle quelle.
+            Ok((controle, modele)) => {
+                let faite = Reecriture::du_controle(&controle);
+                (controle.texte, Some(modele), faite)
             }
-            // Repli : le LLM a raté deux fois, ou il a planté ; l'idée part telle quelle.
-            Ok((controle, _)) => (
-                c.idee.clone(),
-                None,
-                Reecriture::de("repli", controle.reste.map(|m| format!("contrôle qualité : {m}"))),
-            ),
             Err(e) if e == ANNULEE => return Err(e),
+            // Repli : le LLM ne s'est pas lancé, a planté ou a dépassé son délai ; l'idée part telle quelle.
             Err(e) => (c.idee.clone(), None, Reecriture::de("repli", Some(e))),
         };
         let note = faite.note();
@@ -1616,6 +1619,24 @@ mod tests {
             repli.note().as_deref(),
             Some("Prompt non réécrit (llama-server ne répond pas) : ton idée part telle quelle")
         );
+        // Deux essais ratés au contrôle : le meilleur part quand même, la file le dit.
+        let imparfaite = Reecriture::du_controle(&prompt::Controle {
+            texte: "A long prompt.".to_owned(),
+            redemande: Some("trop long".to_owned()),
+            reste: Some("trop long".to_owned()),
+        });
+        assert_eq!(
+            imparfaite.note().as_deref(),
+            Some(
+                "Prompt redemandé au LLM, toujours imparfait (contrôle qualité : trop long) : le meilleur essai part"
+            )
+        );
+        let bonne = prompt::Controle {
+            texte: "A prompt.".to_owned(),
+            redemande: Some("préambule".to_owned()),
+            reste: None,
+        };
+        assert_eq!(Reecriture::du_controle(&bonne).etat, "redemandee");
         let mut infos = Map::new();
         repli.noter(&mut infos);
         assert_eq!(
