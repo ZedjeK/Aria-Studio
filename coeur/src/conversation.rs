@@ -843,6 +843,22 @@ pub fn tour(
     if en_champs && let Some(p) = &ecrit {
         alertes.extend(prompt::controler_coupes(p, duree));
     }
+    // Le contrôle qualité du prompt écrit (l'histoire d'une séquence, en français, n'en a pas) : en alertes, la
+    // conversation se poursuit pour le corriger.
+    if forme != "sequence"
+        && let Some(p) = &ecrit
+    {
+        let attentes = prompt::Attentes {
+            mots_max: mots,
+            anglais: prompt::lit_l_anglais(wf.as_ref()),
+        };
+        let idee = entrees.join(" ");
+        alertes.extend(
+            prompt::defauts(p, &idee, &attentes)
+                .iter()
+                .map(|d| format!("Contrôle qualité : {}", d.pour_toi())),
+        );
+    }
     let mut controles = entrees.clone();
     controles.extend(fiche.iter().map(|r| r.valeur.as_str()));
     controles.push(ecrit.as_deref().unwrap_or_default());

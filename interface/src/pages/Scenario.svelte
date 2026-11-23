@@ -397,6 +397,15 @@
     }
   }
 
+  /** Ce que le contrôle qualité (et les heures de coupe) disent du dernier prompt écrit par le LLM. */
+  let alertesFinal = $state<string[]>([]);
+
+  // Un autre atelier : les alertes du prompt écrit pour le précédent ne valent plus.
+  $effect(() => {
+    void atelier;
+    alertesFinal = [];
+  });
+
   async function ecrire() {
     if (ecriture) return;
     ecriture = 'ecrire';
@@ -413,6 +422,7 @@
       });
       final = r.prompt;
       finalRetouche = true;
+      alertesFinal = r.alertes;
       const coupes = r.alertes.length > 0 ? ` · ⚠ ${r.alertes.join(' ')}` : '';
       signaler(`Prompt écrit par ${r.llm} en ${r.dureeS} s.${coupes}`, r.alertes.length > 0);
     } catch (e) {
@@ -660,6 +670,7 @@
         utiliser={(p, alertes) => {
           final = p;
           finalRetouche = true;
+          alertesFinal = alertes;
           const coupes = alertes.length > 0 ? ` · ⚠ ${alertes.join(' ')}` : '';
           signaler(
             `${atelier === 'retouche' ? 'Consigne de la conversation posée dans la consigne finale' : 'Prompt de la conversation posé dans le prompt final'}.${coupes}`,
@@ -859,6 +870,9 @@
   {#each assemblage?.alertes ?? [] as a (a)}
     <p class="discret">⚠ {a}</p>
   {/each}
+  {#each alertesFinal as a (a)}
+    <p class="alerte-ecriture">⚠ {a}</p>
+  {/each}
   <textarea rows="6" value={final} oninput={(e) => retoucherFinal(e.currentTarget.value)}></textarea>
   <div class="ligne">
     {#if assemblage}
@@ -953,5 +967,10 @@
 
   .alerte {
     color: var(--orange);
+  }
+  .alerte-ecriture {
+    margin: 4px 0;
+    color: var(--orange);
+    font-size: 13px;
   }
 </style>

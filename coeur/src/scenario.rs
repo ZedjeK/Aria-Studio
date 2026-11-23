@@ -187,16 +187,21 @@ pub fn ecrire_prompt(
             )?
         }
     };
-    let reponse = generateur.ecrire(ecriture.lancement.clone(), &ecriture.demande)?;
-    let mut ecrit = prompt::lire_reecriture(&ecriture, &texte, &reponse.texte, &filtre)?;
-    let mut alertes = Vec::new();
+    // Contrôle qualité : une réponse qui a des défauts est redemandée une fois, en disant au LLM ce qui n'allait pas.
+    let attentes = ecriture.attentes(wf.as_ref());
+    let lancement = ecriture.lancement.clone();
+    let controle = prompt::ecrire_controle(&ecriture, &texte, &attentes, |d| {
+        generateur.ecrire(lancement.clone(), d).map(|r| r.texte)
+    })?;
+    let mut alertes = controle.alertes();
+    let mut ecrit = controle.texte;
     if atelier == "clip" {
         if prompt::dialogue_en_balise(wf.as_ref()) {
             ecrit = decoupage::vers_balises(&ecrit); // une réplique entre guillemets passe dans la balise <d> de H3
         }
         if prompt::champs_video(wf.as_ref()) {
             ecrit = prompt::mettre_en_champs(&ecrit, animer);
-            alertes = prompt::controler_coupes(&ecrit, duree);
+            alertes.extend(prompt::controler_coupes(&ecrit, duree));
         }
     }
     // L'idée, le prompt et les textes d'origine ensemble : le LLM peut avoir ajouté un terme sensible.
@@ -244,6 +249,9 @@ pub fn traduire_precisions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// La suite d'un prompt réaliste : assez long pour passer le contrôle qualité (40 mots au moins).
+    const SUITE: &str = ", her breath visible in the cold air, soft golden hour light across the meadow, pine trees in the background, gentle snowflakes falling around her, shallow depth of field, a calm winter mood, a detailed natural photograph with fine texture on the fur and the snow";
     use crate::Dossier;
     use crate::comfy_serveur::Fichier;
     use crate::llama::{self, Lancement};
@@ -297,7 +305,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let ctx = contexte(&temp);
         let mut faux = Faux {
-            texte: "**A red fox** sitting in fresh snow".to_owned(),
+            texte: format!("**A red fox** sitting in fresh snow{SUITE}"),
             demandes: Vec::new(),
         };
         let d = DemandeEcriture {
@@ -308,8 +316,10 @@ mod tests {
             ..DemandeEcriture::default()
         };
         let e = ecrire_prompt(&ctx, &mut faux, &d).unwrap();
-        assert_eq!(e.prompt, "A red fox sitting in fresh snow");
-        assert_eq!((e.mots, e.llm.as_str()), (7, "mistral.gguf"));
+        assert_eq!(e.prompt, format!("A red fox sitting in fresh snow{SUITE}"));
+        assert!(e.alertes.is_empty(), "{:?}", e.alertes);
+        assert_eq!(faux.demandes.len(), 1);
+        assert_eq!((e.mots, e.llm.as_str()), (52, "mistral.gguf"));
         let demande = serde_json::to_string(&faux.demandes[0].messages).unwrap();
         assert!(demande.contains("Also fixed (keep it): Golden hour light."));
         let vide = DemandeEcriture {
@@ -348,7 +358,10 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let ctx = contexte(&temp);
         let mut faux = Faux {
-            texte: "integrated_multimodal_description: The fox says \"Bonjour\" and runs. overall_soundscape: wind"
+            texte: "integrated_multimodal_description: The fox says \"Bonjour\" and runs through the snowy \
+                    forest while the camera slowly tracks beside it at a steady pace, low angle, golden light between \
+                    the pine trees, snow powder flying behind its paws, its breath visible in the cold air, the forest \
+                    quiet and wide around it. overall_soundscape: wind"
                 .to_owned(),
             demandes: Vec::new(),
         };

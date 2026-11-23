@@ -134,3 +134,13 @@ La v2 expose 138 routes HTTP. En v3, l'interface appelle des commandes Tauri : p
 | Licences tierces | `LICENCES-TIERS.txt`, `tests/test_licences_tiers.py` | [ ] |
 | Logo et icône Windows avec le clap | `web/logo.svg`, `tools/launcher/aria-studio.ico` | [ ] `docs/logo.svg` et le logo du menu en place ; `appli/icons/icon.ico` reste celle de la famille tant que `tools/icone.ps1` n'a pas tourné (il demande Microsoft Edge) |
 | Dependabot sur la v3 | — | [ ] Dependabot ne lit que la branche par défaut : les crates et paquets npm de la v3 ne sont suivis qu'après la fusion dans `main` |
+
+## 7. Nouveautés v3
+
+Ce que la v3 fait en plus de la v2. Ces lignes ne relèvent pas de la parité : elles décrivent des fonctions propres à
+la v3, actives par défaut.
+
+| Fonction | Ce qu'elle fait | Où | État |
+| --- | --- | --- | --- |
+| Contrôle qualité des prompts écrits par le LLM | Chaque prompt écrit par le LLM est contrôlé : en anglais quand le modèle cible lit l'anglais (les répliques en balise `<d>` ou entre guillemets ne comptent pas), de la longueur conseillée au LLM (40 mots au moins, la longueur conseillée plus 20 mots ou un cinquième de marge), sans préambule, le texte cité dans l'idée repris mot pour mot. Une réponse qui a un défaut est redemandée une fois, en disant au LLM ce qui n'allait pas ; des deux essais, celui qui a le moins de défauts est gardé, et ce qui reste est affiché. ✨ Écrire le prompt dans les ateliers Image, Retouche et Clip du Scénario, réécriture du Plateau et traduction de la Retouche : contrôle et relance. « M'aider à préciser » et découpage d'une séquence : contrôle affiché en alertes (la conversation se poursuit pour corriger ; un plan se réécrit seul avec ✨). Un spécialiste suit sa propre consigne : sa longueur n'est pas contrôlée. | `coeur/src/prompt.rs` (`Attentes`, `defauts`, `ecrire_controle`), `scenario.rs`, `plateau.rs`, `retouche.rs`, `conversation.rs`, `decoupage.rs` ; alertes sous le prompt final du Scénario | [ ] porté, pas encore essayé avec un vrai LLM |
+| Repli sur l'idée | Au Plateau et à la Retouche, quand la réécriture échoue (le LLM ne se lance pas, plante, dépasse son délai, ou rate deux fois le contrôle qualité), la génération part avec l'idée telle quelle au lieu de mettre la commande en erreur. La file le dit (« Prompt non réécrit (motif) : ton idée part telle quelle », ou « Prompt redemandé au LLM (motif) »), et la fiche de la création le note (`reecriture` : `faite`, `redemandee` ou `repli`, et `reecriture_motif`). Une annulation (✕) reste une annulation ; le filtre AS-18 lit toujours l'idée et le prompt envoyé. | `coeur/src/plateau.rs` (`Reecriture`, `Commande.note`), `retouche.rs` ; file du Plateau et de la Retouche | [ ] porté, pas encore essayé avec un vrai LLM |

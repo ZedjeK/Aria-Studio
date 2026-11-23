@@ -489,6 +489,9 @@
           <div class="texte">
             <span class="prompt-court">{c.type === 'agrandissement' ? 'Agrandissement' : 'Retouche'} · {texteCommande(c) || 'sans précision'}</span>
             <span class="discret">{texteAvancement(c)}</span>
+            {#if c.note}
+              <span class="note-reecriture">⚠ {c.note}</span>
+            {/if}
             {#if c.etat === 'en_cours'}
               <progress max="1" value={c.progression}></progress>
             {/if}
@@ -737,5 +740,9 @@
     width: 100%;
     height: auto;
     border: 1px solid var(--ligne);
+  }
+  .note-reecriture {
+    color: var(--orange);
+    font-size: 12px;
   }
 </style>
