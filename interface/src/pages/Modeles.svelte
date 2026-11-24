@@ -25,11 +25,14 @@
   import { octetsLisibles } from '../lib/jauge';
   import { ceQueRemplace, rangerLlm } from '../lib/llmFacultatifs';
   import {
+    actionLlm,
+    actionWorkflow,
     etatFichier,
     fichiersAManquer,
     fractionTelechargement,
     libelleEtatFichier,
     libelleTache,
+    messageMiseEnFile,
     ordreTache,
     roleFichier,
     telechargementActif,
@@ -78,6 +81,8 @@
   let onglet = $state('telecharger');
   let etat = $state<EtatModeles | null>(null);
   let usages = $state<Usages | null>(null);
+  /** La dernière lecture a échoué : sans elle il n'y aurait ni workflow ni bouton, alors on propose de relire. */
+  let lectureEchouee = $state(false);
   let lieux = $state<EtatLieux | null>(null);
   /** La file des téléchargements est ouverte. */
   let fileOuverte = $state(false);
@@ -109,7 +114,9 @@
   async function relire() {
     try {
       [etat, usages, lieux] = await Promise.all([etatModeles(), usagesModeles(), etatEmplacements()]);
+      lectureEchouee = false;
     } catch (e) {
+      lectureEchouee = true;
       signaler(messageErreur(e), true);
     }
   }
@@ -143,11 +150,7 @@
     demande = null;
     try {
       const n = d.genre === 'workflow' ? await telechargerWorkflow(d.id) : await installerLlm(d.id);
-      signaler(
-        n > 0
-          ? `${n} fichier${n > 1 ? 's' : ''} en file pour ${d.nom} : suis-les dans « Téléchargements ».`
-          : `Rien de plus à télécharger pour ${d.nom}.`,
-      );
+      signaler(messageMiseEnFile(d.nom, n));
       await relire();
     } catch (e) {
       signaler(messageErreur(e), true);
@@ -171,6 +174,17 @@
     return () => clearInterval(minuterie);
   });
 </script>
+
+{#snippet lecture()}
+  {#if lectureEchouee}
+    <p class="ko">Les modèles n'ont pas pu être lus : sans cette lecture, aucun bouton de téléchargement ne peut s'afficher.</p>
+    <div class="actions">
+      <Bouton genre="principal" onclick={() => void relire()}>Relire</Bouton>
+    </div>
+  {:else}
+    <p class="discret">Lecture…</p>
+  {/if}
+{/snippet}
 
 <h1>Modèles</h1>
 <p class="sous-titre">Ce qu'Aria utilise pour écrire et pour dessiner, et d'où ça vient.</p>
@@ -199,15 +213,16 @@
       versCollection={() => (onglet = 'collection')}
     />
   {:else}
-    <p class="discret">Lecture…</p>
+    {@render lecture()}
   {/if}
 {:else if etat}
   {#each parTache as w (w.id)}
     {@const premier = w.id === premierManquant}
+    {@const action = actionWorkflow(w, etat.taches)}
     <Panneau titre={`${w.nom} · ${libelleTache(w.tache)}`} accentue={premier}>
       <ul class="fichiers">
         {#each w.fichiers as f (f.dossier + f.nom)}
-          {@const etatF = etatFichier(w.pret, f.present)}
+          {@const etatF = etatFichier(f)}
           <li>
             <span class="verdict" class:ok={f.present} role="img" aria-label={libelleEtatFichier(etatF)}>
               {etatF === 'present' ? '✓' : etatF === 'manque' ? '○' : '–'}
@@ -226,8 +241,12 @@
       </p>
       <p class="discret code">{w.licence.url}</p>
       <div class="actions">
-        {#if w.pret}
+        {#if action.genre === 'pret'}
           <span class="bon">Prêt</span>
+        {:else if action.genre === 'en_file'}
+          <Bouton genre="secondaire" onclick={() => (fileOuverte = true)}>
+            ⏳ {action.fichiers} fichier{action.fichiers > 1 ? 's' : ''} en cours de téléchargement
+          </Bouton>
         {:else}
           <Bouton
             genre={premier ? 'principal' : 'secondaire'}
@@ -245,6 +264,7 @@
   <Panneau titre="LLM du catalogue">
     <ul class="fichiers">
       {#each llmRanges.generalistes as l (l.fichier)}
+        {@const action = actionLlm(l, etat.taches)}
         <li>
           <span class="verdict" class:ok={l.installe} role="img" aria-label={l.installe ? 'installé' : 'à installer'}>
             {l.installe ? '✓' : '○'}
@@ -257,8 +277,10 @@
           </span>
           {#if l.installe && usages?.llmDefaut === l.fichier}
             <span class="puce">En service</span>
-          {:else if l.installe}
+          {:else if action === 'installe'}
             <span class="bon">Installé</span>
+          {:else if action === 'en_file'}
+            <Bouton genre="discret" petit onclick={() => (fileOuverte = true)}>⏳ En cours de téléchargement</Bouton>
           {:else}
             <Bouton genre="secondaire" petit onclick={() => demander('llm', l.fichier, l.nom, l.licence, l.aTelecharger)}>
               ⬇ Installer ({octetsLisibles(l.aTelecharger)})
@@ -280,6 +302,7 @@
       </p>
       <ul class="fichiers">
         {#each llmRanges.specialistes as l (l.fichier)}
+          {@const action = actionLlm(l, etat.taches)}
           <li>
             <span class="verdict" class:ok={l.installe} role="img" aria-label={l.installe ? 'installé' : 'non installé'}>
               {l.installe ? '✓' : '○'}
@@ -293,8 +316,10 @@
             </span>
             {#if l.installe && usages?.llmDefaut === l.fichier}
               <span class="puce">En service</span>
-            {:else if l.installe}
+            {:else if action === 'installe'}
               <span class="bon">Installé</span>
+            {:else if action === 'en_file'}
+              <Bouton genre="discret" petit onclick={() => (fileOuverte = true)}>⏳ En cours de téléchargement</Bouton>
             {:else}
               <Bouton genre="discret" petit onclick={() => demander('llm', l.fichier, l.nom, l.licence, l.aTelecharger)}>
                 ⬇ Installer ({octetsLisibles(l.aTelecharger)})
@@ -306,7 +331,7 @@
     </Panneau>
   {/if}
 {:else}
-  <p class="discret">Lecture…</p>
+  {@render lecture()}
 {/if}
 
 {#if fileOuverte}

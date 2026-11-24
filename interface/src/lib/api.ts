@@ -427,6 +427,8 @@ export interface FichierModele {
   dossier: string;
   taille: number;
   present: boolean;
+  /** Absent et exigé : il reste à télécharger (le checkpoint d'origine n'est pas exigé si la famille en a un autre). */
+  manque: boolean;
 }
 
 /** Un workflow livré et ce qui lui manque (aria_coeur::installations::EtatWorkflow). */

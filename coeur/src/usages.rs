@@ -533,6 +533,45 @@ mod tests {
     }
 
     #[test]
+    fn ce_qui_manque_se_dit_pareil_dans_les_onglets_et_dans_les_installations() {
+        let temp = tempfile::tempdir().unwrap();
+        let dossier = Dossier::a(temp.path());
+        let data = temp.path().join("data");
+        let modeles = temp.path().join("modeles");
+        for etape in 0..2 {
+            if etape == 1 {
+                // Le premier workflow est complet, les autres restent à vide.
+                let tous = installations::workflows(&modeles);
+                for f in &tous[0].fichiers {
+                    let chemin = crate::modeles::destination(&modeles, &f.dossier, &f.nom).unwrap();
+                    fs::create_dir_all(chemin.parent().unwrap()).unwrap();
+                    fs::write(chemin, b"x").unwrap();
+                }
+            }
+            let etats = installations::workflows(&modeles);
+            let llms = installations::llm(&modeles);
+            let u = usages(&dossier, &data, &modeles);
+            let mut vus = 0;
+            for usage in &u.usages {
+                for w in &usage.workflows {
+                    vus += 1;
+                    let e = etats.iter().find(|e| e.id == w.id).unwrap();
+                    let a_faire = installations::manquants(&modeles, &w.id).unwrap();
+                    assert_eq!(w.pret, e.pret, "{}", w.id);
+                    assert_eq!(w.a_telecharger, e.a_telecharger, "{}", w.id);
+                    assert_eq!(w.pret, w.manquants.is_empty(), "{}", w.id);
+                    assert_eq!(w.manquants.len(), a_faire.len(), "{}", w.id);
+                    for s in &w.reecriture.specialistes {
+                        let l = llms.iter().find(|l| l.fichier == s.fichier).unwrap();
+                        assert_eq!((s.installe, s.a_telecharger), (l.installe, l.a_telecharger));
+                    }
+                }
+            }
+            assert!(vus > 0, "aucun workflow dans les onglets d'usage");
+        }
+    }
+
+    #[test]
     fn llm_d_un_workflow() {
         let temp = tempfile::tempdir().unwrap();
         let dossier = Dossier::a(temp.path());

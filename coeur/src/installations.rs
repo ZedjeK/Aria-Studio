@@ -28,6 +28,9 @@ pub struct Fichier {
     pub dossier: String,
     pub taille: u64,
     pub present: bool,
+    /// Absent et exigé : il reste à télécharger. Un fichier absent mais non exigé (le checkpoint d'origine, quand la
+    /// famille en a déjà un autre) ne manque pas.
+    pub manque: bool,
 }
 
 /// Un workflow livré et ce qui lui manque.
@@ -89,6 +92,13 @@ fn present(modeles: &Path, dossier: &str, nom: &str) -> bool {
     modeles::destination(modeles, dossier, nom).is_ok_and(|p| p.is_file())
 }
 
+/// Le fichier `dossier/nom` est-il dans la liste des fichiers qui manquent à un workflow ?
+fn dans_les_manquants(manquants: &[Value], dossier: &str, nom: &str) -> bool {
+    manquants
+        .iter()
+        .any(|m| texte(m.get("dossier")) == dossier && texte(m.get("nom")) == nom)
+}
+
 /// Les workflows livrés, leurs fichiers et ce qui leur manque (le checkpoint d'origine n'est pas exigé si la famille
 /// en a déjà un, comme en v2).
 pub fn workflows(modeles: &Path) -> Vec<EtatWorkflow> {
@@ -108,6 +118,7 @@ pub fn workflows(modeles: &Path) -> Vec<EtatWorkflow> {
                     let dossier = texte(f.get("dossier"));
                     Fichier {
                         present: present(modeles, &dossier, &nom),
+                        manque: dans_les_manquants(&manquants, &dossier, &nom),
                         taille: f.get("taille").and_then(Value::as_u64).unwrap_or(0),
                         nom,
                         dossier,
@@ -292,6 +303,239 @@ mod tests {
         assert_eq!(a_faire.len(), 2, "le GGUF et sa consigne");
         assert!(a_faire.iter().all(|(_, d)| d == "llm"));
         assert!(llm_manquant(temp.path(), "inconnu.gguf").is_err());
+    }
+
+    /// Pose un fichier (un octet) comme s'il était installé.
+    fn poser(modeles: &Path, dossier: &str, nom: &str) {
+        let chemin = modeles::destination(modeles, dossier, nom).unwrap();
+        fs::create_dir_all(chemin.parent().unwrap()).unwrap();
+        fs::write(chemin, b"x").unwrap();
+    }
+
+    fn est_sha256(empreinte: Option<&str>) -> bool {
+        empreinte.is_some_and(|s| s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit()))
+    }
+
+    fn ids_des_workflows() -> Vec<String> {
+        let temp = tempfile::tempdir().unwrap();
+        let tous = workflows(temp.path());
+        tous.into_iter().map(|w| w.id).collect()
+    }
+
+    fn etat(modeles: &Path, id: &str) -> EtatWorkflow {
+        let tous = workflows(modeles);
+        tous.into_iter().find(|w| w.id == id).unwrap()
+    }
+
+    /// Les fichiers d'un workflow qui sont un checkpoint de famille.
+    fn checkpoints(wf: &EtatWorkflow) -> Vec<Fichier> {
+        let mut liste = Vec::new();
+        for f in &wf.fichiers {
+            if modeles::est_checkpoint(&f.dossier) {
+                liste.push(f.clone());
+            }
+        }
+        liste
+    }
+
+    /// Les fichiers d'un workflow qui ne sont pas un checkpoint de famille.
+    fn hors_famille(wf: &EtatWorkflow) -> Vec<Fichier> {
+        let mut liste = Vec::new();
+        for f in &wf.fichiers {
+            if !modeles::est_checkpoint(&f.dossier) {
+                liste.push(f.clone());
+            }
+        }
+        liste
+    }
+
+    #[test]
+    fn chaque_fichier_d_un_workflow_se_telecharge() {
+        let temp = tempfile::tempdir().unwrap();
+        let dossiers = modeles::dossiers();
+        for wf in workflows(temp.path()) {
+            assert!(!wf.fichiers.is_empty(), "{} sans fichier", wf.id);
+            assert!(!checkpoints(&wf).is_empty(), "{} sans checkpoint", wf.id);
+            let a_faire = manquants(temp.path(), &wf.id).unwrap();
+            assert_eq!(a_faire.len(), wf.fichiers.len(), "{}", wf.id);
+            for (fiche, dossier) in &a_faire {
+                assert!(dossiers.contains(dossier), "{} : dossier {dossier}", wf.id);
+                assert!(fiche.url.starts_with("https://"), "{} : adresse", fiche.nom);
+                assert!(fiche.taille > 0, "{} : taille", fiche.nom);
+                assert!(est_sha256(fiche.sha256.as_deref()), "{} : sha256", fiche.nom);
+            }
+        }
+    }
+
+    #[test]
+    fn un_workflow_vide_est_incomplet_et_tout_manque() {
+        let temp = tempfile::tempdir().unwrap();
+        for wf in workflows(temp.path()) {
+            let total: u64 = wf.fichiers.iter().map(|f| f.taille).sum();
+            assert!(!wf.pret, "{} prêt sans rien", wf.id);
+            assert_eq!(wf.a_telecharger, total, "{}", wf.id);
+            assert!(wf.fichiers.iter().all(|f| !f.present && f.manque), "{}", wf.id);
+        }
+    }
+
+    #[test]
+    fn un_workflow_complet_est_pret_et_ne_demande_rien() {
+        for id in ids_des_workflows() {
+            let temp = tempfile::tempdir().unwrap();
+            let vide = etat(temp.path(), &id);
+            for f in &vide.fichiers {
+                poser(temp.path(), &f.dossier, &f.nom);
+            }
+            let complet = etat(temp.path(), &id);
+            assert!(complet.pret, "{id}");
+            assert_eq!(complet.a_telecharger, 0, "{id}");
+            assert!(complet.fichiers.iter().all(|f| f.present && !f.manque), "{id}");
+            assert!(manquants(temp.path(), &id).unwrap().is_empty(), "{id}");
+        }
+    }
+
+    #[test]
+    fn un_fichier_qui_manque_rend_le_workflow_incomplet() {
+        for id in ids_des_workflows() {
+            let vide = etat(tempfile::tempdir().unwrap().path(), &id);
+            let a_tour_de_role = hors_famille(&vide);
+            assert!(!a_tour_de_role.is_empty(), "{id}");
+            for absent in a_tour_de_role {
+                let temp = tempfile::tempdir().unwrap();
+                for f in &vide.fichiers {
+                    if f.nom != absent.nom || f.dossier != absent.dossier {
+                        poser(temp.path(), &f.dossier, &f.nom);
+                    }
+                }
+                let wf = etat(temp.path(), &id);
+                assert!(!wf.pret, "{id} sans {}", absent.nom);
+                assert_eq!(wf.a_telecharger, absent.taille, "{id} sans {}", absent.nom);
+                assert_eq!(wf.fichiers.iter().filter(|f| f.manque).count(), 1, "{id}");
+                let a_faire = manquants(temp.path(), &id).unwrap();
+                assert_eq!(a_faire.len(), 1, "{id} sans {}", absent.nom);
+                assert_eq!(a_faire[0].0.nom, absent.nom, "{id}");
+            }
+        }
+    }
+
+    #[test]
+    fn le_checkpoint_d_origine_n_est_pas_exige_si_la_famille_en_a_un_autre() {
+        for id in ids_des_workflows() {
+            let temp = tempfile::tempdir().unwrap();
+            let modeles = temp.path();
+            let vide = etat(modeles, &id);
+            let famille = checkpoints(&vide);
+            for f in hors_famille(&vide) {
+                poser(modeles, &f.dossier, &f.nom);
+            }
+            // Seul le checkpoint manque : il se télécharge.
+            let sans = etat(modeles, &id);
+            let attendu: u64 = famille.iter().map(|f| f.taille).sum();
+            assert!(!sans.pret, "{id}");
+            assert_eq!(sans.a_telecharger, attendu, "{id}");
+            for c in &famille {
+                let manque = sans.fichiers.iter().any(|f| f.nom == c.nom && f.manque);
+                assert!(manque, "{id} : {} devrait manquer", c.nom);
+            }
+            // Un autre checkpoint de la famille, déposé à la main : l'origine ne manque plus.
+            poser(modeles, &famille[0].dossier, "autre.safetensors");
+            let pret = etat(modeles, &id);
+            assert!(pret.pret, "{id}");
+            assert_eq!(pret.a_telecharger, 0, "{id}");
+            assert!(manquants(modeles, &id).unwrap().is_empty(), "{id}");
+            // Le fichier d'origine reste absent du disque, mais il ne manque pas.
+            assert!(pret.fichiers.iter().any(|f| !f.present), "{id}");
+            assert!(pret.fichiers.iter().all(|f| !f.manque), "{id}");
+        }
+    }
+
+    #[test]
+    fn un_autre_checkpoint_ne_cache_pas_un_fichier_qui_manque() {
+        for id in ids_des_workflows() {
+            let temp = tempfile::tempdir().unwrap();
+            let modeles = temp.path();
+            let vide = etat(modeles, &id);
+            let autres = hors_famille(&vide);
+            let absent = &autres[0];
+            for f in &autres[1..] {
+                poser(modeles, &f.dossier, &f.nom);
+            }
+            poser(modeles, &checkpoints(&vide)[0].dossier, "autre.safetensors");
+            let wf = etat(modeles, &id);
+            assert!(!wf.pret, "{id}");
+            assert_eq!(wf.a_telecharger, absent.taille, "{id}");
+            let a_faire = manquants(modeles, &id).unwrap();
+            assert_eq!(a_faire.len(), 1, "{id}");
+            assert_eq!(a_faire[0].0.nom, absent.nom, "{id}");
+            assert_eq!(wf.fichiers.iter().filter(|f| f.manque).count(), 1, "{id}");
+        }
+    }
+
+    #[test]
+    fn un_telechargement_en_cours_ne_compte_pas_comme_present() {
+        for id in ids_des_workflows() {
+            let temp = tempfile::tempdir().unwrap();
+            let vide = etat(temp.path(), &id);
+            for f in &vide.fichiers {
+                poser(temp.path(), &f.dossier, &format!("{}.part", f.nom));
+            }
+            let wf = etat(temp.path(), &id);
+            assert!(!wf.pret, "{id}");
+            assert_eq!(wf.a_telecharger, vide.a_telecharger, "{id}");
+            assert!(wf.fichiers.iter().all(|f| !f.present && f.manque), "{id}");
+        }
+    }
+
+    #[test]
+    fn chaque_llm_du_catalogue_se_telecharge() {
+        let temp = tempfile::tempdir().unwrap();
+        let catalogue = llm(temp.path());
+        assert!(catalogue.iter().any(|l| l.specialiste.is_none()));
+        assert!(catalogue.iter().any(|l| l.specialiste.is_some()));
+        for l in &catalogue {
+            assert!(!l.installe, "{} installé sans rien", l.fichier);
+            assert_eq!(l.a_telecharger, l.taille, "{}", l.fichier);
+            let a_faire = llm_manquant(temp.path(), &l.fichier).unwrap();
+            let total: u64 = a_faire.iter().map(|(f, _)| f.taille).sum();
+            assert_eq!(total, l.taille, "{}", l.fichier);
+            for (fiche, dossier) in &a_faire {
+                assert_eq!(dossier, DOSSIER_LLM);
+                assert!(fiche.url.starts_with("https://"), "{} : adresse", fiche.nom);
+                assert!(fiche.taille > 0, "{} : taille", fiche.nom);
+                assert!(est_sha256(fiche.sha256.as_deref()), "{} : sha256", fiche.nom);
+            }
+        }
+    }
+
+    #[test]
+    fn un_llm_n_est_installe_qu_avec_tout_ce_qui_l_accompagne() {
+        let vide = tempfile::tempdir().unwrap();
+        for l in &llm(vide.path()) {
+            let temp = tempfile::tempdir().unwrap();
+            let modeles = temp.path();
+            let a_faire = llm_manquant(modeles, &l.fichier).unwrap();
+            if a_faire.len() > 1 {
+                // Le GGUF seul, sans son projecteur d'images ni sa consigne : il reste à installer.
+                poser(modeles, DOSSIER_LLM, &l.fichier);
+                let tous = llm(modeles);
+                let courant = tous.iter().find(|e| e.fichier == l.fichier).unwrap();
+                let reste = llm_manquant(modeles, &l.fichier).unwrap();
+                let total: u64 = reste.iter().map(|(f, _)| f.taille).sum();
+                assert!(!courant.installe, "{}", l.fichier);
+                assert_eq!(reste.len(), a_faire.len() - 1, "{}", l.fichier);
+                assert_eq!(courant.a_telecharger, total, "{}", l.fichier);
+                assert!(courant.a_telecharger > 0, "{}", l.fichier);
+            }
+            for (fiche, _) in &llm_manquant(modeles, &l.fichier).unwrap() {
+                poser(modeles, DOSSIER_LLM, &fiche.nom);
+            }
+            let tous = llm(modeles);
+            let complet = tous.iter().find(|e| e.fichier == l.fichier).unwrap();
+            assert!(complet.installe, "{}", l.fichier);
+            assert_eq!(complet.a_telecharger, 0, "{}", l.fichier);
+            let plus_rien = llm_manquant(modeles, &l.fichier).unwrap();
+            assert!(plus_rien.is_empty(), "{}", l.fichier);
+        }
     }
 
     #[test]
