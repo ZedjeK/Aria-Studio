@@ -416,12 +416,12 @@ mod tests {
             atelier: "image".to_owned(),
             idee: "un renard dans la neige".to_owned(),
             workflow: Some("krea2_turbo".to_owned()),
-            format: Some("9:16 (Portrait)".to_owned()),
+            format: Some("9:16 (Portrait Widescreen)".to_owned()),
             ..DemandeEcriture::default()
         };
         ecrire_prompt(&ctx, &mut faux, &d).unwrap();
         let demande = serde_json::to_string(&faux.demandes[0].messages).unwrap();
-        assert!(demande.contains("9:16 (Portrait), portrait"));
+        assert!(demande.contains("9:16 (Portrait Widescreen), portrait"));
         // Sans format, la consigne ne parle pas de cadre.
         let libre = DemandeEcriture {
             format: None,
