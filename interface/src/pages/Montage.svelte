@@ -39,14 +39,13 @@
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import CarteChoix from '../lib/composants/CarteChoix.svelte';
-  import Dialogue from '../lib/composants/Dialogue.svelte';
   import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import VignetteCreation from '../lib/composants/VignetteCreation.svelte';
-  import ChoixRushes from './ChoixRushes.svelte';
+  import DialogueRush from './DialogueRush.svelte';
   import MontageSequences from './MontageSequences.svelte';
   import MontageVoix from './MontageVoix.svelte';
   import PanneauRushes from './PanneauRushes.svelte';
@@ -563,12 +562,14 @@
 {/if}
 
 {#if choixRush}
-  <Dialogue titre="Quel rush choisir ?" fermer={() => (choixRush = false)}>
-    <ChoixRushes max={1} bind:selection={source} {signaler} apresChoix={() => (choixRush = false)} />
-    {#snippet pied()}
-      <Bouton genre="discret" onclick={() => (choixRush = false)}>✕ Fermer</Bouton>
-    {/snippet}
-  </Dialogue>
+  <DialogueRush
+    max={1}
+    bind:selection={source}
+    {signaler}
+    fermer={() => (choixRush = false)}
+    apresChoix={() => (choixRush = false)}
+    apresImport={() => (rafraichir += 1)}
+  />
 {/if}
 
 <style>

@@ -58,7 +58,7 @@
   import CarteChoix from '../lib/composants/CarteChoix.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
-  import ChoixRushes from './ChoixRushes.svelte';
+  import CasesRushes from './CasesRushes.svelte';
   import ScenarioAlerte from './ScenarioAlerte.svelte';
   import ScenarioEtape from './ScenarioEtape.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
@@ -665,13 +665,13 @@
           ? `Les images de référence, dans l'ordre (${maxReferences} au plus pour ce modèle)`
           : "L'image à redessiner"}
       </p>
-      <ChoixRushes max={Math.max(1, maxReferences)} bind:selection={referencesImage} {signaler} />
+      <CasesRushes max={Math.max(1, maxReferences)} bind:selection={referencesImage} {signaler} />
     {/if}
     <p class="discret">{aideReference('image', departImage, maxReferences)}</p>
   {:else if atelier === 'retouche'}
     <ScenarioEtape numero={1} titre="L'image à retoucher" />
     <p class="discret">{aideReference(atelier, null, 1)}</p>
-    <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
+    <CasesRushes max={1} bind:selection={imageAtelier} {signaler} />
   {:else}
     <ScenarioEtape numero={1} titre="Départ" />
     <div class="cartes c2" role="radiogroup" aria-label="Départ du clip">
@@ -695,7 +695,7 @@
     {#if imageRequise}
       <p class="etiquette">Le rush à animer</p>
       <p class="discret">{aideReference(atelier, null, 1)}</p>
-      <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
+      <CasesRushes max={1} bind:selection={imageAtelier} {signaler} />
     {/if}
   {/if}
 
