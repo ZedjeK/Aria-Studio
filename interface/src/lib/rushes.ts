@@ -3,6 +3,17 @@
 
 import type { ActionRushes, EtatRushes, GenreRushes, VueRushes } from './api';
 
+/** Ce qu'une fiche de rush envoie à une autre page : réutiliser son prompt au Plateau, le prendre comme référence, l'animer
+ * au Montage, le retoucher. */
+export type VersPage = 'reutiliser' | 'reference' | 'animer' | 'retoucher';
+
+export const LIBELLES_VERS: [VersPage, string][] = [
+  ['reutiliser', 'Réutiliser le prompt'],
+  ['reference', 'Comme référence'],
+  ['animer', '🎞️ Animer'],
+  ['retoucher', 'Retoucher'],
+];
+
 /** Un onglet : une vue, ou un dossier (vue « tous » restreinte à ce dossier). */
 export interface Onglet {
   cle: string;

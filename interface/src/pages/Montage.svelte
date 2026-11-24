@@ -61,9 +61,11 @@
     /** Le prompt d'un clip écrit au Scénario, à tourner ici. */
     recuClip?: EnvoiClip | null;
     recuClipLu?: () => void;
+    /** Ouvre le Scénario (le bouton n'apparaît que si la page peut y aller). */
+    ouvrirScenario?: () => void;
   }
 
-  let { signaler, recu, recuLu, retravailler, recuClip = null, recuClipLu = () => {} }: Props = $props();
+  let { signaler, recu, recuLu, retravailler, recuClip = null, recuClipLu = () => {}, ouvrirScenario }: Props = $props();
 
   const ONGLETS = [
     { id: 'tourner', titre: '🎬 Tourner' },
@@ -323,7 +325,7 @@
         prompt = envoi.prompt;
         source = envoi.source ? [envoi.source] : [];
         if (options?.durees.includes(envoi.duree)) duree = envoi.duree;
-        signaler('Prompt du Scénario posé : vérifie les réglages et tourne.');
+        signaler('Prompt posé : vérifie les réglages et tourne.');
       }
     })();
     void relireCommandes();
@@ -427,6 +429,9 @@
               ✨ Écrire avec le LLM
             </Bouton>
             <Bouton genre="discret" petit desactive={texteOrigine === null} onclick={retrouver}>↩ Retrouver mon texte</Bouton>
+            {#if ouvrirScenario}
+              <Bouton genre="discret" petit onclick={ouvrirScenario}>↗ Ouvrir le Scénario</Bouton>
+            {/if}
           {/if}
         </div>
 
