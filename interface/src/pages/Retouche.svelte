@@ -20,6 +20,7 @@
     type EnvoiRetouche,
     type OptionsPlateau,
   } from '../lib/api';
+  import { textesDuLlm } from '../lib/reecriture';
   import { estActive, lireSeed, llmInitial, modeleInitial, nomCheckpoint, texteAvancement, texteCommande } from '../lib/plateau';
   import {
     ANCRAGES,
@@ -41,6 +42,7 @@
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import Panneau from '../lib/composants/Panneau.svelte';
   import VignetteCreation from '../lib/composants/VignetteCreation.svelte';
+  import CeQueLeLlmAEcrit from './CeQueLeLlmAEcrit.svelte';
   import DialogueRush from './DialogueRush.svelte';
   import PanneauRushes from './PanneauRushes.svelte';
 
@@ -110,6 +112,7 @@
       : (dernierResultat?.images[0] ?? null),
   );
   const resultatFiche = $derived(resultatId ? rushes.find((r) => r.id === resultatId) : undefined);
+  const textesLlm = $derived(dernierResultat ? textesDuLlm(dernierResultat, resultatFiche) : null);
   const peutLancer = $derived(
     !envoi &&
       source !== null &&
@@ -591,6 +594,9 @@
           </button>
         {/each}
       </div>
+    {/if}
+    {#if textesLlm}
+      <CeQueLeLlmAEcrit textes={textesLlm} />
     {/if}
   {/if}
 </Panneau>
