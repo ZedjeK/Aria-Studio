@@ -501,8 +501,12 @@
     }
   }
 
-  /** Le prompt final part tel quel : au Plateau, à la Retouche (avec son image) ou au Montage. */
-  function envoyerFinal() {
+  /** Le prompt final est prêt à partir : écrit, sans erreur d'assemblage, et son image choisie s'il en faut une. */
+  const peutEnvoyer = $derived(final.trim() !== '' && erreurAssemblage === null && !imageManquante);
+
+  /** Le prompt final part tel quel : au Plateau (`lancer` : qui crée aussitôt), à la Retouche (avec son image) ou au
+   * Montage. */
+  function envoyerFinal(lancer = false) {
     const texteFinal = final.trim();
     if (texteFinal === '') return;
     if (atelier === 'retouche') {
@@ -522,6 +526,7 @@
         references: departImage ? referencesImage : [],
         modeReference: departImage,
         format: formatEnvoye,
+        lancer,
       });
     }
   }
@@ -1093,13 +1098,14 @@
     {#if imageManquante}
       <span class="discret">{atelier === 'retouche' ? "Choisis l'image à retoucher." : 'Choisis le rush à animer.'}</span>
     {/if}
-    <Bouton
-      genre="principal"
-      desactive={final.trim() === '' || erreurAssemblage !== null || imageManquante}
-      onclick={envoyerFinal}
-    >
-      {atelier === 'retouche' ? '→ Envoyer à la Retouche' : atelier === 'clip' ? '→ Envoyer au Montage' : '→ Envoyer au Plateau'}
-    </Bouton>
+    {#if atelier === 'image'}
+      <Bouton desactive={!peutEnvoyer} onclick={() => envoyerFinal()}>→ Envoyer au Plateau</Bouton>
+      <Bouton genre="principal" desactive={!peutEnvoyer} onclick={() => envoyerFinal(true)}>Créer</Bouton>
+    {:else}
+      <Bouton genre="principal" desactive={!peutEnvoyer} onclick={() => envoyerFinal()}>
+        {atelier === 'retouche' ? '→ Envoyer à la Retouche' : '→ Envoyer au Montage'}
+      </Bouton>
+    {/if}
   </div>
 </Panneau>
 {/if}
