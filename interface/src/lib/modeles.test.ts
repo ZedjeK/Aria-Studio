@@ -8,6 +8,9 @@ import {
   libelleOrigine,
   libelleTache,
   ordreTache,
+  roleFichier,
+  texteBoutonTelechargements,
+  fichiersAManquer,
   stepsProposes,
   telechargementActif,
   texteIdentification,
@@ -84,5 +87,18 @@ describe('Modèles', () => {
         erreurs: [],
       }),
     ).toBe('1 retrouvé, 2 introuvables');
+  });
+
+  it('dit ce que fait un fichier et compte ce qui manque', () => {
+    expect(roleFichier('image/_base/vae')).toBe('VAE');
+    expect(roleFichier('image/_base/text_encoders')).toBe('encodeur de texte');
+    expect(roleFichier('image/_base/checkpoints')).toBe('checkpoint');
+    expect(roleFichier('image/qwen/inconnu')).toBe('inconnu');
+    expect(fichiersAManquer([{ present: true }, { present: false }, { present: false }])).toBe(2);
+  });
+
+  it('écrit le bouton des téléchargements', () => {
+    expect(texteBoutonTelechargements(0)).toBe('⬇ Téléchargements');
+    expect(texteBoutonTelechargements(2)).toBe('⬇ Téléchargements · 2');
   });
 });

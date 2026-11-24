@@ -1,7 +1,9 @@
 <!--
-  Modèles → un onglet d'usage (Texte → image, Image → image, Vidéo), comme en v2 : les favoris de l'usage, puis une
-  carte par workflow (ce qui manque, checkpoints et checkpoint par défaut, LoRA de la famille, LLM qui réécrit pour lui
-  et LLM entraînés pour ce modèle, licence). Les téléchargements passent par la confirmation de la page Modèles.
+  Modèles → un onglet d'usage (Texte → image, Image → image, Vidéo), comme la maquette : le workflow par défaut en
+  premier, seul panneau accentué de l'onglet, avec ses checkpoints (★ sur le défaut), les LoRA de sa famille, le LLM qui
+  réécrit pour lui et sa licence ; les autres workflows en cartes plus courtes, le détail repliable. Aucun bouton
+  orange : « Télécharger ce qui manque » est une action secondaire. Les téléchargements passent par la confirmation de
+  la page Modèles.
 -->
 <script lang="ts">
   import {
@@ -32,14 +34,21 @@
     demander: (genre: 'workflow' | 'llm', id: string, nom: string, licence: LicenceModele, taille: number) => void;
     /** Ouvre Rechercher sur ce type et cette famille. */
     chercher: (type: 'image' | 'video' | 'lora', famille: string) => void;
+    /** Ouvre Ma collection (steps à valider d'un checkpoint déposé à la main). */
+    versCollection: () => void;
   }
 
-  let { usage, llmDefaut, llmChoix, signaler, relire, demander, chercher }: Props = $props();
+  let { usage, llmDefaut, llmChoix, signaler, relire, demander, chercher, versCollection }: Props = $props();
 
   let occupe = $state(false);
 
-  const nomDe = (id: string | null) => usage.workflows.find((w) => w.id === id)?.nom ?? id ?? '—';
   const libelle = (cle: string) => usage.favoris.find((f) => f.cle === cle)?.libelle ?? cle;
+  /** Les workflows par défaut d'abord, le reste dans l'ordre reçu. */
+  const classes = $derived(
+    [...usage.workflows].sort((a, b) => Number(b.favoriPour.length > 0) - Number(a.favoriPour.length > 0)),
+  );
+  /** Le seul panneau accentué de l'onglet : le premier workflow par défaut. */
+  const premierDefaut = $derived(classes.find((w) => w.favoriPour.length > 0)?.id ?? null);
 
   async function agir(action: () => Promise<void>, message: string) {
     if (occupe) return;
@@ -72,47 +81,157 @@
   }
 </script>
 
-<Panneau titre="Par défaut">
-  <div class="favoris">
-    {#each usage.favoris as f (f.cle)}
-      <div class="favori">
-        <span class="discret">{f.libelle}</span>
-        <strong>{f.valeur ? `★ ${nomDe(f.valeur)}` : '—'}</strong>
-      </div>
+{#snippet detail(wf: WorkflowUsage)}
+  <p class="etiquette">Checkpoints</p>
+  <ul>
+    {#each wf.modeles as m (m)}
+      <li>
+        <span class="etoile">{m === wf.modeleDefaut ? '★' : ''}</span>
+        <span class="nom code">{m}</span>
+        {#if m === wf.origine}<span class="discret">d'origine</span>{/if}
+        {#if wf.modeleDefaut !== null && m !== wf.modeleDefaut}
+          <Bouton
+            genre="discret"
+            petit
+            desactive={occupe}
+            onclick={() =>
+              void agir(
+                async () => {
+                  await modifierReglagesWorkflow(wf.id, { modele: m });
+                },
+                `${wf.nom} : ${m} par défaut.`,
+              )}
+          >
+            ☆ Par défaut
+          </Bouton>
+        {/if}
+      </li>
+    {:else}
+      <li class="discret">Aucun checkpoint prêt.</li>
     {/each}
+    {#each wf.aValider as m (m)}
+      <li>
+        <span class="etoile"></span>
+        <span class="nom code">{m}</span>
+        <span class="puce ambre">Steps à valider</span>
+        <Bouton genre="discret" petit onclick={versCollection}>Valider dans Ma collection</Bouton>
+      </li>
+    {/each}
+  </ul>
+  {#if wf.aValider.length > 0}
+    <p class="discret">Un checkpoint déposé à la main n'est proposé nulle part tant que ses steps ne sont pas validés.</p>
+  {/if}
+  <div class="ligne">
+    <Bouton genre="secondaire" petit onclick={() => chercher(natureDe(wf), wf.famille)}>🔎 Chercher des checkpoints</Bouton>
+    <Bouton genre="discret" petit onclick={() => ouvrir(wf.dossierModeles)}>📂 Ouvrir le dossier</Bouton>
   </div>
-  <p class="discret">
-    Le Plateau, la Retouche et le Montage partent de ces workflows. Le checkpoint par défaut de chacun se choisit plus
-    bas ; ses réglages fins (steps, CFG…) sont dans Réglages.
-  </p>
-</Panneau>
 
-{#each usage.workflows as wf (wf.id)}
-  <Panneau titre={wf.nom}>
-    <div class="ligne">
-      {#if wf.pret}
-        <span class="bon">Prêt</span>
-      {:else}
-        <span class="alerte">Il manque {octetsLisibles(wf.aTelecharger)}</span>
+  <hr />
+  <p class="etiquette">LoRA de la famille</p>
+  <ul>
+    {#each wf.loras as l (l.nom)}
+      <li>
+        <span class="nom">{l.nom}</span>
+        {#if l.declencheurs}<span class="discret">« {l.declencheurs} »</span>{/if}
+        <span class="puce">force {l.force}</span>
+      </li>
+    {:else}
+      <li class="discret">Aucune LoRA pour cette famille.</li>
+    {/each}
+  </ul>
+  <div class="ligne">
+    <Bouton genre="secondaire" petit onclick={() => chercher('lora', wf.famille)}>🔎 Chercher des LoRA</Bouton>
+    <Bouton genre="discret" petit onclick={() => ouvrir(wf.dossierLoras)}>📂 Ouvrir le dossier</Bouton>
+  </div>
+
+  <hr />
+  <p class="etiquette">✍️ Réécriture du prompt</p>
+  <div class="ligne">
+    <select
+      value={wf.reecriture.llm ?? ''}
+      disabled={occupe}
+      aria-label="LLM qui réécrit le prompt de ce workflow"
+      onchange={(e) => choisirLlm(wf, e.currentTarget.value)}
+    >
+      <option value="">LLM par défaut ({nomLlm(llmDefaut, llmChoix)})</option>
+      {#each llmChoix as c (c.fichier)}
+        <option value={c.fichier}>{c.specialiste ? '🎯 ' : ''}{c.nom}{c.favori ? ' ★' : ''}</option>
+      {/each}
+    </select>
+  </div>
+  {#if wf.reecriture.specialistes.find((s) => s.choisi)}
+    <p class="discret">
+      {wf.reecriture.specialistes.find((s) => s.choisi)?.nom} réécrit avec sa propre consigne officielle : les règles du
+      modèle ne lui sont pas données.
+    </p>
+  {:else}
+    <p class="discret">Ce modèle attend {attentes(wf.reecriture)}.</p>
+  {/if}
+  {#if wf.reecriture.ailleurs}
+    <p class="alerte">
+      Ce LLM est entraîné pour {wf.reecriture.ailleurs.join(', ')} : pour ce workflow, Aria passera au LLM par défaut.
+    </p>
+  {/if}
+  {#each wf.reecriture.specialistes.filter((s) => !s.choisi) as s (s.fichier)}
+    <div class="specialiste">
+      <p>
+        🎯 Un LLM entraîné pour ce modèle existe : <strong>{s.nom}</strong>. Il réécrit
+        {s.usage === 'retouche' ? "les consignes de retouche (il voit l'image)" : 'les idées'} comme son auteur l'a prévu.
+      </p>
+      <p class="discret">{s.licence.nom} · {s.licence.resume}</p>
+      <p class="discret code">{s.page}</p>
+      {#if s.installe}
         <Bouton
-          genre="principal"
+          genre="discret"
           petit
-          onclick={() => demander('workflow', wf.id, wf.nom, wf.licence, wf.aTelecharger)}
+          desactive={occupe}
+          onclick={() => void agir(() => definirLlmWorkflow(wf.id, s.fichier), `${wf.nom} : réécrit par ${s.nom}.`)}
         >
-          Télécharger ce qui manque
+          Utiliser pour ce workflow
         </Bouton>
+      {:else}
+        <Bouton genre="secondaire" petit onclick={() => installer(s)}>⬇ Installer ({octetsLisibles(s.aTelecharger)})</Bouton>
       {/if}
     </div>
-    <div class="puces">
+  {/each}
+  {#each wf.reecriture.aVenir as a (a.nom)}
+    <p class="discret">🕓 {a.nom} est entraîné pour ce modèle : {a.raison}</p>
+  {/each}
+
+  <hr />
+  <p class="discret">
+    📜 Licence {wf.licence.nom}{wf.licence.commercial ? '' : ' · usage commercial non permis'} · {wf.licence.resume}
+  </p>
+  <p class="discret code">{wf.licence.url}</p>
+{/snippet}
+
+{#each classes as wf (wf.id)}
+  {@const defaut = wf.favoriPour.length > 0}
+  <Panneau titre={defaut ? `${wf.nom} · ★ Par défaut` : wf.nom} accentue={wf.id === premierDefaut}>
+    <div class="ligne">
+      <span class="puce" class:ambre={!wf.pret}>{wf.pret ? 'complet' : 'incomplet'}</span>
       {#each puces(wf) as p (p)}
-        <span class="puce">{p}</span>
+        <span class="puce neutre">{p}</span>
       {/each}
+      <span class="puce neutre">{wf.licence.nom}</span>
     </div>
+    {#if !wf.pret}
+      <div class="ligne">
+        <span class="alerte">Il manque {octetsLisibles(wf.aTelecharger)}</span>
+        {#if wf.manquants.length > 0}
+          <span class="discret">{wf.manquants.map((f) => `${f.dossier}/${f.nom}`).join(', ')}</span>
+        {/if}
+        <Bouton genre="secondaire" petit onclick={() => demander('workflow', wf.id, wf.nom, wf.licence, wf.aTelecharger)}>
+          ⬇ Télécharger ce qui manque
+        </Bouton>
+      </div>
+    {/if}
     {#if wf.possibles.length > 0}
       <div class="ligne">
         {#each wf.possibles as cle (cle)}
+          {@const court = wf.possibles.length === 1}
           {#if wf.favoriPour.includes(cle)}
-            <span class="bon">★ {libelle(cle)}</span>
+            <span class="bon">★ Par défaut{court ? '' : ` pour « ${libelle(cle)} »`}</span>
           {:else}
             <Bouton
               genre="discret"
@@ -120,143 +239,25 @@
               desactive={occupe || !wf.pret}
               onclick={() => void agir(() => definirFavori(cle, wf.id), `${wf.nom} : par défaut pour « ${libelle(cle)} ».`)}
             >
-              ☆ Par défaut pour « {libelle(cle)} »
+              ☆ Par défaut{court ? '' : ` pour « ${libelle(cle)} »`}
             </Bouton>
           {/if}
         {/each}
       </div>
       {#if !wf.pret}
-        <p class="discret">Télécharge d'abord ce qui manque pour en faire un favori.</p>
+        <p class="discret">Télécharge d'abord ce qui manque pour en faire un workflow par défaut.</p>
       {/if}
     {/if}
-    {#if wf.manquants.length > 0}
-      <p class="discret">Manquants : {wf.manquants.map((f) => `${f.dossier}/${f.nom}`).join(', ')}</p>
+
+    {#if wf.id === premierDefaut}
+      <hr />
+      {@render detail(wf)}
+    {:else}
+      <details>
+        <summary>Checkpoints, LoRA, réécriture du prompt et licence</summary>
+        {@render detail(wf)}
+      </details>
     {/if}
-
-    <div class="colonnes">
-      <section aria-label="Checkpoints">
-        <h3>Checkpoints</h3>
-        <ul>
-          {#each wf.modeles as m (m)}
-            <li>
-              <span class="nom">{m}</span>
-              {#if m === wf.origine}<span class="discret">d'origine</span>{/if}
-              {#if wf.modeleDefaut !== null}
-                {#if m === wf.modeleDefaut}
-                  <span class="bon">par défaut</span>
-                {:else}
-                  <Bouton
-                    genre="discret"
-                    petit
-                    desactive={occupe}
-                    onclick={() =>
-                      void agir(
-                        async () => {
-                          await modifierReglagesWorkflow(wf.id, { modele: m });
-                        },
-                        `${wf.nom} : ${m} par défaut.`,
-                      )}
-                  >
-                    ☆ Par défaut
-                  </Bouton>
-                {/if}
-              {/if}
-            </li>
-          {:else}
-            <li class="discret">Aucun checkpoint prêt.</li>
-          {/each}
-          {#each wf.aValider as m (m)}
-            <li><span class="nom">{m}</span> <span class="alerte">steps à valider (Ma collection)</span></li>
-          {/each}
-        </ul>
-        <div class="ligne">
-          <Bouton genre="discret" petit onclick={() => chercher(natureDe(wf), wf.famille)}>Chercher des checkpoints</Bouton>
-          <Bouton genre="discret" petit onclick={() => ouvrir(wf.dossierModeles)}>Ouvrir le dossier</Bouton>
-        </div>
-      </section>
-      <section aria-label="LoRA">
-        <h3>LoRA</h3>
-        <ul>
-          {#each wf.loras as l (l.nom)}
-            <li>
-              <span class="nom">{l.nom}</span>
-              <span class="discret">{l.declencheurs ? `« ${l.declencheurs} » · ` : ''}force {l.force}</span>
-            </li>
-          {:else}
-            <li class="discret">Aucune LoRA pour cette famille.</li>
-          {/each}
-        </ul>
-        <div class="ligne">
-          <Bouton genre="discret" petit onclick={() => chercher('lora', wf.famille)}>Chercher des LoRA</Bouton>
-          <Bouton genre="discret" petit onclick={() => ouvrir(wf.dossierLoras)}>Ouvrir le dossier</Bouton>
-        </div>
-      </section>
-    </div>
-
-    <details open={wf.reecriture.ailleurs !== null}>
-      <summary>
-        Réécriture du prompt <span class="discret">· {nomLlm(wf.reecriture.llm ?? llmDefaut, llmChoix)}</span>
-      </summary>
-      <label class="champ">
-        LLM
-        <select
-          value={wf.reecriture.llm ?? ''}
-          disabled={occupe}
-          onchange={(e) => choisirLlm(wf, e.currentTarget.value)}
-        >
-          <option value="">LLM par défaut ({nomLlm(llmDefaut, llmChoix)})</option>
-          {#each llmChoix as c (c.fichier)}
-            <option value={c.fichier}>{c.specialiste ? '🎯 ' : ''}{c.nom}{c.favori ? ' ★' : ''}</option>
-          {/each}
-        </select>
-      </label>
-      {#if wf.reecriture.specialistes.find((s) => s.choisi)}
-        <p class="discret">
-          {wf.reecriture.specialistes.find((s) => s.choisi)?.nom} réécrit avec sa propre consigne officielle : les règles
-          du modèle ne lui sont pas données.
-        </p>
-      {:else}
-        <p class="discret">Ce modèle attend {attentes(wf.reecriture)}.</p>
-      {/if}
-      {#if wf.reecriture.ailleurs}
-        <p class="alerte">
-          Ce LLM est entraîné pour {wf.reecriture.ailleurs.join(', ')} : pour ce workflow, Aria passera au LLM par défaut.
-        </p>
-      {/if}
-      {#each wf.reecriture.specialistes.filter((s) => !s.choisi) as s (s.fichier)}
-        <div class="specialiste">
-          <p>
-            🎯 Un LLM entraîné pour ce modèle existe : <strong>{s.nom}</strong>. Il réécrit
-            {s.usage === 'retouche' ? "les consignes de retouche (il voit l'image)" : 'les idées'} comme son auteur l'a
-            prévu.
-          </p>
-          <p class="discret">{s.licence.nom} · {s.licence.resume}</p>
-          <p class="discret code">{s.page}</p>
-          {#if s.installe}
-            <Bouton
-              petit
-              desactive={occupe}
-              onclick={() => void agir(() => definirLlmWorkflow(wf.id, s.fichier), `${wf.nom} : réécrit par ${s.nom}.`)}
-            >
-              Utiliser pour ce workflow
-            </Bouton>
-          {:else}
-            <Bouton petit onclick={() => installer(s)}>Installer ({octetsLisibles(s.aTelecharger)})</Bouton>
-          {/if}
-        </div>
-      {/each}
-      {#each wf.reecriture.aVenir as a (a.nom)}
-        <p class="discret">🕓 {a.nom} est entraîné pour ce modèle : {a.raison}</p>
-      {/each}
-    </details>
-
-    <details>
-      <summary>Licence</summary>
-      <p class="discret">
-        {wf.licence.nom}{wf.licence.commercial ? '' : ' · usage commercial non permis'} · {wf.licence.resume}
-      </p>
-      <p class="discret code">{wf.licence.url}</p>
-    </details>
   </Panneau>
 {:else}
   <p class="discret">Aucun workflow pour cet usage.</p>
@@ -270,9 +271,7 @@
 {/if}
 
 <style>
-  .favoris,
-  .ligne,
-  .puces {
+  .ligne {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -280,30 +279,35 @@
     margin: 6px 0;
   }
 
-  .favori {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 180px;
+  .puce {
+    padding: 2px 10px;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
   }
 
-  .puce {
-    padding: 2px 8px;
-    border: 1px solid var(--ligne);
-    font-size: 12px;
+  .puce.neutre {
+    border-color: var(--ligne);
     color: var(--texte-2);
   }
 
-  .colonnes {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 16px;
-    margin: 10px 0;
+  .puce.ambre {
+    border-color: var(--ambre);
+    color: var(--ambre);
   }
 
-  h3 {
-    margin: 0 0 6px;
-    font-size: 13px;
+  .etiquette {
+    margin: 10px 0 4px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--texte-2);
+  }
+
+  hr {
+    margin: 12px 0;
+    border: 0;
+    border-top: 1px solid var(--ligne);
   }
 
   ul {
@@ -323,6 +327,11 @@
     font-size: 13px;
   }
 
+  .etoile {
+    width: 1.2em;
+    color: var(--ambre);
+  }
+
   .nom {
     overflow-wrap: anywhere;
   }
@@ -333,14 +342,6 @@
 
   summary {
     cursor: pointer;
-  }
-
-  .champ {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin: 8px 0;
-    font-size: 12px;
     color: var(--texte-2);
   }
 

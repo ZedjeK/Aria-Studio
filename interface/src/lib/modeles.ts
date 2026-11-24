@@ -110,3 +110,29 @@ export function texteIdentification(i: IdentificationSources): string {
   }
   return '';
 }
+
+const ROLES: Record<string, string> = {
+  checkpoints: 'checkpoint',
+  modeles: 'checkpoint',
+  diffusion_models: 'modèle de diffusion',
+  vae: 'VAE',
+  text_encoders: 'encodeur de texte',
+  clip: 'encodeur de texte',
+  loras: 'LoRA',
+};
+
+/** Ce que fait un fichier d'un workflow, d'après son dossier (`image/_base/vae` : VAE). */
+export function roleFichier(dossier: string): string {
+  const dernier = dossier.split('/').filter((s) => s !== '').pop() ?? dossier;
+  return ROLES[dernier] ?? dernier;
+}
+
+/** Le texte du bouton de la file : le nombre de téléchargements encore en cours, s'il y en a. */
+export function texteBoutonTelechargements(enCours: number): string {
+  return enCours > 0 ? `⬇ Téléchargements · ${enCours}` : '⬇ Téléchargements';
+}
+
+/** Combien de fichiers un workflow doit encore recevoir. */
+export function fichiersAManquer(fichiers: { present: boolean }[]): number {
+  return fichiers.filter((f) => !f.present).length;
+}

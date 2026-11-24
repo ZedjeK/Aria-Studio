@@ -1,17 +1,23 @@
 <!--
-  Modèles → Ma collection, comme en v2 : ce qui est installé, rangé par groupe, d'où ça vient et à quoi ça sert ; les
-  steps à valider d'un checkpoint ; les mots déclencheurs et la force d'une LoRA ; la corbeille. Un modèle téléchargé
-  par Aria part à la corbeille (rien n'est effacé) ; seul « Vider la corbeille », confirmé, efface pour de bon.
+  Modèles → Ma collection, comme la maquette : le dossier des modèles (chemin, place libre, retrouver les sources), ce
+  qui est installé rangé par groupe, d'où ça vient et à quoi ça sert ; les steps à valider d'un checkpoint déposé à la
+  main (le seul bouton orange de l'onglet, sur le premier à valider) ; la force d'une LoRA sur sa ligne, ses mots
+  déclencheurs dans un dialogue ; la corbeille, toujours visible. Un modèle téléchargé par Aria part à la corbeille
+  (rien n'est effacé) ; seul « Vider », confirmé, efface pour de bon.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
+    choisirDossierModeles,
     collectionModeles,
     corbeilleModeles,
+    etatEmplacements,
     etatSources,
     jeterModele,
     messageErreur,
     oublierReglageLora,
+    ouvrirDossier,
+    parcourirDossier,
     reglerLora,
     relireLora,
     restaurerModele,
@@ -21,6 +27,7 @@
     type Collection,
     type CorbeilleModeles,
     type ElementCollection,
+    type EtatLieux,
     type IdentificationSources,
   } from '../lib/api';
   import { octetsLisibles } from '../lib/jauge';
@@ -47,9 +54,12 @@
 
   let collection = $state<Collection | null>(null);
   let corbeille = $state<CorbeilleModeles | null>(null);
+  let lieux = $state<EtatLieux | null>(null);
   /** Les steps saisis pour chaque checkpoint à valider, par clé. */
   let steps = $state<Record<string, number>>({});
-  /** La LoRA en cours de réglage. */
+  /** La force saisie pour chaque LoRA, par clé. */
+  let forces = $state<Record<string, number>>({});
+  /** La LoRA en cours de réglage (mots déclencheurs). */
   let lora = $state<{ cle: string; nom: string; declencheurs: string; force: number; source: string } | null>(null);
   /** Le modèle à mettre à la corbeille, en attente de confirmation. */
   let aJeter = $state<ElementCollection | null>(null);
@@ -59,15 +69,21 @@
 
   const groupes = $derived(collection?.groupes.filter((g) => g.elements.length > 0) ?? []);
   const erreurReglage = $derived(lora ? erreurLora(lora.declencheurs, lora.force) : null);
+  /** Le premier checkpoint à valider : son groupe est accentué, son bouton est l'orange de l'onglet. */
+  const premierAValider = $derived(groupes.flatMap((g) => g.elements).find((e) => e.aValider !== null)?.cle ?? null);
+  const dossier = $derived(lieux?.dossiers.find((d) => d.cle === 'modeles')?.chemin ?? lieux?.modelesProchain ?? '');
+  const libre = $derived(lieux?.libres['modeles'] ?? null);
 
   async function relire() {
     try {
-      const [c, k] = await Promise.all([collectionModeles(), corbeilleModeles()]);
+      const [c, k, l] = await Promise.all([collectionModeles(), corbeilleModeles(), etatEmplacements()]);
       collection = c;
       corbeille = k;
+      lieux = l;
       for (const g of c.groupes) {
         for (const e of g.elements) {
           if (e.aValider && steps[e.cle] === undefined) steps[e.cle] = stepsProposes(e.aValider) ?? 20;
+          if (e.lora) forces[e.cle] = e.lora.force;
         }
       }
     } catch (e) {
@@ -102,13 +118,29 @@
     });
   }
 
+  /** Enregistre la force saisie sur la ligne, avec les mots déjà réglés. */
+  function enregistrerForce(e: ElementCollection) {
+    if (!e.lora) return;
+    const force = forces[e.cle] ?? e.lora.force;
+    const mots = e.lora.declencheurs;
+    const erreur = erreurLora(mots, force);
+    if (erreur) {
+      signaler(erreur, true);
+      return;
+    }
+    void agir(async () => {
+      await reglerLora(e.cle, mots, force);
+      return `${e.nom} : force ${force} enregistrée.`;
+    });
+  }
+
   function regler(e: ElementCollection) {
     if (!e.lora) return;
     lora = {
       cle: e.cle,
       nom: e.nom,
       declencheurs: e.lora.declencheurs,
-      force: e.lora.force,
+      force: forces[e.cle] ?? e.lora.force,
       source: e.lora.declencheursSource,
     };
   }
@@ -165,6 +197,27 @@
     });
   }
 
+  async function ouvrir() {
+    try {
+      await ouvrirDossier('modeles');
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
+  async function changer() {
+    try {
+      const choisi = await parcourirDossier("Dossier des modèles d'Aria Studio", lieux?.modelesProchain ?? null);
+      if (!choisi) return;
+      lieux = await choisirDossierModeles(choisi);
+      signaler(
+        lieux.redemarrage ? 'Dossier des modèles enregistré : il vaudra au prochain lancement.' : 'Dossier des modèles enregistré.',
+      );
+    } catch (e) {
+      signaler(messageErreur(e), true);
+    }
+  }
+
   async function retrouver() {
     try {
       identification = await retrouverSources();
@@ -196,48 +249,58 @@
   });
 </script>
 
-<ASavoir>
-  Tout ce qui est dans le dossier des modèles, téléchargé par Aria ou déposé à la main. Seuls les modèles téléchargés
-  par Aria se suppriment d'ici : ils partent dans la corbeille, d'où ils se restaurent ; « Vider la corbeille » les
-  efface pour de bon.
-</ASavoir>
-
 {#if collection}
-  {#if collection.orphelins > 0 || identification?.etat === 'en_cours'}
-    <div class="sources">
-      <p class="discret">
-        {collection.orphelins} fichier{collection.orphelins > 1 ? 's' : ''} déposé{collection.orphelins > 1 ? 's' : ''}
-        à la main : Aria les utilise, mais ne les supprime pas. « Retrouver les sources » calcule leur empreinte et la
-        cherche dans le catalogue d'Aria puis sur Civitai, pour connaître leur page et leur licence.
-      </p>
-      <Bouton petit desactive={identification?.etat === 'en_cours'} onclick={() => void retrouver()}>
-        Retrouver les sources
+  <Panneau titre="Dossier des modèles">
+    <div class="ligne">
+      <span class="code chemin">{dossier}</span>
+      {#if libre !== null}<span class="puce">{octetsLisibles(libre)} libres</span>{/if}
+      <Bouton genre="discret" petit onclick={() => void ouvrir()}>📂 Ouvrir</Bouton>
+      <Bouton genre="discret" petit onclick={() => void changer()}>Changer…</Bouton>
+      <Bouton genre="secondaire" petit desactive={identification?.etat === 'en_cours'} onclick={() => void retrouver()}>
+        🔍 Retrouver les sources
       </Bouton>
     </div>
-  {/if}
-  {#if identification && identification.etat !== 'repos'}
-    <p class="discret">{texteIdentification(identification)}</p>
-    {#if identification.etat === 'termine'}
-      {#each identification.trouves as t (t.nom)}
-        <p class="discret">✓ {t.nom} · {t.ou}</p>
-      {/each}
-      {#each identification.erreurs as e (e.nom)}
-        <p class="alerte">{e.nom} : {e.erreur}</p>
-      {/each}
+    {#if lieux?.redemarrage}
+      <p class="discret">Nouveau dossier : {lieux.modelesProchain}, pris en compte au prochain lancement.</p>
     {/if}
-  {/if}
+    {#if collection.orphelins > 0}
+      <p class="discret">
+        {collection.orphelins} fichier{collection.orphelins > 1 ? 's' : ''} déposé{collection.orphelins > 1 ? 's' : ''} à
+        la main : Aria les utilise, mais ne les supprime pas. « Retrouver les sources » calcule leur empreinte et la
+        cherche dans le catalogue d'Aria puis sur Civitai, pour connaître leur page et leur licence.
+      </p>
+    {/if}
+    {#if identification && identification.etat !== 'repos'}
+      <p class="discret">{texteIdentification(identification)}</p>
+      {#if identification.etat === 'termine'}
+        {#each identification.trouves as t (t.nom)}
+          <p class="discret">✓ {t.nom} · {t.ou}</p>
+        {/each}
+        {#each identification.erreurs as e (e.nom)}
+          <p class="alerte">{e.nom} : {e.erreur}</p>
+        {/each}
+      {/if}
+    {/if}
+  </Panneau>
+
   {#each groupes as g (g.id)}
-    <Panneau titre={`${g.nom} · ${octetsLisibles(g.taille)}`}>
+    <Panneau
+      titre={`${g.nom} · ${g.elements.length} · ${octetsLisibles(g.taille)}`}
+      accentue={g.elements.some((e) => e.cle === premierAValider)}
+    >
       <ul class="elements">
         {#each g.elements as e (e.cle)}
           <li>
             <div class="texte">
-              <strong>{e.nom}</strong>
-              <span class="discret">
-                {e.famille ? `${e.famille} · ` : ''}{octetsLisibles(e.taille)} · {libelleOrigine(e.origine)}{e.licence
-                  ? ` · licence ${e.licence}`
-                  : ''}
-              </span>
+              <div class="ligne">
+                <strong>{e.nom}</strong>
+                <span class="discret">· {octetsLisibles(e.taille)}</span>
+                <span class="puce" class:neutre={e.origine !== 'aria'}>{libelleOrigine(e.origine)}</span>
+                {#if e.famille}<span class="puce neutre">{e.famille}</span>{/if}
+                {#if e.licence}<span class="puce neutre">licence {e.licence}</span>{/if}
+                {#if e.steps !== null}<span class="puce neutre">{e.steps} steps</span>{/if}
+                {#if e.aValider}<span class="puce ambre">Steps à valider</span>{/if}
+              </div>
               {#if e.utilisePar.length > 0}
                 <span class="discret">Utilisé par : {e.utilisePar.join(', ')}</span>
               {/if}
@@ -247,41 +310,45 @@
               {#if e.page}
                 <span class="discret code">{e.page}</span>
               {/if}
-              {#if e.steps !== null}
-                <span class="discret">{e.steps} steps</span>
-              {/if}
               {#if e.lora}
-                <span class="discret">
-                  Force {e.lora.force}{e.lora.declencheurs ? ` · « ${e.lora.declencheurs} »` : ''}{e.lora.regle
-                    ? ' · réglé par toi'
-                    : ''}
-                </span>
+                <div class="ligne">
+                  {#if e.lora.declencheurs}<span class="puce neutre">« {e.lora.declencheurs} »</span>{/if}
+                  <label class="discret">
+                    Force
+                    <input type="number" min="0" max="2" step="0.05" bind:value={forces[e.cle]} aria-label={`Force de ${e.nom}`} />
+                  </label>
+                  <Bouton genre="discret" petit desactive={occupe} onclick={() => enregistrerForce(e)}>Enregistrer</Bouton>
+                  <Bouton genre="discret" petit desactive={occupe} onclick={() => regler(e)}>Mots déclencheurs…</Bouton>
+                  {#if e.lora.civitai}
+                    <Bouton genre="discret" petit desactive={occupe} onclick={() => relireSurCivitai(e)}>🔄 Civitai</Bouton>
+                  {/if}
+                  {#if e.lora.regle}<span class="discret">réglé par toi</span>{/if}
+                </div>
               {/if}
               {#if e.aValider}
-                <div class="valider">
-                  <span class="alerte">Steps à valider : ce checkpoint n'est proposé nulle part avant.</span>
-                  {#each e.aValider as d, i (i)}
-                    <span class="discret">{String(d.valeur)} : {d.origine}{d.source ? ` (${d.source})` : ''}</span>
-                  {/each}
-                  <label>
+                <p class="alerte">Steps à valider : ce checkpoint n'est proposé nulle part avant.</p>
+                {#each e.aValider as d, i (i)}
+                  <span class="discret">{String(d.valeur)} : {d.origine}{d.source ? ` (${d.source})` : ''}</span>
+                {/each}
+                <div class="ligne">
+                  <label class="discret">
                     Steps
                     <input type="number" min="1" max={STEPS_MAX} step="1" bind:value={steps[e.cle]} />
                   </label>
-                  <Bouton petit desactive={occupe} onclick={() => valider(e)}>Valider</Bouton>
+                  <Bouton
+                    genre={e.cle === premierAValider ? 'principal' : 'secondaire'}
+                    petit
+                    desactive={occupe}
+                    onclick={() => valider(e)}
+                  >
+                    Valider et mettre en service
+                  </Bouton>
                 </div>
               {/if}
             </div>
-            <div class="actions">
-              {#if e.lora}
-                <Bouton genre="discret" petit desactive={occupe} onclick={() => regler(e)}>Régler</Bouton>
-                {#if e.lora.civitai}
-                  <Bouton genre="discret" petit desactive={occupe} onclick={() => relireSurCivitai(e)}>Relire sur Civitai</Bouton>
-                {/if}
-              {/if}
-              {#if e.supprimable}
-                <Bouton genre="discret" petit desactive={occupe} onclick={() => (aJeter = e)}>Corbeille</Bouton>
-              {/if}
-            </div>
+            {#if e.supprimable}
+              <Bouton genre="discret" petit desactive={occupe} onclick={() => (aJeter = e)}>Supprimer</Bouton>
+            {/if}
           </li>
         {/each}
       </ul>
@@ -290,8 +357,10 @@
     <p class="discret">Aucun modèle installé pour l'instant.</p>
   {/each}
 
-  {#if corbeille && corbeille.modeles.length > 0}
-    <Panneau titre={`Corbeille · ${octetsLisibles(corbeille.taille)}`}>
+  <Panneau
+    titre={`Corbeille des modèles · ${corbeille?.modeles.length ?? 0}${corbeille && corbeille.modeles.length > 0 ? ` · ${octetsLisibles(corbeille.taille)}` : ''}`}
+  >
+    {#if corbeille && corbeille.modeles.length > 0}
       <ul class="elements">
         {#each corbeille.modeles as m (m.cle)}
           <li>
@@ -317,11 +386,13 @@
           </li>
         {/each}
       </ul>
-      <div class="actions">
-        <Bouton petit desactive={occupe} onclick={() => (viderDemande = true)}>Vider la corbeille</Bouton>
+      <div class="ligne">
+        <Bouton genre="secondaire" petit desactive={occupe} onclick={() => (viderDemande = true)}>Vider la corbeille</Bouton>
       </div>
-    </Panneau>
-  {/if}
+    {:else}
+      <p class="discret">Rien pour l'instant.</p>
+    {/if}
+  </Panneau>
 {:else}
   <p class="discret">Lecture…</p>
 {/if}
@@ -350,7 +421,7 @@
 {/if}
 
 {#if aJeter}
-  <Dialogue titre={`Mettre ${aJeter.nom} à la corbeille ?`} fermer={() => (aJeter = null)}>
+  <Dialogue titre={`Supprimer ${aJeter.nom} ?`} fermer={() => (aJeter = null)}>
     <p>
       {octetsLisibles(aJeter.taille)} quittent le dossier des modèles pour sa corbeille : rien n'est effacé, il se
       restaure tant que la corbeille n'est pas vidée.
@@ -366,14 +437,12 @@
 {/if}
 
 {#if viderDemande && corbeille}
-  <Dialogue titre="Vider la corbeille des modèles ?" fermer={() => (viderDemande = false)}>
-    <p>
-      {corbeille.modeles.length} modèle{corbeille.modeles.length > 1 ? 's' : ''}, {octetsLisibles(corbeille.taille)} :
-      effacés pour de bon, sans retour possible.
-    </p>
+  <Dialogue titre="Vider la corbeille ?" fermer={() => (viderDemande = false)}>
+    <ASavoir>Les éléments et leurs fiches sont supprimés pour de bon. Rien ne les ramène.</ASavoir>
+    <p>{corbeille.modeles.length} modèle{corbeille.modeles.length > 1 ? 's' : ''}, {octetsLisibles(corbeille.taille)}.</p>
     {#snippet pied()}
       <Bouton genre="discret" onclick={() => (viderDemande = false)}>Annuler</Bouton>
-      <Bouton genre="principal" onclick={vider}>Effacer pour de bon</Bouton>
+      <Bouton genre="principal" onclick={vider}>Vider</Bouton>
     {/snippet}
   </Dialogue>
 {/if}
@@ -382,7 +451,7 @@
   .elements {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     margin: 8px 0;
     padding: 0;
     list-style: none;
@@ -398,24 +467,57 @@
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     min-width: 0;
+  }
+
+  .ligne {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chemin {
+    flex: 1;
+    min-width: 220px;
+    overflow-wrap: anywhere;
   }
 
   .code {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  .valider {
+  .puce {
+    padding: 2px 10px;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .puce.neutre {
+    border-color: var(--ligne);
+    color: var(--texte-2);
+  }
+
+  .puce.ambre {
+    border-color: var(--ambre);
+    color: var(--ambre);
+  }
+
+  label.discret {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 6px;
-    margin-top: 6px;
+    font-size: 12px;
   }
 
-  .valider label,
+  label.discret input {
+    width: 6em;
+  }
+
   .champ {
     display: flex;
     flex-direction: column;
@@ -424,30 +526,7 @@
     color: var(--texte-2);
   }
 
-  .valider input {
-    width: 8em;
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-  }
-
   .alerte {
     color: var(--orange);
-  }
-
-  .sources {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .sources p {
-    flex: 1;
-    min-width: 260px;
   }
 </style>
