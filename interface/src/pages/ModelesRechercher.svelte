@@ -1,8 +1,9 @@
 <!--
-  Modèles → Rechercher, comme en v2 (« à la LM Studio ») : modèles image, modèles vidéo, LoRA et LLM sur Civitai et
-  Hugging Face, filtrés sur les familles d'Aria, et un lien collé. Le clic « Télécharger » vaut confirmation : la fiche
-  est relue à la source puis mise en file. Les modèles adultes ne sont demandés à Civitai que si la case est cochée,
-  et leurs vignettes restent floues tant que l'autre case ne l'est pas (deux choix retenus sur ce PC seulement).
+  Modèles → Rechercher, comme la maquette (« à la LM Studio ») : « Chercher un modèle » (le panneau accentué, avec le
+  seul bouton orange), les résultats avec leur vignette, puis « Coller un lien ». Modèles image, modèles vidéo, LoRA et
+  LLM sur Civitai et Hugging Face, filtrés sur les familles d'Aria. Le clic « Télécharger » vaut confirmation : la
+  fiche est relue à la source puis mise en file. Les modèles adultes ne sont demandés à Civitai que si la case est
+  cochée, et leurs vignettes restent floues tant que l'autre case ne l'est pas (deux choix retenus sur ce PC seulement).
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -23,7 +24,6 @@
   } from '../lib/api';
   import { octetsLisibles } from '../lib/jauge';
   import { TYPES, compte, conseil, dossierDeFamille, libelleSource, libelleVram, sources, tris } from '../lib/rechercher';
-  import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import VignetteModele from '../lib/composants/VignetteModele.svelte';
@@ -85,6 +85,7 @@
     if (!sources(t).includes(source)) source = 'huggingface';
     resultats = [];
     curseur = null;
+    cherche = false;
     try {
       familles = await famillesDecouvrir(t);
       famille = familles.some((f) => f.famille === voulue) ? voulue : '';
@@ -98,6 +99,7 @@
     if (!tris(s).some((t) => t.id === tri)) tri = 'telechargements';
     resultats = [];
     curseur = null;
+    cherche = false;
   }
 
   async function chercher(suite = false) {
@@ -145,7 +147,7 @@
     occupe = true;
     try {
       await telechargerLien(adresse, dossier);
-      signaler(`${nom} est en file : son avancement s'affiche en haut de la page.`);
+      signaler(`${nom} est en file : suis son avancement dans « Téléchargements ».`);
       ajoute();
     } catch (e) {
       signaler(messageErreur(e), true);
@@ -189,25 +191,186 @@
   });
 </script>
 
-<ASavoir>
-  Seuls les modèles qui vont dans une famille d'Aria sont montrés, et seuls les fichiers .safetensors et .gguf sont
-  proposés : les autres formats peuvent exécuter du code au chargement. Un modèle qui demande une clé (Civitai, ou
-  dépôt Hugging Face à conditions) se télécharge avec celle de Réglages → Emplacements et clés.
-</ASavoir>
+<Panneau titre="Chercher un modèle" accentue>
+  <div class="pastilles choix-pastilles" role="group" aria-label="Type de modèle">
+    {#each TYPES as t (t.id)}
+      <button type="button" class:pris={type === t.id} aria-pressed={type === t.id} onclick={() => void changerType(t.id)}>
+        {t.titre}
+      </button>
+    {/each}
+  </div>
+  <p class="discret">{aide}</p>
+  <div class="grille">
+    <label class="champ">
+      Texte
+      <input
+        type="search"
+        placeholder="Nom, auteur…"
+        bind:value={texte}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') void chercher();
+        }}
+      />
+    </label>
+    <label class="champ">
+      Source
+      <select value={source} onchange={(e) => changerSource(e.currentTarget.value === 'civitai' ? 'civitai' : 'huggingface')}>
+        {#each sources(type) as s (s)}
+          <option value={s}>{libelleSource(s)}</option>
+        {/each}
+      </select>
+    </label>
+    {#if type !== 'llm'}
+      <label class="champ">
+        Famille
+        <select bind:value={famille}>
+          <option value="">Toutes les familles</option>
+          {#each familles as f (f.famille)}
+            <option value={f.famille}>{f.famille}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
+    <label class="champ">
+      Tri
+      <select bind:value={tri}>
+        {#each tris(source) as t (t.id)}
+          <option value={t.id}>{t.titre}</option>
+        {/each}
+      </select>
+    </label>
+  </div>
+  {#if source === 'civitai'}
+    <div class="ligne">
+      <label class="case">
+        <input type="checkbox" bind:checked={adulte} onchange={() => retenirChoix('aria-adulte', adulte)} />
+        🔞 Modèles adultes
+      </label>
+      <label class="case">
+        <input type="checkbox" bind:checked={voirNsfw} onchange={() => retenirChoix('aria-nsfw', voirNsfw)} />
+        Aperçus sensibles sans flou
+      </label>
+    </div>
+  {/if}
+  <div class="actions droite">
+    <Bouton genre="principal" desactive={occupe} onclick={() => void chercher()}>Chercher</Bouton>
+  </div>
+</Panneau>
 
-<Panneau titre="Depuis un lien">
+<Panneau titre={`Résultats · ${resultats.length}`}>
+  {#if resultats.length === 0}
+    <p class="discret">
+      {cherche
+        ? "Aucun résultat pour une famille d'Aria."
+        : "Lance une recherche : seuls les modèles qui vont dans une famille d'Aria sont montrés."}
+    </p>
+  {/if}
+  <ul class="resultats">
+    {#each resultats as m (m.source + m.id)}
+      <li>
+        <VignetteModele url={m.apercu?.url ?? null} floue={(m.apercu?.nsfw ?? false) && !voirNsfw} />
+        <div class="texte">
+          <strong>{m.nom}</strong>
+          <span class="discret">
+            {libelleSource(m.source === 'civitai' ? 'civitai' : 'huggingface')} · {TYPES.find((t) => t.id === type)?.titre ??
+              ''} · {m.auteur ? `${m.auteur} · ` : ''}{m.famille ? `${m.famille} · ` : ''}⬇ {compte(m.telechargements)} · ♥ {compte(
+              m.appreciations,
+            )}{m.installe ? ' · déjà installé' : ''}{m.protege ? ' · accès à conditions' : ''}
+          </span>
+          <span class="discret code">{m.page}</span>
+          {#if m.source === 'civitai'}
+            {#each m.versions as v (v.id)}
+              {@const f = principal(v.fichiers)}
+              <div class="version">
+                <span>
+                  {v.nom ?? 'Version'}{v.base ? ` · ${v.base}` : ''}{v.motsDeclencheurs.length > 0
+                    ? ` · « ${v.motsDeclencheurs.join(', ')} »`
+                    : ''}
+                </span>
+                {#if f}
+                  <span class="discret">{f.nom} · {octetsLisibles(f.taille)} · {v.dossier}</span>
+                  {#if f.installe}
+                    <span class="bon">Installé</span>
+                  {:else}
+                    <Bouton genre="secondaire" petit desactive={occupe} onclick={() => void telecharger(v.lien, v.dossier, f.nom)}>
+                      Télécharger
+                    </Bouton>
+                  {/if}
+                {/if}
+              </div>
+            {/each}
+          {:else}
+            <div class="actions">
+              <Bouton genre="discret" petit onclick={() => void ouvrirDepot(m)}>
+                {depots[m.id] ? 'Masquer les fichiers' : 'Voir les fichiers'}
+              </Bouton>
+            </div>
+            {#if depots[m.id]}
+              {@const d = depots[m.id]}
+              {#if d}
+                {#if d.vramLibreGo !== null}
+                  <span class="discret">VRAM disponible pour le LLM : ~{d.vramLibreGo} / {d.vramTotaleGo} Go</span>
+                {/if}
+                {#each d.fichiers as f (f.nom)}
+                  <div class="version">
+                    <span>{f.nom}</span>
+                    <span class="discret">
+                      {octetsLisibles(f.taille)}{f.vram ? ` · ${libelleVram(f.vram)}` : ''}{f.dossier
+                        ? ` · ${f.dossier}`
+                        : ''}
+                    </span>
+                    {#if f.installe}
+                      <span class="bon">Installé</span>
+                    {:else if f.lien}
+                      {@const adresse = f.lien}
+                      {#if !f.dossier}
+                        <select bind:value={choix[adresse]} aria-label={`Dossier de ${f.nom}`}>
+                          <option value="">Choisis le dossier…</option>
+                          {#each dossiersFamilles as dossier (dossier)}
+                            <option value={dossier}>{dossier}</option>
+                          {/each}
+                        </select>
+                      {/if}
+                      <Bouton
+                        genre="secondaire"
+                        petit
+                        desactive={occupe}
+                        onclick={() => void telecharger(adresse, dossierDe(adresse, f.dossier), f.nom)}
+                      >
+                        Télécharger
+                      </Bouton>
+                    {/if}
+                  </div>
+                {:else}
+                  <span class="discret">Aucun fichier proposé dans ce dépôt.</span>
+                {/each}
+              {/if}
+            {/if}
+          {/if}
+        </div>
+      </li>
+    {/each}
+  </ul>
+  {#if curseur}
+    <div class="actions droite">
+      <Bouton genre="discret" petit desactive={occupe} onclick={() => void chercher(true)}>Plus de résultats</Bouton>
+    </div>
+  {/if}
+</Panneau>
+
+<Panneau titre="🔗 Coller un lien">
   <div class="ligne">
     <input
       class="large"
       type="url"
-      placeholder="https://huggingface.co/…/blob/main/… ou https://civitai.com/models/…"
+      placeholder="Lien Civitai ou Hugging Face"
       aria-label="Lien d'un fichier sur Hugging Face ou Civitai"
       bind:value={lien}
       onkeydown={(e) => {
         if (e.key === 'Enter') void lireLien();
       }}
     />
-    <Bouton petit desactive={occupe || lien.trim() === ''} onclick={() => void lireLien()}>Lire le lien</Bouton>
+    <Bouton genre="discret" petit desactive={occupe || lien.trim() === ''} onclick={() => void lireLien()}>Préparer</Bouton>
   </div>
   {#if proposition}
     {@const f = proposition.fiche}
@@ -249,7 +412,7 @@
           </select>
         {/if}
         <Bouton
-          genre="principal"
+          genre="secondaire"
           petit
           desactive={occupe}
           onclick={() => void telecharger(lien.trim(), dossierDe(lien.trim(), proposition?.dossier ?? null), f.nom)}
@@ -260,161 +423,6 @@
     </div>
   {/if}
 </Panneau>
-
-<Panneau titre="Rechercher">
-  <div class="pastilles" role="group" aria-label="Type de modèle">
-    {#each TYPES as t (t.id)}
-      <button type="button" class="pastille" aria-pressed={type === t.id} onclick={() => void changerType(t.id)}>
-        {t.titre}
-      </button>
-    {/each}
-  </div>
-  <p class="discret">{aide}</p>
-  <div class="ligne">
-    <select
-      value={source}
-      onchange={(e) => changerSource(e.currentTarget.value === 'civitai' ? 'civitai' : 'huggingface')}
-      aria-label="Source"
-    >
-      {#each sources(type) as s (s)}
-        <option value={s}>{libelleSource(s)}</option>
-      {/each}
-    </select>
-    {#if type !== 'llm'}
-      <select bind:value={famille} aria-label="Famille">
-        <option value="">Toutes les familles</option>
-        {#each familles as f (f.famille)}
-          <option value={f.famille}>{f.famille}</option>
-        {/each}
-      </select>
-    {/if}
-    <select bind:value={tri} aria-label="Tri">
-      {#each tris(source) as t (t.id)}
-        <option value={t.id}>{t.titre}</option>
-      {/each}
-    </select>
-    <input
-      class="large"
-      type="search"
-      placeholder="Nom, auteur…"
-      aria-label="Texte cherché"
-      bind:value={texte}
-      onkeydown={(e) => {
-        if (e.key === 'Enter') void chercher();
-      }}
-    />
-    <Bouton petit desactive={occupe} onclick={() => void chercher()}>Chercher</Bouton>
-  </div>
-  {#if source === 'civitai'}
-    <div class="ligne">
-      <label class="case">
-        <input type="checkbox" bind:checked={adulte} onchange={() => retenirChoix('aria-adulte', adulte)} />
-        🔞 Inclure les modèles adultes
-      </label>
-      <label class="case">
-        <input type="checkbox" bind:checked={voirNsfw} onchange={() => retenirChoix('aria-nsfw', voirNsfw)} />
-        Montrer les vignettes adultes sans flou
-      </label>
-    </div>
-  {/if}
-</Panneau>
-
-{#if cherche && resultats.length === 0}
-  <p class="discret">Aucun résultat pour une famille d'Aria.</p>
-{/if}
-
-<ul class="resultats">
-  {#each resultats as m (m.source + m.id)}
-    <li>
-      {#if m.apercu}
-        <VignetteModele url={m.apercu.url} floue={m.apercu.nsfw && !voirNsfw} />
-      {/if}
-      <div class="texte">
-        <strong>{m.nom}</strong>
-        <span class="discret">
-          {m.auteur ? `${m.auteur} · ` : ''}{m.famille ? `${m.famille} · ` : ''}⬇ {compte(m.telechargements)} · ♥ {compte(
-            m.appreciations,
-          )}{m.installe ? ' · déjà installé' : ''}{m.protege ? ' · accès à conditions' : ''}
-        </span>
-        <span class="discret code">{m.page}</span>
-        {#if m.source === 'civitai'}
-          {#each m.versions as v (v.id)}
-            {@const f = principal(v.fichiers)}
-            <div class="version">
-              <span>
-                {v.nom ?? 'Version'}{v.base ? ` · ${v.base}` : ''}{v.motsDeclencheurs.length > 0
-                  ? ` · « ${v.motsDeclencheurs.join(', ')} »`
-                  : ''}
-              </span>
-              {#if f}
-                <span class="discret">{f.nom} · {octetsLisibles(f.taille)} · {v.dossier}</span>
-                {#if f.installe}
-                  <span class="bon">Installé</span>
-                {:else}
-                  <Bouton petit desactive={occupe} onclick={() => void telecharger(v.lien, v.dossier, f.nom)}>
-                    Télécharger
-                  </Bouton>
-                {/if}
-              {/if}
-            </div>
-          {/each}
-        {:else}
-          <div class="actions">
-            <Bouton genre="discret" petit onclick={() => void ouvrirDepot(m)}>
-              {depots[m.id] ? 'Masquer les fichiers' : 'Voir les fichiers'}
-            </Bouton>
-          </div>
-          {#if depots[m.id]}
-            {@const d = depots[m.id]}
-            {#if d}
-              {#if d.vramLibreGo !== null}
-                <span class="discret">VRAM disponible pour le LLM : ~{d.vramLibreGo} / {d.vramTotaleGo} Go</span>
-              {/if}
-              {#each d.fichiers as f (f.nom)}
-                <div class="version">
-                  <span>{f.nom}</span>
-                  <span class="discret">
-                    {octetsLisibles(f.taille)}{f.vram ? ` · ${libelleVram(f.vram)}` : ''}{f.dossier
-                      ? ` · ${f.dossier}`
-                      : ''}
-                  </span>
-                  {#if f.installe}
-                    <span class="bon">Installé</span>
-                  {:else if f.lien}
-                    {@const adresse = f.lien}
-                    {#if !f.dossier}
-                      <select bind:value={choix[adresse]} aria-label={`Dossier de ${f.nom}`}>
-                        <option value="">Choisis le dossier…</option>
-                        {#each dossiersFamilles as dossier (dossier)}
-                          <option value={dossier}>{dossier}</option>
-                        {/each}
-                      </select>
-                    {/if}
-                    <Bouton
-                      petit
-                      desactive={occupe}
-                      onclick={() => void telecharger(adresse, dossierDe(adresse, f.dossier), f.nom)}
-                    >
-                      Télécharger
-                    </Bouton>
-                  {/if}
-                </div>
-              {:else}
-                <span class="discret">Aucun fichier proposé dans ce dépôt.</span>
-              {/each}
-            {/if}
-          {/if}
-        {/if}
-      </div>
-    </li>
-  {/each}
-</ul>
-
-{#if curseur}
-  <div class="actions">
-    <Bouton genre="discret" desactive={occupe} onclick={() => void chercher(true)}>Plus de résultats</Bouton>
-  </div>
-{/if}
 
 <style>
   .ligne,
@@ -427,23 +435,52 @@
     margin: 8px 0;
   }
 
-  .large {
-    flex: 1;
-    min-width: 220px;
+  .droite {
+    justify-content: flex-end;
   }
 
-  .pastille {
-    padding: 4px 12px;
+  .large {
+    flex: 1;
+    min-width: 260px;
+  }
+
+  .choix-pastilles {
+    gap: 8px;
+  }
+
+  .choix-pastilles button {
+    padding: 6px 14px;
     border: 1px solid var(--ligne);
-    background: transparent;
-    color: var(--texte-2);
+    background: var(--fond);
+    color: var(--texte);
     font: inherit;
+    font-size: 13px;
     cursor: pointer;
   }
 
-  .pastille[aria-pressed='true'] {
+  .choix-pastilles button:hover {
     border-color: var(--cyan);
-    color: var(--texte);
+  }
+
+  .choix-pastilles button.pris {
+    border-color: var(--cyan);
+    background: color-mix(in srgb, var(--cyan) 10%, var(--fond));
+    color: var(--cyan);
+  }
+
+  .grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 8px 0;
+  }
+
+  .champ {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--texte-2);
   }
 
   .case {
@@ -468,8 +505,7 @@
   .resultats {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    margin: 12px 0;
+    margin: 0;
     padding: 0;
     list-style: none;
   }
@@ -477,9 +513,12 @@
   .resultats li {
     display: flex;
     gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--ligne);
-    background: var(--panneau);
+    padding: 12px 0;
+    border-bottom: 1px solid var(--ligne);
+  }
+
+  .resultats li:last-child {
+    border-bottom: 0;
   }
 
   .version {
@@ -488,7 +527,6 @@
     align-items: center;
     gap: 10px;
     padding-top: 6px;
-    border-top: 1px solid var(--ligne);
   }
 
   .code {
