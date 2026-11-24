@@ -51,6 +51,9 @@
     role?: string | null;
     duree?: number | null;
     format?: string | null;
+    /** Clip : sa réplique, mot pour mot, et sa musique d'ambiance. */
+    replique?: string | null;
+    musique?: string | null;
     sansSujet?: boolean;
     /** 💬 d'un plan : la demande du découpage, avec le numéro du plan. */
     sequence?: DemandeDecoupage | null;
@@ -74,6 +77,8 @@
     role = null,
     duree = null,
     format = null,
+    replique = null,
+    musique = null,
     sansSujet = false,
     sequence = null,
     libelleUtiliser = 'Utiliser ce prompt',
@@ -121,6 +126,8 @@
         contexte,
         llm,
         format,
+        replique,
+        musique,
         sujet,
         images,
         role,

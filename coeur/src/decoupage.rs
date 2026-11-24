@@ -183,7 +183,7 @@ pub type Bloc = (String, String);
 
 // --- outils de texte ------------------------------------------------------------------------------------------------
 
-fn espaces(texte: &str) -> String {
+pub(crate) fn espaces(texte: &str) -> String {
     texte.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
@@ -708,15 +708,89 @@ pub fn placer_replique(texte: &str, replique: &str, moment: &str, off: bool) -> 
     espaces(&format!("{} {dit} {}", &texte[..coupure], &texte[coupure..]))
 }
 
+/// Les mots qu'une réplique peut compter pour tenir dans cette durée : quelques mots par seconde, arrondi
+/// vers le bas comme la page. Un entier petit : la troncature est voulue.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub fn mots_permis(duree: u32) -> usize {
+    (MOTS_PAR_SECONDE * f64::from(duree)).floor() as usize
+}
+
+/// La réplique et la musique d'un clip, sans espaces en trop : rien si la demande n'en donne pas.
+///
+/// # Errors
+/// Réplique ou musique trop longue.
+pub fn replique_et_musique(
+    replique: Option<&str>,
+    musique: Option<&str>,
+) -> Result<(String, String), String> {
+    let replique = espaces(replique.unwrap_or_default());
+    let musique = espaces(musique.unwrap_or_default());
+    if replique.chars().count() > LONGUEUR_REPLIQUE {
+        return Err(format!("Réplique de {LONGUEUR_REPLIQUE} caractères au plus"));
+    }
+    if musique.chars().count() > LONGUEUR_MUSIQUE {
+        return Err(format!("Musique de {LONGUEUR_MUSIQUE} caractères au plus"));
+    }
+    Ok((replique, musique))
+}
+
+/// La réplique d'un clip trop longue pour sa durée : H3 la presse ou la coupe.
+pub fn alerte_replique_clip(replique: &str, duree: u32) -> Vec<String> {
+    let mots = replique.split_whitespace().count();
+    let permis = mots_permis(duree);
+    if mots <= permis {
+        return Vec::new();
+    }
+    let suite = "elle risque d'être pressée ou coupée";
+    vec![format!(
+        "Clip : réplique de {mots} mots pour {duree} s (environ {permis} au plus) : {suite}"
+    )]
+}
+
+/// Les garde-fous de la réplique d'un clip écrit par le LLM : une réplique que l'utilisateur n'a pas donnée
+/// est retirée, la sienne est remise mot pour mot si le LLM l'a perdue. `source` : ce que le LLM a le droit
+/// de faire dire (l'idée et la réplique) ; `balise` : le modèle lit ses répliques dans `<d>` ; `champs` : le
+/// prompt est en trois champs, seule la description est touchée. Rend le prompt et les alertes.
+pub fn finir_clip(
+    replique: &str,
+    source: &str,
+    en: &str,
+    balise: bool,
+    champs: bool,
+) -> (String, Vec<String>) {
+    if champs {
+        let (description, ambiance, musique) = h3::separer_champs(en);
+        let (texte, alertes) = finir_clip(replique, source, &description, balise, false);
+        return (
+            h3::assembler_champs(&texte, ambiance.as_deref(), musique.as_deref()),
+            alertes,
+        );
+    }
+    let (texte, inventees) = sans_repliques_inventees(source, en);
+    let mut alertes: Vec<String> = inventees
+        .iter()
+        .map(|r| format!("Réplique inventée par le LLM, retirée : « {r} »"))
+        .collect();
+    let perdue = !replique.is_empty() && !simple(&texte).contains(&simple(replique));
+    let dite = replique.replace('"', "'");
+    let texte = match (perdue, balise) {
+        (false, _) => texte,
+        (true, true) => placer_replique(&texte, replique, "pendant", false),
+        (true, false) => format!("{texte} The character says: \"{dite}\""),
+    };
+    if perdue {
+        alertes.push("Le LLM avait perdu ta réplique : elle est remise mot pour mot".to_owned());
+    }
+    (texte, alertes)
+}
+
 /// Une réplique trop longue pour son plan : H3 la presse ou la coupe.
 pub fn alerte_replique(k: usize, p: &Plan) -> Vec<String> {
     if p.replique.is_empty() {
         return Vec::new();
     }
     let mots = p.replique.split_whitespace().count();
-    // Quelques mots par seconde : un entier petit, arrondi vers le bas comme la page.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let permis = (MOTS_PAR_SECONDE * f64::from(p.duree)).floor() as usize;
+    let permis = mots_permis(p.duree);
     if mots > permis {
         vec![format!(
             "Plan {k} : réplique de {mots} mots pour {} s (environ {permis} au plus) : elle risque d'être pressée ou coupée",
@@ -1316,6 +1390,40 @@ mod tests {
             "integrated_multimodal_description: [Shot 1] The character is a tall woman. She runs."
         ));
         assert!(t.ends_with("overall_soundscape: rain"));
+    }
+
+    #[test]
+    fn replique_d_un_clip_trop_longue_pour_sa_duree() {
+        let quatorze = "un deux trois quatre cinq six sept huit neuf dix onze douze treize quatorze";
+        assert_eq!((mots_permis(5), mots_permis(10)), (12, 25));
+        assert_eq!(alerte_replique_clip(quatorze, 5).len(), 1);
+        assert!(alerte_replique_clip(quatorze, 8).is_empty());
+        assert!(alerte_replique_clip("", 5).is_empty());
+    }
+
+    #[test]
+    fn replique_d_un_clip_gardee_ou_remise() {
+        // Déjà dite : rien ne change.
+        let dite = "The fox says: <d>[French] Bonjour</d> and runs.";
+        let (t, alertes) = finir_clip("Bonjour", "Bonjour", dite, true, false);
+        assert_eq!(t, dite);
+        assert!(alertes.is_empty());
+        // Perdue : remise entre guillemets, ou dans la balise de H3.
+        let (t, alertes) = finir_clip("Bonjour", "Bonjour", "The fox runs.", false, false);
+        assert_eq!(t, "The fox runs. The character says: \"Bonjour\"");
+        assert_eq!(alertes.len(), 1);
+        let (t, _) = finir_clip("Bonjour", "Bonjour", "The fox runs. It stops.", true, false);
+        assert!(t.contains("<d>[French] Bonjour</d>"), "{t}");
+        // Une autre réplique est retirée.
+        let invente = "She says \"Salut\". He runs.";
+        let (t, alertes) = finir_clip("Bonjour", "Bonjour", invente, false, false);
+        assert!(!t.contains("Salut") && t.contains("Bonjour"), "{t}");
+        assert!(alertes.iter().any(|a| a.contains("inventée")), "{alertes:?}");
+        // Trois champs : la description change, l'ambiance reste.
+        let champs = "integrated_multimodal_description: [Shot 1] Fox runs.\n\noverall_soundscape: wind";
+        let (t, _) = finir_clip("Bonjour", "Bonjour", champs, false, true);
+        assert!(t.contains("[Shot 1] Fox runs. The character says:"));
+        assert!(t.ends_with("\n\noverall_soundscape: wind"));
     }
 
     #[test]

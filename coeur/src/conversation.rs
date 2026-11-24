@@ -173,6 +173,12 @@ pub struct DemandeConversation {
     /// Le format de l'image, choisi au Scénario.
     #[serde(default)]
     pub format: Option<String>,
+    /// Clip : ce que dit le personnage, mot pour mot.
+    #[serde(default)]
+    pub replique: Option<String>,
+    /// Clip : la musique d'ambiance voulue.
+    #[serde(default)]
+    pub musique: Option<String>,
     /// Le sujet du guide : ses rubriques cadrent les questions.
     #[serde(default)]
     pub sujet: Option<String>,
@@ -496,6 +502,23 @@ pub fn cadre_format(format: Option<&str>, forme: &str) -> String {
     }
 }
 
+/// Ce que l'utilisateur a fixé pour un clip, dit au LLM : sa réplique, mot pour mot, et la musique voulue.
+fn cadre_clip(replique: &str, musique: &str) -> String {
+    let mut lignes = Vec::new();
+    if !replique.is_empty() {
+        let dite = replique.replace('"', "'");
+        lignes.push(format!(
+            "The user fixed the line the character speaks: \"{dite}\". Keep it word for word, in its own language, in the prompt; never ask about it and never invent another line."
+        ));
+    }
+    if !musique.is_empty() {
+        lignes.push(format!(
+            "The user wants this background music: {musique}. Describe it in the prompt; never ask about it."
+        ));
+    }
+    lignes.join("\n")
+}
+
 /// Les rubriques que le modèle cible n'a pas à se faire demander (`profil_prompt.rubriques_ignorees` de sa fiche).
 pub(crate) fn rubriques_ignorees(wf: Option<&workflows::Workflow>) -> Vec<String> {
     wf.and_then(|w| w.fiche.pointer("/profil_prompt/rubriques_ignorees"))
@@ -556,6 +579,12 @@ pub fn tour(
         return Err(format!("GGUF absent de modeles/llm : {l}"));
     }
     let forme = forme_de(d);
+    // La réplique et la musique ne concernent que le clip.
+    let (replique, musique) = if forme == "clip" {
+        decoupage::replique_et_musique(d.replique.as_deref(), d.musique.as_deref())?
+    } else {
+        (String::new(), String::new())
+    };
     let mut duree = d.duree.unwrap_or(5);
     let mut deja = d.contexte.trim().to_owned();
     // 💬 d'un plan : la conversation sait ce que sait le découpage, ce plan seul à écrire.
@@ -612,6 +641,7 @@ pub fn tour(
         entrees.extend(prep.entrees.iter().map(String::as_str));
     }
     entrees.extend(textes.iter().copied());
+    entrees.extend([replique.as_str(), musique.as_str()]);
     filtre.verifier(&entrees).map_err(|e| e.to_string())?;
     let vues = ids
         .iter()
@@ -679,6 +709,7 @@ pub fn tour(
         ajouter(&prompt::avec_noms_images(note, noms.as_deref()));
     }
     ajouter(&cadre_format(d.format.as_deref(), forme));
+    ajouter(&cadre_clip(&replique, &musique));
     let video = forme == "clip";
     let rubriques = if matches!(forme, "image" | "clip") {
         rubriques_guide(
@@ -822,14 +853,25 @@ pub fn tour(
         questions,
         prompt: mut ecrit,
     } = lu.ok_or_else(|| "Réponse du LLM illisible".to_owned())?;
+    let mut alertes = Vec::new();
     // Les répliques dans la balise <d> de H3, et un clip en trois champs.
-    if matches!(forme, "clip" | "plan") && prompt::dialogue_en_balise(wf.as_ref()) {
+    let balise = matches!(forme, "clip" | "plan") && prompt::dialogue_en_balise(wf.as_ref());
+    if balise {
         ecrit = ecrit.map(|p| decoupage::vers_balises(&p));
+    }
+    // Clip : sa réplique, mot pour mot (aucune autre, remise si le LLM l'a perdue), assez courte pour la durée.
+    if !replique.is_empty() {
+        alertes.extend(decoupage::alerte_replique_clip(&replique, duree));
+        if let Some(p) = ecrit.take() {
+            let source = entrees.join(" ");
+            let (fini, retirees) = decoupage::finir_clip(&replique, &source, &p, balise, en_champs);
+            ecrit = Some(fini);
+            alertes.extend(retirees);
+        }
     }
     if en_champs {
         ecrit = ecrit.map(|p| prompt::mettre_en_champs(&p, role == "animer"));
     }
-    let mut alertes = Vec::new();
     // Un plan : les garde-fous du découpage (réplique du plan à son moment, rien d'inventé).
     if let Some((k, prep)) = &plan
         && let Some(p) = prep.plans.get(*k)
@@ -1119,6 +1161,41 @@ mod tests {
                 || sys.contains("a 8-second video clip with sound")
         );
         assert!(sys.contains("Caméra, Son, Réplique") && sys.contains("overall_soundscape"));
+    }
+
+    #[test]
+    fn le_clip_garde_la_replique_et_la_musique() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let reponse = r#"{"message": "Voilà.", "fiche": {}, "questions": [], "prompt": "A fox looks up and says « Salut ». Wind in the trees."}"#;
+        let mut faux = Faux {
+            reponses: vec![reponse.to_owned()],
+            demandes: Vec::new(),
+        };
+        let mut d = demande(&[("user", ECRIRE)]);
+        d.forme = "clip".into();
+        d.workflow = Some("minimax_h3_t2v".into());
+        d.duree = Some(8);
+        d.replique = Some(" Bonjour ".into());
+        d.musique = Some("piano lent".into());
+        let t = tour(&ctx, &mut faux, &d).unwrap();
+        let sys = systeme(&faux);
+        assert!(sys.contains("line the character speaks: \"Bonjour\""));
+        assert!(sys.contains("background music: piano lent"));
+        // L'autre réplique est retirée, la sienne remise dans la balise de H3.
+        let p = t.prompt.unwrap();
+        let n = p.matches("<d>[French] Bonjour</d>").count();
+        assert!(!p.contains("Salut") && n == 1, "{p}");
+        let alertes = t.alertes.join(" | ");
+        assert!(alertes.contains("inventée"), "{alertes}");
+        // Trop longue, ou refusée par AS-18 : rien n'est demandé au LLM.
+        d.replique = Some("a".repeat(301));
+        let refus = tour(&ctx, &mut faux, &d).unwrap_err();
+        assert_eq!(refus, "Réplique de 300 caractères au plus");
+        d.replique = Some("a twelve-year-old girl, nude".into());
+        let as18 = tour(&ctx, &mut faux, &d).unwrap_err();
+        assert!(as18.starts_with("ERREUR AS-18"));
+        assert_eq!(faux.demandes.len(), 1);
     }
 
     #[test]

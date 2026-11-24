@@ -45,6 +45,12 @@ pub struct DemandeEcriture {
     /// La durée d'un clip, en secondes (absente : 5).
     #[serde(default)]
     pub duree: Option<u32>,
+    /// Clip : ce que dit le personnage, gardé mot pour mot (absente : le LLM n'invente aucune réplique).
+    #[serde(default)]
+    pub replique: Option<String>,
+    /// Clip : la musique d'ambiance voulue (absente : pas de musique de fond).
+    #[serde(default)]
+    pub musique: Option<String>,
 }
 
 /// Le prompt écrit.
@@ -127,11 +133,25 @@ pub fn ecrire_prompt(
         let durees: Vec<String> = montage::DUREES.iter().map(u32::to_string).collect();
         return Err(format!("Durée proposée : {} s", durees.join(", ")));
     }
-    let texte = match (idee.is_empty(), complements.is_empty()) {
+    // La réplique et la musique ne concernent que le clip.
+    let (replique, musique) = if atelier == "clip" {
+        decoupage::replique_et_musique(d.replique.as_deref(), d.musique.as_deref())?
+    } else {
+        (String::new(), String::new())
+    };
+    let mut texte = match (idee.is_empty(), complements.is_empty()) {
         (false, false) => format!("{idee}\n\nAlso fixed (keep it): {complements}"),
         (false, true) => idee.to_owned(),
         _ => complements.to_owned(),
     };
+    // Dites au LLM telles quelles : AS-18 les lit avec l'idée, avant comme après l'écriture.
+    if !replique.is_empty() {
+        let dite = replique.replace('"', "'");
+        texte.push_str(&format!("\n\nSpoken line, word for word: \"{dite}\""));
+    }
+    if !musique.is_empty() {
+        texte.push_str(&format!("\n\nBackground music the user asks for: {musique}"));
+    }
     // AS-18 : l'idée, et les textes d'origine des images (un rush né d'un mineur le reste).
     let origine = creations::textes_origine(&contexte.data, &d.images)?;
     let filtre = securite::filtre(&contexte.dossier).map_err(|e| e.to_string())?;
@@ -196,12 +216,24 @@ pub fn ecrire_prompt(
     let mut alertes = controle.alertes();
     let mut ecrit = controle.texte;
     if atelier == "clip" {
-        if prompt::dialogue_en_balise(wf.as_ref()) {
+        let balise = prompt::dialogue_en_balise(wf.as_ref());
+        let champs = prompt::champs_video(wf.as_ref());
+        if balise {
             ecrit = decoupage::vers_balises(&ecrit); // une réplique entre guillemets passe dans la balise <d> de H3
         }
-        if prompt::champs_video(wf.as_ref()) {
+        // Sa réplique, mot pour mot : aucune autre, remise si le LLM l'a perdue, assez courte pour la durée.
+        if !replique.is_empty() {
+            let (fini, retirees) = decoupage::finir_clip(&replique, &texte, &ecrit, balise, champs);
+            ecrit = fini;
+            alertes.extend(retirees);
+            alertes.extend(decoupage::alerte_replique_clip(&replique, duree));
+        }
+        if champs {
             ecrit = prompt::mettre_en_champs(&ecrit, animer);
             alertes.extend(prompt::controler_coupes(&ecrit, duree));
+            if !musique.is_empty() && crate::h3::separer_champs(&ecrit).2.is_none() {
+                alertes.push("Le LLM n'a pas écrit la musique demandée".to_owned());
+            }
         }
     }
     // L'idée, le prompt et les textes d'origine ensemble : le LLM peut avoir ajouté un terme sensible.
@@ -252,6 +284,8 @@ mod tests {
 
     /// La suite d'un prompt réaliste : assez long pour passer le contrôle qualité (40 mots au moins).
     const SUITE: &str = ", her breath visible in the cold air, soft golden hour light across the meadow, pine trees in the background, gentle snowflakes falling around her, shallow depth of field, a calm winter mood, a detailed natural photograph with fine texture on the fur and the snow";
+    /// Ce qu'un LLM écrit pour un clip H3 : `{dit}` est ce que le renard dit entre guillemets, sans musique.
+    const CLIP_H3: &str = "integrated_multimodal_description: The fox says \"{dit}\" and runs through the snowy forest while the camera slowly tracks beside it at a steady pace, low angle, golden light between the pine trees, snow powder flying behind its paws, its breath visible in the cold air, the forest quiet and wide around it. overall_soundscape: wind";
     use crate::Dossier;
     use crate::comfy_serveur::Fichier;
     use crate::llama::{self, Lancement};
@@ -402,6 +436,104 @@ mod tests {
             ecrire_prompt(&ctx, &mut faux, &sans_rush).unwrap_err(),
             "Choisis le rush à animer"
         );
+    }
+
+    fn demande_de_clip(replique: &str, musique: &str) -> DemandeEcriture {
+        DemandeEcriture {
+            atelier: "clip".to_owned(),
+            idee: "le renard dit bonjour et court".to_owned(),
+            workflow: Some("minimax_h3_t2v".to_owned()),
+            duree: Some(8),
+            replique: Some(replique.to_owned()),
+            musique: Some(musique.to_owned()),
+            ..DemandeEcriture::default()
+        }
+    }
+
+    #[test]
+    fn la_replique_et_la_musique_du_clip_vont_au_llm() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let mut faux = Faux {
+            texte: CLIP_H3.replace("{dit}", "Bonjour"),
+            demandes: Vec::new(),
+        };
+        let d = demande_de_clip(" Bonjour  ", "piano lent");
+        let e = ecrire_prompt(&ctx, &mut faux, &d).unwrap();
+        let user = faux.demandes[0].messages[1]["content"].as_str().unwrap();
+        assert!(user.contains("Spoken line, word for word: \"Bonjour\""));
+        assert!(user.contains("Background music the user asks for: piano lent"));
+        // Sa réplique est dans la balise de H3, une seule fois ; la musique oubliée par le LLM est signalée.
+        assert_eq!(e.prompt.matches("<d>[French] Bonjour</d>").count(), 1);
+        assert!(e.alertes.join(" | ").contains("la musique demandée"));
+        // Sans réplique ni musique, la demande reste celle d'avant.
+        let libre = DemandeEcriture {
+            replique: None,
+            musique: None,
+            ..d.clone()
+        };
+        ecrire_prompt(&ctx, &mut faux, &libre).unwrap();
+        let derniere = faux.demandes.last().unwrap();
+        let user = derniere.messages[1]["content"].as_str().unwrap();
+        assert!(!user.contains("Spoken line"));
+        assert!(!user.contains("Background music"));
+    }
+
+    #[test]
+    fn le_clip_ne_dit_que_sa_replique() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let mut faux = Faux {
+            texte: CLIP_H3.replace("{dit}", "Salut les amis"),
+            demandes: Vec::new(),
+        };
+        let d = demande_de_clip("Bonjour", "");
+        let e = ecrire_prompt(&ctx, &mut faux, &d).unwrap();
+        // La réplique inventée est retirée, la sienne remise mot pour mot.
+        assert!(!e.prompt.contains("Salut les amis"), "{}", e.prompt);
+        assert_eq!(e.prompt.matches("<d>[French] Bonjour</d>").count(), 1);
+        let alertes = e.alertes.join(" | ");
+        assert!(alertes.contains("inventée"), "{alertes}");
+        assert!(alertes.contains("perdu"), "{alertes}");
+    }
+
+    #[test]
+    fn replique_et_musique_du_clip_controlees() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let mut faux = Faux {
+            texte: CLIP_H3.replace("{dit}", "Bonjour"),
+            demandes: Vec::new(),
+        };
+        let longue = demande_de_clip(&"a".repeat(301), "");
+        assert_eq!(
+            ecrire_prompt(&ctx, &mut faux, &longue).unwrap_err(),
+            "Réplique de 300 caractères au plus"
+        );
+        let bruyante = demande_de_clip("", &"a".repeat(201));
+        assert_eq!(
+            ecrire_prompt(&ctx, &mut faux, &bruyante).unwrap_err(),
+            "Musique de 200 caractères au plus"
+        );
+        // Une réplique trop longue pour 8 s se dit mais prévient.
+        let quatorze = "un deux trois quatre cinq six sept huit neuf dix onze douze treize quatorze";
+        let d = demande_de_clip(&format!("{quatorze} {quatorze}"), "");
+        let e = ecrire_prompt(&ctx, &mut faux, &d).unwrap();
+        assert!(e.alertes.join(" | ").contains("réplique de 28 mots pour 8 s"));
+        // L'AS-18 lit la réplique et la musique.
+        let refus = demande_de_clip("a twelve-year-old girl, nude", "");
+        assert!(
+            ecrire_prompt(&ctx, &mut faux, &refus)
+                .unwrap_err()
+                .starts_with("ERREUR AS-18")
+        );
+        // Hors du clip, ces champs sont ignorés.
+        let image = DemandeEcriture {
+            atelier: "image".to_owned(),
+            workflow: Some("krea2_turbo".to_owned()),
+            ..demande_de_clip(&"a".repeat(301), "")
+        };
+        assert!(ecrire_prompt(&ctx, &mut faux, &image).is_ok());
     }
 
     #[test]
