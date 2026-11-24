@@ -4,13 +4,20 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { lireDemarrageAuto, messageErreur, miseAJourDisponible, reglerDemarrageAuto } from '../lib/api';
+  import {
+    chercherMiseAJour,
+    lireDemarrageAuto,
+    messageErreur,
+    miseAJourDisponible,
+    reglerDemarrageAuto,
+  } from '../lib/api';
   import type { Identite, InfosMiseAJour, Reglages } from '../lib/api';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import CarteChoix from '../lib/composants/CarteChoix.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import DialogueMiseAJour from '../dialogues/MiseAJour.svelte';
+  import { texteRecherche } from '../lib/miseAJour';
 
   interface Props {
     identite: Identite;
@@ -24,6 +31,23 @@
   /** La version trouvée au lancement, s'il y en a une : « Voir la mise à jour » n'apparaît qu'alors. */
   let miseAJour = $state<InfosMiseAJour | null>(null);
   let dialogueMiseAJour = $state(false);
+  /** « Vérifier maintenant » : la requête part, puis la ligne dit ce qui a été trouvé ou ce qui a manqué. */
+  let recherche = $state<'repos' | 'en_cours'>('repos');
+  let retourRecherche = $state<{ texte: string; erreur: boolean } | null>(null);
+
+  async function verifierMaintenant() {
+    recherche = 'en_cours';
+    retourRecherche = null;
+    try {
+      const trouvee = await chercherMiseAJour();
+      miseAJour = trouvee;
+      retourRecherche = { texte: texteRecherche(trouvee, identite.version), erreur: false };
+    } catch (e) {
+      retourRecherche = { texte: messageErreur(e), erreur: true };
+    } finally {
+      recherche = 'repos';
+    }
+  }
 
   async function relireDemarrageAuto() {
     if (!identite.enFond) return;
@@ -87,12 +111,27 @@
     <input type="checkbox" bind:checked={reglages.chercherMisesAJour} onchange={enregistrer} />
     Chercher une nouvelle version au lancement (une requête vers GitHub ; rien n'est installé sans ton accord)
   </label>
-  {#if miseAJour}
-    <div class="actions">
-      <span class="discret">La version {miseAJour.version} est publiée (en cours : {miseAJour.actuelle}).</span>
-      <Bouton petit onclick={() => (dialogueMiseAJour = true)}>Voir la mise à jour</Bouton>
+  <div class="actions">
+    <span class="discret" class:erreur={retourRecherche?.erreur} role="status">
+      {#if recherche === 'en_cours'}
+        Recherche en cours… (une requête vers GitHub)
+      {:else if retourRecherche}
+        {retourRecherche.texte}
+      {:else if miseAJour}
+        {texteRecherche(miseAJour, identite.version)}
+      {:else}
+        Une seule requête vers GitHub, seulement quand tu cliques ; rien n'est installé sans ton accord.
+      {/if}
+    </span>
+    <div class="boutons">
+      <Bouton petit desactive={recherche === 'en_cours'} onclick={() => void verifierMaintenant()}>
+        Vérifier maintenant
+      </Bouton>
+      {#if miseAJour}
+        <Bouton petit onclick={() => (dialogueMiseAJour = true)}>Voir la mise à jour</Bouton>
+      {/if}
     </div>
-  {/if}
+  </div>
 </Panneau>
 
 <Panneau titre="Fond animé">
@@ -138,6 +177,16 @@
   .discret {
     color: var(--texte-2);
     font-size: 13px;
+  }
+
+  .discret.erreur {
+    color: var(--rouge);
+  }
+
+  .boutons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .ligne {

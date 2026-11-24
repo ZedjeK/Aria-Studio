@@ -17,6 +17,7 @@ fn main() {
         "installer",
         "lancer_sans_installer",
         "mise_a_jour_disponible",
+        "chercher_mise_a_jour",
         "voir_notes",
         "installer_mise_a_jour",
         "lire_moteurs",

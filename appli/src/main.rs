@@ -224,6 +224,7 @@ fn lancer() -> Result<(), String> {
             installation::installer,
             installation::lancer_sans_installer,
             mise_a_jour::mise_a_jour_disponible,
+            mise_a_jour::chercher_mise_a_jour,
             mise_a_jour::voir_notes,
             mise_a_jour::installer_mise_a_jour,
             moteurs::lire_moteurs,
