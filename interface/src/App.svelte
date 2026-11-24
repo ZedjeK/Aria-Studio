@@ -17,6 +17,7 @@
     miseAJourDisponible,
     quitter,
     repriseV2Vue,
+    type Creation,
     type EtatMoteur,
     type EtatReprise,
     type Identite,
@@ -29,6 +30,7 @@
   } from './lib/api';
   import { pastillesMoteurs, type Pastille } from './lib/menu';
   import { texteBandeau } from './lib/reprise';
+  import type { VersPage } from './lib/rushes';
   import Bandeau from './lib/composants/Bandeau.svelte';
   import BarreTitre from './lib/composants/BarreTitre.svelte';
   import Bouton from './lib/composants/Bouton.svelte';
@@ -92,6 +94,31 @@
   /** Une consigne de retouche, ou le prompt d'un clip, écrits au Scénario. */
   let versRetouche = $state<EnvoiRetouche | null>(null);
   let versClip = $state<EnvoiClip | null>(null);
+  /** Change quand un rush envoyé d'une page à l'autre doit être repris : la page d'arrivée repart de zéro avec lui. */
+  let reprisePage = $state(0);
+
+  /** Un rush de la galerie part vers une autre page : son prompt au Plateau, comme référence, animé ou retouché. */
+  function depuisRush(action: VersPage, rush: Creation) {
+    reprisePage += 1;
+    if (action === 'reutiliser') {
+      versPlateau = {
+        prompt: rush.prompt || rush.idee || '',
+        workflow: rush.workflow ?? null,
+        references: [],
+        modeReference: null,
+      };
+      page = 'plateau';
+    } else if (action === 'reference') {
+      versPlateau = { prompt: '', workflow: null, references: [rush.id], modeReference: 'inspirer' };
+      page = 'plateau';
+    } else if (action === 'animer') {
+      versClip = { prompt: '', mode: 'animer', source: rush.id, duree: 5 };
+      page = 'montage';
+    } else {
+      versRetouche = { source: rush.id, instruction: '', workflow: null };
+      page = 'retouche';
+    }
+  }
   /** L'état des moteurs, relu toutes les quelques secondes pour les pastilles du haut. */
   let moteurs = $state<EtatMoteur[] | null>(null);
   let miseAJour = $state<InfosMiseAJour | null>(null);
@@ -244,12 +271,29 @@
           }}
         />
       {:else if page === 'plateau'}
-        <Plateau {signaler} recu={versPlateau} recuLu={() => (versPlateau = null)} />
+        {#key reprisePage}
+          <Plateau
+            {signaler}
+            recu={versPlateau}
+            recuLu={() => (versPlateau = null)}
+            ouvrirScenario={() => (page = 'scenario')}
+            versPage={depuisRush}
+          />
+        {/key}
       {:else if page === 'retouche'}
-        <Retouche {signaler} recu={versRetouche} recuLu={() => (versRetouche = null)} />
+        {#key reprisePage}
+          <Retouche
+            {signaler}
+            recu={versRetouche}
+            recuLu={() => (versRetouche = null)}
+            ouvrirScenario={() => (page = 'scenario')}
+          />
+        {/key}
       {:else if page === 'montage'}
+        {#key reprisePage}
         <Montage
           {signaler}
+          ouvrirScenario={() => (page = 'scenario')}
           recu={versMontage}
           recuLu={() => (versMontage = null)}
           recuClip={versClip}
@@ -259,6 +303,7 @@
             page = 'scenario';
           }}
         />
+        {/key}
       {:else if page === 'modeles'}
         <Modeles {signaler} />
       {:else if page === 'casting'}

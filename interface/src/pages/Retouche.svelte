@@ -51,9 +51,11 @@
     /** Une consigne écrite au Scénario, avec son image. */
     recu?: EnvoiRetouche | null;
     recuLu?: () => void;
+    /** Ouvre le Scénario (le bouton n'apparaît que si la page peut y aller). */
+    ouvrirScenario?: () => void;
   }
 
-  let { signaler, recu = null, recuLu = () => {} }: Props = $props();
+  let { signaler, recu = null, recuLu = () => {}, ouvrirScenario }: Props = $props();
 
   type Mode = 'retouche' | 'agrandissement';
 
@@ -328,7 +330,7 @@
         consigne = envoi.instruction;
         reecrire = false;
         if (envoi.workflow && options?.workflows.some((w) => w.id === envoi.workflow)) choisirWorkflow(envoi.workflow);
-        signaler('Consigne du Scénario posée : vérifie le masque et lance la retouche.');
+        signaler(envoi.instruction === '' ? 'Image de départ posée : peins la zone à changer et décris le changement.' : 'Consigne du Scénario posée : vérifie le masque et lance la retouche.');
       }
     })();
     void relireCommandes();
@@ -449,6 +451,11 @@
               : 'Ajoute la mer à droite'}
           ></textarea>
         </label>
+        {#if ouvrirScenario}
+          <div class="ligne">
+            <Bouton petit onclick={ouvrirScenario}>✍️ L'écrire au Scénario</Bouton>
+          </div>
+        {/if}
         <div class="ligne">
           <label>
             <input type="checkbox" bind:checked={reecrire} disabled={options.llm.length === 0} />

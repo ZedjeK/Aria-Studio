@@ -33,10 +33,12 @@
     basculer,
     compteRendu,
     images,
+    LIBELLES_VERS,
     libelleAction,
     ongletDe,
     onglets,
     scinderTitre,
+    type VersPage,
   } from '../lib/rushes';
   import { badgeMeilleure, badgeVerification, peutChoisir, texteChoix } from '../lib/vision';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
@@ -55,9 +57,11 @@
     agirClip?: (clip: Creation, action: ActionClip) => void;
     /** Une commande vient d'entrer dans la file (relancée avec un prompt corrigé). */
     enFile?: () => void;
+    /** Rushes : la fiche et le clic droit envoient un rush vers une autre page (réutiliser, référence, animer, retoucher). */
+    versPage?: ((action: VersPage, rush: Creation) => void) | undefined;
   }
 
-  let { signaler, rafraichir, genre = 'images', agirClip, enFile }: Props = $props();
+  let { signaler, rafraichir, genre = 'images', agirClip, enFile, versPage }: Props = $props();
 
   /** Le LLM qui voit compare la sélection (Choisir les meilleures). */
   let compare = $state(false);
@@ -243,7 +247,7 @@
     menu = { x: Math.min(e.clientX, window.innerWidth - 250), y: Math.min(e.clientY, window.innerHeight - 280), id };
   }
 
-  function depuisMenu(action: 'fiche' | 'selection' | ActionRushes | ActionClip) {
+  function depuisMenu(action: 'fiche' | 'selection' | VersPage | ActionRushes | ActionClip) {
     const m = menu;
     menu = null;
     if (!m) return;
@@ -251,6 +255,9 @@
     else if (action === 'selection') {
       selectionne = true;
       if (!selection.includes(m.id)) selection = [...selection, m.id];
+    } else if (action === 'animer' || action === 'retoucher' || action === 'reference' || (action === 'reutiliser' && !bobines)) {
+      const rush = rushes.find((r) => r.id === m.id);
+      if (rush) versPage?.(action, rush);
     } else if (action === 'variante' || action === 'reutiliser' || action === 'sequence') {
       const clip = rushes.find((r) => r.id === m.id);
       if (clip) agirClip?.(clip, action);
@@ -450,6 +457,11 @@
         <button type="button" role="menuitem" onclick={() => depuisMenu('reutiliser')}>Réutiliser le prompt</button>
       {/if}
     {/if}
+    {#if !bobines && versPage && onglet.vue !== 'corbeille'}
+      {#each LIBELLES_VERS as [action, libelle] (action)}
+        <button type="button" role="menuitem" onclick={() => depuisMenu(action)}>{libelle}</button>
+      {/each}
+    {/if}
     <hr />
     <button type="button" role="menuitem" onclick={() => depuisMenu('selection')}>Sélectionner</button>
     {#each proposees.filter((a) => a !== 'ranger') as action (action)}
@@ -494,6 +506,21 @@
           <Bouton petit onclick={() => agirDepuisFiche(r, 'variante')}>Variante</Bouton>
           <Bouton petit onclick={() => agirDepuisFiche(r, 'reutiliser')}>Réutiliser le prompt</Bouton>
         {/if}
+      </div>
+    {/if}
+    {#if !bobines && versPage && onglet.vue !== 'corbeille'}
+      <div class="actions-fiche">
+        {#each LIBELLES_VERS as [action, libelle] (action)}
+          <Bouton
+            petit
+            onclick={() => {
+              fiche = null;
+              versPage?.(action, r);
+            }}
+          >
+            {libelle}
+          </Bouton>
+        {/each}
       </div>
     {/if}
     {#snippet pied()}

@@ -22,6 +22,7 @@
     verifierImages,
     type Commande,
     type EtatVision,
+    type Creation,
     type EnvoiPlateau,
     type ModeReference,
     type OptionsPlateau,
@@ -54,6 +55,7 @@
   import PanneauRushes from './PanneauRushes.svelte';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import { peutChoisir, texteChoix, texteVerifications } from '../lib/vision';
+  import type { VersPage } from '../lib/rushes';
 
   /** La carte « Références » choisie : aucune, mélanger des images (inspirer) ou redessiner une image (variation). */
   type Depart = 'aucune' | ModeReference;
@@ -64,9 +66,13 @@
     recu?: EnvoiPlateau | null;
     /** Le prompt reçu est posé. */
     recuLu?: () => void;
+    /** Ouvre le Scénario (le bouton n'apparaît que si la page peut y aller). */
+    ouvrirScenario?: () => void;
+    /** Un rush de la galerie part vers une autre page (fiche et clic droit). */
+    versPage?: (action: VersPage, rush: Creation) => void;
   }
 
-  let { signaler, recu = null, recuLu }: Props = $props();
+  let { signaler, recu = null, recuLu, ouvrirScenario, versPage }: Props = $props();
 
   let options = $state<OptionsPlateau | null>(null);
   let commandes = $state<Commande[]>([]);
@@ -149,8 +155,11 @@
       choisirWorkflow(garde ? workflowId : (defaut?.id ?? ''));
       // Un prompt du Scénario : il part tel quel, avec son modèle cible s'il est prêt.
       if (recu) {
-        prompt = recu.prompt;
-        reecrire = false;
+        // Un rush pris comme référence n'apporte pas de prompt : l'idée reste à écrire, et le LLM la réécrira.
+        if (recu.prompt !== '') {
+          prompt = recu.prompt;
+          reecrire = false;
+        }
         // S'inspirer ou redessiner : le départ, puis le modèle cible parmi ceux de ce départ, puis les images.
         const depart = recu.modeReference;
         if (depart !== modeReference) changerDepart(depart);
@@ -158,7 +167,7 @@
         if (cible && workflowsPour(depart, options, optionsInspirer).some((w) => w.id === cible)) choisirWorkflow(cible);
         if (depart) references = [...recu.references];
         recuLu?.();
-        signaler('Prompt du Scénario reçu : il partira tel quel.');
+        signaler(recu.prompt === '' ? 'Rush de départ posé : écris ce qui change.' : 'Prompt reçu : il partira tel quel.');
       }
     } catch (e) {
       signaler(messageErreur(e), true);
@@ -386,6 +395,9 @@
           ✨ Écrire avec le LLM
         </Bouton>
         <Bouton genre="discret" petit desactive={texteOrigine === null} onclick={retrouver}>↩ Retrouver mon texte</Bouton>
+        {#if ouvrirScenario}
+          <Bouton genre="discret" petit onclick={ouvrirScenario}>↗ Ouvrir le Scénario</Bouton>
+        {/if}
       {/if}
     </div>
 
@@ -566,7 +578,7 @@
   </div>
 </Panneau>
 
-<PanneauRushes {signaler} {rafraichir} enFile={() => void relireCommandes()} />
+<PanneauRushes {signaler} {rafraichir} enFile={() => void relireCommandes()} {versPage} />
 
 {#if choixRush}
   <Dialogue titre="Quel rush choisir ?" fermer={() => (choixRush = false)}>
