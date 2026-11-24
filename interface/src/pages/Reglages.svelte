@@ -63,6 +63,9 @@
     { id: 'mcp', titre: 'Claude (MCP)' },
   ];
   let onglet = $state('moteurs');
+  /** « Chercher un réglage » et « Modifiés seulement » : gardés d'un onglet à l'autre. */
+  let recherche = $state('');
+  let modifies = $state(false);
   let etat = $state<EtatMoteurs | null>(null);
   /** Ce qu'on demande de confirmer : installer, réinstaller ou revenir, pour un moteur. */
   let demande = $state<{ action: 'installer' | 'reinstaller' | 'revenir'; moteur: EtatMoteur } | null>(null);
@@ -160,9 +163,9 @@
 {:else if onglet === 'lieux'}
   <ReglagesLieux {signaler} />
 {:else if onglet === 'llm'}
-  <ReglagesLlm {signaler} />
+  <ReglagesLlm {signaler} bind:recherche bind:modifies />
 {:else if onglet === 'workflows'}
-  <ReglagesWorkflows {signaler} />
+  <ReglagesWorkflows {signaler} bind:recherche bind:modifies />
 {:else}
 <ASavoir>
   Un seul moteur tient la carte graphique à la fois : ComfyUI se vide quand le LLM écrit, puis reprend. Les versions

@@ -18,18 +18,21 @@
     type Recommandations,
   } from '../lib/api';
   import { ecarts, parCible } from '../lib/optimiseur';
-  import { changements, texteChangements, type Saisies } from '../lib/reglages';
+  import { changements, filtrerReglages, nombreModifies, texteChangements, type Saisies } from '../lib/reglages';
   import ApercuPropositions from '../lib/composants/ApercuPropositions.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import ChampReglage from '../lib/composants/ChampReglage.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import RechercheReglage from '../lib/composants/RechercheReglage.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
+    recherche: string;
+    modifies: boolean;
   }
 
-  let { signaler }: Props = $props();
+  let { signaler, recherche = $bindable(), modifies = $bindable() }: Props = $props();
 
   let etat = $state<EtatReglages | null>(null);
   let id = $state('');
@@ -52,6 +55,20 @@
           ),
   );
   const parDefaut = $derived(workflow?.variantes.find((v) => v.origine));
+  /** Ce que les filtres laissent voir : les réglages du workflow, puis ceux de chaque checkpoint. */
+  const paramsMontres = $derived(workflow ? filtrerReglages(workflow.params, saisies, recherche, modifies) : []);
+  const variantesMontrees = $derived(
+    (workflow?.variantes ?? [])
+      .map((v) => ({ v, params: filtrerReglages(v.params, saisiesVariantes[v.fichier] ?? {}, recherche, modifies) }))
+      .filter((x) => x.params.length > 0),
+  );
+  const nombreMontres = $derived(paramsMontres.length + variantesMontrees.reduce((s, x) => s + x.params.length, 0));
+  const nombreModifiesTotal = $derived(
+    workflow === undefined
+      ? 0
+      : nombreModifies(workflow.params, saisies) +
+          workflow.variantes.reduce((s, v) => s + nombreModifies(v.params, saisiesVariantes[v.fichier] ?? {}), 0),
+  );
   /** Les recommandations de la fiche du workflow affiché, le temps de l'aperçu. */
   let recommandations = $state<Recommandations | null>(null);
   const apercu = $derived(
@@ -133,6 +150,8 @@
 </ASavoir>
 
 {#if etat && workflow}
+  <RechercheReglage bind:recherche bind:modifies nombreModifies={nombreModifiesTotal} {nombreMontres} />
+
   {#if recommandations && apercu}
     <ApercuPropositions
       titre={`Recommandations de la fiche · ${recommandations.nom}`}
@@ -167,9 +186,11 @@
     <p class="discret">{workflow.famille} · modeles\{workflow.dossierModeles.replaceAll('/', '\\')}</p>
     {#if workflow.params.length === 0}
       <p class="discret">Rien à régler pour ce workflow.</p>
+    {:else if nombreMontres === 0}
+      <p class="discret">Aucun réglage ne correspond.</p>
     {:else}
       <div class="grille">
-        {#each workflow.params as p (p.cle)}
+        {#each paramsMontres as p (p.cle)}
           <ChampReglage param={p} bind:saisies />
         {/each}
       </div>
@@ -183,11 +204,11 @@
       {/if}
       <p class="etiquette">Checkpoints de la famille</p>
       <div class="variantes">
-        {#each workflow.variantes as v (v.fichier)}
-          {#if v.params.length > 0}
+        {#each variantesMontrees as { v, params } (v.fichier)}
+          {#if params.length > 0}
             <div class="variante">
               <span class="code nom">{v.fichier}{v.origine ? ' · origine' : ''}</span>
-              {#each v.params as p (p.cle)}
+              {#each params as p (p.cle)}
                 <ChampReglage
                   param={p}
                   bind:saisies={

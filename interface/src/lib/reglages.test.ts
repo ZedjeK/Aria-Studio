@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { ParamReglage } from './api';
-import { changements, groupesLlm, libelleChoix, nomConsigne, texteChangements, valeurAffichee } from './reglages';
+import {
+  changements,
+  filtrerReglages,
+  groupesLlm,
+  libelleChoix,
+  nombreModifies,
+  nomConsigne,
+  texteChangements,
+  valeurAffichee,
+} from './reglages';
 
 function param(changes: Partial<ParamReglage>): ParamReglage {
   return {
@@ -79,5 +88,29 @@ describe('Réglages', () => {
     expect(texteChangements(0)).toBe('0 changement non enregistré');
     expect(texteChangements(1)).toBe('1 changement non enregistré');
     expect(texteChangements(2)).toBe('2 changements non enregistrés');
+  });
+
+  it('cherche un réglage sans accent ni majuscule, mot par mot', () => {
+    const params = [
+      param({ cle: 'temperature_reflexion', libelle: 'Température · écriture avec réflexion' }),
+      param({ cle: 'top_k', libelle: 'Top-k · sans réflexion', aide: 'Nombre de mots candidats' }),
+    ];
+    expect(filtrerReglages(params, {}, '', false)).toHaveLength(2);
+    expect(filtrerReglages(params, {}, 'TEMPERATURE', false).map((p) => p.cle)).toEqual(['temperature_reflexion']);
+    expect(filtrerReglages(params, {}, 'reflexion sans', false).map((p) => p.cle)).toEqual(['top_k']);
+    expect(filtrerReglages(params, {}, 'candidats', false).map((p) => p.cle)).toEqual(['top_k']);
+    expect(filtrerReglages(params, {}, 'absent', false)).toEqual([]);
+  });
+
+  it('ne garde que les réglages modifiés, enregistrés ou en cours de saisie', () => {
+    const params = [
+      param({ cle: 'a', defaut: 1, valeur: 2, modifie: true }),
+      param({ cle: 'b', defaut: 1, valeur: 1 }),
+      param({ cle: 'c', defaut: 1, valeur: 1 }),
+    ];
+    expect(filtrerReglages(params, {}, '', true).map((p) => p.cle)).toEqual(['a']);
+    expect(filtrerReglages(params, { c: 5, a: null }, '', true).map((p) => p.cle)).toEqual(['c']);
+    expect(nombreModifies(params, {})).toBe(1);
+    expect(nombreModifies(params, { b: 3 })).toBe(2);
   });
 });
