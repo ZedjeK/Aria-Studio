@@ -42,6 +42,10 @@
   let ecoutee = $state<string | null>(null);
 
   const seed = $derived(lireSeed(seedTexte));
+  /** Le dernier essai pas encore gardé : il se garde dans le panneau de l'essai, sous un nom. */
+  const brouillon = $derived(voix.find((v) => !v.gardee));
+  /** La bibliothèque : les voix gardées, puis les autres essais à garder. */
+  const autres = $derived(voix.filter((v) => v.id !== brouillon?.id));
 
   async function relire() {
     try {
@@ -113,11 +117,10 @@
   });
 </script>
 
-<Panneau titre="Voix">
+<Panneau titre="Essai de voix" accentue>
   <p class="discret">
-    Les voix de référence des séquences. Un essai fait dire une phrase au personnage en cabine silencieuse
-    {options ? `(≈ ${Math.round(options.estimationS / 60)} min)` : ''} ; un fichier audio de {options?.dureeMin ?? 3} s
-    au moins ({options?.formats.join(', ') ?? 'wav, mp3, flac, ogg'}) sert tel quel.
+    Un essai fait dire une phrase au personnage en cabine silencieuse
+    {options ? `(≈ ${Math.round(options.estimationS / 60)} min)` : ''} : seul le son est gardé, si tu le gardes.
   </p>
   <div class="grille">
     <label>
@@ -143,16 +146,31 @@
     <ChoixRushes max={1} bind:selection={personnage} {signaler} />
   </details>
   <div class="actions">
-    <Bouton desactive={seed === undefined} onclick={() => void essayer()}>Essayer cette voix</Bouton>
-    <label class="import">
-      <span class="etiquette">Ou un fichier audio</span>
-      <input type="text" maxlength={options?.longueurNom ?? 40} placeholder="Nom de la voix" bind:value={nomImport} />
-      <input type="file" accept=".wav,.mp3,.flac,.ogg,audio/*" onchange={importer} />
-    </label>
+    <Bouton petit desactive={seed === undefined} onclick={() => void essayer()}>
+      {brouillon ? '🔁 Autre prise' : '🎙️ Tourner l’essai'}
+    </Bouton>
   </div>
+  {#if brouillon}
+    <div class="brouillon">
+      <span class="discret">
+        Essai à garder{brouillon.duree_son ? ` · ${brouillon.duree_son} s` : ''}{brouillon.phrase ? ` · « ${brouillon.phrase} »` : ''}
+      </span>
+      <SonVoix id={brouillon.id} />
+      <div class="actions">
+        <label class="nom">
+          <span class="etiquette">Nom de la voix</span>
+          <input type="text" maxlength={options?.longueurNom ?? 40} placeholder="Voix de Maya, version calme" bind:value={noms[brouillon.id]} />
+        </label>
+        <Bouton genre="principal" onclick={() => void garder(brouillon)}>✓ Garder</Bouton>
+        <Bouton genre="discret" petit onclick={() => void supprimer(brouillon)}>✕ Jeter</Bouton>
+      </div>
+    </div>
+  {/if}
+</Panneau>
 
+<Panneau titre={`Bibliothèque de voix · ${autres.length}`}>
   <ul class="voix">
-    {#each voix as v (v.id)}
+    {#each autres as v (v.id)}
       <li>
         <div class="texte">
           <strong>{v.nom ?? 'Essai à garder'}</strong>
@@ -167,19 +185,27 @@
         </div>
         <div class="actions">
           <Bouton genre="discret" petit onclick={() => (ecoutee = ecoutee === v.id ? null : v.id)}>
-            {ecoutee === v.id ? 'Fermer' : 'Écouter'}
+            {ecoutee === v.id ? 'Fermer' : '▶ Écouter'}
           </Bouton>
           {#if !v.gardee}
             <input type="text" maxlength={options?.longueurNom ?? 40} placeholder="Nom" bind:value={noms[v.id]} />
             <Bouton petit onclick={() => void garder(v)}>Garder</Bouton>
           {/if}
-          <Bouton genre="discret" petit onclick={() => void supprimer(v)}>Corbeille</Bouton>
+          <Bouton genre="discret" petit onclick={() => void supprimer(v)}>✕ Corbeille</Bouton>
         </div>
       </li>
     {:else}
-      <li class="discret">Aucune voix pour l'instant.</li>
+      <li class="discret">Aucune voix gardée pour l'instant : tourne un essai, ou importe un fichier audio.</li>
     {/each}
   </ul>
+  <div class="actions import">
+    <input type="text" maxlength={options?.longueurNom ?? 40} placeholder="Nom de la voix importée" bind:value={nomImport} aria-label="Nom de la voix importée" />
+    <label class="bouton-fichier">
+      📁 Importer un fichier audio…
+      <input type="file" accept=".wav,.mp3,.flac,.ogg,audio/*" onchange={importer} />
+    </label>
+    <span class="discret">{options?.formats.join(', ') ?? 'wav, mp3, flac, ogg'}, {options?.dureeMin ?? 3} s au moins</span>
+  </div>
 </Panneau>
 
 <style>
@@ -193,12 +219,15 @@
   label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
   .etiquette {
-    font-size: 12px;
     color: var(--texte-2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
   .actions {
@@ -209,18 +238,45 @@
     margin: 8px 0;
   }
 
-  .import {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
+  .brouillon {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
+    margin-top: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--ligne);
+    background: var(--fond);
+  }
+
+  .nom {
+    min-width: 240px;
+  }
+
+  .import {
+    margin-top: 14px;
+  }
+
+  .bouton-fichier {
+    position: relative;
+    flex-direction: row;
+    padding: 6px 14px;
+    border: 1px solid var(--ligne);
+    color: var(--texte-2);
+    cursor: pointer;
+  }
+
+  .bouton-fichier input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
   }
 
   .voix {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin: 10px 0 0;
+    margin: 0;
     padding: 0;
     list-style: none;
   }

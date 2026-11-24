@@ -91,7 +91,6 @@
   let choixRush = $state<'personnage' | number | null>(null);
   let rushChoisi = $state<string[]>([]);
   let regarde = $state<string | null>(null);
-  let corbeilleOuverte = $state(false);
 
   const opts = $derived(etat?.options ?? null);
   const loras = $derived(lorasChoisies(workflow.loras, lignesLoras));
@@ -370,7 +369,7 @@
 </script>
 
 <div bind:this={cadre}></div>
-<Panneau titre="Séquences">
+<Panneau titre="Séquence" accentue>
   {#if !etat || !courante || !opts}
     <p class="discret">Lecture…</p>
   {:else}
@@ -405,6 +404,19 @@
         />
       </label>
       {#if nonEnregistree}<span class="alerte">● non enregistrée</span>{/if}
+      <Bouton genre="discret" petit desactive={bloque} onclick={() => void enregistrer()}>Enregistrer</Bouton>
+      <Bouton genre="discret" petit desactive={bloque || !courante.id} onclick={mettreALaCorbeille}>Supprimer</Bouton>
+      {#if retravailler}
+        <Bouton
+          petit
+          desactive={bloque || !courante.id || nonEnregistree}
+          onclick={() => {
+            if (courante) retravailler?.($state.snapshot(courante));
+          }}
+        >
+          ✍️ Retravailler au Scénario
+        </Bouton>
+      {/if}
     </div>
 
     {#if courante.alerte}
@@ -511,7 +523,7 @@
       {#each courante.plans as p, k (k)}
         <li class:a-jour={!indices.includes(k)}>
           <div class="ligne">
-            <strong>Plan {k + 1}</strong>
+            <span class="puce" class:cyan={!indices.includes(k)}>PLAN {k + 1}</span>
             <select
               value={p.enchainement}
               onchange={(e) => changerEnchainement(k, e.currentTarget.value as Enchainement)}
@@ -618,50 +630,42 @@
           ? `${indices.length} plan${indices.length > 1 ? 's' : ''} à tourner · ≈ ${dureeLisible(estimation)} sur la carte de la mesure`
           : 'Tous les plans sont à jour'} · film d'environ {dureeFilm} s
       </span>
-      <Bouton genre="discret" desactive={bloque || !courante.id} onclick={mettreALaCorbeille}>Corbeille</Bouton>
-      {#if retravailler}
-        <Bouton
-          genre="discret"
-          desactive={bloque || !courante.id || nonEnregistree}
-          onclick={() => {
-            if (courante) retravailler?.($state.snapshot(courante));
-          }}
-        >
-          ✍️ Au Scénario
-        </Bouton>
-      {/if}
-      <Bouton desactive={bloque} onclick={() => void enregistrer()}>Enregistrer</Bouton>
       <Bouton genre="principal" desactive={bloque || workflow.modeles.length === 0} onclick={() => void tourner()}>
         {indices.length > 0 ? 'Tourner la séquence' : 'Tout retourner'}
       </Bouton>
     </div>
 
-    {#if courante.film}
-      <h3>Le film</h3>
-      <VideoCreation id={courante.film} />
-    {/if}
-
-    {#if etat.corbeille.length > 0}
-      <details bind:open={corbeilleOuverte}>
-        <summary>Séquences à la corbeille ({etat.corbeille.length})</summary>
-        <ul class="corbeille">
-          {#each etat.corbeille as s (s.id)}
-            <li>
-              <span>{s.titre}</span>
-              <span class="discret">
-                {s.plans} plan{s.plans > 1 ? 's' : ''}{s.date
-                  ? ` · le ${new Date(s.date).toLocaleDateString('fr-FR')}`
-                  : ''}
-              </span>
-              <Bouton genre="discret" petit onclick={() => restaurer(s.id)}>Restaurer</Bouton>
-            </li>
-          {/each}
-        </ul>
-        <Bouton genre="discret" petit onclick={vider}>Vider la corbeille</Bouton>
-      </details>
-    {/if}
   {/if}
 </Panneau>
+
+{#if etat && courante && opts}
+  {#if courante.film}
+    <Panneau titre="Le film">
+      <VideoCreation id={courante.film} />
+      <p class="discret">
+        Film assemblé : {courante.plans.filter((p) => p.clip).length} plan{courante.plans.filter((p) => p.clip).length > 1 ? 's' : ''}
+        sur {courante.plans.length} · environ {dureeFilm} s.
+      </p>
+    </Panneau>
+  {/if}
+
+  {#if etat.corbeille.length > 0}
+    <Panneau titre={`Séquences à la corbeille · ${etat.corbeille.length}`}>
+      <ul class="corbeille">
+        {#each etat.corbeille as s (s.id)}
+          <li>
+            <span>{s.titre}</span>
+            <span class="discret">
+              {s.plans} plan{s.plans > 1 ? 's' : ''}{s.date ? ` · le ${new Date(s.date).toLocaleDateString('fr-FR')}` : ''}
+            </span>
+            <Bouton genre="discret" petit onclick={() => restaurer(s.id)}>Restaurer</Bouton>
+          </li>
+        {/each}
+      </ul>
+      <Bouton genre="discret" petit onclick={vider}>Vider la corbeille</Bouton>
+    </Panneau>
+  {/if}
+{/if}
 
 {#if choixRush !== null}
   <Dialogue titre={choixRush === 'personnage' ? 'Quel personnage pour la séquence ?' : 'Quel rush pour ce plan ?'} fermer={() => (choixRush = null)}>
@@ -684,6 +688,21 @@
 {/if}
 
 <style>
+  .puce {
+    display: inline-flex;
+    padding: 2px 10px;
+    border: 1px solid var(--ligne);
+    color: var(--texte-2);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+
+  .puce.cyan {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
   .ligne,
   .actions,
   .corps-plan {
