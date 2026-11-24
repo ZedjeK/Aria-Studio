@@ -310,7 +310,12 @@
         <Casting {signaler} />
       {:else if page === 'reglages'}
         {#key `${apresAssistant}-${ouvertureReglages}`}
-          <PageReglages {signaler} ouvrirAssistant={() => (assistant = true)} ongletInitial={ongletReglages} />
+          <PageReglages
+            {signaler}
+            ouvrirAssistant={() => (assistant = true)}
+            ouvrirModeles={() => (page = 'modeles')}
+            ongletInitial={ongletReglages}
+          />
         {/key}
       {:else if page === 'journal'}
         <Journal {signaler} />
