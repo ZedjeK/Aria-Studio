@@ -237,7 +237,7 @@ pub async fn oublier_reglage_lora(
     .await
 }
 
-/// Met un modèle téléchargé par Aria à la corbeille (un fichier en cours de téléchargement n'y va pas).
+/// Met un modèle de la collection à la corbeille, téléchargé par Aria ou déposé à la main (rien n'est effacé).
 #[tauri::command]
 pub async fn jeter_modele(file: State<'_, Arc<Telechargeur>>, cle: String) -> Result<(), String> {
     hors_interface(&file, move |f| {
