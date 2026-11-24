@@ -227,6 +227,7 @@ fn lancer() -> Result<(), String> {
             mise_a_jour::voir_notes,
             mise_a_jour::installer_mise_a_jour,
             moteurs::lire_moteurs,
+            moteurs::lire_vram,
             moteurs::installer_moteur,
             moteurs::annuler_installation_moteur,
             moteurs::revenir_moteur,

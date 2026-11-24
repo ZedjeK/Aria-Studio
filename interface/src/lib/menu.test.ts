@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EtatMoteur } from './api';
-import { couleurTon, ligneErreur, pastillesMoteurs } from './menu';
+import { couleurTon, fractionVram, ligneErreur, pastillesMoteurs, texteVram } from './menu';
 
 describe('menu de l’icône', () => {
   it('donne à chaque ton la couleur de la pastille', () => {
@@ -61,6 +61,33 @@ describe('menu de l’icône', () => {
 
     it('prend le ComfyUI de l’utilisateur pour un moteur installé', () => {
       expect(pastillesMoteurs([moteur('comfyui', 'externe')])[0]).toEqual({ nom: 'ComfyUI', detail: 'au repos', ton: 'repos' });
+    });
+  });
+
+  describe('VRAM en fond des pastilles', () => {
+    it('remplit la part utilisée de la VRAM totale', () => {
+      expect(fractionVram({ utiliseeGo: 8, totaleGo: 16 })).toBe(0.5);
+      expect(fractionVram({ utiliseeGo: 0, totaleGo: 16 })).toBe(0);
+    });
+
+    it('ne dépasse jamais le bloc entier', () => {
+      expect(fractionVram({ utiliseeGo: 20, totaleGo: 16 })).toBe(1);
+      expect(texteVram({ utiliseeGo: 20, totaleGo: 16 })).toBe('16 Go sur 16 Go');
+    });
+
+    it('dit « 9,8 Go sur 16 Go » dans l’info-bulle, sans « ,0 » inutile', () => {
+      expect(texteVram({ utiliseeGo: 9.8, totaleGo: 16 })).toBe('9,8 Go sur 16 Go');
+      expect(texteVram({ utiliseeGo: 9.8, totaleGo: 15.99 })).toBe('9,8 Go sur 16 Go');
+      expect(texteVram({ utiliseeGo: 0.04, totaleGo: 24 })).toBe('0 Go sur 24 Go');
+    });
+
+    it('ne montre rien sans lecture, jamais un chiffre supposé', () => {
+      expect(fractionVram(null)).toBeNull();
+      expect(texteVram(null)).toBeNull();
+      expect(fractionVram({ utiliseeGo: 3, totaleGo: 0 })).toBeNull();
+      expect(texteVram({ utiliseeGo: 3, totaleGo: 0 })).toBeNull();
+      expect(fractionVram({ utiliseeGo: Number.NaN, totaleGo: 16 })).toBeNull();
+      expect(texteVram({ utiliseeGo: -1, totaleGo: 16 })).toBeNull();
     });
   });
 });

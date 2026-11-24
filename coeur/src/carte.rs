@@ -91,6 +91,39 @@ pub fn vram_utilisee() -> Option<u64> {
     Some(nvml.device_by_index(0).ok()?.memory_info().ok()?.used)
 }
 
+/// La VRAM de la première carte à l'instant, en Go : de quoi remplir le fond des pastilles de l'état en direct.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Vram {
+    /// Ce que tous les programmes occupent, bureau compris.
+    pub utilisee_go: f64,
+    pub totale_go: f64,
+}
+
+/// La VRAM en Go (au centième) d'après ce que NVML a lu ; rien si la carte dit zéro octet, jamais de valeur
+/// supposée. Une occupation au-delà du total est ramenée au total.
+fn vram_en_go(utilisee: u64, totale: u64) -> Option<Vram> {
+    if totale == 0 {
+        return None;
+    }
+    Some(Vram {
+        utilisee_go: en_go(utilisee.min(totale)),
+        totale_go: en_go(totale),
+    })
+}
+
+fn en_go(octets: u64) -> f64 {
+    #[allow(clippy::cast_precision_loss)] // des Go affichés au centième
+    let go = octets as f64 / GIO as f64;
+    (go * 100.0).round() / 100.0
+}
+
+/// La VRAM utilisée et totale de la première carte, lues d'un seul appel à NVML ; rien sans carte NVIDIA.
+pub fn vram_directe() -> Option<Vram> {
+    let memoire = nvml()?.device_by_index(0).ok()?.memory_info().ok()?;
+    vram_en_go(memoire.used, memoire.total)
+}
+
 /// La VRAM totale de la première carte, en octets ; rien sans NVML.
 pub fn vram_totale() -> Option<u64> {
     let nvml = nvml()?;
@@ -131,6 +164,32 @@ mod tests {
         assert_eq!(libre(16 * GIO, GIO), 15 * GIO);
         assert_eq!(libre(16 * GIO, 12 * GIO), 16 * GIO - AUTRES_MAX);
         assert_eq!(libre(GIO, 0), GIO);
+    }
+
+    #[test]
+    fn la_vram_se_rend_en_go_au_centieme() {
+        let v = vram_en_go(98 * GIO / 10, 16 * GIO).unwrap();
+        assert!((v.utilisee_go - 9.8).abs() < 1e-9, "{v:?}");
+        assert!((v.totale_go - 16.0).abs() < 1e-9, "{v:?}");
+    }
+
+    #[test]
+    fn une_vram_sans_total_ne_se_devine_pas() {
+        assert_eq!(vram_en_go(GIO, 0), None);
+    }
+
+    #[test]
+    fn une_occupation_au_dela_du_total_est_ramenee_au_total() {
+        let v = vram_en_go(20 * GIO, 16 * GIO).unwrap();
+        assert!((v.utilisee_go - v.totale_go).abs() < 1e-9, "{v:?}");
+    }
+
+    #[test]
+    fn la_vram_directe_ne_plante_jamais_meme_sans_carte() {
+        // Sur la CI, il n'y a pas de carte NVIDIA : rien à rendre, sans erreur.
+        if let Some(v) = vram_directe() {
+            assert!(v.utilisee_go <= v.totale_go);
+        }
     }
 
     #[test]

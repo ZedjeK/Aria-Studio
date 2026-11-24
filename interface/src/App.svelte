@@ -13,6 +13,7 @@
     identite as lireIdentite,
     lireMoteurs,
     lireReglages,
+    lireVram,
     messageErreur,
     miseAJourDisponible,
     quitter,
@@ -23,6 +24,7 @@
     type Identite,
     type InfosMiseAJour,
     type Reglages,
+    type Vram,
     type EnvoiClip,
     type EnvoiPlateau,
     type EnvoiRetouche,
@@ -34,7 +36,7 @@
   import Bandeau from './lib/composants/Bandeau.svelte';
   import BarreTitre from './lib/composants/BarreTitre.svelte';
   import Bouton from './lib/composants/Bouton.svelte';
-  import EtatDirect from './lib/composants/EtatDirect.svelte';
+  import EtatDirectVram from './lib/EtatDirectVram.svelte';
   import FondAnime from './lib/composants/FondAnime.svelte';
   import MenuLateral from './lib/composants/MenuLateral.svelte';
   import DialogueAssistant from './dialogues/Assistant.svelte';
@@ -121,6 +123,8 @@
   }
   /** L'état des moteurs, relu toutes les quelques secondes pour les pastilles du haut. */
   let moteurs = $state<EtatMoteur[] | null>(null);
+  /** La VRAM de la carte, relue avec les moteurs : le fond des pastilles. null : pas de carte NVIDIA, ou pas de lecture. */
+  let vram = $state<Vram | null>(null);
   let miseAJour = $state<InfosMiseAJour | null>(null);
   let bandeauRange = $state(false);
   /** La reprise d'une v2 pour un essai portable : annoncée une fois au premier lancement. */
@@ -145,6 +149,12 @@
       moteurs = (await lireMoteurs()).moteurs;
     } catch {
       // Les pastilles gardent leur dernier état.
+    }
+    try {
+      vram = await lireVram();
+    } catch {
+      // Une lecture ratée ne laisse pas un chiffre périmé : le fond disparaît jusqu'à la prochaine lecture.
+      vram = null;
     }
   }
 
@@ -227,7 +237,7 @@
 
     <BarreTitre>
       <span class="chemin" data-tauri-drag-region>{famille?.titre ?? ''} <b>/ {titrePage}</b></span>
-      <EtatDirect {pastilles} />
+      <EtatDirectVram {pastilles} {vram} />
     </BarreTitre>
 
     {#if miseAJour && !bandeauRange}

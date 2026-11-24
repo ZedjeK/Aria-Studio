@@ -15,6 +15,7 @@
     "allow-voir-notes",
     "allow-installer-mise-a-jour",
     "allow-lire-moteurs",
+    "allow-lire-vram",
     "allow-installer-moteur",
     "allow-annuler-installation-moteur",
     "allow-revenir-moteur",
