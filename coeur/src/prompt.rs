@@ -168,11 +168,7 @@ const VARIATION: Gabarit = Gabarit {
 /// Les règles du modèle cible pour redessiner une image : sans son « plan », la structure d'une description complète
 /// (ouverture, placements, lumière, clôture), qui ramènerait le prompt à décrire toute la scène.
 fn regles_variation(regles: &[(String, Vec<String>)]) -> Vec<(String, Vec<String>)> {
-    regles
-        .iter()
-        .filter(|(cle, _)| cle != "plan")
-        .cloned()
-        .collect()
+    regles.iter().filter(|(cle, _)| cle != "plan").cloned().collect()
 }
 
 /// Images de référence (« S'inspirer ») : une nouvelle scène, les références citées par leur numéro.
@@ -743,7 +739,11 @@ pub struct Attentes {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Defaut {
     Langue,
-    Longueur { mots: u64, min: u64, max: u64 },
+    Longueur {
+        mots: u64,
+        min: u64,
+        max: u64,
+    },
     Preambule,
     TexteCite,
     /// Une instruction d'édition qui décrit l'image au lieu de dire ce qui change.
@@ -2265,8 +2265,12 @@ You write the prompt for an image model that redraws a starting image."
         // Seules les ouvertures de description sans ambiguïté comptent.
         assert!(decrit_l_image("In this photo, the woman stands by a window."));
         assert!(decrit_l_image("This picture is a portrait of a woman."));
-        assert!(!decrit_l_image("A photograph of the woman from Picture 1, now in a red dress."));
-        assert!(!decrit_l_image("Make the picture warmer and keep everything else unchanged."));
+        assert!(!decrit_l_image(
+            "A photograph of the woman from Picture 1, now in a red dress."
+        ));
+        assert!(!decrit_l_image(
+            "Make the picture warmer and keep everything else unchanged."
+        ));
     }
 
     #[test]
