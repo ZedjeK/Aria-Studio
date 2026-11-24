@@ -240,6 +240,47 @@ export function alertesJusqua(alertes: string[], n: number): string[] {
   });
 }
 
+/** Une liste où l'élément `k` a avancé (delta -1) ou reculé (delta 1) d'un rang ; rien ne bouge au bord. */
+export function deplacer<T>(liste: T[], k: number, delta: -1 | 1): T[] {
+  const vers = k + delta;
+  const a = liste[k];
+  const b = liste[vers];
+  if (a === undefined || b === undefined) return liste;
+  const copie = [...liste];
+  copie[k] = b;
+  copie[vers] = a;
+  return copie;
+}
+
+/** Une liste sans l'élément `k`. */
+export function retirer<T>(liste: T[], k: number): T[] {
+  return liste.filter((_, i) => i !== k);
+}
+
+/** Les alertes d'un plan (« Plan 2 : … ») suivent le plan quand il change de rang ; `renumeroter` rend son nouveau
+ * rang (0 = le premier), ou null s'il disparaît. */
+export function alertesRenumerotees(alertes: string[], renumeroter: (rang: number) => number | null): string[] {
+  return alertes.flatMap((a) => {
+    const m = /^Plan (\d+) :(.*)$/s.exec(a);
+    if (!m) return [a];
+    const nouveau = renumeroter(Number(m[1]) - 1);
+    return nouveau === null ? [] : [`Plan ${nouveau + 1} :${m[2]}`];
+  });
+}
+
+/** Un plan qui change de rang change de type possible : seul le premier part du texte ou de la référence, les autres
+ * enchaînent. Le rush d'arrivée ne vaut que pour une transition. */
+export function corrigerEnchainements(plans: PlanDecoupage[], reference: string | null): PlanDecoupage[] {
+  return plans.map((p, k) => {
+    const depart = p.enchainement === 'texte' || p.enchainement === 'rush';
+    const enchainement: Enchainement =
+      k === 0 ? (depart ? p.enchainement : reference ? 'rush' : 'texte') : depart ? 'couper' : p.enchainement;
+    return enchainement === p.enchainement && (enchainement === 'transition' || p.rush === null)
+      ? p
+      : { ...p, enchainement, rush: enchainement === 'transition' ? p.rush : null };
+  });
+}
+
 /** Ce que le Montage reçoit : un plan déjà dans la séquence garde son identifiant (et son clip) et sa seed. */
 export function plansPourMontage(
   plans: PlanDecoupage[],
