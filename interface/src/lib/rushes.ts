@@ -29,6 +29,12 @@ export function onglets(etat: EtatRushes): Onglet[] {
   ];
 }
 
+/** « Essais (11) » : le nom d'un onglet et son nombre, pour le volet (le nombre à droite, en petit). */
+export function scinderTitre(titre: string): { nom: string; nombre: string } {
+  const m = /^(.*) \((\d+)\)$/.exec(titre);
+  return m ? { nom: m[1] ?? titre, nombre: m[2] ?? '' } : { nom: titre, nombre: '' };
+}
+
 /** L'onglet de cette clé, ou « Tous » s'il a disparu (dossier supprimé ou renommé). */
 export function ongletDe(liste: Onglet[], cle: string): Onglet {
   return liste.find((o) => o.cle === cle) ?? { cle: 'tous', titre: 'Tous', vue: 'tous', dossier: null };
