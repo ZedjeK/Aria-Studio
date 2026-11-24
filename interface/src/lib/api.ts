@@ -14,10 +14,19 @@ export interface ReglagesFond {
   maximum: number;
 }
 
+/** Les notifications Windows de fin de rendu (`notifications.active` et `notifications.son` dans reglages.json). */
+export interface ReglagesNotifications {
+  /** Prévenir quand une image, une retouche, un clip, une séquence ou un casting se termine. */
+  active: boolean;
+  /** Avec le son de Windows ; décoché, la notification est silencieuse. */
+  son: boolean;
+}
+
 export interface Reglages {
   fond: ReglagesFond;
   proposerInstallation: boolean;
   chercherMisesAJour: boolean;
+  notifications: ReglagesNotifications;
 }
 
 export interface Identite {
@@ -1188,6 +1197,12 @@ export const miseAJourDisponible = (): Promise<InfosMiseAJour | null> =>
  */
 export const chercherMiseAJour = (): Promise<InfosMiseAJour | null> =>
   invoke<InfosMiseAJour | null>('chercher_mise_a_jour');
+
+/**
+ * « Essayer » (Paramètres › Notifications) : montre une notification Windows d'essai, avec ou sans son, même si les
+ * notifications sont décochées. Rien ne passe par le réseau.
+ */
+export const essayerNotification = (son: boolean): Promise<void> => invoke<void>('essayer_notification', { son });
 
 /** Ouvre la page de la release dans le navigateur. */
 export const voirNotes = (): Promise<void> => invoke<void>('voir_notes');

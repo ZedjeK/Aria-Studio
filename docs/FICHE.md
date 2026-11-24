@@ -31,6 +31,7 @@ colonne « Preuve » renvoie au fichier qui fait foi.
 - **Les moteurs eux-mêmes** (ComfyUI, llama-server, Python) peuvent écrire dans `%TEMP%` ou un cache : non vérifié.
 - **Démarrer avec Windows** : la valeur « Aria Studio » de `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, seulement si la case est cochée (décochée d'office) ; décocher la retire. Le journal garde la valeur d'avant.
 - **Raccourci du Bureau** : « Aria Studio.lnk », seulement si la case est cochée à l'installation (décochée d'office). Bureau de l'utilisateur seulement (jamais le Bureau public), vers `programme\Aria-Studio.exe` ; un raccourci déjà là n'est mis à jour qu'après une question.
+- **Notifications Windows** (la fin d'une image, d'une retouche, d'un clip, d'une séquence ou d'un casting ; Paramètres › Notifications) : une notification locale de Windows (WinRT), qui ne passe par aucun réseau ; Aria n'écrit rien pour elle. Elle emprunte l'identité de PowerShell, que Windows connaît toujours : son en-tête porte ce nom, et Windows y range lui-même son réglage de notification, ce qui n'est pas du fait d'Aria. Les deux choix (`notifications.active`, `notifications.son`) vivent dans `reglages.json`, comme en v2.
 
 Rien dans `%APPDATA%`, `%LOCALAPPDATA%`, une tâche planifiée ou un service, dans le code d'`app/` ; dans le registre, seulement la valeur de démarrage ci-dessus.
 

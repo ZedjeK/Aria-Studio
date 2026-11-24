@@ -16,6 +16,7 @@ mod lieux;
 mod mcp;
 mod mise_a_jour;
 mod moteurs;
+mod notifications;
 mod plateau;
 mod reglages_fins;
 mod scenario;
@@ -180,7 +181,8 @@ fn lancer() -> Result<(), String> {
     let cache_webview = dossier.cache_webview();
     let moteurs = moteurs::Moteurs::new(&emplacements)?;
     moteurs::reprendre(&moteurs);
-    let plateau = plateau::demarrer(&emplacements, &moteurs);
+    let poignee = notifications::Poignee::default();
+    let plateau = plateau::demarrer(&emplacements, &moteurs, std::sync::Arc::clone(&poignee));
     let telechargeur = telechargements::demarrer(&emplacements);
     // Le canal local du serveur MCP pour Claude (127.0.0.1, jeton neuf à chaque lancement).
     let session_mcp = mcp::ouvrir(&dossier, &plateau, &moteurs);
@@ -227,6 +229,7 @@ fn lancer() -> Result<(), String> {
             mise_a_jour::chercher_mise_a_jour,
             mise_a_jour::voir_notes,
             mise_a_jour::installer_mise_a_jour,
+            notifications::essayer_notification,
             moteurs::lire_moteurs,
             moteurs::lire_vram,
             moteurs::installer_moteur,
@@ -353,6 +356,8 @@ fn lancer() -> Result<(), String> {
             plateau::lancer_casting,
         ])
         .setup(move |app| {
+            // La file du Plateau peut prévenir dès que l'appli existe ; la poignée ne se pose qu'une fois.
+            let _ = poignee.set(app.handle().clone());
             if proposer {
                 installation::ouvrir_fenetre(app.handle())?;
             } else {

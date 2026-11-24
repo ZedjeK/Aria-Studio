@@ -6,7 +6,8 @@
 //!
 //! - `fond` : `actif`, `vitesse`, `minimum`, `maximum` ;
 //! - `installation.proposee` : proposer de s'installer ;
-//! - `mises_a_jour.active` : chercher une nouvelle version au lancement.
+//! - `mises_a_jour.active` : chercher une nouvelle version au lancement ;
+//! - `notifications` : `active` (me prévenir à la fin d'un rendu) et `son` (avec le son de Windows), comme en v2.
 //!
 //! Toutes les autres sections, et les autres clés des sections lues, sont gardées telles quelles à chaque écriture :
 //! une v2 qui reprend la main retrouve tous ses réglages.
@@ -39,6 +40,8 @@ const SECTION_INSTALLATION: &str = "installation";
 const CLE_PROPOSEE: &str = "proposee";
 const SECTION_MISES_A_JOUR: &str = "mises_a_jour";
 const CLE_ACTIVE: &str = "active";
+const SECTION_NOTIFICATIONS: &str = "notifications";
+const CLE_SON: &str = "son";
 const PREFIXE_SAUVEGARDE: &str = "reglages-";
 const PREFIXE_ILLISIBLE: &str = "reglages-illisible-";
 
@@ -107,6 +110,26 @@ impl Default for ReglagesFond {
     }
 }
 
+/// Les notifications Windows de fin de rendu : `notifications.active` et `notifications.son` dans le fichier, comme
+/// en v2 (qui les a cochées toutes les deux par défaut).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ReglagesNotifications {
+    /// Prévenir quand une image, une retouche, un clip, une séquence ou un casting se termine.
+    pub active: bool,
+    /// Avec le son de Windows ; décoché, la notification est silencieuse.
+    pub son: bool,
+}
+
+impl Default for ReglagesNotifications {
+    fn default() -> Self {
+        Self {
+            active: true,
+            son: true,
+        }
+    }
+}
+
 /// Les réglages que cette version sait gérer. Ce type est aussi celui qu'échangent le cœur et l'interface : ses
 /// noms de champs sont ceux de l'interface, pas ceux du fichier (voir le haut du module).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -124,6 +147,9 @@ pub struct Reglages {
     /// pour ça. Dans le fichier : `mises_a_jour.active`.
     #[serde(rename = "chercherMisesAJour")]
     pub chercher_mises_a_jour: bool,
+
+    /// Notifications Windows de fin de rendu ; absentes du fichier, ce sont celles par défaut.
+    pub notifications: ReglagesNotifications,
 }
 
 impl Default for Reglages {
@@ -132,6 +158,7 @@ impl Default for Reglages {
             fond: ReglagesFond::default(),
             proposer_installation: true,
             chercher_mises_a_jour: true,
+            notifications: ReglagesNotifications::default(),
         }
     }
 }
@@ -168,6 +195,11 @@ impl Reglages {
                 .unwrap_or(defaut.proposer_installation),
             chercher_mises_a_jour: booleen(sections, SECTION_MISES_A_JOUR, CLE_ACTIVE)
                 .unwrap_or(defaut.chercher_mises_a_jour),
+            notifications: ReglagesNotifications {
+                active: booleen(sections, SECTION_NOTIFICATIONS, CLE_ACTIVE)
+                    .unwrap_or(defaut.notifications.active),
+                son: booleen(sections, SECTION_NOTIFICATIONS, CLE_SON).unwrap_or(defaut.notifications.son),
+            },
         }
         .assaini()
     }
@@ -188,6 +220,9 @@ impl Reglages {
             SECTION_MISES_A_JOUR,
             une_cle(CLE_ACTIVE, propre.chercher_mises_a_jour),
         );
+        let mut notifications = une_cle(CLE_ACTIVE, propre.notifications.active);
+        notifications.insert(CLE_SON.to_owned(), Value::Bool(propre.notifications.son));
+        fusionner(sections, SECTION_NOTIFICATIONS, notifications);
         Ok(())
     }
 
@@ -487,6 +522,10 @@ mod tests {
             },
             proposer_installation: false,
             chercher_mises_a_jour: false,
+            notifications: ReglagesNotifications {
+                active: false,
+                son: false,
+            },
         };
         reglages.enregistrer(&dossier).unwrap();
         assert_eq!(Reglages::charger(&dossier), reglages);
@@ -498,6 +537,14 @@ mod tests {
         let r = Reglages::charger(&dossier);
         assert!(!r.proposer_installation);
         assert!(!r.chercher_mises_a_jour);
+        // La v2 a écrit `"notifications": {"active": true, "son": false}`.
+        assert_eq!(
+            r.notifications,
+            ReglagesNotifications {
+                active: true,
+                son: false,
+            }
+        );
         assert_eq!(
             r.fond,
             ReglagesFond {
@@ -518,6 +565,8 @@ mod tests {
         assert_eq!(v["installation"]["proposee"], Value::Bool(true));
         assert_eq!(v["mises_a_jour"]["active"], Value::Bool(true));
         assert_eq!(v["fond"]["vitesse"], Value::from("normale"));
+        assert_eq!(v["notifications"]["active"], Value::Bool(true));
+        assert_eq!(v["notifications"]["son"], Value::Bool(true));
         assert!(v.get("proposerInstallation").is_none());
         assert!(v.get("chercherMisesAJour").is_none());
         let texte = fs::read_to_string(dossier.reglages()).unwrap();
@@ -681,6 +730,36 @@ mod tests {
         let r = Reglages::depuis_json(r#"{ "installation": { "proposee": "non" }, "mises_a_jour": 3 }"#);
         assert!(r.proposer_installation);
         assert!(r.chercher_mises_a_jour);
+    }
+
+    #[test]
+    fn les_notifications_gardent_les_cles_de_la_v2_et_les_autres() {
+        // Sans section : cochées toutes les deux, comme en v2 ; une clé absente ou d'un mauvais type aussi.
+        assert_eq!(
+            Reglages::depuis_json("{}").notifications,
+            ReglagesNotifications::default()
+        );
+        let r = Reglages::depuis_json(r#"{ "notifications": { "active": false, "son": "oui" } }"#);
+        assert_eq!(
+            r.notifications,
+            ReglagesNotifications {
+                active: false,
+                son: true,
+            }
+        );
+        // Une clé d'une autre version reste dans la section quand on change le son.
+        let (_temp, dossier) = dossier_avec(r#"{"notifications": {"son": true, "autre": 3}}"#);
+        let reglages = Reglages {
+            notifications: ReglagesNotifications {
+                active: true,
+                son: false,
+            },
+            ..Reglages::charger(&dossier)
+        };
+        reglages.enregistrer(&dossier).unwrap();
+        let ecrit = fichier(&dossier);
+        assert_eq!(ecrit["notifications"]["son"], Value::Bool(false));
+        assert_eq!(ecrit["notifications"]["autre"], Value::from(3));
     }
 
     #[test]

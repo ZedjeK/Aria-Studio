@@ -15,6 +15,7 @@
     "allow-chercher-mise-a-jour",
     "allow-voir-notes",
     "allow-installer-mise-a-jour",
+    "allow-essayer-notification",
     "allow-lire-moteurs",
     "allow-lire-vram",
     "allow-installer-moteur",
