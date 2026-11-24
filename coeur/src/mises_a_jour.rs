@@ -452,7 +452,10 @@ mod tests {
         assert_eq!(rechercher(&release, (2, 0, 0)), Recherche::AJour);
         // Une version plus récente sans zip lisible n'est pas « à jour » : la recherche le dit.
         let sans_zip = reponse("v1.2.0", "autre-nom.zip", &bonne, &digest);
-        assert_eq!(rechercher(&sans_zip, (1, 1, 0)), Recherche::Inexploitable((1, 2, 0)));
+        assert_eq!(
+            rechercher(&sans_zip, (1, 1, 0)),
+            Recherche::Inexploitable((1, 2, 0))
+        );
         assert_eq!(rechercher(&sans_zip, (1, 2, 0)), Recherche::AJour);
         // Une préversion ou un brouillon ne compte pas.
         let brouillon = release.replace("\"draft\":false", "\"draft\":true");
