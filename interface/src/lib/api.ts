@@ -508,7 +508,6 @@ export interface ElementCollection {
   licence: string | null;
   declencheurs: string[];
   utilisePar: string[];
-  supprimable: boolean;
   steps: number | null;
   aValider: StepsDits[] | null;
   lora: ReglageLora | null;

@@ -2,8 +2,8 @@
   Modèles → Ma collection, comme la maquette : le dossier des modèles (chemin, place libre, retrouver les sources), ce
   qui est installé rangé par groupe, d'où ça vient et à quoi ça sert ; les steps à valider d'un checkpoint déposé à la
   main (le seul bouton orange de l'onglet, sur le premier à valider) ; la force d'une LoRA sur sa ligne, ses mots
-  déclencheurs dans un dialogue ; la corbeille, toujours visible. Un modèle téléchargé par Aria part à la corbeille
-  (rien n'est effacé) ; seul « Vider », confirmé, efface pour de bon.
+  déclencheurs dans un dialogue ; la corbeille, toujours visible. Chaque modèle, téléchargé par Aria ou déposé à la
+  main, part à la corbeille (rien n'est effacé) ; seul « Vider », confirmé, efface pour de bon.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -266,8 +266,9 @@
     {#if collection.orphelins > 0}
       <p class="discret">
         {collection.orphelins} fichier{collection.orphelins > 1 ? 's' : ''} déposé{collection.orphelins > 1 ? 's' : ''} à
-        la main : Aria les utilise, mais ne les supprime pas. « Retrouver les sources » calcule leur empreinte et la
-        cherche dans le catalogue d'Aria puis sur Civitai, pour connaître leur page et leur licence.
+        la main : ils se suppriment comme les autres (corbeille, rien n'est effacé). « Retrouver les sources » calcule
+        leur empreinte et la cherche dans le catalogue d'Aria puis sur Civitai, pour connaître leur page et leur
+        licence.
       </p>
     {/if}
     {#if identification && identification.etat !== 'repos'}
@@ -346,13 +347,7 @@
                 </div>
               {/if}
             </div>
-            {#if e.supprimable}
-              <Bouton genre="discret" petit desactive={occupe} onclick={() => (aJeter = e)}>Supprimer</Bouton>
-            {:else}
-              <span class="discret a-la-main" title="La corbeille ne prend que les modèles téléchargés par Aria.">
-                Déposé à la main : à supprimer dans le dossier
-              </span>
-            {/if}
+            <Bouton genre="discret" petit desactive={occupe} onclick={() => (aJeter = e)}>Supprimer</Bouton>
           </li>
         {/each}
       </ul>
@@ -430,6 +425,9 @@
       {octetsLisibles(aJeter.taille)} quittent le dossier des modèles pour sa corbeille : rien n'est effacé, il se
       restaure tant que la corbeille n'est pas vidée.
     </p>
+    {#if aJeter.origine === 'main'}
+      <p class="discret">Déposé à la main : il revient tel quel à la restauration.</p>
+    {/if}
     {#if aJeter.utilisePar.length > 0}
       <p class="alerte">Utilisé par : {aJeter.utilisePar.join(', ')}.</p>
     {/if}
@@ -465,13 +463,6 @@
     display: flex;
     align-items: flex-start;
     gap: 12px;
-  }
-
-  .a-la-main {
-    flex: none;
-    max-width: 200px;
-    font-size: 12px;
-    text-align: right;
   }
 
   .texte {

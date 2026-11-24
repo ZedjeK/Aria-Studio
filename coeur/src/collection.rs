@@ -5,8 +5,10 @@
 //! La corbeille : un modèle supprimé n'est jamais effacé d'un coup. Il part dans `<dossier des modèles>\.corbeille\`, au
 //! même chemin relatif (un renommage sur le même disque, instantané même pour 20 Go), et sa fiche quitte le registre
 //! pour `data\corbeille_modeles.json` avec la date et le dossier des modèles d'alors ; elle y revient à la
-//! restauration. Seul « Vider la corbeille » efface pour de bon. Seuls les modèles téléchargés par Aria se
-//! suppriment : un fichier déposé à la main reste à l'utilisateur.
+//! restauration. Seul « Vider la corbeille » efface pour de bon. Tout ce que montre Ma collection se supprime, un
+//! fichier déposé à la main compris : il part de la même façon, sans fiche (il n'en avait pas) ni changement de
+//! nature à la restauration, et seulement s'il est bien un fichier de modèle d'un dossier d'Aria, sans lien
+//! symbolique ni jonction sur son chemin.
 //!
 //! « Retrouver les sources » est dans `retrouver`, les onglets d'usage et leurs favoris dans `usages`.
 
@@ -77,7 +79,6 @@ pub struct Element {
     pub licence: Option<String>,
     pub declencheurs: Vec<String>,
     pub utilise_par: Vec<String>,
-    pub supprimable: bool,
     /// Checkpoint de famille : ses steps validés…
     pub steps: Option<u64>,
     /// … ou ce qui aide à les valider (il n'est proposé nulle part avant).
@@ -325,7 +326,6 @@ pub fn collection(dossier: &Dossier, data: &Path, modeles_dir: &Path) -> Collect
                 steps: etat_steps.and_then(|e| e.as_ref().ok().copied()),
                 a_valider: etat_steps.and_then(|e| e.as_ref().err().cloned()),
                 lora: (groupe == "lora").then(|| reglage_lora(&cle, &registre, &memoire)),
-                supprimable: suivi,
                 origine: origine.to_owned(),
                 utilise_par,
                 famille,
@@ -574,20 +574,77 @@ fn dans(base: &Path, cle: &str) -> Result<PathBuf, String> {
     }
 }
 
-/// Met un modèle téléchargé par Aria à la corbeille.
+/// Un lien symbolique, ou une jonction sous Windows (rien n'est suivi).
+fn est_un_lien(chemin: &Path) -> bool {
+    let meta = fs::symlink_metadata(chemin);
+    meta.is_ok_and(|m| m.file_type().is_symlink())
+}
+
+/// Une extension de modèle : celles que montre Ma collection.
+fn extension_connue(nom: &str) -> bool {
+    let extension = nom.rsplit_once('.').map(|(_, e)| e.to_lowercase());
+    extension.is_some_and(|e| EXTENSIONS.contains(&e.as_str()))
+}
+
+/// Un fichier sans fiche au registre (déposé à la main) ne part à la corbeille que s'il est ce que montre Ma
+/// collection : un fichier de modèle, dans un dossier de modèles d'Aria, sans lien sur son chemin. `dans` a déjà
+/// écarté `..`, un chemin absolu et une lettre de lecteur.
+fn verifier_depose(modeles_dir: &Path, cle: &str) -> Result<(), String> {
+    let refus = |raison: &str| format!("{cle} ne part pas à la corbeille : {raison}");
+    let Some((dossier, nom)) = cle.rsplit_once('/') else {
+        return Err(refus("pas dans un dossier de modèles"));
+    };
+    if !modeles::dossiers().iter().any(|d| d == dossier) {
+        return Err(refus("pas dans un dossier de modèles d'Aria"));
+    }
+    if nom.contains(['\\', ':']) {
+        return Err(refus("nom de fichier invalide"));
+    }
+    if !extension_connue(nom) {
+        return Err(refus("ni .safetensors ni .gguf"));
+    }
+    let mut chemin = modeles_dir.to_path_buf();
+    for morceau in dossier.split('/') {
+        chemin.push(morceau);
+        if est_un_lien(&chemin) {
+            return Err(refus("un dossier du chemin est un lien"));
+        }
+    }
+    chemin.push(nom);
+    let meta = fs::symlink_metadata(&chemin);
+    let Ok(meta) = meta else {
+        return Err(refus("fichier introuvable"));
+    };
+    if meta.file_type().is_symlink() {
+        return Err(refus("c'est un lien, pas un fichier"));
+    }
+    if !meta.is_file() {
+        return Err(refus("ce n'est pas un fichier"));
+    }
+    Ok(())
+}
+
+/// Met un modèle à la corbeille : un téléchargement d'Aria (sa fiche part avec lui) ou un fichier déposé à la main
+/// (marqué `depose_a_la_main`, sans fiche à rendre). Rien n'est effacé : c'est un renommage sur le même disque.
 ///
 /// # Errors
-/// Fichier déposé à la main, déjà à la corbeille, ou que Windows refuse de déplacer (ouvert par ComfyUI).
+/// Fichier hors des dossiers de modèles, qui n'en est pas un (lien, dossier, autre extension), introuvable, déjà à la
+/// corbeille, ou que Windows refuse de déplacer (ouvert par ComfyUI).
 pub fn mettre_a_la_corbeille(
     dossier: &Dossier,
     data: &Path,
     modeles_dir: &Path,
     cle: &str,
 ) -> Result<(), String> {
-    let Some(entree) = registre(data).get(cle).cloned() else {
-        return Err("Seuls les modèles téléchargés par l'appli peuvent être supprimés".to_owned());
-    };
     let fichier = dans(modeles_dir, cle)?;
+    let fiche = registre(data).get(cle).cloned();
+    let a_la_main = fiche.is_none();
+    if a_la_main {
+        verifier_depose(modeles_dir, cle)?;
+    }
+    if est_un_lien(&modeles_dir.join(CORBEILLE)) {
+        return Err("La corbeille des modèles est un lien : supprime-le à la main".to_owned());
+    }
     let mut corbeille = lire_json(&fichier_corbeille(data));
     if fichier.is_file() {
         let nom = fichier
@@ -606,7 +663,10 @@ pub fn mettre_a_la_corbeille(
         fs::rename(&fichier, &cible).map_err(|e| {
             format!("{nom} n'a pas pu aller à la corbeille ({e}) : il est peut-être ouvert par ComfyUI. Arrête-le, puis réessaie")
         })?;
-        let mut garde = entree.as_object().cloned().unwrap_or_default();
+        let mut garde = match fiche {
+            Some(Value::Object(f)) => f,
+            _ => Map::new(),
+        };
         garde.insert(
             "corbeille".to_owned(),
             json!(Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()),
@@ -615,20 +675,26 @@ pub fn mettre_a_la_corbeille(
             "dossier_modeles".to_owned(),
             json!(modeles_dir.display().to_string()),
         );
+        if a_la_main {
+            garde.insert("depose_a_la_main".to_owned(), json!(true));
+        }
         corbeille.insert(cle.to_owned(), Value::Object(garde));
         ecrire_json(&fichier_corbeille(data), &Value::Object(corbeille), 2)?;
     }
-    // Sans fichier (déjà effacé à la main), seule sa fiche s'en va.
-    modifier_registre(data, |r| {
-        r.remove(cle);
-    })
-    .map_err(|e| format!("registre des modèles : {e}"))?;
+    if !a_la_main {
+        // Sans fichier (déjà effacé à la main), seule sa fiche s'en va.
+        modifier_registre(data, |r| {
+            r.remove(cle);
+        })
+        .map_err(|e| format!("registre des modèles : {e}"))?;
+    }
+    let detail = a_la_main.then_some("déposé à la main");
     journal::noter(
         dossier,
         "Modèle mis à la corbeille",
         cle,
         journal::Resultat::Ok,
-        None,
+        detail,
     );
     Ok(())
 }
@@ -731,10 +797,13 @@ pub fn restaurer(dossier: &Dossier, data: &Path, modeles_dir: &Path, cle: &str) 
     let mut remise = entree.as_object().cloned().unwrap_or_default();
     remise.remove("corbeille");
     remise.remove("dossier_modeles");
-    modifier_registre(data, |r| {
-        r.insert(cle.to_owned(), Value::Object(remise));
-    })
-    .map_err(|e| format!("registre des modèles : {e}"))?;
+    // Un fichier déposé à la main n'avait pas de fiche : il n'en gagne pas à la restauration (il reste « à la main »).
+    if remise.remove("depose_a_la_main").is_none() {
+        modifier_registre(data, |r| {
+            r.insert(cle.to_owned(), Value::Object(remise));
+        })
+        .map_err(|e| format!("registre des modèles : {e}"))?;
+    }
     corbeille.remove(cle);
     ecrire_json(&fichier_corbeille(data), &Value::Object(corbeille), 2)?;
     supprimer_dossiers_vides(&modeles_dir.join(CORBEILLE));
@@ -857,7 +926,7 @@ mod tests {
         let c = collection(&b.dossier, &b.data, &b.modeles);
         let groupe = |id: &str| c.groupes.iter().find(|g| g.id == id).unwrap();
         let image = &groupe("image").elements[0];
-        assert_eq!((image.origine.as_str(), image.supprimable), ("aria", true));
+        assert_eq!(image.origine, "aria");
         assert_eq!(image.steps, Some(8));
         assert!(image.utilise_par.contains(&"Krea 2".to_owned()));
         let lora = &groupe("lora").elements[0];
@@ -921,12 +990,6 @@ mod tests {
     fn corbeille_aller_retour() {
         let b = banc();
         poser(&b, "llm/mistral.gguf", b"poids", true);
-        poser(&b, "llm/main.gguf", b"poids", false);
-        assert!(
-            mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, "llm/main.gguf")
-                .unwrap_err()
-                .starts_with("Seuls les modèles téléchargés")
-        );
         assert!(mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, "../x").is_err());
         mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, "llm/mistral.gguf").unwrap();
         assert!(!b.modeles.join("llm/mistral.gguf").exists());
@@ -951,6 +1014,160 @@ mod tests {
         assert_eq!(vider_corbeille(&b.dossier, &b.data, &b.modeles).unwrap(), (1, 5));
         assert!(corbeille(&b.data, &b.modeles).modeles.is_empty());
         assert_eq!(journal::lire(&b.dossier)[0].action, "Corbeille des modèles vidée");
+    }
+
+    /// Un dossier de modèles d'Aria dont le chemin commence et finit comme dit (hors fichiers de base).
+    fn dossier_qui(debut: &str, fin: &str) -> String {
+        for d in modeles::dossiers() {
+            if d.starts_with(debut) && d.ends_with(fin) && !d.contains(modeles::BASE) {
+                return d;
+            }
+        }
+        panic!("aucun dossier {debut}…{fin}");
+    }
+
+    /// Un fichier déposé à la main dans chaque groupe de Ma collection.
+    fn cles_de_chaque_groupe() -> Vec<String> {
+        vec![
+            format!("{}/checkpoint.safetensors", dossier_qui("image/", "/modeles")),
+            format!("{}/clip.safetensors", dossier_qui("video/", "/modeles")),
+            format!("{}/style.safetensors", dossier_qui("image/", "/loras")),
+            "llm/mistral.gguf".to_owned(),
+            "llm/mistral-mmproj-f16.gguf".to_owned(),
+            format!("{}/vae.safetensors", modeles::dossier_base("image", "vae")),
+            format!("{}/vae.safetensors", modeles::dossier_base("video", "vae")),
+        ]
+    }
+
+    #[test]
+    fn un_fichier_depose_a_la_main_part_a_la_corbeille_dans_chaque_groupe() {
+        let b = banc();
+        let cles = cles_de_chaque_groupe();
+        for cle in &cles {
+            poser(&b, cle, b"poids", false);
+        }
+        let avant = collection(&b.dossier, &b.data, &b.modeles);
+        assert_eq!(avant.orphelins, cles.len());
+        for cle in &cles {
+            mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, cle).unwrap();
+            assert!(!b.modeles.join(cle).exists(), "{cle} est encore là");
+            let a_la_corbeille = b.modeles.join(CORBEILLE).join(cle);
+            assert!(a_la_corbeille.is_file(), "{cle} n'est pas à la corbeille");
+        }
+        assert!(registre(&b.data).is_empty());
+        let c = corbeille(&b.data, &b.modeles);
+        assert_eq!(c.modeles.len(), cles.len());
+        assert_eq!(c.taille, 5 * cles.len() as u64);
+        let apres = collection(&b.dossier, &b.data, &b.modeles);
+        assert!(apres.groupes.iter().all(|g| g.elements.is_empty()));
+        for cle in &cles {
+            restaurer(&b.dossier, &b.data, &b.modeles, cle).unwrap();
+            assert!(b.modeles.join(cle).is_file(), "{cle} n'est pas revenu");
+        }
+        // Restauré, il reste « à la main » : la corbeille ne lui a pas inventé de fiche.
+        assert!(registre(&b.data).is_empty());
+        assert_eq!(collection(&b.dossier, &b.data, &b.modeles).orphelins, cles.len());
+        assert!(corbeille(&b.data, &b.modeles).modeles.is_empty());
+        assert!(!b.modeles.join(CORBEILLE).exists());
+    }
+
+    #[test]
+    fn jeter_un_fichier_a_la_main_se_note_au_journal_sans_rien_effacer() {
+        let b = banc();
+        poser(&b, "llm/main.gguf", b"poids", false);
+        mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, "llm/main.gguf").unwrap();
+        let entree = &journal::lire(&b.dossier)[0];
+        assert_eq!(entree.action, "Modèle mis à la corbeille");
+        assert_eq!(entree.detail.as_deref(), Some("déposé à la main"));
+        // Rien n'est effacé tant que la corbeille n'est pas vidée.
+        let copie = b.modeles.join(".corbeille/llm/main.gguf");
+        assert_eq!(fs::read(&copie).unwrap(), b"poids");
+        assert_eq!(vider_corbeille(&b.dossier, &b.data, &b.modeles).unwrap(), (1, 5));
+        assert!(!copie.exists());
+    }
+
+    #[test]
+    fn un_second_jeter_refuse_un_fichier_deja_a_la_corbeille() {
+        let b = banc();
+        poser(&b, "llm/main.gguf", b"un", false);
+        mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, "llm/main.gguf").unwrap();
+        // Le même nom redéposé : la copie de la corbeille n'est pas écrasée.
+        poser(&b, "llm/main.gguf", b"deux", false);
+        let second = mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, "llm/main.gguf");
+        let erreur = second.unwrap_err();
+        assert!(erreur.contains("déjà dans la corbeille"), "{erreur}");
+        assert_eq!(fs::read(b.modeles.join("llm/main.gguf")).unwrap(), b"deux");
+        let copie = b.modeles.join(".corbeille/llm/main.gguf");
+        assert_eq!(fs::read(&copie).unwrap(), b"un");
+    }
+
+    #[test]
+    fn la_corbeille_refuse_ce_qui_n_est_pas_un_modele_d_aria() {
+        let b = banc();
+        let dehors = b.modeles.parent().unwrap().join("secret.gguf");
+        fs::write(&dehors, b"a moi").unwrap();
+        poser(&b, "llm/notes.txt", b"rien", false);
+        poser(&b, "docs/livre.safetensors", b"rien", false);
+        poser(&b, "llm/sous/dossier.gguf", b"rien", false);
+        poser(&b, ".corbeille/llm/x.gguf", b"rien", false);
+        let refus = [
+            "../secret.gguf",
+            "llm/../../secret.gguf",
+            "/secret.gguf",
+            "C:/Windows/secret.gguf",
+            "llm\\..\\..\\secret.gguf",
+            "llm/notes.txt",
+            "docs/livre.safetensors",
+            "llm/sous/dossier.gguf",
+            ".corbeille/llm/x.gguf",
+            "llm/absent.gguf",
+            "llm",
+            "",
+            "mistral.gguf",
+        ];
+        for cle in refus {
+            let resultat = mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, cle);
+            assert!(resultat.is_err(), "{cle:?} aurait dû être refusé");
+        }
+        assert_eq!(fs::read(&dehors).unwrap(), b"a moi");
+        assert!(b.modeles.join("llm/notes.txt").is_file());
+        assert!(b.modeles.join("docs/livre.safetensors").is_file());
+        assert!(corbeille(&b.data, &b.modeles).modeles.is_empty());
+    }
+
+    #[test]
+    fn la_corbeille_refuse_un_dossier_nomme_comme_un_modele() {
+        let b = banc();
+        fs::create_dir_all(b.modeles.join("llm/modele.gguf")).unwrap();
+        let resultat = mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, "llm/modele.gguf");
+        let erreur = resultat.unwrap_err();
+        assert!(erreur.contains("pas un fichier"), "{erreur}");
+        assert!(b.modeles.join("llm/modele.gguf").is_dir());
+    }
+
+    /// Un lien de `lien` vers `cible`, ou faux si le système ne le permet pas (Windows sans le droit d'en créer).
+    fn lier(cible: &Path, lien: &Path) -> bool {
+        #[cfg(unix)]
+        let fait = std::os::unix::fs::symlink(cible, lien);
+        #[cfg(windows)]
+        let fait = std::os::windows::fs::symlink_file(cible, lien);
+        fait.is_ok()
+    }
+
+    #[test]
+    fn la_corbeille_refuse_un_lien_symbolique() {
+        let b = banc();
+        let vrai = b.modeles.parent().unwrap().join("ailleurs.gguf");
+        fs::write(&vrai, b"poids").unwrap();
+        fs::create_dir_all(b.modeles.join("llm")).unwrap();
+        if !lier(&vrai, &b.modeles.join("llm/lien.gguf")) {
+            return;
+        }
+        let resultat = mettre_a_la_corbeille(&b.dossier, &b.data, &b.modeles, "llm/lien.gguf");
+        let erreur = resultat.unwrap_err();
+        assert!(erreur.contains("lien"), "{erreur}");
+        assert_eq!(fs::read(&vrai).unwrap(), b"poids");
+        assert!(corbeille(&b.data, &b.modeles).modeles.is_empty());
     }
 
     #[test]
