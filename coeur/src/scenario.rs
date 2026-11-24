@@ -475,7 +475,8 @@ mod tests {
         ecrire_prompt(&ctx, &mut faux, &libre).unwrap();
         let derniere = faux.demandes.last().unwrap();
         let user = derniere.messages[1]["content"].as_str().unwrap();
-        assert!(!user.contains("Spoken line") && !user.contains("Background music"));
+        assert!(!user.contains("Spoken line"));
+        assert!(!user.contains("Background music"));
     }
 
     #[test]
@@ -492,7 +493,8 @@ mod tests {
         assert!(!e.prompt.contains("Salut les amis"), "{}", e.prompt);
         assert_eq!(e.prompt.matches("<d>[French] Bonjour</d>").count(), 1);
         let alertes = e.alertes.join(" | ");
-        assert!(alertes.contains("inventée") && alertes.contains("perdu"), "{alertes}");
+        assert!(alertes.contains("inventée"), "{alertes}");
+        assert!(alertes.contains("perdu"), "{alertes}");
     }
 
     #[test]
