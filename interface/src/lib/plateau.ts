@@ -1,6 +1,6 @@
 // Le Plateau : textes et saisies, d'après ce que rend le cœur.
 
-import type { ChoixWorkflow, Commande, EtatCommande, ModeReference, OptionsPlateau } from './api';
+import type { ChoixLlm, ChoixWorkflow, Commande, EtatCommande, ModeReference, OptionsPlateau } from './api';
 
 const LIBELLES: Record<EtatCommande, string> = {
   attente: 'en attente',
@@ -55,6 +55,11 @@ export function llmInitial(options: OptionsPlateau, workflowId: string): string 
   const sien = options.llmParWorkflow[workflowId];
   if (sien && options.llm.some((l) => l.fichier === sien)) return sien;
   return options.llm[0]?.fichier ?? '';
+}
+
+/** Le repère d'un LLM qui voit les images, à coller derrière son nom dans une liste ; rien s'il n'en voit pas. */
+export function repereVision(choix: ChoixLlm): string {
+  return choix.vision ? ' · 👁 voit les images' : '';
 }
 
 /** Ce qu'une commande montre : le prompt, ou l'idée tant que le LLM ne l'a pas réécrite. */

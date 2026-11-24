@@ -21,7 +21,7 @@
     type OptionsPlateau,
   } from '../lib/api';
   import { textesDuLlm } from '../lib/reecriture';
-  import { estActive, lireSeed, llmInitial, modeleInitial, nomCheckpoint, texteAvancement, texteCommande } from '../lib/plateau';
+  import { estActive, lireSeed, llmInitial, modeleInitial, nomCheckpoint, repereVision, texteAvancement, texteCommande } from '../lib/plateau';
   import {
     ANCRAGES,
     FONDU_AGRANDISSEMENT,
@@ -442,7 +442,9 @@
           {#if reecrire}
             <select bind:value={llmChoisi} aria-label="LLM qui traduit">
               {#each options.llm as choix (choix.fichier)}
-                <option value={choix.fichier}>{choix.nom}{choix.specialiste ? ' (spécialiste)' : ''}</option>
+                <option value={choix.fichier}>
+                  {choix.nom}{choix.specialiste ? ' (spécialiste)' : ''}{repereVision(choix)}
+                </option>
               {/each}
             </select>
           {/if}

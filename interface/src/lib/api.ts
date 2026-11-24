@@ -189,6 +189,8 @@ export interface ChoixLlm {
   favori: boolean;
   /** Entraîné pour un modèle cible : il ne réécrit que pour lui. */
   specialiste: boolean;
+  /** Il voit les images (un projecteur de sa famille est installé, la vision n'est pas coupée). */
+  vision: boolean;
 }
 
 /** Ce que le Plateau propose (aria_coeur::plateau::Options). */

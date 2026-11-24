@@ -10,6 +10,7 @@ import {
   lireSeed,
   modeleInitial,
   nomCheckpoint,
+  repereVision,
   texteAvancement,
   texteCommande,
   texteStepsSuggeres,
@@ -47,8 +48,8 @@ const options: OptionsPlateau = {
   workflows: [krea],
   incomplets: [],
   llm: [
-    { fichier: 'Ternary-Bonsai-2-27B-PTQ1_0.gguf', nom: 'Bonsai 2 27B', favori: true, specialiste: false },
-    { fichier: 'mistral.gguf', nom: 'mistral', favori: false, specialiste: false },
+    { fichier: 'Ternary-Bonsai-2-27B-PTQ1_0.gguf', nom: 'Bonsai 2 27B', favori: true, specialiste: false, vision: true },
+    { fichier: 'mistral.gguf', nom: 'mistral', favori: false, specialiste: false, vision: false },
   ],
   llmParWorkflow: { krea2_turbo: 'mistral.gguf', qwen_image_2_1: 'retire.gguf' },
   defautReferences: 'qwen_image_2_1_edit',
@@ -172,5 +173,11 @@ describe('Plateau', () => {
     expect(texteAvancement(commande({ type: 'casting', etat: 'termine', nombre: 24, fait: 24 }))).toBe(
       'terminée · 24/24 générations',
     );
+  });
+
+  it('signale les LLM qui voient les images', () => {
+    const [voit, neVoitPas] = options.llm;
+    expect(voit && repereVision(voit)).toBe(' · 👁 voit les images');
+    expect(neVoitPas && repereVision(neVoitPas)).toBe('');
   });
 });
