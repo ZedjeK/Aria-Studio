@@ -3,7 +3,6 @@
   numéro : image 1, image 2…). Au-delà de `max`, le premier choisi cède sa place ; avec `max` à 1, un clic remplace.
 -->
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { imageCreation, lireRushes, messageErreur, type Creation } from '../lib/api';
 
   interface Props {
@@ -11,10 +10,12 @@
     selection: string[];
     signaler: (texte: string, erreur?: boolean) => void;
     /** Un rush vient d'être choisi ou retiré : le dialogue qui porte la liste peut se refermer. */
-    apresChoix?: () => void;
+    apresChoix?: (() => void) | undefined;
+    /** Change quand une image vient d'entrer dans les Rushes : la grille est relue. */
+    version?: number;
   }
 
-  let { max, selection = $bindable(), signaler, apresChoix }: Props = $props();
+  let { max, selection = $bindable(), signaler, apresChoix, version = 0 }: Props = $props();
 
   let rushes = $state<Creation[]>([]);
   let vignettes = $state<Record<string, string>>({});
@@ -33,30 +34,39 @@
     if (selection.length > max) selection = selection.slice(0, Math.max(0, max));
   });
 
-  onMount(() => {
+  $effect(() => {
+    void version;
+    let annule = false;
+    const creees: string[] = [];
     void (async () => {
       try {
-        rushes = (await lireRushes('tous', null)).slice(0, 48);
-        for (const r of rushes) {
+        const lues = (await lireRushes('tous', null)).slice(0, 48);
+        if (annule) return;
+        rushes = lues;
+        for (const r of lues) {
           try {
             const octets = await imageCreation(r.id);
-            vignettes[r.id] = URL.createObjectURL(new Blob([octets], { type: 'image/png' }));
+            if (annule) return;
+            const adresse = URL.createObjectURL(new Blob([octets], { type: 'image/png' }));
+            creees.push(adresse);
+            vignettes[r.id] = adresse;
           } catch {
             // Une image effacée entre-temps : la vignette reste vide.
           }
         }
       } catch (e) {
-        signaler(messageErreur(e), true);
+        if (!annule) signaler(messageErreur(e), true);
       }
     })();
     return () => {
-      for (const adresse of Object.values(vignettes)) URL.revokeObjectURL(adresse);
+      annule = true;
+      for (const adresse of creees) URL.revokeObjectURL(adresse);
     };
   });
 </script>
 
 {#if rushes.length === 0}
-  <p class="discret">Aucun rush pour l'instant : crée d'abord une image, ou importe-en une depuis la Retouche.</p>
+  <p class="discret">Aucun rush pour l'instant : crée d'abord une image, ou prends-en une sur ton disque avec le bouton orange.</p>
 {:else}
   <div class="choix">
     {#each rushes as rush (rush.id)}

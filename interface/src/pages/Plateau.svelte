@@ -44,14 +44,13 @@
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import CarteChoix from '../lib/composants/CarteChoix.svelte';
-  import Dialogue from '../lib/composants/Dialogue.svelte';
   import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import Panneau from '../lib/composants/Panneau.svelte';
   import VignetteCreation from '../lib/composants/VignetteCreation.svelte';
-  import ChoixRushes from './ChoixRushes.svelte';
+  import DialogueRush from './DialogueRush.svelte';
   import PanneauRushes from './PanneauRushes.svelte';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import { peutChoisir, texteChoix, texteVerifications } from '../lib/vision';
@@ -581,19 +580,16 @@
 <PanneauRushes {signaler} {rafraichir} enFile={() => void relireCommandes()} {versPage} />
 
 {#if choixRush}
-  <Dialogue titre="Quel rush choisir ?" fermer={() => (choixRush = false)}>
-    <ChoixRushes
-      max={maxRushes}
-      bind:selection={references}
-      {signaler}
-      apresChoix={() => {
-        if (maxRushes <= 1) choixRush = false;
-      }}
-    />
-    {#snippet pied()}
-      <Bouton genre="discret" onclick={() => (choixRush = false)}>✕ Fermer</Bouton>
-    {/snippet}
-  </Dialogue>
+  <DialogueRush
+    max={maxRushes}
+    bind:selection={references}
+    {signaler}
+    fermer={() => (choixRush = false)}
+    apresChoix={() => {
+      if (maxRushes <= 1) choixRush = false;
+    }}
+    apresImport={() => (rafraichir += 1)}
+  />
 {/if}
 
 <style>

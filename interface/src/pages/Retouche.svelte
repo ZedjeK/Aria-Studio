@@ -11,7 +11,6 @@
     commanderAgrandissement,
     commanderRetouche,
     imageCreation,
-    importerImage,
     lireCommandes,
     lireRushes,
     messageErreur,
@@ -36,14 +35,13 @@
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import CarteChoix from '../lib/composants/CarteChoix.svelte';
-  import Dialogue from '../lib/composants/Dialogue.svelte';
   import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
   import RangerDans from '../lib/composants/RangerDans.svelte';
   import ChoixLoras from '../lib/composants/ChoixLoras.svelte';
   import { lignesPour, lorasChoisies, type LigneLora } from '../lib/loras';
   import Panneau from '../lib/composants/Panneau.svelte';
   import VignetteCreation from '../lib/composants/VignetteCreation.svelte';
-  import ChoixRushes from './ChoixRushes.svelte';
+  import DialogueRush from './DialogueRush.svelte';
   import PanneauRushes from './PanneauRushes.svelte';
 
   interface Props {
@@ -221,29 +219,6 @@
     fondu = nouveau === 'agrandissement' ? FONDU_AGRANDISSEMENT : FONDU_RETOUCHE;
     // Une précision d'agrandissement se traduit d'office quand un LLM est là ; une consigne de retouche part telle quelle.
     reecrire = nouveau === 'agrandissement' && (options?.llm.length ?? 0) > 0;
-  }
-
-  function importer(evenement: Event & { currentTarget: HTMLInputElement }) {
-    const fichier = evenement.currentTarget.files?.[0];
-    evenement.currentTarget.value = '';
-    if (!fichier) return;
-    const lecteur = new FileReader();
-    lecteur.onload = () => {
-      if (typeof lecteur.result !== 'string') return;
-      void (async () => {
-        try {
-          const fiche = await importerImage(lecteur.result as string, fichier.name, dossier);
-          signaler(`Image importée : ${fiche.largeur}×${fiche.hauteur}.`);
-          await relireRushes();
-          rafraichir += 1;
-          prendre(fiche);
-          choixRush = false;
-        } catch (e) {
-          signaler(messageErreur(e), true);
-        }
-      })();
-    };
-    lecteur.readAsDataURL(fichier);
   }
 
   function peindre(x: number, y: number) {
@@ -623,16 +598,15 @@
 <PanneauRushes {signaler} {rafraichir} />
 
 {#if choixRush}
-  <Dialogue titre="Quel rush choisir ?" fermer={() => (choixRush = false)}>
-    <ChoixRushes max={1} bind:selection={choisie} {signaler} apresChoix={() => void prendreChoisi()} />
-    {#snippet pied()}
-      <label class="bouton-fichier">
-        Une image de mon disque…
-        <input type="file" accept="image/png,image/jpeg,image/webp" onchange={importer} />
-      </label>
-      <Bouton genre="discret" onclick={() => (choixRush = false)}>✕ Fermer</Bouton>
-    {/snippet}
-  </Dialogue>
+  <DialogueRush
+    max={1}
+    bind:selection={choisie}
+    {signaler}
+    {dossier}
+    fermer={() => (choixRush = false)}
+    apresChoix={() => void prendreChoisi()}
+    apresImport={() => (rafraichir += 1)}
+  />
 {/if}
 
 <style>
@@ -669,21 +643,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  .bouton-fichier {
-    position: relative;
-    padding: 6px 12px;
-    border: 1px solid var(--ligne);
-    color: var(--texte-2);
-    cursor: pointer;
-  }
-
-  .bouton-fichier input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
   }
 
   .pastilles {
