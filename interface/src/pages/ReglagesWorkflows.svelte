@@ -28,11 +28,13 @@
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
+    /** Va à la page Modèles ; sans elle, pas de bouton. */
+    ouvrirModeles?: (() => void) | undefined;
     recherche: string;
     modifies: boolean;
   }
 
-  let { signaler, recherche = $bindable(), modifies = $bindable() }: Props = $props();
+  let { signaler, ouvrirModeles, recherche = $bindable(), modifies = $bindable() }: Props = $props();
 
   let etat = $state<EtatReglages | null>(null);
   let id = $state('');
@@ -200,7 +202,10 @@
       <hr class="sep" />
       {#if parDefaut}
         <p class="etiquette">Checkpoint par défaut</p>
-        <p>★ <span class="code">{parDefaut.fichier}</span></p>
+        <p class="defaut">
+          ★ <span class="code">{parDefaut.fichier}</span>
+          {#if ouvrirModeles}<Bouton genre="discret" petit onclick={ouvrirModeles}>Ouvrir dans Modèles</Bouton>{/if}
+        </p>
       {/if}
       <p class="etiquette">Checkpoints de la famille</p>
       <div class="variantes">
@@ -266,6 +271,13 @@
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
+  }
+
+  .defaut {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
   }
 
   .variantes {

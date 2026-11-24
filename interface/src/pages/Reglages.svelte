@@ -48,11 +48,13 @@
     signaler: (texte: string, erreur?: boolean) => void;
     /** Relance l'assistant de premier lancement. */
     ouvrirAssistant?: () => void;
+    /** Va à la page Modèles (« Ouvrir dans Modèles », à côté du checkpoint par défaut). */
+    ouvrirModeles?: () => void;
     /** L'onglet à ouvrir d'abord (le bandeau de la reprise de la v2 ouvre Emplacements). */
     ongletInitial?: string | undefined;
   }
 
-  let { signaler, ouvrirAssistant, ongletInitial }: Props = $props();
+  let { signaler, ouvrirAssistant, ouvrirModeles, ongletInitial }: Props = $props();
 
   const onglets = [
     { id: 'moteurs', titre: 'Moteurs' },
@@ -165,7 +167,7 @@
 {:else if onglet === 'llm'}
   <ReglagesLlm {signaler} bind:recherche bind:modifies />
 {:else if onglet === 'workflows'}
-  <ReglagesWorkflows {signaler} bind:recherche bind:modifies />
+  <ReglagesWorkflows {signaler} {ouvrirModeles} bind:recherche bind:modifies />
 {:else}
 <ASavoir>
   Un seul moteur tient la carte graphique à la fois : ComfyUI se vide quand le LLM écrit, puis reprend. Les versions
