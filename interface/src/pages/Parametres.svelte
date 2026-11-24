@@ -6,6 +6,7 @@
   import { onMount } from 'svelte';
   import {
     chercherMiseAJour,
+    essayerNotification,
     lireDemarrageAuto,
     messageErreur,
     miseAJourDisponible,
@@ -65,6 +66,15 @@
     } catch (e) {
       signaler(messageErreur(e), true);
       await relireDemarrageAuto();
+    }
+  }
+
+  async function essayer() {
+    try {
+      await essayerNotification(reglages.notifications.son);
+      signaler('Notification envoyée. Si rien ne s’affiche, Windows la retient (Assistant de concentration, notifications coupées).');
+    } catch (e) {
+      signaler(messageErreur(e), true);
     }
   }
 
@@ -134,6 +144,29 @@
   </div>
 </Panneau>
 
+<Panneau titre="Notifications">
+  <label class="ligne">
+    <input type="checkbox" bind:checked={reglages.notifications.active} onchange={enregistrer} />
+    Me prévenir quand une image, une retouche, un clip, une séquence ou un casting se termine
+  </label>
+  <div class="actions">
+    <label class="ligne">
+      <input
+        type="checkbox"
+        bind:checked={reglages.notifications.son}
+        disabled={!reglages.notifications.active}
+        onchange={enregistrer}
+      />
+      Avec un son
+    </label>
+    <Bouton petit onclick={() => void essayer()}>Essayer</Bouton>
+  </div>
+  <p class="discret note">
+    Une notification Windows, sans réseau. Elle n'apparaît que si la fenêtre d'Aria n'est pas devant toi, et un clic dessus
+    ramène la fenêtre. Elle porte l'en-tête « Windows PowerShell » : Windows ne connaît pas encore Aria.
+  </p>
+</Panneau>
+
 <Panneau titre="Fond animé">
   <label class="ligne">
     <input type="checkbox" bind:checked={reglages.fond.actif} onchange={enregistrer} />
@@ -187,6 +220,10 @@
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
+  }
+
+  .note {
+    margin: 10px 0 0;
   }
 
   .ligne {

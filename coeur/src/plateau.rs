@@ -1020,11 +1020,22 @@ pub struct Plateau {
 impl Plateau {
     /// Le Plateau, son fil d'exécution lancé avec ce générateur.
     pub fn demarrer(contexte: Contexte, generateur: impl Generateur) -> Self {
+        Self::demarrer_avec_fin(contexte, generateur, |_| ())
+    }
+
+    /// Comme [`Plateau::demarrer`], et `fin` est appelée à la fin de chaque commande (réussie, en erreur ou annulée)
+    /// avec son état final, sur le fil du Plateau et une fois le verrou de la file relâché : c'est par là que
+    /// l'appli prévient l'utilisateur. Elle ne doit pas bloquer longtemps : la commande suivante attend.
+    pub fn demarrer_avec_fin(
+        contexte: Contexte,
+        generateur: impl Generateur,
+        fin: impl Fn(&Commande) + Send + 'static,
+    ) -> Self {
         let partage = Arc::new(Partage::default());
         let (envoi, reception) = mpsc::channel();
         let fil = Arc::clone(&partage);
         let contexte_fil = contexte.clone();
-        std::thread::spawn(move || boucle(&contexte_fil, generateur, &fil, &reception));
+        std::thread::spawn(move || boucle(&contexte_fil, generateur, &fil, &reception, &fin));
         Self {
             contexte,
             partage,
@@ -1247,6 +1258,7 @@ fn boucle(
     mut generateur: impl Generateur,
     partage: &Partage,
     reception: &Receiver<String>,
+    fin: &impl Fn(&Commande),
 ) {
     for id in reception {
         let commande = {
@@ -1263,6 +1275,7 @@ fn boucle(
         let resultat = executer(contexte, &mut generateur, partage, &commande);
         let mut file = partage.file();
         file.courante = None;
+        let mut finie = None;
         if let Some(c) = file.commandes.iter_mut().find(|c| c.id == id) {
             c.etape.clear();
             match resultat {
@@ -1273,6 +1286,12 @@ fn boucle(
                     c.erreur = Some(erreur);
                 }
             }
+            finie = Some(c.clone());
+        }
+        // Le verrou est relâché avant d'appeler `fin` : l'interface relit la file pendant ce temps.
+        drop(file);
+        if let Some(commande) = finie {
+            fin(&commande);
         }
     }
 }
@@ -2132,6 +2151,37 @@ mod tests {
         let plateau = Plateau::demarrer(ctx, generateur);
         let c = plateau.commander(&demande("a fox")).unwrap();
         assert_eq!(attendre(&plateau, &c.id).etat, EtatCommande::Termine);
+    }
+
+    /// Ce que signale la fin d'une commande : son état et le nombre d'images faites.
+    fn signalees(erreur: Option<&str>) -> Vec<(EtatCommande, usize)> {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp, KREA);
+        let (generateur, _) = faux(erreur, Duration::ZERO);
+        let finies: Arc<Mutex<Vec<(EtatCommande, usize)>>> = Arc::new(Mutex::new(Vec::new()));
+        let notees = Arc::clone(&finies);
+        let plateau = Plateau::demarrer_avec_fin(ctx, generateur, move |c| {
+            notees.lock().unwrap().push((c.etat, c.images.len()));
+        });
+        let c = plateau.commander(&demande("a fox")).unwrap();
+        attendre(&plateau, &c.id);
+        // Le signal part juste après le changement d'état : on lui laisse un instant.
+        let limite = Instant::now() + Duration::from_secs(10);
+        while finies.lock().unwrap().is_empty() && Instant::now() < limite {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let vues = finies.lock().unwrap().clone();
+        drop(plateau);
+        vues
+    }
+
+    #[test]
+    fn la_fin_de_chaque_commande_est_signalee() {
+        assert_eq!(signalees(None), vec![(EtatCommande::Termine, 1)]);
+        assert_eq!(
+            signalees(Some("ComfyUI ne répond pas")),
+            vec![(EtatCommande::Erreur, 0)]
+        );
     }
 
     #[test]

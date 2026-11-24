@@ -18,6 +18,7 @@ use tauri::State;
 use tauri::ipc::Response;
 
 use crate::moteurs::{Moteurs, PORT_LLAMA};
+use crate::notifications::{self, Poignee};
 
 /// Le genre par défaut : les Rushes du Plateau (images) ; les Bobines du Montage passent `clips`.
 const GENRE: &str = "images";
@@ -26,9 +27,11 @@ fn genre(choisi: Option<String>) -> String {
     choisi.unwrap_or_else(|| GENRE.to_owned())
 }
 
-/// Le Plateau de ce lancement : ComfyUI passe par l'orchestrateur des moteurs.
-pub fn demarrer(emplacements: &Emplacements, moteurs: &Moteurs) -> Arc<Plateau> {
-    Arc::new(Plateau::demarrer(
+/// Le Plateau de ce lancement : ComfyUI passe par l'orchestrateur des moteurs, et la fin de chaque commande prévient
+/// l'utilisateur si les notifications le veulent (`notifications::prevenir`).
+pub fn demarrer(emplacements: &Emplacements, moteurs: &Moteurs, poignee: Poignee) -> Arc<Plateau> {
+    let dossier = emplacements.dossier.clone();
+    Arc::new(Plateau::demarrer_avec_fin(
         Contexte {
             dossier: emplacements.dossier.clone(),
             data: emplacements.data.clone(),
@@ -37,6 +40,7 @@ pub fn demarrer(emplacements: &Emplacements, moteurs: &Moteurs) -> Arc<Plateau> 
             port_llama: PORT_LLAMA,
         },
         Arc::clone(&moteurs.orchestrateur),
+        move |commande| notifications::prevenir(&poignee, &dossier, commande),
     ))
 }
 

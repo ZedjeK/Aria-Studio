@@ -20,6 +20,7 @@ fn main() {
         "chercher_mise_a_jour",
         "voir_notes",
         "installer_mise_a_jour",
+        "essayer_notification",
         "lire_moteurs",
         "lire_vram",
         "installer_moteur",
