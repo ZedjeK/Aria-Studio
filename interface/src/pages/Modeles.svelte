@@ -23,6 +23,7 @@
     type Usages,
   } from '../lib/api';
   import { octetsLisibles } from '../lib/jauge';
+  import { ceQueRemplace, rangerLlm } from '../lib/llmFacultatifs';
   import {
     fichiersAManquer,
     fractionTelechargement,
@@ -237,9 +238,10 @@
     </Panneau>
   {/each}
 
+  {@const llmRanges = rangerLlm(etat.llm)}
   <Panneau titre="LLM du catalogue">
     <ul class="fichiers">
-      {#each etat.llm as l (l.fichier)}
+      {#each llmRanges.generalistes as l (l.fichier)}
         <li>
           <span class="verdict" class:ok={l.installe} role="img" aria-label={l.installe ? 'installé' : 'à installer'}>
             {l.installe ? '✓' : '○'}
@@ -247,8 +249,7 @@
           <span class="nom">
             <strong>{l.nom}</strong>
             <span class="discret">
-              · {l.specialiste ? `spécialiste (${l.specialiste === 'creation' ? 'réécriture' : 'retouche'})` : 'généraliste'}
-              {l.vision ? ' · 👁 voit les images' : ''} · licence {l.licence.nom} · {octetsLisibles(l.taille)}
+              · généraliste{l.vision ? ' · 👁 voit les images' : ''} · licence {l.licence.nom} · {octetsLisibles(l.taille)}
             </span>
           </span>
           {#if l.installe && usages?.llmDefaut === l.fichier}
@@ -264,6 +265,43 @@
       {/each}
     </ul>
   </Panneau>
+
+  {#if llmRanges.specialistes.length > 0}
+    <Panneau titre="Spécialistes, facultatifs">
+      <p class="discret">
+        {llmRanges.generalisteInstalle
+          ? 'Le LLM généraliste en place sait déjà écrire pour Qwen-Image 2.1 : ces spécialistes ne sont pas nécessaires.'
+          : 'Installe d\'abord un généraliste : il sert à tout. Ces spécialistes ne font que l\'écriture des prompts de Qwen-Image 2.1.'}
+        Ils écrivent avec la consigne officielle du modèle (licence Qwen Research, usage non commercial) ; ce sont des
+        conversions de la communauté : l'empreinte SHA-256 vérifie le fichier, pas la fidélité de la conversion.
+      </p>
+      <ul class="fichiers">
+        {#each llmRanges.specialistes as l (l.fichier)}
+          <li>
+            <span class="verdict" class:ok={l.installe} role="img" aria-label={l.installe ? 'installé' : 'non installé'}>
+              {l.installe ? '✓' : '○'}
+            </span>
+            <span class="nom">
+              <strong>{l.nom}</strong>
+              <span class="discret">
+                · remplace {l.specialiste ? ceQueRemplace(l.specialiste) : ''}{l.vision ? ' · 👁 voit les images' : ''} · licence
+                {l.licence.nom}{l.licence.commercial ? '' : ' (non commercial)'} · {octetsLisibles(l.taille)}
+              </span>
+            </span>
+            {#if l.installe && usages?.llmDefaut === l.fichier}
+              <span class="puce">En service</span>
+            {:else if l.installe}
+              <span class="bon">Installé</span>
+            {:else}
+              <Bouton genre="discret" petit onclick={() => demander('llm', l.fichier, l.nom, l.licence, l.aTelecharger)}>
+                ⬇ Installer ({octetsLisibles(l.aTelecharger)})
+              </Bouton>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </Panneau>
+  {/if}
 {:else}
   <p class="discret">Lecture…</p>
 {/if}
