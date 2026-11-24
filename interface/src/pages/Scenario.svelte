@@ -50,6 +50,7 @@
     sousListeVisible,
     valeursProposees,
   } from '../lib/scenario';
+  import { motsPourDuree } from '../lib/decoupage';
   import { repereVision, rushesMax, workflowsPour } from '../lib/plateau';
   import { etatVide, versIdee, type EtatDirections } from '../lib/directions';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
@@ -108,6 +109,10 @@
   let montage = $state<OptionsMontage | null>(null);
   let modeClip = $state<'animer' | 'texte'>('animer');
   let dureeClip = $state(5);
+  /** Clip : ce que dit le personnage (mot pour mot) et la musique d'ambiance, écrites par le LLM dans le prompt. */
+  let repliqueClip = $state('');
+  let musiqueClip = $state('');
+  const motsClip = $derived(motsPourDuree(repliqueClip, dureeClip));
   /** L'image à retoucher, ou le rush à animer. */
   let imageAtelier = $state<string[]>([]);
   const proposesClip = $derived(montage ? (modeClip === 'animer' ? montage.animer : montage.texte) : null);
@@ -251,6 +256,8 @@
           workflowRetouche,
           modeClip,
           dureeClip,
+          repliqueClip,
+          musiqueClip,
         }),
       );
       brouillonGarde = true;
@@ -284,6 +291,8 @@
       if ('workflowRetouche' in d && typeof d.workflowRetouche === 'string') workflowRetouche = d.workflowRetouche;
       if ('modeClip' in d && (d.modeClip === 'animer' || d.modeClip === 'texte')) modeClip = d.modeClip;
       if ('dureeClip' in d && typeof d.dureeClip === 'number') dureeClip = d.dureeClip;
+      if ('repliqueClip' in d && typeof d.repliqueClip === 'string') repliqueClip = d.repliqueClip;
+      if ('musiqueClip' in d && typeof d.musiqueClip === 'string') musiqueClip = d.musiqueClip;
       if ('choixParSujet' in d) choixParSujet = choixDuBrouillon(d.choixParSujet);
       if ('age' in d && typeof d.age === 'number') age = d.age;
       if ('texte' in d && typeof d.texte === 'string') texte = d.texte;
@@ -467,6 +476,8 @@
         images: imagesLlm,
         role: atelier === 'clip' && modeClip === 'animer' ? 'animer' : atelier === 'image' ? departImage : null,
         duree: atelier === 'clip' ? dureeClip : null,
+        replique: atelier === 'clip' ? repliqueClip.trim() : null,
+        musique: atelier === 'clip' ? musiqueClip.trim() : null,
       });
       final = r.prompt;
       finalRetouche = true;
@@ -712,6 +723,35 @@
         </select>
       </label>
     </div>
+    <div class="ligne">
+      <label class="inline">
+        <span class="etiquette">🗣 Dialogue</span>
+        <input
+          type="text"
+          maxlength="300"
+          placeholder="Une réplique, mot pour mot (laisse vide : personne ne parle)"
+          bind:value={repliqueClip}
+          oninput={garder}
+        />
+      </label>
+      {#if motsClip.mots > 0}
+        <small class="compte" class:trop={motsClip.trop}>
+          {motsClip.mots} mots · {motsClip.permis} au plus pour {dureeClip} s
+        </small>
+      {/if}
+    </div>
+    <div class="ligne">
+      <label class="inline">
+        <span class="etiquette">🎵 Musique d'ambiance</span>
+        <input
+          type="text"
+          maxlength="200"
+          placeholder="Une ambiance musicale (laisse vide : pas de musique de fond)"
+          bind:value={musiqueClip}
+          oninput={garder}
+        />
+      </label>
+    </div>
   {/if}
   <SousOnglets onglets={ongletsIdee} bind:actif={modeIdee} />
   {#if modeIdee === 'preciser'}
@@ -732,6 +772,8 @@
               : null}
         sansSujet={atelier === 'image' && departImage !== null}
         duree={atelier === 'clip' ? dureeClip : null}
+        replique={atelier === 'clip' ? repliqueClip.trim() : null}
+        musique={atelier === 'clip' ? musiqueClip.trim() : null}
         disponible={llms.length > 0}
         {signaler}
         libelleUtiliser={atelier === 'retouche' ? 'Utiliser cette consigne' : 'Utiliser ce prompt'}
@@ -1159,6 +1201,14 @@
     margin: 0 0 6px;
     color: var(--texte-2);
     font-size: 12px;
+  }
+
+  .compte.trop {
+    color: var(--orange);
+  }
+
+  .inline input[type='text'] {
+    min-width: 340px;
   }
 
   .alertes {

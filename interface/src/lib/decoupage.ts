@@ -179,11 +179,16 @@ export function compterMots(t: string): number {
   return t.split(/\s+/).filter((m) => m !== '').length;
 }
 
+/** Une réplique trop longue pour sa durée (un plan ou un clip) : le cœur prévient aussi. */
+export function motsPourDuree(replique: string, duree: number): { mots: number; permis: number; trop: boolean } {
+  const mots = compterMots(replique);
+  const permis = Math.floor(MOTS_PAR_SECONDE * duree);
+  return { mots, permis, trop: mots > permis };
+}
+
 /** Une réplique trop longue pour son plan : le cœur prévient aussi. */
 export function motsReplique(p: PlanDecoupage): { mots: number; permis: number; trop: boolean } {
-  const mots = compterMots(p.replique);
-  const permis = Math.floor(MOTS_PAR_SECONDE * p.duree);
-  return { mots, permis, trop: mots > permis };
+  return motsPourDuree(p.replique, p.duree);
 }
 
 /** Le format ne compte que si le premier plan part du texte : avec un rush, la taille est celle du rush. */

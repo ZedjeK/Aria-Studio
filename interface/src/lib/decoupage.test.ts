@@ -10,6 +10,7 @@ import {
   etatPlan,
   etatVide,
   majAlertes,
+  motsPourDuree,
   motsReplique,
   nouveauPlan,
   plansDemande,
@@ -41,6 +42,13 @@ describe('atelier Séquence', () => {
     expect(motsReplique({ ...p, replique: 'un deux trois quatre cinq six sept huit neuf dix onze douze treize' }).trop).toBe(
       true,
     );
+  });
+
+  it('compte les mots d’une réplique de clip selon sa durée', () => {
+    const quatorze = 'un deux trois quatre cinq six sept huit neuf dix onze douze treize quatorze';
+    expect(motsPourDuree(quatorze, 5)).toEqual({ mots: 14, permis: 12, trop: true });
+    expect(motsPourDuree(quatorze, 8)).toEqual({ mots: 14, permis: 20, trop: false });
+    expect(motsPourDuree('  ', 5)).toEqual({ mots: 0, permis: 12, trop: false });
   });
 
   it('garde les alertes des autres plans', () => {

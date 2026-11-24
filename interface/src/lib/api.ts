@@ -1329,6 +1329,10 @@ export interface DemandeEcriture {
   role?: string | null;
   /** La durée d'un clip, en secondes. */
   duree?: number | null;
+  /** Clip : ce que dit le personnage, mot pour mot ; vide : le LLM n'invente aucune réplique. */
+  replique?: string | null;
+  /** Clip : la musique d'ambiance voulue ; vide : pas de musique de fond. */
+  musique?: string | null;
 }
 
 export interface PromptEcrit {
@@ -1523,6 +1527,10 @@ export interface DemandeConversation {
   sansSujet: boolean;
   /** 💬 d'un plan : la demande du découpage, `plan` étant son numéro. */
   sequence: DemandeDecoupage | null;
+  /** Clip : ce que dit le personnage, mot pour mot. */
+  replique?: string | null;
+  /** Clip : la musique d'ambiance voulue. */
+  musique?: string | null;
 }
 
 export const conversationScenario = (demande: DemandeConversation): Promise<TourConversation> =>
