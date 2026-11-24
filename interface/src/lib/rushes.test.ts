@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EtatRushes } from './api';
-import { actions, basculer, compteRendu, images, libelleAction, ongletDe, onglets } from './rushes';
+import { actions, basculer, compteRendu, images, libelleAction, ongletDe, onglets, scinderTitre } from './rushes';
 
 const etat: EtatRushes = {
   tous: 12,
@@ -56,5 +56,11 @@ describe('Rushes', () => {
   it('bascule la sélection', () => {
     expect(basculer([], 'a')).toEqual(['a']);
     expect(basculer(['a', 'b'], 'a')).toEqual(['b']);
+  });
+
+  it('sépare le nom d’un onglet et son nombre pour le volet', () => {
+    expect(scinderTitre('Essais (11)')).toEqual({ nom: 'Essais', nombre: '11' });
+    expect(scinderTitre('Mes (rushes) (3)')).toEqual({ nom: 'Mes (rushes)', nombre: '3' });
+    expect(scinderTitre('Tous')).toEqual({ nom: 'Tous', nombre: '' });
   });
 });
