@@ -11,7 +11,9 @@ use serde_json::Value;
 
 use crate::plateau::{Contexte, Generateur};
 use crate::prompt::{self, Images, Vue};
-use crate::{conversation, creations, decoupage, images, listes, llm, montage, reglages, securite, workflows};
+use crate::{
+    conversation, creations, decoupage, images, listes, llm, montage, reglages, securite, workflows,
+};
 
 /// L'idée, au plus (en caractères).
 pub const IDEE_MAX: usize = 2000;
