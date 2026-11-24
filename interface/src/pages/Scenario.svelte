@@ -28,6 +28,7 @@
     type ChoixListes,
     type ChoixWorkflow,
     type EnvoiClip,
+    type EnvoiPlateau,
     type EnvoiRetouche,
     type ModeReference,
     type OptionsMontage,
@@ -45,6 +46,7 @@
     choixDansOnglet,
     choixDuBrouillon,
     contexteListes,
+    formatDemande,
     incompatible,
     poserChoix,
     sousListeVisible,
@@ -70,7 +72,7 @@
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
     /** Envoie le prompt final au Plateau, avec le modèle cible et, pour s'inspirer ou redessiner, ses images. */
-    envoyer: (prompt: string, workflow: string | null, references: string[], modeReference: ModeReference | null) => void;
+    envoyer: (envoi: EnvoiPlateau) => void;
     /** Ouvre une séquence dans le Montage (atelier Séquence). */
     versMontage: (id: string) => void;
     /** Une séquence du Montage à retravailler ici. */
@@ -126,6 +128,11 @@
   let referencesImage = $state<string[]>([]);
   let optionsImage = $state<OptionsPlateau | null>(null);
   let optionsReferences = $state<OptionsPlateau | null>(null);
+  /** Atelier Image : le format de l'image ; vide, c'est celui du modèle cible. */
+  let formatImage = $state('');
+  const formatsImage = $derived(optionsImage?.formats ?? []);
+  /** Le format que le LLM et le Plateau reçoivent (rien pour Redessiner, dont le format est celui de l'image). */
+  const formatEnvoye = $derived(formatDemande(atelier, departImage, formatImage, formatsImage));
   const imageManquante = $derived(
     (imageRequise && imageAtelier.length === 0) ||
       (atelier === 'image' && departImage !== null && referencesImage.length === 0),
@@ -258,6 +265,7 @@
           dureeClip,
           repliqueClip,
           musiqueClip,
+          formatImage,
         }),
       );
       brouillonGarde = true;
@@ -293,6 +301,7 @@
       if ('dureeClip' in d && typeof d.dureeClip === 'number') dureeClip = d.dureeClip;
       if ('repliqueClip' in d && typeof d.repliqueClip === 'string') repliqueClip = d.repliqueClip;
       if ('musiqueClip' in d && typeof d.musiqueClip === 'string') musiqueClip = d.musiqueClip;
+      if ('formatImage' in d && typeof d.formatImage === 'string') formatImage = d.formatImage;
       if ('choixParSujet' in d) choixParSujet = choixDuBrouillon(d.choixParSujet);
       if ('age' in d && typeof d.age === 'number') age = d.age;
       if ('texte' in d && typeof d.texte === 'string') texte = d.texte;
@@ -478,6 +487,7 @@
         duree: atelier === 'clip' ? dureeClip : null,
         replique: atelier === 'clip' ? repliqueClip.trim() : null,
         musique: atelier === 'clip' ? musiqueClip.trim() : null,
+        format: formatEnvoye,
       });
       final = r.prompt;
       finalRetouche = true;
@@ -506,7 +516,13 @@
         duree: dureeClip,
       });
     } else {
-      envoyer(texteFinal, workflowId, departImage ? referencesImage : [], departImage);
+      envoyer({
+        prompt: texteFinal,
+        workflow: workflowId,
+        references: departImage ? referencesImage : [],
+        modeReference: departImage,
+        format: formatEnvoye,
+      });
     }
   }
 
@@ -712,6 +728,19 @@
 
   <ScenarioEtape numero={2} titre={atelier === 'retouche' ? 'Ta consigne' : 'Ton idée'} />
   <Panneau titre={atelier === 'retouche' ? 'Ce que tu veux changer' : atelier === 'clip' ? 'Ce que tu veux animer' : 'Ce que tu veux voir'}>
+  {#if atelier === 'image' && departImage !== 'variation' && formatsImage.length > 0}
+    <div class="ligne">
+      <label class="inline">
+        <span class="etiquette">Format</span>
+        <select bind:value={formatImage} onchange={garder}>
+          <option value="">Celui du modèle cible</option>
+          {#each formatsImage as f (f)}
+            <option value={f}>{f}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
+  {/if}
   {#if atelier === 'clip'}
     <div class="ligne">
       <label class="inline">
@@ -774,6 +803,7 @@
         duree={atelier === 'clip' ? dureeClip : null}
         replique={atelier === 'clip' ? repliqueClip.trim() : null}
         musique={atelier === 'clip' ? musiqueClip.trim() : null}
+        format={atelier === 'image' ? formatEnvoye : null}
         disponible={llms.length > 0}
         {signaler}
         libelleUtiliser={atelier === 'retouche' ? 'Utiliser cette consigne' : 'Utiliser ce prompt'}

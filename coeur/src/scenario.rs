@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::plateau::{Contexte, Generateur};
 use crate::prompt::{self, Images, Vue};
-use crate::{creations, decoupage, images, listes, llm, montage, reglages, securite, workflows};
+use crate::{conversation, creations, decoupage, images, listes, llm, montage, reglages, securite, workflows};
 
 /// L'idée, au plus (en caractères).
 pub const IDEE_MAX: usize = 2000;
@@ -51,6 +51,10 @@ pub struct DemandeEcriture {
     /// Clip : la musique d'ambiance voulue (absente : pas de musique de fond).
     #[serde(default)]
     pub musique: Option<String>,
+    /// Le format de l'image, choisi au Scénario (Image et Retouche) : le LLM cadre le prompt pour lui.
+    /// Absent : celui du modèle cible.
+    #[serde(default)]
+    pub format: Option<String>,
 }
 
 /// Le prompt écrit.
@@ -93,8 +97,8 @@ pub(crate) fn verifier_llm(contexte: &Contexte, choisi: Option<&str>) -> Result<
 /// redessiner), une consigne de retouche (il voit l'image), ou le prompt d'un clip (il voit le rush à animer).
 ///
 /// # Errors
-/// Atelier inconnu, idée vide ou trop longue, image manquante, durée inconnue, LLM absent, filtre AS-18, ou
-/// llama-server qui échoue.
+/// Atelier inconnu, idée vide ou trop longue, image manquante, durée ou format inconnus, LLM absent, filtre
+/// AS-18, ou llama-server qui échoue.
 #[allow(clippy::too_many_lines)] // la route de la v2, gardée d'un tenant pour se relire à côté d'elle
 pub fn ecrire_prompt(
     contexte: &Contexte,
@@ -139,6 +143,11 @@ pub fn ecrire_prompt(
     } else {
         (String::new(), String::new())
     };
+    if let Some(f) = d.format.as_deref().filter(|f| !f.is_empty())
+        && !workflows::FORMATS.contains(&f)
+    {
+        return Err(format!("Format inconnu : {f}"));
+    }
     let mut texte = match (idee.is_empty(), complements.is_empty()) {
         (false, false) => format!("{idee}\n\nAlso fixed (keep it): {complements}"),
         (false, true) => idee.to_owned(),
@@ -175,7 +184,7 @@ pub fn ecrire_prompt(
         .collect::<Result<Vec<Vue>, String>>()?;
     let debut = Instant::now();
     let lieux = contexte.lieux();
-    let ecriture = match atelier {
+    let mut ecriture = match atelier {
         "retouche" => {
             prompt::preparer_traduction(&lieux, &texte, choisi.as_deref(), wf.as_ref(), vues.first())?
         }
@@ -207,6 +216,12 @@ pub fn ecrire_prompt(
             )?
         }
     };
+    // Le format choisi cadre le prompt (une image 9:16 ne se compose pas comme un 16:9) ; un clip suit le
+    // cadre de son modèle vidéo.
+    if matches!(atelier, "image" | "retouche") {
+        let cadre = conversation::cadre_format(d.format.as_deref(), atelier);
+        prompt::ajouter_a_la_consigne(&mut ecriture, &cadre);
+    }
     // Contrôle qualité : une réponse qui a des défauts est redemandée une fois, en disant au LLM ce qui n'allait pas.
     let attentes = ecriture.attentes(wf.as_ref());
     let lancement = ecriture.lancement.clone();
@@ -384,6 +399,43 @@ mod tests {
             ecrire_prompt(&ctx, &mut faux, &refus)
                 .unwrap_err()
                 .starts_with("ERREUR AS-18")
+        );
+    }
+
+    #[test]
+    fn le_format_cadre_le_prompt_d_une_image() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let mut faux = Faux {
+            texte: format!("A red fox sitting in fresh snow{SUITE}"),
+            demandes: Vec::new(),
+        };
+        let d = DemandeEcriture {
+            atelier: "image".to_owned(),
+            idee: "un renard dans la neige".to_owned(),
+            workflow: Some("krea2_turbo".to_owned()),
+            format: Some("9:16 (Portrait)".to_owned()),
+            ..DemandeEcriture::default()
+        };
+        ecrire_prompt(&ctx, &mut faux, &d).unwrap();
+        let demande = serde_json::to_string(&faux.demandes[0].messages).unwrap();
+        assert!(demande.contains("9:16 (Portrait), portrait"));
+        // Sans format, la consigne ne parle pas de cadre.
+        let libre = DemandeEcriture {
+            format: None,
+            ..d.clone()
+        };
+        ecrire_prompt(&ctx, &mut faux, &libre).unwrap();
+        let demande = serde_json::to_string(&faux.demandes[1].messages).unwrap();
+        assert!(!demande.contains("Output frame"));
+        // Un format que le Plateau ne propose pas est refusé.
+        let inconnu = DemandeEcriture {
+            format: Some("5:4".to_owned()),
+            ..d
+        };
+        assert_eq!(
+            ecrire_prompt(&ctx, &mut faux, &inconnu).unwrap_err(),
+            "Format inconnu : 5:4"
         );
     }
 

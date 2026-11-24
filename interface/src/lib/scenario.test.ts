@@ -4,6 +4,7 @@ import {
   choixDansOnglet,
   choixDuBrouillon,
   contexteListes,
+  formatDemande,
   incompatible,
   poserChoix,
   sousListeVisible,
@@ -139,5 +140,26 @@ describe('Scénario', () => {
       personnage: { personnage: { Genre: 'Femme' } },
     });
     expect(choixDuBrouillon(null)).toEqual({});
+  });
+});
+
+describe('Format de l’atelier Image', () => {
+  const formats = ['1:1 (Square)', '16:9 (Widescreen)', '9:16 (Portrait)'];
+
+  it('envoie le format choisi, au texte comme aux références', () => {
+    expect(formatDemande('image', null, '9:16 (Portrait)', formats)).toBe('9:16 (Portrait)');
+    expect(formatDemande('image', 'inspirer', '16:9 (Widescreen)', formats)).toBe('16:9 (Widescreen)');
+  });
+
+  it('n’envoie rien quand le modèle cible décide, ou pour un format que le Plateau ne propose pas', () => {
+    expect(formatDemande('image', null, '', formats)).toBeNull();
+    expect(formatDemande('image', null, '5:4', formats)).toBeNull();
+    expect(formatDemande('image', null, '1:1 (Square)', [])).toBeNull();
+  });
+
+  it('ne cadre ni Redessiner (le format est celui de l’image) ni les autres ateliers', () => {
+    expect(formatDemande('image', 'variation', '1:1 (Square)', formats)).toBeNull();
+    expect(formatDemande('clip', null, '1:1 (Square)', formats)).toBeNull();
+    expect(formatDemande('retouche', null, '1:1 (Square)', formats)).toBeNull();
   });
 });

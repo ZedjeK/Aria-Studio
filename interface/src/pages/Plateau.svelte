@@ -166,6 +166,9 @@
         const cible = recu.workflow;
         if (cible && workflowsPour(depart, options, optionsInspirer).some((w) => w.id === cible)) choisirWorkflow(cible);
         if (depart) references = [...recu.references];
+        // Le format choisi au Scénario (pas pour Redessiner : il garde celui de l'image).
+        const formatRecu = recu.format;
+        if (formatRecu && depart !== 'variation' && options.formats.includes(formatRecu)) format = formatRecu;
         recuLu?.();
         signaler(recu.prompt === '' ? 'Rush de départ posé : écris ce qui change.' : 'Prompt reçu : il partira tel quel.');
       }

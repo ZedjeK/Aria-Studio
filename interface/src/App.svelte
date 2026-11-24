@@ -261,8 +261,8 @@
       {#if page === 'scenario'}
         <Scenario
           {signaler}
-          envoyer={(prompt, workflow, references, modeReference) => {
-            versPlateau = { prompt, workflow, references, modeReference };
+          envoyer={(envoi) => {
+            versPlateau = envoi;
             page = 'plateau';
           }}
           versMontage={(id) => {
