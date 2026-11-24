@@ -1305,6 +1305,26 @@ pub fn preparer_reecriture(
     })
 }
 
+/// Ajoute un bloc à la consigne du LLM (son message système). Un spécialiste garde la sienne telle quelle, et
+/// un bloc vide ne change rien.
+pub fn ajouter_a_la_consigne(ecriture: &mut Ecriture, bloc: &str) {
+    if bloc.is_empty() || ecriture.specialiste.is_some() {
+        return;
+    }
+    let Some(premier) = ecriture.demande.messages.get_mut(0) else {
+        return;
+    };
+    if premier.get("role").and_then(Value::as_str) != Some("system") {
+        return;
+    }
+    let Some(contenu) = premier.get_mut("content") else {
+        return;
+    };
+    if let Some(texte) = contenu.as_str() {
+        *contenu = Value::String(format!("{texte}\n\n{bloc}"));
+    }
+}
+
 /// Une image montrée au LLM : ses pixels (il la voit s'il a sa vision), sinon ce qu'en dit sa fiche.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Vue {

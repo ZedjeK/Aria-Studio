@@ -10,6 +10,18 @@ export const ONGLETS: { id: OngletScenario; titre: string }[] = [
   { id: 'scene', titre: 'Mise en scène' },
 ];
 
+/** Le format que l'atelier Image envoie au LLM et au Plateau : celui qu'il a choisi si le Plateau le propose ; rien
+ * pour un autre atelier, pour Redessiner (le format est celui de l'image) ou quand le modèle cible décide. */
+export function formatDemande(
+  atelier: string,
+  depart: 'inspirer' | 'variation' | null,
+  choisi: string,
+  formats: string[],
+): string | null {
+  if (atelier !== 'image' || depart === 'variation') return null;
+  return formats.includes(choisi) ? choisi : null;
+}
+
 /** L'âge de la majorité (comme le filtre AS-18). */
 export const AGE_MAJORITE = 18;
 

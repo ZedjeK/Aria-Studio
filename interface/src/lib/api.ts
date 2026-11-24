@@ -1358,6 +1358,8 @@ export interface DemandeEcriture {
   replique?: string | null;
   /** Clip : la musique d'ambiance voulue ; vide : pas de musique de fond. */
   musique?: string | null;
+  /** Le format de l'image (Image et Retouche) : le LLM cadre le prompt pour lui ; null : celui du modèle cible. */
+  format?: string | null;
 }
 
 export interface PromptEcrit {
@@ -1376,6 +1378,8 @@ export interface EnvoiPlateau {
   workflow: string | null;
   references: string[];
   modeReference: ModeReference | null;
+  /** Le format choisi au Scénario : le Plateau le pose s'il le propose ; absent : celui du modèle cible. */
+  format?: string | null;
 }
 
 /** Une consigne écrite au Scénario, en route vers la page Retouche avec son image. */
