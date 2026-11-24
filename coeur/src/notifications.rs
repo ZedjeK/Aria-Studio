@@ -112,11 +112,7 @@ mod tests {
 
     #[test]
     fn rien_pour_une_annulation_une_commande_en_route_ou_une_voix() {
-        for etat in [
-            EtatCommande::Annule,
-            EtatCommande::Attente,
-            EtatCommande::EnCours,
-        ] {
+        for etat in [EtatCommande::Annule, EtatCommande::Attente, EtatCommande::EnCours] {
             assert_eq!(annonce(&commande("creation", etat)), None);
         }
         assert_eq!(annonce(&commande("voix", EtatCommande::Termine)), None);

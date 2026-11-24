@@ -198,8 +198,7 @@ impl Reglages {
             notifications: ReglagesNotifications {
                 active: booleen(sections, SECTION_NOTIFICATIONS, CLE_ACTIVE)
                     .unwrap_or(defaut.notifications.active),
-                son: booleen(sections, SECTION_NOTIFICATIONS, CLE_SON)
-                    .unwrap_or(defaut.notifications.son),
+                son: booleen(sections, SECTION_NOTIFICATIONS, CLE_SON).unwrap_or(defaut.notifications.son),
             },
         }
         .assaini()
