@@ -56,7 +56,7 @@ describe('Usages', () => {
     expect(puces(workflow({ vramMinGo: 10, references: 3, variation: false }))).toContain('3 images de référence au plus');
     expect(natureDe(workflow({ tache: 'image_vers_video' }))).toBe('video');
     expect(natureDe(workflow({ tache: 'retouche' }))).toBe('image');
-    expect(nomLlm('a.gguf', [{ fichier: 'a.gguf', nom: 'A', favori: true, specialiste: false }])).toBe('A');
+    expect(nomLlm('a.gguf', [{ fichier: 'a.gguf', nom: 'A', favori: true, specialiste: false, vision: false }])).toBe('A');
     expect(nomLlm('b.gguf', [])).toBe('b.gguf');
   });
 });

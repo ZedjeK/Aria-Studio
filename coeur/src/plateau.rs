@@ -289,6 +289,9 @@ pub struct ChoixLlm {
     pub favori: bool,
     /// Entraîné pour un modèle cible : il ne réécrit que pour lui.
     pub specialiste: bool,
+    /// Il voit les images : un projecteur de sa famille est dans `modeles\llm` et la vision n'est pas coupée.
+    /// Utile pour Redessiner, Mélanger et la vérification d'une image.
+    pub vision: bool,
 }
 
 /// Ce que le Plateau propose : relu à chaque appel, un modèle déposé y apparaît aussitôt.
@@ -533,7 +536,7 @@ pub fn options_pour(contexte: &Contexte, tache: &str, defaut: String) -> Options
         defaut,
         workflows: prets,
         incomplets,
-        llm: llm_au_choix(&contexte.modeles),
+        llm: llm_au_choix(&contexte.dossier, &contexte.modeles),
         llm_par_workflow,
         defaut_references: workflow_references(&contexte.dossier),
         references_max: workflows::REFERENCES_MAX,
@@ -710,8 +713,8 @@ fn valider_references(contexte: &Contexte, demande: &Demande) -> Result<String, 
 }
 
 /// Les LLM installés : les favoris d'abord, avec leur nom ; les autres avec le nom de leur fiche, sinon celui du
-/// fichier.
-pub fn llm_au_choix(modeles: &std::path::Path) -> Vec<ChoixLlm> {
+/// fichier. `vision` dit lesquels voient les images (même règle que la vérification d'une image).
+pub fn llm_au_choix(dossier: &Dossier, modeles: &std::path::Path) -> Vec<ChoixLlm> {
     let presents = llm::disponibles(modeles);
     let mut choix: Vec<ChoixLlm> = llm::FAVORIS
         .iter()
@@ -721,6 +724,7 @@ pub fn llm_au_choix(modeles: &std::path::Path) -> Vec<ChoixLlm> {
             nom: (*nom).to_owned(),
             favori: true,
             specialiste: false,
+            vision: llm::projecteur(dossier, modeles, f).0.is_some(),
         })
         .collect();
     for f in presents {
@@ -735,6 +739,7 @@ pub fn llm_au_choix(modeles: &std::path::Path) -> Vec<ChoixLlm> {
             .map_or_else(|| f.trim_end_matches(".gguf").to_owned(), str::to_owned);
         choix.push(ChoixLlm {
             specialiste: fiche.as_ref().is_some_and(|x| x.get("specialiste").is_some()),
+            vision: llm::projecteur(dossier, modeles, &f).0.is_some(),
             fichier: f,
             nom,
             favori: false,
@@ -1961,6 +1966,32 @@ mod tests {
         );
         let refus = valider(&ctx, &demande("a twelve-year-old girl, nude")).unwrap_err();
         assert!(refus.starts_with("ERREUR AS-18"), "{refus}");
+    }
+
+    #[test]
+    fn les_llm_qui_voient_les_images_sont_signales() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp, KREA);
+        let llm_dir = ctx.modeles.join(crate::modeles::DOSSIER_LLM);
+        fs::create_dir_all(&llm_dir).unwrap();
+        for f in ["mistral.gguf", "autre.gguf", "mistral-mmproj-Q8_0.gguf"] {
+            fs::write(llm_dir.join(f), crate::gguf::essai::gguf(&[12])).unwrap();
+        }
+        // Dans l'ordre des fichiers : autre.gguf, mistral.gguf.
+        let vision = |ctx: &Contexte| -> Vec<bool> {
+            llm_au_choix(&ctx.dossier, &ctx.modeles)
+                .into_iter()
+                .map(|c| c.vision)
+                .collect()
+        };
+        // Le projecteur n'est pas un LLM ; il donne la vue à ceux de sa famille.
+        assert_eq!(vision(&ctx), [false, true]);
+        // La vision coupée à la main dans Réglages : le LLM ne la promet plus.
+        let coupee = r#"{"llm": {"mistral.gguf": {"vision": "aucune"}}}"#;
+        fs::write(ctx.dossier.reglages(), coupee).unwrap();
+        assert_eq!(vision(&ctx), [false, false]);
+        // Le Plateau et la Retouche reçoivent le même champ.
+        assert!(options(&ctx).llm.iter().all(|c| !c.vision));
     }
 
     #[test]

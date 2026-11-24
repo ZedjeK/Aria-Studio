@@ -37,6 +37,7 @@
     workflowsPour,
     modeleInitial,
     nomCheckpoint,
+    repereVision,
     texteAvancement,
     texteCommande,
     texteStepsSuggeres,
@@ -360,7 +361,9 @@
           <span class="discret">avec</span>
           <select bind:value={llmChoisi} aria-label="LLM qui réécrit">
             {#each options.llm as choix (choix.fichier)}
-              <option value={choix.fichier}>{choix.nom}{choix.specialiste ? ' (spécialiste)' : ''}</option>
+              <option value={choix.fichier}>
+                {choix.nom}{choix.specialiste ? ' (spécialiste)' : ''}{repereVision(choix)}
+              </option>
             {/each}
           </select>
         </label>

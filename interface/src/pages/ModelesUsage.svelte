@@ -19,6 +19,7 @@
     type WorkflowUsage,
   } from '../lib/api';
   import { octetsLisibles } from '../lib/jauge';
+  import { repereVision } from '../lib/plateau';
   import { attentes, natureDe, nomLlm, puces } from '../lib/usages';
   import Bouton from '../lib/composants/Bouton.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -155,7 +156,7 @@
     >
       <option value="">LLM par défaut ({nomLlm(llmDefaut, llmChoix)})</option>
       {#each llmChoix as c (c.fichier)}
-        <option value={c.fichier}>{c.specialiste ? '🎯 ' : ''}{c.nom}{c.favori ? ' ★' : ''}</option>
+        <option value={c.fichier}>{c.specialiste ? '🎯 ' : ''}{c.nom}{c.favori ? ' ★' : ''}{repereVision(c)}</option>
       {/each}
     </select>
   </div>

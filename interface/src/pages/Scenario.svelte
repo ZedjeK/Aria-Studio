@@ -50,7 +50,7 @@
     sousListeVisible,
     valeursProposees,
   } from '../lib/scenario';
-  import { rushesMax, workflowsPour } from '../lib/plateau';
+  import { repereVision, rushesMax, workflowsPour } from '../lib/plateau';
   import { etatVide, versIdee, type EtatDirections } from '../lib/directions';
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
@@ -611,7 +611,7 @@
     <select bind:value={llmChoisi} disabled={llms.length === 0}>
       <option value="">{atelier === 'sequence' ? 'Celui du modèle vidéo' : 'Celui du modèle cible'}</option>
       {#each llms as l (l.fichier)}
-        <option value={l.fichier}>{l.specialiste ? '🎯 ' : ''}{l.nom}{l.favori ? ' ★' : ''}</option>
+        <option value={l.fichier}>{l.specialiste ? '🎯 ' : ''}{l.nom}{l.favori ? ' ★' : ''}{repereVision(l)}</option>
       {/each}
     </select>
   </label>
