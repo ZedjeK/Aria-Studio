@@ -1321,9 +1321,7 @@ pub fn ajouter_a_la_consigne(ecriture: &mut Ecriture, bloc: &str) {
         return;
     };
     if let Some(texte) = contenu.as_str() {
-        *contenu = Value::String(format!("{texte}
-
-{bloc}"));
+        *contenu = Value::String(format!("{texte}\n\n{bloc}"));
     }
 }
 
