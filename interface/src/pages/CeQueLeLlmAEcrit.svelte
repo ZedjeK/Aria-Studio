@@ -1,6 +1,7 @@
 <!--
-  « Ce que le LLM a écrit », sous un résultat : ta consigne, le prompt réellement envoyé au modèle et ce qui s'est passé
-  à la réécriture. Repliable, fermé d'office : la comparaison avant · après reste la vedette du résultat.
+  « Ce que le LLM a écrit », sous un résultat : ta consigne, ce que le LLM en a fait, le prompt réellement envoyé au
+  modèle et ce qui s'est passé à la réécriture. Repliable, fermé d'office : la comparaison avant · après reste la
+  vedette du résultat. Une fiche plus ancienne n'a pas le texte du LLM : elle montre deux textes seulement.
 -->
 <script lang="ts">
   import type { TextesLlm } from '../lib/reecriture';
@@ -17,8 +18,12 @@
   <dl>
     <dt>Ta consigne</dt>
     <dd>{textes.idee}</dd>
-    <dt>Prompt envoyé au modèle{textes.llm ? ` (écrit par ${textes.llm})` : ''}</dt>
-    <dd class="code">{textes.prompt}</dd>
+    {#if textes.retravaille}
+      <dt>Prompt retravaillé par le LLM{textes.llm ? ` (${textes.llm})` : ''}</dt>
+      <dd class="code">{textes.retravaille}</dd>
+    {/if}
+    <dt>Prompt envoyé au modèle</dt>
+    <dd class="code">{textes.envoye}</dd>
   </dl>
   {#if textes.remarque}
     <p class="remarque">⚠ {textes.remarque}</p>

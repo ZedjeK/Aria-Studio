@@ -37,7 +37,43 @@ describe('textesDuLlm', () => {
   it('montre l’idée, le prompt et le LLM de la commande', () => {
     expect(textesDuLlm(commande({ prompt: 'a red-haired woman' }), undefined)).toEqual({
       idee: 'rends-la rousse',
-      prompt: 'a red-haired woman',
+      retravaille: null,
+      envoye: 'a red-haired woman',
+      llm: 'bonsai',
+      remarque: null,
+    });
+  });
+
+  it('une fiche à trois textes les montre tous les trois', () => {
+    const t = textesDuLlm(
+      commande({ prompt: 'a red-haired woman' }),
+      fiche({
+        idee: 'rends-la rousse',
+        prompt_llm: '**Make her hair red**',
+        prompt: 'Make her hair red',
+        prompt_envoye: 'neon glow, Make her hair red',
+        llm: 'bonsai',
+        reecriture: 'faite',
+      }),
+    );
+    expect(t).toEqual({
+      idee: 'rends-la rousse',
+      retravaille: '**Make her hair red**',
+      envoye: 'neon glow, Make her hair red',
+      llm: 'bonsai',
+      remarque: null,
+    });
+  });
+
+  it('une fiche à deux textes (v2, ou écrite avant) se lit encore', () => {
+    const t = textesDuLlm(
+      commande({ prompt: 'a red-haired woman' }),
+      fiche({ idee: 'rends-la rousse', prompt: 'Make her hair red', llm: 'bonsai', reecriture: 'faite' }),
+    );
+    expect(t).toEqual({
+      idee: 'rends-la rousse',
+      retravaille: null,
+      envoye: 'Make her hair red',
       llm: 'bonsai',
       remarque: null,
     });

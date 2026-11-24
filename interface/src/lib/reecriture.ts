@@ -1,5 +1,6 @@
-// « Ce que le LLM a écrit » : la consigne d'origine, le prompt réellement envoyé au modèle, et ce qui s'est passé à la
-// réécriture (la fiche de la création garde `reecriture` et `reecriture_motif`).
+// « Ce que le LLM a écrit » : la consigne d'origine, ce que le LLM en a fait, le prompt réellement envoyé au modèle,
+// et ce qui s'est passé à la réécriture (la fiche de la création garde `idee`, `prompt_llm`, `prompt_envoye`,
+// `reecriture` et `reecriture_motif`). Une fiche plus ancienne n'a que l'idée et le prompt : elle se lit encore.
 
 import type { Commande, Creation } from './api';
 
@@ -7,8 +8,11 @@ import type { Commande, Creation } from './api';
 export interface TextesLlm {
   /** Ce que l'utilisateur a écrit. */
   idee: string;
-  /** Le prompt parti au modèle ; l'idée elle-même si le LLM a manqué. */
-  prompt: string;
+  /** Ce que le LLM a écrit au premier essai, avant le nettoyage et le contrôle ; null s'il manque (fiche plus ancienne,
+   * ou LLM qui a manqué). */
+  retravaille: string | null;
+  /** Le prompt réellement parti au modèle ; l'idée elle-même si le LLM a manqué. */
+  envoye: string;
   /** Le LLM qui l'a écrit ; null s'il a manqué. */
   llm: string | null;
   /** Ce qui s'est passé, en une ligne ; null quand tout s'est bien passé. */
@@ -36,11 +40,12 @@ export function remarqueReecriture(etat: string | null | undefined, motif: strin
  */
 export function textesDuLlm(commande: Commande, fiche: Creation | undefined): TextesLlm | null {
   if (!commande.reecrire) return null;
-  const prompt = fiche?.prompt || commande.prompt;
-  if (!prompt) return null;
+  const envoye = fiche?.prompt_envoye || fiche?.prompt || commande.prompt;
+  if (!envoye) return null;
   return {
     idee: fiche?.idee || commande.idee,
-    prompt,
+    retravaille: fiche?.prompt_llm || null,
+    envoye,
     llm: fiche ? (fiche.llm ?? null) : commande.llm,
     remarque: remarqueReecriture(fiche?.reecriture, fiche?.reecriture_motif),
   };

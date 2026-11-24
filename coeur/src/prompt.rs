@@ -884,6 +884,8 @@ fn liste(defauts: &[Defaut]) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Controle {
     pub texte: String,
+    /// La première réponse du LLM, telle qu'elle est venue : avant le nettoyage et le contrôle qualité.
+    pub brut: String,
     /// Les défauts du premier essai : la réponse a été redemandée au LLM.
     pub redemande: Option<String>,
     /// Les défauts qui restent après le second essai.
@@ -915,6 +917,14 @@ pub fn extraire(ecriture: &Ecriture, idee: &str, reponse: &str) -> Result<String
     }
 }
 
+/// Longueur maximale, en caractères, de la réponse brute du LLM gardée sur la fiche d'une création.
+const BRUT_MAX: usize = 4000;
+
+/// La réponse du LLM telle qu'elle est venue, sans les blancs autour, pour la fiche de la création.
+fn brut_de(reponse: &str) -> String {
+    reponse.trim().chars().take(BRUT_MAX).collect()
+}
+
 /// Écrit un prompt et le contrôle : une réponse qui a des défauts est redemandée une fois, en disant au LLM ce qui
 /// n'allait pas ; des deux essais, celui qui a le moins de défauts est gardé. `appeler` envoie une demande au LLM et
 /// rend son texte. Une annulation (✕) arrête tout ; une panne au second essai garde le premier.
@@ -936,11 +946,13 @@ pub fn ecrire_controle(
         }
     };
     let premiere = appeler(&ecriture.demande)?;
+    let brut = brut_de(&premiere);
     let texte = extraire(ecriture, idee, &premiere)?;
     let defauts_un = juger(&texte);
     if defauts_un.is_empty() {
         return Ok(Controle {
             texte,
+            brut,
             redemande: None,
             reste: None,
         });
@@ -973,6 +985,7 @@ pub fn ecrire_controle(
     };
     Ok(Controle {
         texte: garde,
+        brut,
         redemande: Some(liste(&defauts_un)),
         reste: (!restants.is_empty()).then(|| liste(&restants)),
     })
