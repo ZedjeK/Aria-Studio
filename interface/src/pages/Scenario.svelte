@@ -55,9 +55,11 @@
   import AnnulerEcriture from '../lib/composants/AnnulerEcriture.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import CarteChoix from '../lib/composants/CarteChoix.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
   import SousOnglets from '../lib/composants/SousOnglets.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
+  import ScenarioAlerte from './ScenarioAlerte.svelte';
   import ScenarioEtape from './ScenarioEtape.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
   import ScenarioDirections from './ScenarioDirections.svelte';
@@ -205,6 +207,22 @@
       const n = structure ? choixDansOnglet(structure, choix, o.id) : 0;
       return { id: o.id, titre: n > 0 ? `${o.titre} (${n})` : o.titre };
     }),
+  );
+  /** Les choix faits dans l'onglet affiché, en puces à retirer. */
+  const puces = $derived(
+    structure
+      ? structure.blocs
+          .filter((b) => atelier === 'clip' || !b.video)
+          .flatMap((b) =>
+            b.groupes
+              .filter((g) => g.onglet === onglet)
+              .flatMap((g) => g.sousListes)
+              .flatMap((sl) => {
+                const valeur = choix[b.id]?.[sl.nom];
+                return valeur ? [{ cle: `${b.id}/${sl.nom}`, bloc: b.id, sousListe: sl.nom, valeur }] : [];
+              }),
+          )
+      : [],
   );
   let ongletChoisi = $state<string>('sujet');
   const onglet = $derived<OngletScenario>(
@@ -427,6 +445,9 @@
   /** Ce que le contrôle qualité (et les heures de coupe) disent du dernier prompt écrit par le LLM. */
   let alertesFinal = $state<string[]>([]);
 
+  /** Ce que le contrôle reproche au prompt : les règles des listes, puis ce que le LLM a écrit de travers. */
+  const alertesAffichees = $derived([...new Set([...(assemblage?.alertes ?? []), ...alertesFinal])]);
+
   // Un autre atelier : les alertes du prompt écrit pour le précédent ne valent plus.
   $effect(() => {
     void atelier;
@@ -478,11 +499,18 @@
     }
   }
 
-  const DEPARTS_IMAGE: [ModeReference | null, string][] = [
-    [null, 'À partir de rien'],
-    ['inspirer', "S'inspirer d'images"],
-    ['variation', 'Redessiner une image'],
-  ];
+  /** Le départ de l'atelier Image, tel que les cartes le nomment. */
+  type DepartCarte = 'texte' | ModeReference;
+  const departCarte = $derived<DepartCarte>(departImage ?? 'texte');
+  const versDepart = (v: DepartCarte): ModeReference | null => (v === 'texte' ? null : v);
+
+  /** Le départ du clip : animer un rush, ou partir du texte (sans image). */
+  function changerModeClip(mode: 'animer' | 'texte') {
+    if (mode === modeClip) return;
+    modeClip = mode;
+    if (mode === 'texte') imageAtelier = [];
+    planifier();
+  }
 
   /** Change le départ de l'atelier Image : les images repartent de zéro, le modèle cible suit (comme au Plateau). */
   function changerDepartImage(mode: ModeReference | null) {
@@ -605,12 +633,31 @@
 {:else}
   {#if atelier === 'image'}
     <ScenarioEtape numero={1} titre="Départ" />
-    <div class="ligne" role="group" aria-label="Départ">
-      {#each DEPARTS_IMAGE as [mode, texte] (texte)}
-        <Bouton genre={departImage === mode ? 'secondaire' : 'discret'} petit onclick={() => changerDepartImage(mode)}>
-          {texte}
-        </Bouton>
-      {/each}
+    <div class="cartes c3" role="radiogroup" aria-label="Départ">
+      <CarteChoix
+        groupe="depart-image"
+        valeur="texte"
+        titre="Depuis un texte"
+        bind:choisie={() => departCarte, (v) => changerDepartImage(versDepart(v))}
+      >
+        Tu pars d'une idée, sans image.
+      </CarteChoix>
+      <CarteChoix
+        groupe="depart-image"
+        valeur="inspirer"
+        titre="Mélanger des images"
+        bind:choisie={() => departCarte, (v) => changerDepartImage(versDepart(v))}
+      >
+        Des références nourrissent le prompt.
+      </CarteChoix>
+      <CarteChoix
+        groupe="depart-image"
+        valeur="variation"
+        titre="Redessiner une image"
+        bind:choisie={() => departCarte, (v) => changerDepartImage(versDepart(v))}
+      >
+        Une image sert de base.
+      </CarteChoix>
     </div>
     {#if departImage}
       <p class="etiquette">
@@ -627,28 +674,23 @@
     <ChoixRushes max={1} bind:selection={imageAtelier} {signaler} />
   {:else}
     <ScenarioEtape numero={1} titre="Départ" />
-    <div class="ligne" role="group" aria-label="Départ du clip">
-      <Bouton
-        genre={modeClip === 'animer' ? 'secondaire' : 'discret'}
-        petit
-        onclick={() => {
-          modeClip = 'animer';
-          planifier();
-        }}
+    <div class="cartes c2" role="radiogroup" aria-label="Départ du clip">
+      <CarteChoix
+        groupe="depart-clip"
+        valeur="animer"
+        titre="Animer un rush"
+        bind:choisie={() => modeClip, (v) => changerModeClip(v)}
       >
-        Animer un rush
-      </Bouton>
-      <Bouton
-        genre={modeClip === 'texte' ? 'secondaire' : 'discret'}
-        petit
-        onclick={() => {
-          modeClip = 'texte';
-          imageAtelier = [];
-          planifier();
-        }}
+        Une image du Plateau prend vie.
+      </CarteChoix>
+      <CarteChoix
+        groupe="depart-clip"
+        valeur="texte"
+        titre="À partir du texte"
+        bind:choisie={() => modeClip, (v) => changerModeClip(v)}
       >
-        À partir du texte
-      </Bouton>
+        Tu décris tout, sans image.
+      </CarteChoix>
     </div>
     {#if imageRequise}
       <p class="etiquette">Le rush à animer</p>
@@ -896,11 +938,13 @@
         {/if}
       {/each}
     {/each}
-    {#if onglet === 'decor'}
+    {#if onglet === 'scene'}
       <label class="texte">
         <span class="etiquette">Texte dans l'image</span>
         <input type="text" maxlength="200" bind:value={texte} oninput={planifier} placeholder="facultatif, mot pour mot" />
       </label>
+    {/if}
+    {#if onglet === 'decor'}
       <label class="texte">
         <span class="etiquette">Précisions (traduites par le LLM, puis ajoutées au prompt)</span>
         <textarea rows="2" maxlength="500" bind:value={precisions} oninput={planifier}></textarea>
@@ -920,6 +964,29 @@
         </div>
       {/if}
     {/if}
+    {#if puces.length > 0 || (onglet === 'sujet' && age !== null)}
+      <div class="puces" role="group" aria-label="Tes choix">
+        {#each puces as c (c.cle)}
+          <span class="puce">
+            {c.valeur}
+            <button type="button" aria-label="Retirer {c.valeur}" onclick={() => changer(c.bloc, c.sousListe, '')}>✕</button>
+          </span>
+        {/each}
+        {#if onglet === 'sujet' && age !== null}
+          <span class="puce">
+            {age} ans
+            <button
+              type="button"
+              aria-label="Retirer l'âge précis"
+              onclick={() => {
+                age = null;
+                planifier();
+              }}>✕</button
+            >
+          </span>
+        {/if}
+      </div>
+    {/if}
     <div class="actions">
       <Bouton genre="discret" petit onclick={toutEffacer}>Tout réinitialiser</Bouton>
     </div>
@@ -931,26 +998,25 @@
 {#if atelier !== 'sequence'}
 <ScenarioEtape numero={4} titre={atelier === 'retouche' ? 'Consigne finale' : 'Prompt final'} />
 <Panneau titre={atelier === 'retouche' ? 'Consigne finale' : 'Prompt final'} accentue>
-  {#if erreurAssemblage}
-    <p class="alerte">{erreurAssemblage}</p>
+  {#if assemblage}
+    <p class="compte">
+      {final.split(/\s+/).filter((m) => m !== '').length} mots{assemblage.motsMax ? ` · ${assemblage.motsMax} au plus pour ce modèle` : ''}
+    </p>
   {/if}
-  {#each assemblage?.alertes ?? [] as a (a)}
-    <p class="discret">⚠ {a}</p>
-  {/each}
-  {#each alertesFinal as a (a)}
-    <p class="alerte-ecriture">⚠ {a}</p>
-  {/each}
   <textarea rows="6" value={final} oninput={(e) => retoucherFinal(e.currentTarget.value)}></textarea>
-  <div class="ligne">
-    {#if assemblage}
-      <span class="discret">
-        {final.split(/\s+/).filter((m) => m !== '').length} mots{assemblage.motsMax ? ` · ${assemblage.motsMax} au plus pour ce modèle` : ''}
-      </span>
+  <div class="alertes">
+    {#if erreurAssemblage}
+      <ScenarioAlerte titre="Erreur" erreur>{erreurAssemblage}</ScenarioAlerte>
     {/if}
-    {#if finalRetouche}
-      <Bouton genre="discret" petit onclick={reprendreAssemblage}>Reprendre l'assemblage</Bouton>
-    {/if}
+    {#each alertesAffichees as a (a)}
+      <ScenarioAlerte>{a}</ScenarioAlerte>
+    {/each}
   </div>
+  {#if finalRetouche}
+    <div class="ligne">
+      <Bouton genre="discret" petit onclick={reprendreAssemblage}>Reprendre l'assemblage</Bouton>
+    </div>
+  {/if}
   <div class="actions">
     {#if imageManquante}
       <span class="discret">{atelier === 'retouche' ? "Choisis l'image à retoucher." : 'Choisis le rush à animer.'}</span>
@@ -960,7 +1026,7 @@
       desactive={final.trim() === '' || erreurAssemblage !== null || imageManquante}
       onclick={envoyerFinal}
     >
-      {atelier === 'retouche' ? 'Envoyer à la Retouche' : atelier === 'clip' ? 'Envoyer au Montage' : 'Envoyer au Plateau'}
+      {atelier === 'retouche' ? '→ Envoyer à la Retouche' : atelier === 'clip' ? '→ Envoyer au Montage' : '→ Envoyer au Plateau'}
     </Bouton>
   </div>
 </Panneau>
@@ -974,6 +1040,25 @@
     align-items: center;
     gap: 10px;
     margin: 8px 0;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
+
+  /* Les cartes à onglet du départ : une colonne par choix. */
+  .cartes {
+    display: grid;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .c2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .c3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .pastille {
@@ -1070,12 +1155,37 @@
     width: 100%;
   }
 
-  .alerte {
-    color: var(--orange);
+  .compte {
+    margin: 0 0 6px;
+    color: var(--texte-2);
+    font-size: 12px;
   }
-  .alerte-ecriture {
-    margin: 4px 0;
-    color: var(--orange);
-    font-size: 13px;
+
+  .alertes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .puces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .puces .puce {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  .puces .puce button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
   }
 </style>
