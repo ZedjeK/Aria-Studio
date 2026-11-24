@@ -1,5 +1,5 @@
 // Les points de couleur : bloc « État » du menu de l'icône, pastilles de l'état en direct.
-import type { EtatMoteur, LigneMenu, Ton } from './api';
+import type { EtatMoteur, LigneMenu, Ton, Vram } from './api';
 
 /** La couleur du point d'une ligne « État » : la même palette que la pastille de l'icône. */
 export function couleurTon(ton: Ton): string {
@@ -44,4 +44,29 @@ export function pastillesMoteurs(moteurs: EtatMoteur[] | null): Pastille[] {
   const comfy = moteurs?.filter((m) => m.id === 'comfyui');
   const llm = moteurs?.filter((m) => m.id.startsWith('llama'));
   return [pastille('ComfyUI', comfy), pastille('LLM', llm)];
+}
+
+/** Une lecture de VRAM n'est utilisable que si les deux valeurs existent et que la carte a une mémoire. */
+function vramLisible(vram: Vram | null): vram is Vram {
+  return vram !== null && Number.isFinite(vram.utiliseeGo) && Number.isFinite(vram.totaleGo) && vram.totaleGo > 0 && vram.utiliseeGo >= 0;
+}
+
+/**
+ * La part de VRAM utilisée, de 0 à 1 : le fond orangé des pastilles ComfyUI et LLM, dont le bloc entier représente
+ * la VRAM totale. `null` sans lecture : pas de fond, jamais une part supposée.
+ */
+export function fractionVram(vram: Vram | null): number | null {
+  if (!vramLisible(vram)) return null;
+  return Math.min(1, vram.utiliseeGo / vram.totaleGo);
+}
+
+/** Des Go à la française, au dixième, sans « ,0 » inutile : 9,8 ou 16. */
+function enGo(valeur: number): string {
+  return valeur.toFixed(1).replace('.', ',').replace(/,0$/, '');
+}
+
+/** L'info-bulle des pastilles : « 9,8 Go sur 16 Go ». `null` sans lecture. */
+export function texteVram(vram: Vram | null): string | null {
+  if (!vramLisible(vram)) return null;
+  return `${enGo(Math.min(vram.utiliseeGo, vram.totaleGo))} Go sur ${enGo(vram.totaleGo)} Go`;
 }

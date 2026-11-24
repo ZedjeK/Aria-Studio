@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use aria_coeur::carte::{self, Carte};
+use aria_coeur::carte::{self, Carte, Vram};
 use aria_coeur::catalogue::Catalogue;
 use aria_coeur::comfy::{self, DOSSIER_TRAVAIL};
 use aria_coeur::comfy_serveur::ServeurComfy;
@@ -228,6 +228,16 @@ pub async fn lire_moteurs(moteurs: State<'_, Moteurs>) -> Result<EtatMoteurs, St
     })
     .await
     .map_err(|e| format!("état des moteurs illisible : {e}"))
+}
+
+/// La VRAM utilisée et totale de la carte à l'instant (NVML), pour le fond des pastilles de l'état en direct ;
+/// rien sans carte NVIDIA.
+#[tauri::command]
+pub async fn lire_vram() -> Result<Option<Vram>, String> {
+    // NVML : à lire hors du fil de l'interface.
+    tauri::async_runtime::spawn_blocking(carte::vram_directe)
+        .await
+        .map_err(|e| format!("VRAM illisible : {e}"))
 }
 
 /// Lance l'installation d'un moteur en arrière-plan ; son avancement se lit avec [`lire_moteurs`].

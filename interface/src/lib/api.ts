@@ -117,6 +117,15 @@ export interface EtatMoteurs {
 
 export const lireMoteurs = (): Promise<EtatMoteurs> => invoke<EtatMoteurs>('lire_moteurs');
 
+/** La VRAM de la carte à l'instant, en Go (aria_coeur::carte::Vram) : tous les programmes y comptent. */
+export interface Vram {
+  utiliseeGo: number;
+  totaleGo: number;
+}
+
+/** La VRAM utilisée et totale (NVML) ; null sans carte NVIDIA ou sans lecture : rien ne se suppose. */
+export const lireVram = (): Promise<Vram | null> => invoke<Vram | null>('lire_vram');
+
 /** « J'ai déjà ComfyUI » : ce dossier portable, vérifié par un lancement d'essai ; null : revenir à celui d'Aria. */
 export const choisirComfyui = (chemin: string | null): Promise<void> => invoke<void>('choisir_comfyui', { chemin });
 

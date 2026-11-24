@@ -12,12 +12,14 @@
     installerMoteur,
     libererCarte,
     lireMoteurs,
+    lireVram,
     messageErreur,
     ouvrirDossier,
     parcourirDossier,
     revenirMoteur,
     type EtatMoteur,
     type EtatMoteurs,
+    type Vram,
   } from '../lib/api';
   import {
     detailCarte,
@@ -31,6 +33,7 @@
     texteConfirmation,
     texteInstaller,
   } from '../lib/moteurs';
+  import { fractionVram, texteVram } from '../lib/menu';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import ExpliquerErreur from '../lib/composants/ExpliquerErreur.svelte';
@@ -69,6 +72,8 @@
   let recherche = $state('');
   let modifies = $state(false);
   let etat = $state<EtatMoteurs | null>(null);
+  /** La VRAM de la carte, relue toutes les 5 secondes tant que l'onglet Moteurs est ouvert. null : pas de lecture. */
+  let vram = $state<Vram | null>(null);
   /** Ce qu'on demande de confirmer : installer, réinstaller ou revenir, pour un moteur. */
   let demande = $state<{ action: 'installer' | 'reinstaller' | 'revenir'; moteur: EtatMoteur } | null>(null);
   let minuteur: ReturnType<typeof setTimeout> | undefined;
@@ -78,6 +83,15 @@
   const enCours = $derived(etat?.tache != null && !etat.tache.fini);
   const absents = $derived(etat ? manquants(etat.moteurs) : []);
 
+  async function relireVram() {
+    try {
+      vram = await lireVram();
+    } catch {
+      // Une lecture ratée ne laisse pas un chiffre périmé : la jauge se vide jusqu'à la prochaine lecture.
+      vram = null;
+    }
+  }
+
   async function relire() {
     clearTimeout(minuteur);
     try {
@@ -85,6 +99,7 @@
     } catch (e) {
       signaler(messageErreur(e), true);
     }
+    await relireVram();
     // Pendant une installation, l'avancement se relit chaque seconde.
     if (etat?.tache && !etat.tache.fini) minuteur = setTimeout(() => void relire(), 1000);
   }
@@ -151,7 +166,13 @@
   onMount(() => {
     if (ongletInitial && onglets.some((o) => o.id === ongletInitial)) onglet = ongletInitial;
     void relire();
-    return () => clearTimeout(minuteur);
+    const minuteurVram = setInterval(() => {
+      if (onglet === 'moteurs' && !document.hidden) void relireVram();
+    }, 5000);
+    return () => {
+      clearTimeout(minuteur);
+      clearInterval(minuteurVram);
+    };
   });
 </script>
 
@@ -191,8 +212,8 @@
     {:else}
       <p class="ko">{texteCarte(etat.carte)}</p>
     {/if}
-    <!-- Mesure en direct : une commande Tauri manque (issue « commande Tauri pour la VRAM utilisée »). Vide et « à tester » d'ici là. -->
-    <Jauge etiquette="VRAM" fraction={null} />
+    <!-- Mesure en direct (NVML) : vide et « à tester » sans lecture, jamais un chiffre supposé. -->
+    <Jauge etiquette="VRAM" fraction={fractionVram(vram)} mesure={texteVram(vram) ?? undefined} />
     <div class="actions">
       <Bouton petit onclick={() => void liberer()}>Libérer la carte graphique</Bouton>
       {#if ouvrirAssistant}
