@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { PlanEcrit, Sequence } from './api';
 import {
   alertesJusqua,
+  alertesRenumerotees,
+  corrigerEnchainements,
   depuisBrouillon,
+  deplacer,
   depuisSequence,
   etatPlan,
   etatVide,
@@ -14,6 +17,7 @@ import {
   poserPlan,
   redimensionner,
   remplisAuDela,
+  retirer,
   sansPrompt,
   traductionValide,
 } from './decoupage';
@@ -88,5 +92,41 @@ describe('atelier Séquence', () => {
     const b = depuisBrouillon({ synopsis: 4, plans: [{ enchainement: 'nimporte' }], titre: 'T' });
     expect([b.synopsis, b.plans.length, b.titre]).toEqual(['', 3, 'T']);
     expect(depuisBrouillon({ plans: [{}, { moment: 'fin', duree: 10 }] }).plans[1]).toMatchObject({ moment: 'fin', duree: 10 });
+  });
+});
+
+describe('plans déplacés, retirés, renumérotés', () => {
+  it('avance, recule et retire sans rien perdre', () => {
+    expect(deplacer(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c']);
+    expect(deplacer(['a', 'b', 'c'], 1, 1)).toEqual(['a', 'c', 'b']);
+    expect(deplacer(['a', 'b'], 0, -1)).toEqual(['a', 'b']);
+    expect(deplacer(['a', 'b'], 1, 1)).toEqual(['a', 'b']);
+    expect(retirer(['a', 'b', 'c'], 1)).toEqual(['a', 'c']);
+  });
+
+  it('fait suivre les alertes au plan qui change de rang', () => {
+    const alertes = ['Plan 1 : trop long', 'Plan 2 : réplique inventée', 'Pas de plan'];
+    // Le plan 2 passe en premier, le plan 1 en deuxième.
+    const echange = (r: number) => (r === 0 ? 1 : r === 1 ? 0 : r);
+    expect(alertesRenumerotees(alertes, echange)).toEqual(['Plan 2 : trop long', 'Plan 1 : réplique inventée', 'Pas de plan']);
+    // Le plan 1 disparaît : le plan 2 devient le premier.
+    const sans = (r: number) => (r === 0 ? null : r - 1);
+    expect(alertesRenumerotees(alertes, sans)).toEqual(['Plan 1 : réplique inventée', 'Pas de plan']);
+  });
+
+  it('garde un départ au premier plan et des enchaînements aux autres', () => {
+    const [a, b] = [nouveauPlan(0, null), nouveauPlan(1, null, 'prolonger')];
+    // Un plan qui prolonge ne peut pas ouvrir la séquence ; celui du texte ne peut pas suivre.
+    const inverse = corrigerEnchainements([b, a], null);
+    expect(inverse.map((p) => p.enchainement)).toEqual(['texte', 'couper']);
+    expect(corrigerEnchainements([b, a], 'r1')[0]?.enchainement).toBe('rush');
+    // Rien ne change quand tout est en ordre (les plans sont rendus tels quels).
+    const ordre = corrigerEnchainements([a, b], null);
+    expect(ordre[0]).toBe(a);
+    expect(ordre[1]).toBe(b);
+    // Le rush d'arrivée ne survit qu'à une transition.
+    const transition = { ...nouveauPlan(1, null, 'transition'), rush: 'r2' };
+    expect(corrigerEnchainements([a, transition], null)[1]?.rush).toBe('r2');
+    expect(corrigerEnchainements([{ ...transition, enchainement: 'couper' }], null)[0]?.rush).toBeNull();
   });
 });

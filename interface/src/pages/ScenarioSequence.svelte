@@ -30,18 +30,23 @@
     TYPES_DEPART,
     TYPES_SUITE,
     alertesJusqua,
+    alertesRenumerotees,
     compterMots,
+    corrigerEnchainements,
     depuisBrouillon,
     depuisSequence,
+    deplacer,
     etatPlan,
     formatCompte,
     majAlertes,
     motsReplique,
+    nouveauPlan,
     plansDemande,
     plansPourMontage,
     poserPlan,
     redimensionner,
     remplisAuDela,
+    retirer,
     sansPrompt,
     traductionValide,
     type EtatDecoupage,
@@ -54,7 +59,9 @@
   import VignetteCreation from '../lib/composants/VignetteCreation.svelte';
   import ChoixRushes from './ChoixRushes.svelte';
   import ScenarioConversation from './ScenarioConversation.svelte';
+  import ScenarioAlerte from './ScenarioAlerte.svelte';
   import ScenarioDirections from './ScenarioDirections.svelte';
+  import ScenarioEtape from './ScenarioEtape.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
@@ -215,6 +222,59 @@
     };
   }
 
+  /** Les plans dépliés, dans l'ordre des plans (le premier l'est au départ). */
+  let ouverts = $state<boolean[]>([true]);
+  const estOuvert = (k: number): boolean => ouverts[k] ?? false;
+  const ouvertsAjustes = (): boolean[] => e.plans.map((_, i) => estOuvert(i));
+  const libelleType = (p: { enchainement: Enchainement }): string =>
+    [...TYPES_DEPART, ...TYPES_SUITE].find(([valeur]) => valeur === p.enchainement)?.[1] ?? p.enchainement;
+
+  function basculer(k: number) {
+    const o = ouvertsAjustes();
+    o[k] = !o[k];
+    ouverts = o;
+  }
+
+  /** ↑ ↓ : le plan change de rang avec son voisin (ses alertes, sa conversation et son pli le suivent). */
+  function deplacerPlan(k: number, delta: -1 | 1) {
+    const vers = k + delta;
+    if (vers < 0 || vers >= e.plans.length) return;
+    e.plans = corrigerEnchainements(deplacer(e.plans, k, delta), e.reference);
+    ouverts = deplacer(ouvertsAjustes(), k, delta);
+    e.alertes = alertesRenumerotees(e.alertes, (r) => (r === k ? vers : r === vers ? k : r));
+    if (aide === k) aide = vers;
+    else if (aide === vers) aide = k;
+  }
+
+  function supprimerPlan(k: number) {
+    if (e.plans.length <= PLANS_MIN) return;
+    const p = e.plans[k];
+    if (!p) return;
+    const appliquer = () => {
+      e.plans = corrigerEnchainements(retirer(e.plans, k), e.reference);
+      ouverts = retirer(ouvertsAjustes(), k);
+      e.alertes = alertesRenumerotees(e.alertes, (r) => (r === k ? null : r > k ? r - 1 : r));
+      if (aide === k) aide = null;
+      else if (typeof aide === 'number' && aide > k) aide -= 1;
+    };
+    if (!(p.note.trim() || p.replique.trim() || p.prompt.trim())) {
+      appliquer();
+      return;
+    }
+    question = {
+      titre: `Supprimer le plan ${k + 1}`,
+      texte: `Le plan ${k + 1} est déjà rempli (ce qui s'y passe, réplique, prompt) : le supprimer ? Les plans suivants prennent un rang de moins.`,
+      bouton: 'Supprimer',
+      agir: appliquer,
+    };
+  }
+
+  function ajouterPlan() {
+    if (e.plans.length >= PLANS_MAX) return;
+    ouverts = [...ouvertsAjustes(), true];
+    e.plans = [...e.plans, nouveauPlan(e.plans.length, e.reference)];
+  }
+
   function changerEnchainement(k: number, valeur: Enchainement) {
     const p = e.plans[k];
     if (!p) return;
@@ -348,26 +408,15 @@
   });
 </script>
 
-<Panneau titre="La séquence">
-  <label>
-    <span class="etiquette">Fil de l'histoire (facultatif : les plans peuvent le raconter seuls)</span>
-    <textarea
-      rows="3"
-      maxlength="2000"
-      bind:value={e.synopsis}
-      placeholder="Une pilote rentre au hangar après une mission ratée ; elle dit « Plus jamais ça »."
-    ></textarea>
-  </label>
-  <div class="actions">
-    <Bouton
-      genre="discret"
-      petit
-      desactive={llms.length === 0}
-      onclick={() => (aide = aide === 'histoire' ? null : 'histoire')}
-    >
-      {aide === 'histoire' ? "Fermer l'aide" : "💬 M'aider à préciser l'histoire"}
-    </Bouton>
-  </div>
+<ScenarioEtape numero={1} titre="Le fil de l'histoire" />
+<Panneau titre="Ton histoire (facultatif)">
+  <textarea
+    rows="3"
+    maxlength="2000"
+    bind:value={e.synopsis}
+    aria-label="Fil de l'histoire (facultatif : les plans peuvent le raconter seuls)"
+    placeholder="Une pilote rentre au hangar après une mission ratée ; elle dit « Plus jamais ça »."
+  ></textarea>
   <ScenarioDirections
     atelier="sequence"
     envie={e.synopsis}
@@ -376,6 +425,7 @@
     llm={llmChoisi || null}
     disponible={llms.length > 0}
     bloque={ecriture !== null || envoi}
+    ecritureEnCours={ecriture !== null}
     bind:etat={directions}
     bind:occupe={directionsEnCours}
     {signaler}
@@ -387,7 +437,16 @@
       amorceHistoire = versIdee(d);
       aide = 'histoire';
     }}
-  />
+  >
+    {#snippet avant()}
+      <Bouton petit desactive={occupe || llms.length === 0} onclick={toutEcrire}>
+        {ecriture === 'tout' ? 'Le LLM écrit…' : '✨ Tout écrire'}
+      </Bouton>
+      <Bouton petit desactive={llms.length === 0} onclick={() => (aide = aide === 'histoire' ? null : 'histoire')}>
+        {aide === 'histoire' ? "Fermer l'aide" : "💬 M'aider à préciser"}
+      </Bouton>
+    {/snippet}
+  </ScenarioDirections>
   {#if aide === 'histoire'}
     <ScenarioConversation
       forme="sequence"
@@ -403,195 +462,236 @@
       amorceLue={() => (amorceHistoire = '')}
       utiliser={(p) => {
         e.synopsis = p;
-        signaler("Histoire posée dans le fil : ✨ Tout écrire la répartit dans les plans.");
+        signaler('Histoire posée dans le fil : ✨ Tout écrire la répartit dans les plans.');
       }}
     />
   {/if}
-  <div class="ligne">
-    <div class="emplacement">
-      <span class="etiquette">Personnage de référence</span>
-      {#if e.reference}
-        <VignetteCreation id={e.reference} titre="Référence du personnage" />
-        <Bouton genre="discret" petit desactive={occupe} onclick={retirerReference}>✕ Retirer</Bouton>
-      {:else}
-        <Bouton genre="discret" desactive={occupe} onclick={() => ouvrirChoixRush('reference')}>Choisir une image…</Bouton>
-        <span class="discret">Sans image, la description des compléments est répétée dans les plans.</span>
-      {/if}
-    </div>
-    <div class="grille">
-      <label>
-        <span class="etiquette">Contrainte de tous les plans</span>
-        <input type="text" maxlength="300" bind:value={e.contrainte} placeholder="facultatif : pas de texte à l'écran" />
-      </label>
-      <label class="case">
-        <input type="checkbox" bind:checked={e.avecMusique} />
-        Musique d'ambiance
-      </label>
-      {#if e.avecMusique}
-        <label>
-          <span class="etiquette">Laquelle</span>
-          <input type="text" maxlength="200" bind:value={e.musique} placeholder="au choix du LLM" />
-        </label>
-      {/if}
-      {#if formatCompte(e.plans) && formats.length > 0}
-        <label>
-          <span class="etiquette">Format</span>
-          <select bind:value={e.format}>
-            {#each formats as f (f)}
-              <option value={f}>{f}</option>
-            {/each}
-          </select>
-        </label>
-      {/if}
-      <label>
-        <span class="etiquette">Plans</span>
-        <select value={e.plans.length} onchange={(ev) => changerNombre(Number(ev.currentTarget.value))} disabled={occupe}>
-          {#each Array.from({ length: PLANS_MAX - PLANS_MIN + 1 }, (_, i) => i + PLANS_MIN) as n (n)}
-            <option value={n}>{n}</option>
-          {/each}
-        </select>
-      </label>
-    </div>
-  </div>
-  <div class="actions">
-    <span class="discret">Film d'environ {dureeTotale} s</span>
-    <Bouton genre="principal" desactive={occupe || llms.length === 0} onclick={toutEcrire}>
-      {ecriture === 'tout' ? 'Le LLM écrit…' : '✨ Tout écrire'}
-    </Bouton>
-    {#if ecriture !== null}
-      <AnnulerEcriture />
+  <div class="emplacement">
+    <span class="etiquette">Personnage de référence</span>
+    {#if e.reference}
+      <VignetteCreation id={e.reference} titre="Référence du personnage" />
+      <Bouton genre="discret" petit desactive={occupe} onclick={retirerReference}>✕ Retirer</Bouton>
+    {:else}
+      <Bouton genre="discret" petit desactive={occupe} onclick={() => ouvrirChoixRush('reference')}>Choisir une image…</Bouton>
+      <span class="discret">Sans image, la description des compléments est répétée dans les plans.</span>
     {/if}
   </div>
 </Panneau>
+
+<ScenarioEtape numero={2} titre="Les plans" />
+<div class="ligne">
+  <label class="inline">
+    <span class="etiquette">Nombre de plans</span>
+    <select value={e.plans.length} onchange={(ev) => changerNombre(Number(ev.currentTarget.value))} disabled={occupe}>
+      {#each Array.from({ length: PLANS_MAX - PLANS_MIN + 1 }, (_, i) => i + PLANS_MIN) as n (n)}
+        <option value={n}>{n}</option>
+      {/each}
+    </select>
+  </label>
+  <span class="puce">Durée du film estimée : {dureeTotale} s</span>
+</div>
 
 <ol class="plans">
   {#each e.plans as p, k (k)}
     {@const [classe, etat] = etatPlan(p)}
     {@const replique = motsReplique(p)}
+    {@const ouvert = estOuvert(k)}
     <li class={classe}>
-      <div class="ligne">
-        <strong>Plan {k + 1}</strong>
-        <select
-          value={p.enchainement}
-          onchange={(ev) => changerEnchainement(k, ev.currentTarget.value as Enchainement)}
-          disabled={occupe}
-          aria-label="Type du plan {k + 1}"
-        >
-          {#each k === 0 ? TYPES_DEPART : TYPES_SUITE as [valeur, texte] (valeur)}
-            <option value={valeur} disabled={valeur === 'rush' && !e.reference}>{texte}</option>
-          {/each}
-        </select>
-        <select bind:value={p.duree} disabled={occupe} aria-label="Durée du plan {k + 1}">
-          {#each durees as d (d)}
-            <option value={d}>{d} s</option>
-          {/each}
-        </select>
-        <span class="etat discret">{etat}</span>
-        <Bouton petit desactive={occupe || llms.length === 0} onclick={() => void ecrire(k)}>
-          {ecriture === k ? 'Le LLM écrit…' : '✨ Écrire'}
-        </Bouton>
-        <Bouton genre="discret" petit desactive={llms.length === 0} onclick={() => (aide = aide === k ? null : k)}>
-          {aide === k ? 'Fermer' : '💬 Préciser'}
-        </Bouton>
-      </div>
-      <div class="corps">
-        {#if p.enchainement === 'transition'}
-          <div class="emplacement">
-            {#if p.rush}
-              <VignetteCreation id={p.rush} titre="Rush d'arrivée" />
-              <Bouton genre="discret" petit desactive={occupe} onclick={() => (p.rush = null)}>✕ Retirer</Bouton>
-            {:else}
-              <Bouton genre="discret" petit desactive={occupe} onclick={() => ouvrirChoixRush(k)}>Rush d'arrivée…</Bouton>
-              <span class="discret">facultatif : sinon, à choisir au Montage</span>
+      <button type="button" class="entete" aria-expanded={ouvert} aria-controls="plan-{k}" onclick={() => basculer(k)}>
+        <b>Plan {k + 1}</b>
+        <span class="puce">{libelleType(p)}</span>
+        <span class="puce">{p.duree} s</span>
+        <span class="puce {classe}">{etat}</span>
+        <span class="resume">{p.note.trim() || 'Rien encore : ouvre le plan pour le remplir.'}</span>
+        <span class="petit-texte" aria-hidden="true">{ouvert ? '▾' : '▸'}</span>
+      </button>
+      {#if ouvert}
+        <div class="corps-plan" id="plan-{k}">
+          <div class="grille g3">
+            <div class="champ">
+              <label for="type-{k}">Enchaînement</label>
+              <select
+                id="type-{k}"
+                value={p.enchainement}
+                onchange={(ev) => changerEnchainement(k, ev.currentTarget.value as Enchainement)}
+                disabled={occupe}
+              >
+                {#each k === 0 ? TYPES_DEPART : TYPES_SUITE as [valeur, texte] (valeur)}
+                  <option value={valeur} disabled={valeur === 'rush' && !e.reference}>{texte}</option>
+                {/each}
+              </select>
+            </div>
+            <div class="champ">
+              <label for="duree-{k}">Durée</label>
+              <select id="duree-{k}" bind:value={p.duree} disabled={occupe}>
+                {#each durees as d (d)}
+                  <option value={d}>{d} s</option>
+                {/each}
+              </select>
+            </div>
+            <div class="champ">
+              <label for="note-{k}">Ce qui se passe</label>
+              <textarea id="note-{k}" rows="2" maxlength="500" bind:value={p.note} placeholder={NOTES_TYPES[p.enchainement]}
+              ></textarea>
+            </div>
+          </div>
+          {#if p.enchainement === 'transition'}
+            <div class="emplacement">
+              {#if p.rush}
+                <VignetteCreation id={p.rush} titre="Rush d'arrivée" />
+                <Bouton genre="discret" petit desactive={occupe} onclick={() => (p.rush = null)}>✕ Retirer</Bouton>
+              {:else}
+                <Bouton genre="discret" petit desactive={occupe} onclick={() => ouvrirChoixRush(k)}>Rush d'arrivée…</Bouton>
+                <span class="discret">facultatif : sinon, à choisir au Montage</span>
+              {/if}
+            </div>
+          {/if}
+          <label class="case">
+            <input type="checkbox" bind:checked={p.dialogue} />
+            🗣 Dialogue
+          </label>
+          {#if p.dialogue}
+            <input
+              type="text"
+              maxlength="300"
+              bind:value={p.replique}
+              aria-label="Réplique du plan {k + 1}"
+              placeholder="Ce que dit le personnage, mot pour mot : « Tu m'as encore attendu ? »"
+            />
+            <div class="ligne">
+              <span class="discret">Quand :</span>
+              {#each MOMENTS as [valeur, texte] (valeur)}
+                <label class="case">
+                  <input
+                    type="radio"
+                    name="moment-{k}"
+                    value={valeur}
+                    checked={p.moment === valeur}
+                    onchange={() => (p.moment = valeur as MomentReplique)}
+                  />
+                  {texte}
+                </label>
+              {/each}
+              <label class="case" title="On entend la voix, ses lèvres restent fermées">
+                <input type="checkbox" bind:checked={p.off} />
+                voix off
+              </label>
+              {#if replique.mots > 0}
+                <small class:trop={replique.trop}>{replique.mots} mots · {replique.permis} au plus pour {p.duree} s</small>
+              {/if}
+            </div>
+          {/if}
+          <div class="champ">
+            <label for="prompt-{k}">
+              Prompt du plan, en anglais, tourné tel quel{compterMots(p.prompt) > 0 ? ` · ${compterMots(p.prompt)} mots` : ''}
+            </label>
+            <textarea
+              id="prompt-{k}"
+              rows="3"
+              bind:value={p.prompt}
+              placeholder="✨ ou 💬 l'écrivent ici ; tu peux le retoucher, ou l'écrire toi-même."
+            ></textarea>
+          </div>
+          <div class="ligne">
+            <Bouton petit desactive={occupe || llms.length === 0} onclick={() => void ecrire(k)}>
+              {ecriture === k ? 'Le LLM écrit…' : '✨ Écrire'}
+            </Bouton>
+            <Bouton petit desactive={llms.length === 0} onclick={() => (aide = aide === k ? null : k)}>
+              {aide === k ? 'Fermer' : '💬 Préciser'}
+            </Bouton>
+            <Bouton genre="discret" petit desactive={occupe || k === 0} onclick={() => deplacerPlan(k, -1)}>↑</Bouton>
+            <Bouton genre="discret" petit desactive={occupe || k === e.plans.length - 1} onclick={() => deplacerPlan(k, 1)}>↓</Bouton>
+            <Bouton genre="discret" petit desactive={occupe || e.plans.length <= PLANS_MIN} onclick={() => supprimerPlan(k)}>
+              ✕ Supprimer
+            </Bouton>
+            {#if ecriture === k}
+              <AnnulerEcriture />
             {/if}
           </div>
-        {/if}
-        <textarea rows="2" maxlength="500" bind:value={p.note} placeholder={NOTES_TYPES[p.enchainement]}></textarea>
-      </div>
-      <label class="case">
-        <input type="checkbox" bind:checked={p.dialogue} />
-        🗣 Dialogue
-      </label>
-      {#if p.dialogue}
-        <input
-          type="text"
-          maxlength="300"
-          bind:value={p.replique}
-          placeholder="Ce que dit le personnage, mot pour mot : « Tu m'as encore attendu ? »"
-        />
-        <div class="ligne">
-          <span class="discret">Quand :</span>
-          {#each MOMENTS as [valeur, texte] (valeur)}
-            <label class="case">
-              <input type="radio" name="moment-{k}" value={valeur} checked={p.moment === valeur} onchange={() => (p.moment = valeur as MomentReplique)} />
-              {texte}
-            </label>
-          {/each}
-          <label class="case" title="On entend la voix, ses lèvres restent fermées">
-            <input type="checkbox" bind:checked={p.off} />
-            voix off
-          </label>
-          {#if replique.mots > 0}
-            <small class:alerte={replique.trop}>{replique.mots} mots · {replique.permis} au plus pour {p.duree} s</small>
+          {#if aide === k}
+            <ScenarioConversation
+              forme="plan"
+              workflow={null}
+              llm={llmChoisi || null}
+              contexte=""
+              {sujet}
+              sequence={demande(k)}
+              disponible={llms.length > 0}
+              {signaler}
+              libelleUtiliser="Utiliser pour ce plan"
+              utiliser={(texte, alertes) => {
+                const cible = e.plans[k];
+                if (cible) cible.prompt = texte;
+                e.alertes = majAlertes(e.alertes, alertes, k);
+                signaler(`Plan ${k + 1} : prompt de la conversation posé.`, alertes.length > 0);
+              }}
+            />
           {/if}
         </div>
-      {/if}
-      <label>
-        <span class="etiquette">
-          Prompt du plan, en anglais, tourné tel quel{compterMots(p.prompt) > 0 ? ` · ${compterMots(p.prompt)} mots` : ''}
-        </span>
-        <textarea
-          rows="3"
-          bind:value={p.prompt}
-          placeholder="✨ ou 💬 l'écrivent ici ; tu peux le retoucher, ou l'écrire toi-même."
-        ></textarea>
-      </label>
-      {#if aide === k}
-        <ScenarioConversation
-          forme="plan"
-          workflow={null}
-          llm={llmChoisi || null}
-          contexte=""
-          {sujet}
-          sequence={demande(k)}
-          disponible={llms.length > 0}
-          {signaler}
-          libelleUtiliser="Utiliser pour ce plan"
-          utiliser={(texte, alertes) => {
-            const cible = e.plans[k];
-            if (cible) cible.prompt = texte;
-            e.alertes = majAlertes(e.alertes, alertes, k);
-            signaler(`Plan ${k + 1} : prompt de la conversation posé.`, alertes.length > 0);
-          }}
-        />
       {/if}
     </li>
   {/each}
 </ol>
+<div class="ligne">
+  <Bouton genre="discret" petit desactive={occupe || e.plans.length >= PLANS_MAX} onclick={ajouterPlan}>＋ Ajouter un plan</Bouton>
+  {#if ecriture === 'tout'}
+    <AnnulerEcriture />
+  {/if}
+</div>
+
+<div class="grille g2">
+  <div class="champ">
+    <label class="case">
+      <input type="checkbox" bind:checked={e.avecMusique} />
+      🎵 Musique d'ambiance
+    </label>
+    {#if e.avecMusique}
+      <input type="text" maxlength="200" bind:value={e.musique} aria-label="Laquelle" placeholder="au choix du LLM" />
+    {/if}
+  </div>
+  <div class="champ">
+    <label for="contrainte">🔒 Contraintes (tous les plans)</label>
+    <input id="contrainte" type="text" maxlength="300" bind:value={e.contrainte} placeholder="facultatif : pas de texte à l'écran" />
+  </div>
+  {#if formatCompte(e.plans) && formats.length > 0}
+    <div class="champ">
+      <label for="format">Format</label>
+      <select id="format" bind:value={e.format}>
+        {#each formats as f (f)}
+          <option value={f}>{f}</option>
+        {/each}
+      </select>
+    </div>
+  {/if}
+</div>
 
 {#if e.alertes.length > 0}
-  <Panneau titre="À vérifier">
-    <ul class="alertes">
-      {#each e.alertes as a (a)}
-        <li>{a}</li>
-      {/each}
-    </ul>
-  </Panneau>
+  <div class="alertes">
+    {#each e.alertes as a (a)}
+      <ScenarioAlerte titre="À vérifier">{a}</ScenarioAlerte>
+    {/each}
+  </div>
 {/if}
 
-<Panneau titre="Au Montage" accentue>
-  <div class="ligne">
-    <label class="large">
-      <span class="etiquette">Titre de la séquence</span>
-      <input type="text" maxlength="40" bind:value={e.titre} placeholder="Le titre range ses clips dans un dossier des Bobines" />
-    </label>
+<ScenarioEtape numero={3} titre="Au Montage" />
+<Panneau titre="La séquence" accentue>
+  <div class="champ">
+    <label for="titre-sequence">Titre de la séquence</label>
+    <input
+      id="titre-sequence"
+      type="text"
+      maxlength="40"
+      bind:value={e.titre}
+      placeholder="Le titre range ses clips dans un dossier des Bobines"
+    />
   </div>
+  <p class="discret resume-sequence">{e.plans.length} plans · {dureeTotale} s</p>
   {#if erreurEnvoi}
-    <p class="alerte">{erreurEnvoi}</p>
+    <ScenarioAlerte titre="Erreur" erreur>{erreurEnvoi}</ScenarioAlerte>
   {/if}
   <div class="actions">
     {#if e.sequenceId}
-      <Bouton genre="discret" desactive={occupe} onclick={() => void envoyer(false)}>Nouvelle séquence</Bouton>
+      <Bouton desactive={occupe} onclick={() => void envoyer(false)}>＋ Nouvelle séquence</Bouton>
     {/if}
     <Bouton genre="principal" desactive={occupe} onclick={() => void envoyer(true)}>
       {e.sequenceId ? `→ Mettre à jour${e.titre.trim() ? ` « ${e.titre.trim()} »` : ''}` : '→ Créer dans le Montage'}
@@ -624,44 +724,66 @@
 
 <style>
   .ligne,
-  .actions,
-  .corps {
+  .actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
-    margin: 8px 0;
+    gap: 10px 16px;
   }
 
   .actions {
     justify-content: flex-end;
+    margin-top: 16px;
   }
 
-  .corps {
-    align-items: flex-start;
+  .grille {
+    display: grid;
+    gap: 12px 16px;
   }
 
-  .corps textarea {
-    flex: 1;
-    min-width: 240px;
+  .g2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  label {
+  .g3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .champ {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
   }
 
-  label.case {
+  .champ > label {
+    color: var(--texte-2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .champ > label.case {
+    color: var(--texte);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .champ select,
+  .champ input:not([type='checkbox']) {
+    width: 100%;
+  }
+
+  label.case,
+  label.inline {
+    display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-size: 13px;
-  }
-
-  .large {
-    flex: 1;
-    min-width: 240px;
   }
 
   .etiquette {
@@ -671,16 +793,10 @@
 
   .emplacement {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  .grille {
-    display: grid;
-    flex: 1;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
+    margin-top: 12px;
   }
 
   textarea,
@@ -688,38 +804,95 @@
     width: 100%;
   }
 
+  .puce {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border: 1px solid var(--ligne);
+    color: var(--texte-2);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .puce.pret {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  .puce.perime {
+    border-color: var(--ambre);
+    color: var(--ambre);
+  }
+
   .plans {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin: 0 0 16px;
+    margin: 0;
     padding: 0;
     list-style: none;
   }
 
   .plans li {
-    padding: 10px;
     border: 1px solid var(--ligne);
+    background: var(--fond);
   }
 
-  .plans li.pret {
-    border-color: var(--cyan);
+  .entete {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    background: none;
+    color: var(--texte);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
-  .plans li.perime {
-    border-color: var(--orange);
+  .entete b {
+    color: var(--cyan);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
-  .etat {
+  .resume {
     flex: 1;
+    min-width: 120px;
+    overflow: hidden;
+    color: var(--texte-2);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .petit-texte {
+    color: var(--texte-2);
+    font-size: 12px;
+  }
+
+  .corps-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-top: 1px solid var(--ligne);
+  }
+
+  small.trop {
+    color: var(--orange);
   }
 
   .alertes {
-    margin: 0;
-    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
-  .alerte {
-    color: var(--orange);
+  .resume-sequence {
+    margin: 8px 0 0;
   }
 </style>
