@@ -13,6 +13,22 @@ export const ANCRAGES: { id: string; fleche: string; titre: string }[] = [
   { id: 'bas-droite', fleche: '↘', titre: 'En bas à droite' },
 ];
 
+/** Un nombre de pixels lisible : « 1 344 » (espace fine insécable). */
+function milliers(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+/** Ce que fera un agrandissement : « Cadre agrandi : 1 344 × 768 → 1 792 × 768, ancré à gauche. » */
+export function texteCadre(
+  source: { largeur: number; hauteur: number },
+  largeur: number,
+  hauteur: number,
+  ancrage: string,
+): string {
+  const place = ANCRAGES.find((a) => a.id === ancrage)?.titre.toLowerCase() ?? ancrage;
+  return `Cadre agrandi : ${milliers(source.largeur)} × ${milliers(source.hauteur)} → ${milliers(largeur)} × ${milliers(hauteur)}, ancré ${place}.`;
+}
+
 /** La plus grande image acceptée, en pixels de côté (aria_coeur::images::TAILLE_MAX). */
 export const TAILLE_MAX = 4096;
 /** Le fondu le plus large, en pixels (aria_coeur::retouche::FONDU_MAX). */
