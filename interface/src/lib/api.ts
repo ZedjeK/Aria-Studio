@@ -308,6 +308,10 @@ export interface Creation {
   type?: string;
   idee?: string | null;
   prompt?: string | null;
+  /** Ce que le LLM a écrit au premier essai, avant le nettoyage et le contrôle qualité ; absent des fiches de la v2. */
+  prompt_llm?: string | null;
+  /** Le prompt réellement envoyé au modèle (mots déclencheurs des LoRA compris) ; absent des fiches plus anciennes. */
+  prompt_envoye?: string | null;
   llm?: string | null;
   /** Ce qui s'est passé à la réécriture de l'idée : `faite`, `redemandee`, `imparfaite` ou `repli`, et pourquoi. */
   reecriture?: string | null;

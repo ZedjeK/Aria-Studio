@@ -1279,19 +1279,29 @@ fn boucle(
 pub struct Reecriture {
     pub etat: &'static str,
     pub motif: Option<String>,
+    /// La première réponse du LLM, telle qu'elle est venue ; rien quand le LLM a manqué.
+    pub brut: Option<String>,
 }
 
 impl Reecriture {
     pub fn de(etat: &'static str, motif: Option<String>) -> Self {
-        Self { etat, motif }
+        Self {
+            etat,
+            motif,
+            brut: None,
+        }
     }
 
     /// D'après le contrôle qualité : faite, redemandée, ou imparfaite (le meilleur des deux essais part).
     pub fn du_controle(controle: &prompt::Controle) -> Self {
-        match (&controle.redemande, &controle.reste) {
+        let faite = match (&controle.redemande, &controle.reste) {
             (_, Some(reste)) => Self::de("imparfaite", Some(format!("contrôle qualité : {reste}"))),
             (Some(m), None) => Self::de("redemandee", Some(m.clone())),
             (None, None) => Self::de("faite", None),
+        };
+        Self {
+            brut: Some(controle.brut.clone()).filter(|b| !b.is_empty()),
+            ..faite
         }
     }
 
@@ -1310,11 +1320,15 @@ impl Reecriture {
         }
     }
 
-    /// Sur la fiche de la création : `reecriture` et `reecriture_motif`.
+    /// Sur la fiche de la création : `reecriture`, `reecriture_motif` et `prompt_llm` (ce que le LLM a écrit au
+    /// premier essai, avant le nettoyage et le contrôle ; absent quand le LLM a manqué).
     pub fn noter(&self, infos: &mut Map<String, Value>) {
         infos.insert("reecriture".to_owned(), json!(self.etat));
         if let Some(m) = &self.motif {
             infos.insert("reecriture_motif".to_owned(), json!(m));
+        }
+        if let Some(b) = &self.brut {
+            infos.insert("prompt_llm".to_owned(), json!(b));
         }
     }
 }
@@ -1522,6 +1536,7 @@ fn executer(
             "type": "creation",
             "idee": c.idee,
             "prompt": texte_prompt,
+            "prompt_envoye": avec_declencheurs(&texte_prompt, &c.loras),
             "llm": llm_utilise,
             "workflow": c.workflow,
             "modele": modele,
@@ -1670,6 +1685,7 @@ mod tests {
         // Deux essais ratés au contrôle : le meilleur part quand même, la file le dit.
         let imparfaite = Reecriture::du_controle(&prompt::Controle {
             texte: "A long prompt.".to_owned(),
+            brut: "Sure! A very long prompt.".to_owned(),
             redemande: Some("trop long".to_owned()),
             reste: Some("trop long".to_owned()),
         });
@@ -1681,6 +1697,7 @@ mod tests {
         );
         let bonne = prompt::Controle {
             texte: "A prompt.".to_owned(),
+            brut: String::new(),
             redemande: Some("préambule".to_owned()),
             reste: None,
         };
@@ -1691,6 +1708,11 @@ mod tests {
             (infos["reecriture"].clone(), infos["reecriture_motif"].clone()),
             (json!("repli"), json!("llama-server ne répond pas"))
         );
+        // Le LLM a manqué : pas de texte écrit à noter. Sinon, sa première réponse est gardée telle quelle.
+        assert!(!infos.contains_key("prompt_llm"));
+        let mut notees = Map::new();
+        imparfaite.noter(&mut notees);
+        assert_eq!(notees["prompt_llm"], json!("Sure! A very long prompt."));
     }
 
     #[test]
@@ -1888,6 +1910,15 @@ mod tests {
         );
         assert_eq!(fiche["reecriture"], json!("faite"));
         assert_eq!(fiche["llm"], json!("mistral.gguf"));
+        // Trois textes : l'idée, ce que le LLM a écrit (avant nettoyage), le prompt réellement envoyé.
+        assert_eq!(
+            fiche["prompt_llm"],
+            json!(format!("**A red fox** sitting in fresh snow{SUITE}"))
+        );
+        assert_eq!(
+            fiche["prompt_envoye"],
+            json!(format!("A red fox sitting in fresh snow{SUITE}"))
+        );
     }
 
     #[test]

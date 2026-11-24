@@ -491,6 +491,8 @@ pub fn executer(
         None => crate::plateau::seed_au_hasard()?,
     };
     let etape = if agrandir { "Agrandissement" } else { "Retouche" };
+    // Ce qui part vraiment au modèle : la consigne, avec les mots déclencheurs des LoRA en tête.
+    let envoye = plateau::avec_declencheurs(&consigne, &c.loras);
     // L'image d'entrée est téléversée une seule fois pour toutes les variantes.
     let nom = generateur.televerser(&format!("aria_{}.png", c.id), &images::png(&entree)?)?;
     for i in 0..c.nombre {
@@ -506,10 +508,7 @@ pub fn executer(
         suivi.progression(0.0);
         let debut_image = Instant::now();
         let mut valeurs = Map::new();
-        valeurs.insert(
-            "prompt".to_owned(),
-            json!(plateau::avec_declencheurs(&consigne, &c.loras)),
-        );
+        valeurs.insert("prompt".to_owned(), json!(envoye));
         valeurs.insert("image".to_owned(), json!(nom));
         valeurs.insert("seed".to_owned(), json!(seed));
         valeurs.insert("modele".to_owned(), json!(c.modele));
@@ -543,6 +542,7 @@ pub fn executer(
             "type": c.genre,
             "idee": c.idee,
             "prompt": consigne,
+            "prompt_envoye": envoye,
             "llm": llm_utilise,
             "workflow": c.workflow,
             "modele": modele,
@@ -896,6 +896,8 @@ mod tests {
         assert_eq!(f["masque"], json!(true));
         assert_eq!(f["dossier"], json!("Ciels"));
         assert_eq!(f["prompt"], json!("make it red"));
+        assert_eq!(f["prompt_envoye"], json!("make it red"));
+        assert!(f.get("prompt_llm").is_none());
         assert_eq!(creations::fiche(&data, &fin.images[1]).unwrap()["seed"], json!(4));
 
         let c = plateau
