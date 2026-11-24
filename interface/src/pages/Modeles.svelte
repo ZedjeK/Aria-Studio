@@ -71,7 +71,7 @@
     video:
       'Les modèles vidéo sont lourds : vérifie la place libre avant de télécharger. Le workflow par défaut (★) est celui du Montage.',
     collection:
-      "Un fichier déposé à la main est reconnu par son empreinte SHA-256 ; sa source se retrouve sur Civitai. Seuls les modèles téléchargés par Aria se suppriment d'ici : ils partent dans la corbeille, d'où ils se restaurent.",
+      "Un fichier déposé à la main est reconnu par son empreinte SHA-256 ; sa source se retrouve sur Civitai. Chaque modèle se supprime d'ici, déposé à la main ou non : il part dans la corbeille, d'où il se restaure.",
     rechercher:
       "La recherche se limite aux familles qu'Aria sait faire tourner. Seuls .safetensors et .gguf sont téléchargés : les autres formats peuvent exécuter du code au chargement. Un modèle qui demande une clé se télécharge avec celle de Réglages → Emplacements et clés.",
   };
