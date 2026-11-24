@@ -309,6 +309,9 @@ export interface Creation {
   idee?: string | null;
   prompt?: string | null;
   llm?: string | null;
+  /** Ce qui s'est passé à la réécriture de l'idée : `faite`, `redemandee`, `imparfaite` ou `repli`, et pourquoi. */
+  reecriture?: string | null;
+  reecriture_motif?: string | null;
   workflow?: string | null;
   modele?: string | null;
   format?: string | null;
