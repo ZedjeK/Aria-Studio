@@ -118,3 +118,18 @@ export function texteAvancement(commande: Commande): string {
   if (commande.etat === 'erreur') return commande.erreur ?? 'Erreur inconnue';
   return `${libelleEtat(commande.etat)}${compte}`;
 }
+
+/** Ce que le Plateau fait d'un envoi du Scénario qui demande de créer : lancer tout de suite, ou poser le prompt et
+ * dire pourquoi la création attend (de quoi compléter, ou plusieurs images à confirmer d'un clic). */
+export function lancementDuScenario(peutCreer: boolean, nombre: number): { lancer: boolean; message: string } {
+  if (!peutCreer) {
+    return {
+      lancer: false,
+      message: 'Prompt reçu, mais la création attend : complète ce qui manque, puis clique sur Créer.',
+    };
+  }
+  if (nombre > 1) {
+    return { lancer: false, message: `Prompt reçu : ${nombre} images sont demandées, clique sur Créer pour confirmer.` };
+  }
+  return { lancer: true, message: 'Prompt reçu : la création est lancée.' };
+}

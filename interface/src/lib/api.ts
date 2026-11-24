@@ -1380,6 +1380,8 @@ export interface EnvoiPlateau {
   modeReference: ModeReference | null;
   /** Le format choisi au Scénario : le Plateau le pose s'il le propose ; absent : celui du modèle cible. */
   format?: string | null;
+  /** « Créer » : le Plateau lance la création dès qu'il a posé le prompt, sans clic de plus. */
+  lancer?: boolean;
 }
 
 /** Une consigne écrite au Scénario, en route vers la page Retouche avec son image. */

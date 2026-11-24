@@ -30,6 +30,7 @@
   import {
     estActive,
     formatInitial,
+    lancementDuScenario,
     lireSeed,
     llmInitial,
     LIBERTE,
@@ -88,6 +89,8 @@
   let reecrire = $state(true);
   let llmChoisi = $state('');
   let premiereLecture = true;
+  /** Le dernier envoi du Scénario reçu : une relecture des options ne le relance pas. */
+  let envoiTraite: EnvoiPlateau | null = null;
   // Partir de rushes : s'en inspirer (workflows de retouche à références), ou en redessiner un.
   let modeReference = $state<ModeReference | null>(null);
   let carte = $state<Depart>('aucune');
@@ -153,8 +156,9 @@
       const voulu = modeReference === 'inspirer' ? options.defautReferences : options.defaut;
       const defaut = liste.find((w) => w.id === voulu) ?? liste[0];
       choisirWorkflow(garde ? workflowId : (defaut?.id ?? ''));
-      // Un prompt du Scénario : il part tel quel, avec son modèle cible s'il est prêt.
-      if (recu) {
+      // Un prompt du Scénario : il part tel quel, avec son modèle cible s'il est prêt. Chaque envoi se traite une fois.
+      if (recu && recu !== envoiTraite) {
+        envoiTraite = recu;
         // Un rush pris comme référence n'apporte pas de prompt : l'idée reste à écrire, et le LLM la réécrira.
         if (recu.prompt !== '') {
           prompt = recu.prompt;
@@ -170,7 +174,16 @@
         const formatRecu = recu.format;
         if (formatRecu && depart !== 'variation' && options.formats.includes(formatRecu)) format = formatRecu;
         recuLu?.();
-        signaler(recu.prompt === '' ? 'Rush de départ posé : écris ce qui change.' : 'Prompt reçu : il partira tel quel.');
+        // « Créer » au Scénario : la création part ici, par le même chemin que le bouton (filtre AS-18, modèle prêt).
+        const lancement = recu.lancer === true ? lancementDuScenario(peutCreer, nombre) : null;
+        signaler(
+          lancement
+            ? lancement.message
+            : recu.prompt === ''
+              ? 'Rush de départ posé : écris ce qui change.'
+              : 'Prompt reçu : il partira tel quel.',
+        );
+        if (lancement?.lancer) void creer();
       }
     } catch (e) {
       signaler(messageErreur(e), true);
