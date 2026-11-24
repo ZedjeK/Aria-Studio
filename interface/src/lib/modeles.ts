@@ -23,13 +23,14 @@ export function ordreTache(tache: string): number {
 
 /**
  * Un fichier d'un workflow : présent, manquant, ou « non exigé ». Le cœur n'exige pas le checkpoint d'origine quand la
- * famille en a déjà un : le fichier est absent du disque, mais le workflow est prêt et rien n'est à télécharger.
+ * famille en a déjà un : le fichier est absent du disque, mais il ne manque pas, et rien n'est à télécharger pour lui.
+ * C'est le cœur qui le dit (`manque`) : l'interface ne le devine pas d'après l'état du workflow.
  */
 export type EtatFichier = 'present' | 'manque' | 'non_exige';
 
-export function etatFichier(workflowPret: boolean, present: boolean): EtatFichier {
-  if (present) return 'present';
-  return workflowPret ? 'non_exige' : 'manque';
+export function etatFichier(f: { present: boolean; manque: boolean }): EtatFichier {
+  if (f.present) return 'present';
+  return f.manque ? 'manque' : 'non_exige';
 }
 
 export function libelleEtatFichier(etat: EtatFichier): string {
@@ -154,7 +155,47 @@ export function texteBoutonTelechargements(enCours: number): string {
   return enCours > 0 ? `⬇ Téléchargements · ${enCours}` : '⬇ Téléchargements';
 }
 
-/** Combien de fichiers un workflow doit encore recevoir. */
-export function fichiersAManquer(fichiers: { present: boolean }[]): number {
-  return fichiers.filter((f) => !f.present).length;
+/** Combien de fichiers un workflow doit encore recevoir (un fichier « non exigé » n'en fait pas partie). */
+export function fichiersAManquer(fichiers: { manque: boolean }[]): number {
+  return fichiers.filter((f) => f.manque).length;
+}
+
+/** Ce fichier est-il dans la file, en attente ou en route ? */
+export function enFile(taches: Telechargement[], dossier: string, nom: string): boolean {
+  return taches.some((t) => telechargementActif(t) && t.dossier === dossier && t.nom === nom);
+}
+
+/**
+ * Ce que montre la carte d'un workflow. Tant que quelque chose manque, il y a un bouton : « Télécharger ce qui
+ * manque », ou, quand tout ce qui manque est déjà dans la file, un bouton qui l'ouvre.
+ */
+export type ActionWorkflow = { genre: 'pret' } | { genre: 'telecharger' } | { genre: 'en_file'; fichiers: number };
+
+export function actionWorkflow(
+  w: { pret: boolean; fichiers: { nom: string; dossier: string; manque: boolean }[] },
+  taches: Telechargement[],
+): ActionWorkflow {
+  if (w.pret) return { genre: 'pret' };
+  const manquants = w.fichiers.filter((f) => f.manque);
+  const dansLaFile = manquants.filter((f) => enFile(taches, f.dossier, f.nom));
+  if (manquants.length > 0 && dansLaFile.length === manquants.length) {
+    return { genre: 'en_file', fichiers: dansLaFile.length };
+  }
+  return { genre: 'telecharger' };
+}
+
+/** Ce que montre la ligne d'un LLM du catalogue : installé, « Installer », ou son GGUF est déjà dans la file. */
+export type ActionLlm = 'installe' | 'installer' | 'en_file';
+
+export function actionLlm(l: { fichier: string; installe: boolean }, taches: Telechargement[]): ActionLlm {
+  if (l.installe) return 'installe';
+  return enFile(taches, 'llm', l.fichier) ? 'en_file' : 'installer';
+}
+
+/** Le message d'après un clic sur « Télécharger » : ce qui est parti, ou pourquoi rien n'est parti. */
+export function messageMiseEnFile(nom: string, ajoutes: number): string {
+  if (ajoutes > 0) {
+    return `${ajoutes} fichier${ajoutes > 1 ? 's' : ''} en file pour ${nom} : suis-les dans « Téléchargements ».`;
+  }
+  return `Rien de plus à mettre en file pour ${nom} : ce qui manque est déjà dans « Téléchargements ».`;
 }
