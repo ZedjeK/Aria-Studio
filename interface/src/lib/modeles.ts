@@ -21,6 +21,28 @@ export function ordreTache(tache: string): number {
   return ordre === -1 ? Object.keys(TACHES).length : ordre;
 }
 
+/**
+ * Un fichier d'un workflow : présent, manquant, ou « non exigé ». Le cœur n'exige pas le checkpoint d'origine quand la
+ * famille en a déjà un : le fichier est absent du disque, mais le workflow est prêt et rien n'est à télécharger.
+ */
+export type EtatFichier = 'present' | 'manque' | 'non_exige';
+
+export function etatFichier(workflowPret: boolean, present: boolean): EtatFichier {
+  if (present) return 'present';
+  return workflowPret ? 'non_exige' : 'manque';
+}
+
+export function libelleEtatFichier(etat: EtatFichier): string {
+  switch (etat) {
+    case 'present':
+      return 'présent';
+    case 'manque':
+      return 'manque';
+    case 'non_exige':
+      return 'non exigé : un autre checkpoint de la famille est déjà là';
+  }
+}
+
 /** Vrai tant qu'un téléchargement peut encore avancer (il s'annule alors). */
 export function telechargementActif(t: Telechargement): boolean {
   return t.etat === 'attente' || t.etat === 'en_cours' || t.etat === 'verification';

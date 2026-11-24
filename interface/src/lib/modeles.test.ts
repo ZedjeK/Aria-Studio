@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Telechargement } from './api';
 import {
   dateLisible,
+  etatFichier,
   erreurLora,
   erreurSteps,
   fractionTelechargement,
@@ -100,5 +101,20 @@ describe('Modèles', () => {
   it('écrit le bouton des téléchargements', () => {
     expect(texteBoutonTelechargements(0)).toBe('⬇ Téléchargements');
     expect(texteBoutonTelechargements(2)).toBe('⬇ Téléchargements · 2');
+  });
+});
+
+describe('etatFichier', () => {
+  it('un fichier présent est présent, prêt ou non', () => {
+    expect(etatFichier(true, true)).toBe('present');
+    expect(etatFichier(false, true)).toBe('present');
+  });
+
+  it('un fichier absent d’un workflow incomplet manque : le bouton de téléchargement s’affiche', () => {
+    expect(etatFichier(false, false)).toBe('manque');
+  });
+
+  it('un fichier absent d’un workflow prêt n’est pas exigé : le cœur ne le demande pas', () => {
+    expect(etatFichier(true, false)).toBe('non_exige');
   });
 });

@@ -24,8 +24,10 @@
   } from '../lib/api';
   import { octetsLisibles } from '../lib/jauge';
   import {
+    etatFichier,
     fichiersAManquer,
     fractionTelechargement,
+    libelleEtatFichier,
     libelleTache,
     ordreTache,
     roleFichier,
@@ -204,14 +206,15 @@
     <Panneau titre={`${w.nom} · ${libelleTache(w.tache)}`} accentue={premier}>
       <ul class="fichiers">
         {#each w.fichiers as f (f.dossier + f.nom)}
+          {@const etatF = etatFichier(w.pret, f.present)}
           <li>
-            <span class="verdict" class:ok={f.present} role="img" aria-label={f.present ? 'présent' : 'manque'}>
-              {f.present ? '✓' : '○'}
+            <span class="verdict" class:ok={f.present} role="img" aria-label={libelleEtatFichier(etatF)}>
+              {etatF === 'present' ? '✓' : etatF === 'manque' ? '○' : '–'}
             </span>
             <span class="nom">
               <span class="code">{f.nom}</span>
               <span class="discret">
-                · {roleFichier(f.dossier)} · {octetsLisibles(f.taille)}{f.present ? '' : ' · manque'}
+                · {roleFichier(f.dossier)} · {octetsLisibles(f.taille)}{etatF === 'present' ? '' : ` · ${libelleEtatFichier(etatF)}`}
               </span>
             </span>
           </li>
@@ -324,20 +327,30 @@
 {/if}
 
 <style>
+  /* Six onglets et le bouton Téléchargements : un onglet ne passe jamais à la ligne ni ne se rétrécit ; faute de place,
+     la rangée des onglets passe à la ligne par onglet entier et le bouton descend à droite. */
   .rangee {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
-    gap: 12px;
+    gap: 6px 12px;
     border-bottom: 1px solid var(--ligne);
   }
 
   .rangee > :global(.onglets) {
-    flex: 1;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
     min-width: 0;
     border-bottom: 0;
   }
 
+  .rangee :global(.onglet) {
+    flex: none;
+    white-space: nowrap;
+  }
+
   .droite {
+    margin-left: auto;
     padding-bottom: 6px;
   }
 
