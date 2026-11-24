@@ -80,3 +80,36 @@ export function groupesLlm(params: ParamReglage[]): GroupeReglages[] {
 export function texteChangements(nombre: number): string {
   return `${nombre} changement${nombre > 1 ? 's' : ''} non enregistré${nombre > 1 ? 's' : ''}`;
 }
+
+/** Un texte sans accents ni majuscules, pour chercher sans se soucier de l'écriture. */
+export function simplifie(texte: string): string {
+  return texte.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+}
+
+/** Un réglage dont la valeur montrée n'est pas celle d'origine (enregistrée ou en cours de saisie). */
+export function estModifie(p: ParamReglage, saisies: Saisies): boolean {
+  return valeurAffichee(p, saisies) !== p.defaut;
+}
+
+/** Le nombre de réglages modifiés dans une liste. */
+export function nombreModifies(params: ParamReglage[], saisies: Saisies): number {
+  return params.filter((p) => estModifie(p, saisies)).length;
+}
+
+/**
+ * Les réglages à montrer pour « Chercher un réglage » et « Modifiés seulement ». Chaque mot tapé doit se lire dans le
+ * libellé, la clé ou l'aide du réglage ; sans accent ni majuscule. Côté interface seulement : rien n'est enregistré.
+ */
+export function filtrerReglages(
+  params: ParamReglage[],
+  saisies: Saisies,
+  recherche: string,
+  modifiesSeulement: boolean,
+): ParamReglage[] {
+  const mots = simplifie(recherche).split(/\s+/).filter((m) => m !== '');
+  return params.filter((p) => {
+    if (modifiesSeulement && !estModifie(p, saisies)) return false;
+    const texte = simplifie(`${p.libelle} ${p.cle} ${p.aide}`);
+    return mots.every((m) => texte.includes(m));
+  });
+}

@@ -17,18 +17,29 @@
     type Proposition,
   } from '../lib/api';
   import { parCible, texteMateriel } from '../lib/optimiseur';
-  import { changements, groupesLlm, nomConsigne, texteChangements, type Saisies } from '../lib/reglages';
+  import {
+    changements,
+    filtrerReglages,
+    groupesLlm,
+    nombreModifies,
+    nomConsigne,
+    texteChangements,
+    type Saisies,
+  } from '../lib/reglages';
   import ApercuPropositions from '../lib/composants/ApercuPropositions.svelte';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
   import ChampReglage from '../lib/composants/ChampReglage.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
+  import RechercheReglage from '../lib/composants/RechercheReglage.svelte';
 
   interface Props {
     signaler: (texte: string, erreur?: boolean) => void;
+    recherche: string;
+    modifies: boolean;
   }
 
-  let { signaler }: Props = $props();
+  let { signaler, recherche = $bindable(), modifies = $bindable() }: Props = $props();
 
   let etat = $state<EtatReglages | null>(null);
   let fichier = $state('');
@@ -40,7 +51,8 @@
   const nombreChangements = $derived(
     llm === undefined ? 0 : Object.keys(changements(llm.params, saisies)).length + Object.keys(consignes).length,
   );
-  const groupes = $derived(llm ? groupesLlm(llm.params) : []);
+  const groupes = $derived(llm ? groupesLlm(filtrerReglages(llm.params, saisies, recherche, modifies)) : []);
+  const nombreMontres = $derived(groupes.reduce((somme, g) => somme + g.params.length, 0));
   /** La consigne affichée dans le panneau des consignes : une seule à la fois, choisie dans la liste. */
   let consigneChoisie = $state('');
   const consigne = $derived(llm?.consignes.find((c) => c.cle === consigneChoisie) ?? llm?.consignes[0]);
@@ -115,6 +127,10 @@
   le moteur ou la vision redémarre llama-server. La clause de protection des mineurs termine toujours la consigne.
 </ASavoir>
 
+{#if etat && llm}
+  <RechercheReglage bind:recherche bind:modifies nombreModifies={nombreModifies(llm.params, saisies)} {nombreMontres} />
+{/if}
+
 {#if etat && etat.llm.length === 0}
   <p class="discret">Aucun LLM dans modelesllm. Les LLM téléchargés par la version 2 sont repris.</p>
 {:else if etat && llm}
@@ -151,6 +167,10 @@
         {analyse ? 'Analyse…' : '⚡ Adapter à ma machine'}
       </Bouton>
     </div>
+    {#if groupes.length === 0}
+      <hr class="sep" />
+      <p class="discret">Aucun réglage ne correspond.</p>
+    {/if}
     {#each groupes as g (g.titre)}
       <hr class="sep" />
       <p class="etiquette">{g.titre}</p>
