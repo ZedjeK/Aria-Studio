@@ -1,12 +1,14 @@
 <!--
-  Casting, comme en v2 (web/casting.js) : mêmes prompts et mêmes seeds sur plusieurs modèles d'une tâche, puis
-  comparaison à l'aveugle. « Nouveau casting » dit ce qu'un casting comparerait et ce qui l'empêche de partir ;
-  « Comparer » montre les castings faits : notes de 1 à 5, révélation (elle ne se défait pas), modèle par défaut, et
-  une image de texte vers image figée comme image de départ des retouches. Les images de départ sont les tiennes :
-  figées depuis un casting, importées d'un fichier ou prises dans les Rushes (la v2 en livrait, pas la v3, pour une
-  raison de licence). Un casting passe par la file du Plateau :
-  il se suit ici et s'annule. Le Casting LLM fait réécrire les idées par chaque candidat, contrôle les prompts, puis
-  les fait rendre par le modèle par défaut de Texte vers image.
+  Casting, comme la maquette : mêmes prompts et mêmes seeds sur plusieurs modèles d'une tâche, puis comparaison à
+  l'aveugle. « Nouveau casting » : le panneau accentué « Une tâche, des candidats » (tâches en cartes à onglet,
+  candidats à cocher, jeu d'essai, suivi du casting en cours et le seul bouton orange) puis l'historique des castings.
+  « Comparer » : notes de 1 à 5 en étoiles, « Révéler les modèles » (le seul orange tant que les noms sont cachés,
+  confirmé : ça ne se défait pas), puis le bilan des modèles révélés (le seul orange devient « Choisir par défaut » du
+  mieux noté) ; une image de texte vers image se fige comme image de départ des retouches. Les images de départ sont les
+  tiennes : figées depuis un casting, importées d'un fichier ou prises dans les Rushes (la v2 en livrait, pas la v3, pour
+  une raison de licence). Un casting passe par la file du Plateau : il se suit ici et s'annule. Le Casting LLM fait
+  réécrire les idées par chaque candidat, contrôle les prompts, puis les fait rendre par le modèle par défaut de Texte
+  vers image.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -32,7 +34,11 @@
   } from '../lib/api';
   import {
     AVEC_SOURCE,
+    aNoter as imagesANoter,
     avancementPrompt,
+    blocageChoix,
+    candidatsChoisis,
+    cleDuMeilleur,
     CONTROLES,
     dateCasting,
     etatCasting,
@@ -40,10 +46,13 @@
     NOMS_TACHES,
     nombreDe,
     resumeTache,
+    titreTache,
+    totalChoisi,
     unite,
   } from '../lib/casting';
   import ASavoir from '../lib/composants/ASavoir.svelte';
   import Bouton from '../lib/composants/Bouton.svelte';
+  import CarteChoix from '../lib/composants/CarteChoix.svelte';
   import Dialogue from '../lib/composants/Dialogue.svelte';
   import MediaCasting from '../lib/composants/MediaCasting.svelte';
   import Panneau from '../lib/composants/Panneau.svelte';
@@ -59,6 +68,8 @@
   let etat = $state<EtatCasting | null>(null);
   let sousOnglet = $state('lancer');
   let tache = $state<TacheCasting>('texte_vers_image');
+  /** Les candidats décochés, par identifiant (les complets sont cochés d'office). */
+  let exclus = $state<Record<string, boolean>>({});
   let affiche = $state<string | null>(null);
   let casting = $state<VueCasting | null>(null);
   let confirmerRevelation = $state(false);
@@ -74,14 +85,26 @@
   /** Change quand une image de départ est remplacée : sa vignette se relit. */
   let versionSources = $state(0);
 
+  const COMMENTAIRES: Record<string, string> = {
+    lancer:
+      "Chaque modèle part d'une mémoire vidéo vide. La première génération, « à froid », est comptée à part. Tous les modèles cochés passent, dans un ordre tiré au hasard que tu ne vois pas ; le casting passe par la file du Plateau, qui tourne une chose à la fois. Au Casting LLM, les prompts écrits et leurs contrôles se lisent après la révélation.",
+    comparer:
+      'Les noms des modèles sont cachés tant que tu ne les as pas révélés : note d’abord, le résultat n’est pas faussé.',
+  };
+
   const preparation = $derived(etat?.preparation.taches.find((t) => t.tache === tache) ?? null);
-  const aNoter = $derived(etat?.castings.filter((c) => !c.revele).length ?? 0);
+  const estLlm = $derived(preparation?.tache === 'reecriture');
+  const choisis = $derived(preparation ? candidatsChoisis(preparation, exclus) : []);
+  const blocage = $derived(preparation ? blocageChoix(preparation, choisis) : null);
+  const aNoter = $derived(imagesANoter(etat?.castings ?? []));
   const onglets = $derived([
     { id: 'lancer', titre: 'Nouveau casting' },
     { id: 'comparer', titre: aNoter > 0 ? `Comparer · ${aNoter} à noter` : 'Comparer' },
   ]);
   const moyennesModeles = $derived(casting ? moyennes(casting.modeles) : []);
   const meilleure = $derived(Math.max(...moyennesModeles.filter((m): m is number => m !== null)));
+  /** Le seul bouton orange du bilan : le mieux noté, s'il n'est pas déjà le modèle par défaut. */
+  const cleMeilleur = $derived(casting?.revele ? cleDuMeilleur(casting.modeles, casting.par_defaut) : null);
   const llm = $derived(casting?.tache === 'reecriture');
   const actif = $derived(etat?.actif ?? null);
   const enCours = $derived(actif !== null && (actif.etat === 'attente' || actif.etat === 'en_cours'));
@@ -118,9 +141,13 @@
   }
 
   async function lancer() {
+    const p = preparation;
+    if (!p) return;
     lancement = true;
     try {
-      await lancerCasting(tache);
+      // Tous les candidats cochés : le cœur prend tous ceux de la tâche ; sinon, la liste choisie.
+      const liste = p.tache === 'reecriture' || choisis.length === p.candidats.length ? null : choisis;
+      await lancerCasting(tache, liste);
       signaler(`Casting lancé : ${NOMS_TACHES[tache]}.`);
       await relire();
     } catch (e) {
@@ -149,6 +176,12 @@
     }
   }
 
+  /** Un casting de l'historique : il s'ouvre dans « Comparer ». */
+  async function ouvrir(id: string) {
+    await afficher(id);
+    sousOnglet = 'comparer';
+  }
+
   /** Une action sur le casting affiché ; la page ne bouge pas sous le doigt pendant qu'on note. */
   async function agir(action: (id: string) => Promise<VueCasting>) {
     const id = affiche;
@@ -174,12 +207,8 @@
     void agir((id) => noterCasting(id, m.cle, g.fichier, note));
   }
 
-  function reveler() {
-    if (casting && casting.notees < casting.total) {
-      confirmerRevelation = true;
-      return;
-    }
-    void agir((id) => revelerCasting(id));
+  function basculer(id: string) {
+    exclus[id] = !exclus[id];
   }
 
   function importerSource(nom: string) {
@@ -246,68 +275,83 @@
 </script>
 
 <h1>Casting</h1>
-<p class="sous-titre">Compare les modèles d'une tâche à l'aveugle, sur les mêmes prompts et les mêmes seeds.</p>
+<p class="sous-titre">Fais tourner plusieurs modèles sur les mêmes prompts, et choisis à l'aveugle.</p>
 <SousOnglets {onglets} bind:actif={sousOnglet} />
+<ASavoir>{COMMENTAIRES[sousOnglet] ?? ''}</ASavoir>
 
 {#if sousOnglet === 'lancer'}
-  <ASavoir>
-    Tous les modèles de la tâche passent, dans un ordre tiré au hasard que tu ne vois pas. Le casting passe par la file
-    du Plateau, qui tourne une chose à la fois. Au Casting LLM, les prompts écrits et leurs contrôles se lisent après la
-    révélation.
-  </ASavoir>
-  {#if actif && enCours}
-    <Panneau titre={`Casting en cours · ${NOMS_TACHES[actif.tache] ?? actif.tache}`}>
-      <progress max={Math.max(actif.total, 1)} value={actif.fait}></progress>
-      <div class="actions">
-        <span class="discret">{actif.fait} / {actif.total} · {actif.courant || 'préparation…'}</span>
-        <Bouton genre="discret" petit onclick={() => void annuler()}>✕ Annuler</Bouton>
-      </div>
-    </Panneau>
-  {/if}
   {#if etat}
-    <div class="taches" role="radiogroup" aria-label="Tâche du casting">
-      {#each etat.preparation.taches as t (t.tache)}
-        <label class="carte-tache" class:bloquee={t.blocage !== null}>
-          <input type="radio" name="tache-casting" value={t.tache} bind:group={tache} />
-          <strong>{NOMS_TACHES[t.tache]}</strong>
-          <small class="discret">{resumeTache(t)}</small>
-        </label>
-      {/each}
-    </div>
-    {#if preparation}
-      <Panneau titre={NOMS_TACHES[preparation.tache]} accentue>
-        <h3>{preparation.tache === 'reecriture' ? 'Candidats comparés' : 'Modèles comparés'}</h3>
+    <Panneau titre="Une tâche, des candidats" accentue>
+      <div class="cartes" role="radiogroup" aria-label="Tâche du casting">
+        {#each etat.preparation.taches as t (t.tache)}
+          <CarteChoix groupe="tache-casting" valeur={t.tache} titre={titreTache(t.tache)} bind:choisie={tache}>
+            {resumeTache(t)}
+          </CarteChoix>
+        {/each}
+      </div>
+      {#if preparation}
+        <hr />
+        <p class="etiquette">{estLlm ? 'Candidats comparés' : 'Candidats'}</p>
         <ul class="candidats">
           {#each preparation.candidats as c (c.id)}
             <li>
-              <strong>{c.nom}</strong>
-              <span class:alerte={c.manquants > 0} class:ok={c.manquants === 0}>
-                {c.manquants > 0 ? `incomplet · ${nombreDe(c.manquants, 'fichier')} ${c.manquants > 1 ? 'manquent' : 'manque'}` : 'prêt'}
-              </span>
+              <label class="coche">
+                <input
+                  type="checkbox"
+                  checked={estLlm || (c.manquants === 0 && !exclus[c.id])}
+                  disabled={estLlm || c.manquants > 0 || enCours}
+                  onchange={() => basculer(c.id)}
+                />
+                {c.nom}
+              </label>
+              {#if c.manquants > 0}
+                <span class="puce ambre">
+                  incomplet · {nombreDe(c.manquants, 'fichier')} {c.manquants > 1 ? 'manquent' : 'manque'}
+                </span>
+              {:else}
+                <span class="puce">installé</span>
+              {/if}
             </li>
           {:else}
             <li class="discret">Aucun candidat pour l'instant.</li>
           {/each}
         </ul>
+        {#if estLlm}
+          <p class="discret">Tous les LLM installés passent : il n'y a rien à cocher.</p>
+        {/if}
         {#if preparation.rendu}
           <p class="discret">
             Chaque candidat réécrit les idées, puis {preparation.rendu.nom} les rend en image : c'est le modèle par défaut
             de Texte vers image.
           </p>
         {/if}
-        <h3>{preparation.tache === 'reecriture' ? 'Idées à réécrire' : "Jeu d'essai"}</h3>
+
+        <div class="essai-boite">
+          <strong>{estLlm ? 'Idées à réécrire' : "Jeu d'essai"}</strong>
+          <span>
+            {#if estLlm}
+              {nombreDe(preparation.essais.length, 'idée')}, une seed de rendu : {preparation.seeds[0] ?? ''}.
+            {:else}
+              {nombreDe(preparation.essais.length, 'prompt')} livré{preparation.essais.length > 1 ? 's' : ''},
+              {nombreDe(preparation.seeds.length, 'seed')} chacun ({preparation.seeds.join(' et ')}, les mêmes pour tous
+              les modèles).
+            {/if}
+            {#if choisis.length >= 2}
+              <b>{nombreDe(totalChoisi(preparation, choisis), unite(preparation.tache))} en tout</b>{estLlm
+                ? ` : ${nombreDe(preparation.candidats.length, 'candidat')} × ${nombreDe(preparation.essais.length, 'idée')}, une réécriture puis un rendu.`
+                : ` : ${nombreDe(choisis.length, 'modèle')} × ${nombreDe(preparation.essais.length, 'prompt')} × ${nombreDe(preparation.seeds.length, 'seed')}.`}
+            {/if}
+          </span>
+        </div>
         <div class="essais">
           {#each preparation.essais as e (e.id)}
             <span class="essai" title={e.prompt}><b>{e.id}</b> <i>· {e.teste}</i></span>
           {/each}
         </div>
-        <p class="discret">
-          {preparation.tache === 'reecriture'
-            ? `Une seed de rendu : ${preparation.seeds[0] ?? ''}.`
-            : `${nombreDe(preparation.seeds.length, 'seed')} par prompt : ${preparation.seeds.join(' et ')}. Les mêmes pour tous les modèles.`}
-        </p>
+
         {#if preparation.sources.length > 0}
-          <h3>Images de départ</h3>
+          <hr />
+          <p class="etiquette">Images de départ</p>
           <p class="discret">
             Ce sont les tiennes. Chaque prompt du jeu d'essai retouche ou anime l'image de son nom : importe une image, prends-la
             dans les Rushes, ou fige-en une depuis un casting Texte vers image (« Utiliser comme source »).
@@ -338,35 +382,51 @@
             onchange={fichierChoisi}
           />
         {/if}
-        {#if preparation.candidats.length >= 2}
-          <p>
-            <strong>{nombreDe(preparation.total, unite(preparation.tache))}</strong>
-            <span class="discret">
-              · {preparation.tache === 'reecriture'
-                ? `${nombreDe(preparation.candidats.length, 'candidat')} × ${nombreDe(preparation.essais.length, 'idée')} : une réécriture, puis un rendu`
-                : `${nombreDe(preparation.candidats.length, 'modèle')} × ${nombreDe(preparation.essais.length, 'prompt')} × ${nombreDe(preparation.seeds.length, 'seed')}`}
-            </span>
-          </p>
-        {/if}
-        {#if preparation.blocage}
-          <p class="alerte">{preparation.blocage}.</p>
+
+        {#if blocage}
+          <p class="alerte">{blocage}{blocage.endsWith('.') ? '' : '.'}</p>
         {:else}
           <p class="discret">
             Le casting démarre si moins de {String(etat.preparation.vramMaxOccupeeGo).replace('.', ',')} Go de VRAM sont
             occupés.
           </p>
         {/if}
+
+        {#if actif && enCours}
+          <div class="rendu">
+            <span class="etape">
+              {NOMS_TACHES[actif.tache] ?? actif.tache} · {actif.fait} / {actif.total} · {actif.courant || 'préparation…'}
+            </span>
+            <progress max={Math.max(actif.total, 1)} value={actif.fait}></progress>
+            <Bouton genre="discret" petit onclick={() => void annuler()}>✕ Annuler</Bouton>
+          </div>
+        {/if}
         <div class="actions">
-          <Bouton
-            genre="principal"
-            desactive={enCours || lancement || preparation.blocage !== null}
-            onclick={() => void lancer()}
-          >
+          <Bouton genre="principal" desactive={enCours || lancement || blocage !== null} onclick={() => void lancer()}>
             Lancer le casting
           </Bouton>
         </div>
-      </Panneau>
-    {/if}
+      {/if}
+    </Panneau>
+
+    <Panneau titre="Historique">
+      {#if etat.castings.length > 0}
+        <div class="cartes c3" role="radiogroup" aria-label="Castings faits">
+          {#each etat.castings as c (c.id)}
+            <CarteChoix groupe="historique" valeur={c.id} titre={dateCasting(c.date)} bind:choisie={() => '', (v) => void ouvrir(v)}>
+              {NOMS_TACHES[c.tache] ?? c.tache} · {nombreDe(c.nb_workflows, 'modèle')} ·
+              {#if c.revele}
+                révélé
+              {:else}
+                <b>{c.total - c.notees} à noter</b>
+              {/if}
+            </CarteChoix>
+          {/each}
+        </div>
+      {:else}
+        <p class="discret">Aucun casting pour l'instant : le premier que tu lances apparaît ici.</p>
+      {/if}
+    </Panneau>
   {:else}
     <p class="discret">Lecture…</p>
   {/if}
@@ -375,27 +435,29 @@
     <p>Les castings faits avec la version 2 (dans <code>data\bancs\</code>) apparaissent ici.</p>
   </Panneau>
 {:else if etat}
-  <div class="castings" role="radiogroup" aria-label="Casting affiché">
-    {#each etat.castings as c (c.id)}
-      <label class="carte-tache">
-        <input type="radio" name="casting-affiche" value={c.id} checked={c.id === affiche} onchange={() => void afficher(c.id)} />
-        <strong>{NOMS_TACHES[c.tache] ?? c.tache}</strong>
-        <small class="discret">{dateCasting(c.date)} · {nombreDe(c.nb_workflows, 'modèle')}</small>
-        <small class:ok={c.revele} class:alerte={!c.revele}>{etatCasting(c)}</small>
-      </label>
-    {/each}
-  </div>
+  {#if etat.castings.length > 1}
+    <label class="choix-casting">
+      <span class="discret">Casting affiché</span>
+      <select value={affiche ?? ''} onchange={(e) => void afficher(e.currentTarget.value)}>
+        {#each etat.castings as c (c.id)}
+          <option value={c.id}>{NOMS_TACHES[c.tache] ?? c.tache} · {dateCasting(c.date)} · {etatCasting(c)}</option>
+        {/each}
+      </select>
+    </label>
+  {/if}
 
   {#if casting}
     {@const c = casting}
-    <Panneau titre={`${NOMS_TACHES[c.tache] ?? c.tache} · ${dateCasting(c.date)}${c.revele ? '' : " · à l'aveugle"}`} accentue={!c.revele}>
+    <Panneau
+      titre={c.revele
+        ? `${NOMS_TACHES[c.tache] ?? c.tache} · ${dateCasting(c.date)}`
+        : `Comparer à l'aveugle · ${NOMS_TACHES[c.tache] ?? c.tache} · ${nombreDe(c.prompts.length, 'prompt')}`}
+      accentue={!c.revele}
+    >
       <div class="tete">
         <span>{c.notees} / {c.total} {c.tache.endsWith('video') ? 'clips notés' : 'images notées'}</span>
         <progress max={Math.max(c.total, 1)} value={c.notees}></progress>
         <span class="discret">VRAM au repos : {c.vram_base_go ?? '—'} Go</span>
-        {#if !c.revele}
-          <Bouton genre="principal" desactive={occupe} onclick={reveler}>Révéler les modèles</Bouton>
-        {/if}
       </div>
       <div class="sauts">
         {#each c.prompts as p (p.id)}
@@ -406,80 +468,25 @@
         {/each}
       </div>
 
-      {#if c.revele}
-        <table class="resume">
-          <thead>
-            <tr>
-              <th>Modèle</th>
-              <th>Note moyenne</th>
-              {#if llm}
-                <th>Chargement</th><th>Écriture</th><th>Durée moyenne</th><th>Pic de VRAM</th><th>Contrôles</th>
-              {:else}
-                <th>À froid</th><th>À chaud</th><th>Pic de RAM</th><th>VRAM avant → après libération</th>
-              {/if}
-              <th>Par défaut</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each c.modeles as m, i (m.cle)}
-              {@const moyenne = moyennesModeles[i] ?? null}
-              <tr>
-                <td>{m.nom}</td>
-                <td class:meilleure={moyenne !== null && moyenne === meilleure}>
-                  {moyenne === null ? '—' : moyenne.toFixed(2).replace('.', ',')}
-                </td>
-                {#if llm}
-                  <td>{mesure(m.resume, 'chargement_s', ' s')}</td>
-                  <td>{mesure(m.resume, 'ecriture_tps_moyen', ' tok/s')}</td>
-                  <td>{mesure(m.resume, 'duree_moyenne_s', ' s')}</td>
-                  <td>{mesure(m.resume, 'pic_vram_go', ' Go')}</td>
-                  <td>{mesure(m.resume, 'controles_reussis', '')}</td>
-                {:else}
-                  <td>{mesure(m.resume, 'temps_froid_s', ' s')}</td>
-                  <td>{mesure(m.resume, 'temps_chaud_moyen_s', ' s')}</td>
-                  <td>{mesure(m.resume, 'pic_ram_go', ' Go')}</td>
-                  <td>{m.liberation?.vram_avant_go ?? '—'} → {m.liberation?.vram_apres_go ?? '—'} Go</td>
-                {/if}
-                <td>
-                  {#if c.par_defaut === m.cle}
-                    <span class="ok">★ par défaut</span>
-                  {:else}
-                    <Bouton petit desactive={occupe} onclick={() => void agir((id) => favoriCasting(id, m.cle))}>
-                      Choisir par défaut
-                    </Bouton>
-                    {#if c.favori === m.cle}<span class="discret">choisi ici, changé depuis</span>{/if}
-                  {/if}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-        <p class="discret">
-          {llm
-            ? "Le LLM par défaut sert aux modèles qui n'ont pas le leur, au Scénario et aux traductions."
-            : 'Le modèle par défaut est celui que prennent le Plateau, le Montage et le Scénario pour cette tâche.'}
-        </p>
-      {/if}
-
       {#each c.prompts as p (p.id)}
         {@const sert = c.modeles.some((m) => m.generations.some((g) => g.prompt === p.id && g.peut_servir_de_source))}
         <section class="bloc-prompt" id={`prompt-casting-${p.id}`}>
-          <h3>
+          <h4>
             {p.id} <span class="discret">· {p.teste}</span>
             {#if sert}<span class="sert">sert d'image de départ à la Retouche</span>{/if}
-          </h3>
+          </h4>
           <p class="discret">{p.prompt}</p>
           <div class="grille" style:grid-template-columns={`repeat(${c.modeles.length + (AVEC_SOURCE.includes(c.tache) ? 1 : 0)}, minmax(0, 1fr))`}>
             {#if AVEC_SOURCE.includes(c.tache) && p.source}
               {@const nom = p.source}
               <div class="colonne">
-                <h4>Source</h4>
+                <h5>Source</h5>
                 <MediaCasting lire={() => sourceCasting(nom)} fichier={nom} titre="source" />
               </div>
             {/if}
             {#each c.modeles as m (m.cle)}
               <div class="colonne">
-                <h4>{m.nom} <span class="discret">{c.seeds.length > 1 ? 'seeds' : 'seed'} {c.seeds.join(' · ')}</span></h4>
+                <h5>{m.nom} <span class="discret">{c.seeds.length > 1 ? 'seeds' : 'seed'} {c.seeds.join(' · ')}</span></h5>
                 <div class="seeds" style:grid-template-columns={`repeat(${Math.max(c.seeds.length, 1)}, minmax(0, 1fr))`}>
                   {#each m.generations.filter((g) => g.prompt === p.id) as g (g.fichier)}
                     <div class="vignette" class:source={g.est_la_source}>
@@ -489,13 +496,15 @@
                           <button
                             type="button"
                             class="etoile"
-                            class:allumee={(g.note ?? 0) >= n}
+                            class:pleine={(g.note ?? 0) >= n}
                             title={`${n}/5`}
                             disabled={occupe}
                             onclick={() => noter(m, g, n)}>★</button
                           >
                         {/each}
-                        {#if g.peut_servir_de_source}
+                      </div>
+                      {#if g.peut_servir_de_source}
+                        <div class="etoiles">
                           {#if g.est_la_source}
                             <span class="ok">source ✓</span>
                           {:else}
@@ -507,8 +516,8 @@
                               Utiliser comme source
                             </Bouton>
                           {/if}
-                        {/if}
-                      </div>
+                        </div>
+                      {/if}
                       {#if g.texte}
                         <p class="discret texte-prompt">{g.texte}</p>
                         {#if g.controles}
@@ -532,29 +541,99 @@
           </div>
         </section>
       {/each}
+
+      {#if !c.revele}
+        <div class="actions">
+          <Bouton genre="principal" desactive={occupe} onclick={() => (confirmerRevelation = true)}>Révéler les modèles</Bouton>
+        </div>
+      {/if}
     </Panneau>
+
+    {#if c.revele}
+      <Panneau titre="Bilan · modèles révélés" accentue={cleMeilleur !== null}>
+        <table class="resume">
+          <thead>
+            <tr>
+              <th>Modèle</th>
+              <th>Note moyenne</th>
+              {#if llm}
+                <th>Chargement</th><th>Écriture</th><th>Durée moyenne</th><th>Pic de VRAM</th><th>Contrôles</th>
+              {:else}
+                <th>1re image « à froid »</th><th>À chaud</th><th>Pic de RAM</th><th>VRAM avant → après libération</th>
+              {/if}
+              <th>Par défaut</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each c.modeles as m, i (m.cle)}
+              {@const moyenne = moyennesModeles[i] ?? null}
+              <tr>
+                <td>{m.nom}</td>
+                <td class:meilleure={moyenne !== null && moyenne === meilleure}>
+                  {moyenne === null ? '—' : `${moyenne.toFixed(2).replace('.', ',')} ★`}
+                </td>
+                {#if llm}
+                  <td>{mesure(m.resume, 'chargement_s', ' s')}</td>
+                  <td>{mesure(m.resume, 'ecriture_tps_moyen', ' tok/s')}</td>
+                  <td>{mesure(m.resume, 'duree_moyenne_s', ' s')}</td>
+                  <td>{mesure(m.resume, 'pic_vram_go', ' Go')}</td>
+                  <td>{mesure(m.resume, 'controles_reussis', '')}</td>
+                {:else}
+                  <td>{mesure(m.resume, 'temps_froid_s', ' s')}</td>
+                  <td>{mesure(m.resume, 'temps_chaud_moyen_s', ' s')}</td>
+                  <td>{mesure(m.resume, 'pic_ram_go', ' Go')}</td>
+                  <td>{m.liberation?.vram_avant_go ?? '—'} → {m.liberation?.vram_apres_go ?? '—'} Go</td>
+                {/if}
+                <td>
+                  {#if c.par_defaut === m.cle}
+                    <span class="ok">★ par défaut</span>
+                  {:else}
+                    <Bouton
+                      genre={m.cle === cleMeilleur ? 'principal' : 'secondaire'}
+                      petit
+                      desactive={occupe}
+                      onclick={() => void agir((id) => favoriCasting(id, m.cle))}
+                    >
+                      Choisir par défaut
+                    </Bouton>
+                    {#if c.favori === m.cle}<span class="discret">choisi ici, changé depuis</span>{/if}
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        <p class="discret">
+          {llm
+            ? "Le LLM par défaut sert aux modèles qui n'ont pas le leur, au Scénario et aux traductions."
+            : 'Le modèle par défaut est celui que prennent le Plateau, le Montage et le Scénario pour cette tâche.'}
+        </p>
+      </Panneau>
+    {/if}
   {/if}
 {:else}
   <p class="discret">Lecture…</p>
 {/if}
 
 {#if confirmerRevelation && casting}
-  <Dialogue titre="Révéler les modèles" fermer={() => (confirmerRevelation = false)}>
-    <p>
-      Seulement {casting.notees} {casting.tache.endsWith('video') ? 'clips notés' : 'images notées'} sur {casting.total}.
-    </p>
-    <p class="discret">
-      Une fois les noms affichés, ce casting n'est plus à l'aveugle : ça ne se défait pas. Tes notes restent, et tu peux
-      encore noter après.
-    </p>
+  <Dialogue titre="Révéler les modèles ?" fermer={() => (confirmerRevelation = false)}>
+    <ASavoir>
+      Tes notes sont enregistrées d'abord. Une fois les noms connus, tu ne peux plus noter à l'aveugle ce casting.
+    </ASavoir>
+    {#if casting.notees < casting.total}
+      <p class="discret">
+        Seulement {casting.notees} {casting.tache.endsWith('video') ? 'clips notés' : 'images notées'} sur {casting.total} :
+        tu pourras encore noter après, mais plus à l'aveugle.
+      </p>
+    {/if}
     {#snippet pied()}
-      <Bouton genre="discret" onclick={() => (confirmerRevelation = false)}>Continuer à noter</Bouton>
+      <Bouton genre="discret" onclick={() => (confirmerRevelation = false)}>Pas encore</Bouton>
       <Bouton
         genre="principal"
         onclick={() => {
           confirmerRevelation = false;
           void agir((id) => revelerCasting(id));
-        }}>Révéler quand même</Bouton
+        }}>Révéler</Bouton
       >
     {/snippet}
   </Dialogue>
@@ -571,51 +650,53 @@
 {/if}
 
 <style>
-  .taches,
-  .castings {
+  /* Les cartes à onglet : une colonne par choix. */
+  .cartes {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 8px;
-    margin: 12px 0;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    align-items: stretch;
+    margin: 4px 0;
   }
 
-  .carte-tache {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 8px 10px;
-    border: 1px solid var(--ligne);
-    cursor: pointer;
+  .cartes.c3 {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
-  .carte-tache:has(input:checked) {
-    border-color: var(--cyan);
+  hr {
+    margin: 14px 0 10px;
+    border: 0;
+    border-top: 1px solid var(--ligne);
   }
 
-  .carte-tache.bloquee strong {
+  .etiquette {
+    margin: 0 0 6px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
     color: var(--texte-2);
-  }
-
-  .carte-tache input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  h3 {
-    margin: 14px 0 6px;
-    font-size: 14px;
   }
 
   h4 {
     margin: 0 0 6px;
+    font-size: 14px;
+  }
+
+  h5 {
+    margin: 0 0 6px;
     font-size: 13px;
+  }
+
+  .choix-casting {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0;
   }
 
   .candidats {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -623,13 +704,52 @@
 
   .candidats li {
     display: flex;
+    align-items: center;
     gap: 10px;
+  }
+
+  .coche {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .puce {
+    padding: 2px 10px;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .puce.ambre {
+    border-color: var(--ambre);
+    color: var(--ambre);
+  }
+
+  .essai-boite {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin: 12px 0 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--ligne);
+    background: var(--fond);
+  }
+
+  .essai-boite strong {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--texte-2);
   }
 
   .essais,
   .sauts,
   .tete,
-  .actions {
+  .actions,
+  .rendu {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -639,6 +759,10 @@
 
   .actions {
     justify-content: flex-end;
+  }
+
+  .rendu {
+    gap: 12px;
   }
 
   .essai {
@@ -680,16 +804,25 @@
 
   .resume {
     width: 100%;
-    margin: 10px 0;
+    margin: 4px 0 10px;
     border-collapse: collapse;
     font-size: 13px;
   }
 
   .resume th,
   .resume td {
-    padding: 4px 8px;
+    padding: 6px 10px 6px 0;
     border-bottom: 1px solid var(--ligne);
     text-align: left;
+    vertical-align: top;
+  }
+
+  .resume th {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--texte-2);
   }
 
   .meilleure {
@@ -721,6 +854,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: 2px;
     margin-top: 4px;
   }
@@ -731,12 +865,12 @@
     background: none;
     color: var(--texte-2);
     font: inherit;
-    font-size: 16px;
+    font-size: 18px;
     cursor: pointer;
   }
 
-  .etoile.allumee {
-    color: var(--orange);
+  .etoile.pleine {
+    color: var(--ambre);
   }
 
   .texte-prompt {

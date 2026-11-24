@@ -75,3 +75,54 @@ export function avancementPrompt(c: VueCasting, prompt: string): { notees: numbe
 
 /** Un clip se lit, une image se regarde. */
 export const estVideo = (fichier: string): boolean => fichier.toLowerCase().endsWith('.mp4');
+
+const ICONES_TACHES: Record<TacheCasting, string> = {
+  texte_vers_image: '🖼️',
+  retouche: '🖌️',
+  reecriture: '💬',
+  image_vers_video: '🎬',
+  texte_vers_video: '🎞️',
+};
+
+/** Le titre de la carte d'une tâche : son icône et son nom. */
+export function titreTache(tache: TacheCasting): string {
+  return `${ICONES_TACHES[tache]} ${NOMS_TACHES[tache]}`;
+}
+
+/** Les images (ou clips) qu'il reste à noter, tous castings à l'aveugle confondus. */
+export function aNoter(castings: Pick<ResumeCasting, 'revele' | 'notees' | 'total'>[]): number {
+  return castings.filter((c) => !c.revele).reduce((somme, c) => somme + Math.max(c.total - c.notees, 0), 0);
+}
+
+/**
+ * Les candidats d'un casting d'image ou de clip qui partiront : ceux qui sont complets et que tu n'as pas décochés.
+ * Au Casting LLM, tous les candidats passent : rien à choisir.
+ */
+export function candidatsChoisis(p: PreparationCasting, exclus: Record<string, boolean>): string[] {
+  if (p.tache === 'reecriture') return p.candidats.map((c) => c.id);
+  return p.candidats.filter((c) => c.manquants === 0 && !exclus[c.id]).map((c) => c.id);
+}
+
+/** Ce qui empêche le casting de partir, d'après les candidats cochés ; null s'il peut partir. */
+export function blocageChoix(p: PreparationCasting, choisis: string[]): string | null {
+  if (p.tache === 'reecriture') return p.blocage;
+  if (choisis.length < 2) return 'Coche au moins deux modèles prêts pour les comparer';
+  // Des candidats incomplets décochés : le blocage du cœur parle d'eux, le lancement dira le reste.
+  return p.candidats.every((c) => c.manquants === 0) ? p.blocage : null;
+}
+
+/** Combien d'images (ou de clips) produiraient les candidats cochés. */
+export function totalChoisi(p: PreparationCasting, choisis: string[]): number {
+  if (p.tache === 'reecriture') return p.total;
+  return choisis.length * p.essais.length * p.seeds.length;
+}
+
+/** Le seul modèle dont le bouton « Choisir par défaut » est orange : le mieux noté, s'il ne l'est pas déjà. */
+export function cleDuMeilleur(modeles: ModeleCasting[], parDefaut: string | null): string | null {
+  const notes = moyennes(modeles);
+  const max = Math.max(...notes.filter((n): n is number => n !== null));
+  if (!Number.isFinite(max)) return null;
+  const i = notes.findIndex((n) => n === max);
+  const cle = modeles[i]?.cle ?? null;
+  return cle !== null && cle !== parDefaut ? cle : null;
+}

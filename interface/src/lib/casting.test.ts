@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { PreparationCasting, VueCasting } from './api';
-import { avancementPrompt, estVideo, etatCasting, moyennes, nombreDe, resumeTache, unite } from './casting';
+import {
+  aNoter,
+  avancementPrompt,
+  blocageChoix,
+  candidatsChoisis,
+  cleDuMeilleur,
+  estVideo,
+  etatCasting,
+  moyennes,
+  nombreDe,
+  resumeTache,
+  titreTache,
+  totalChoisi,
+  unite,
+} from './casting';
 
 const preparation = (changements: Partial<PreparationCasting>): PreparationCasting => ({
   tache: 'texte_vers_image',
@@ -63,5 +77,46 @@ describe('casting', () => {
     expect(moyennes(c.modeles)).toEqual([3, null]);
     expect(avancementPrompt(c, 'portrait')).toEqual({ notees: 1, total: 2 });
     expect(estVideo('portrait_42.MP4')).toBe(true);
+  });
+
+  it('titre les cartes et compte ce qu’il reste à noter', () => {
+    expect(titreTache('texte_vers_image')).toBe('🖼️ Texte vers image');
+    expect(
+      aNoter([
+        { revele: false, notees: 2, total: 8 },
+        { revele: true, notees: 1, total: 8 },
+        { revele: false, notees: 0, total: 4 },
+      ]),
+    ).toBe(10);
+  });
+
+  it('choisit les candidats qui partent et dit ce qui empêche', () => {
+    const candidats = [
+      { id: 'a', nom: 'A', manquants: 0 },
+      { id: 'b', nom: 'B', manquants: 0 },
+      { id: 'c', nom: 'C', manquants: 3 },
+    ];
+    const p = preparation({ candidats, essais: [{ id: 'p1', prompt: 'x', teste: 'y' }], seeds: [1, 2], blocage: 'C pas complet' });
+    expect(candidatsChoisis(p, {})).toEqual(['a', 'b']);
+    expect(candidatsChoisis(p, { b: true })).toEqual(['a']);
+    expect(blocageChoix(p, ['a', 'b'])).toBeNull();
+    expect(blocageChoix(p, ['a'])).toBe('Coche au moins deux modèles prêts pour les comparer');
+    expect(totalChoisi(p, ['a', 'b'])).toBe(4);
+    const complets = preparation({ candidats: candidats.slice(0, 2), blocage: 'Images de départ à ajouter' });
+    expect(blocageChoix(complets, ['a', 'b'])).toBe('Images de départ à ajouter');
+    const llm = preparation({ tache: 'reecriture', candidats, total: 12 });
+    expect(candidatsChoisis(llm, { a: true })).toEqual(['a', 'b', 'c']);
+    expect(totalChoisi(llm, [])).toBe(12);
+  });
+
+  it('désigne le mieux noté, s’il n’est pas déjà par défaut', () => {
+    const modeles = [
+      { cle: 'A', nom: 'A', generations: [generation('p', 4)], resume: null, liberation: null },
+      { cle: 'B', nom: 'B', generations: [generation('p', 5)], resume: null, liberation: null },
+      { cle: 'C', nom: 'C', generations: [generation('p', null)], resume: null, liberation: null },
+    ];
+    expect(cleDuMeilleur(modeles, null)).toBe('B');
+    expect(cleDuMeilleur(modeles, 'B')).toBeNull();
+    expect(cleDuMeilleur(modeles.slice(2), null)).toBeNull();
   });
 });
