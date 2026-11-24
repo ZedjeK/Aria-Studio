@@ -348,6 +348,10 @@
             </div>
             {#if e.supprimable}
               <Bouton genre="discret" petit desactive={occupe} onclick={() => (aJeter = e)}>Supprimer</Bouton>
+            {:else}
+              <span class="discret a-la-main" title="La corbeille ne prend que les modèles téléchargés par Aria.">
+                Déposé à la main : à supprimer dans le dossier
+              </span>
             {/if}
           </li>
         {/each}
@@ -461,6 +465,13 @@
     display: flex;
     align-items: flex-start;
     gap: 12px;
+  }
+
+  .a-la-main {
+    flex: none;
+    max-width: 200px;
+    font-size: 12px;
+    text-align: right;
   }
 
   .texte {
