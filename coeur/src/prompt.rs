@@ -44,6 +44,14 @@ const ENTETE_REGLES: &str = "Rules of the target model. They shape the OPEN part
 pub const MOTS_MIN: u64 = 40;
 /// La longueur maximale d'un prompt d'image sans modèle cible, en mots.
 pub const MOTS_MAX_REECRITURE: u64 = 120;
+/// La longueur maximale d'une instruction de retouche, en mots : ce qui change, ce qui reste (« une ou deux phrases »).
+pub const MOTS_MAX_RETOUCHE: u64 = 60;
+/// La longueur maximale d'un prompt pour redessiner une image, en mots : ce qui change, puis ce qui reste.
+pub const MOTS_MAX_VARIATION: u64 = 70;
+/// La longueur maximale d'une création depuis des références, en mots : celle que dit sa consigne (« at most 90 words »).
+pub const MOTS_MAX_REFERENCES: u64 = 90;
+/// En dessous (un seul mot ou deux), une instruction d'édition est sans doute coupée.
+const MOTS_MIN_EDITION: u64 = 3;
 
 /// Une consigne d'usage, au gabarit de la v2.
 struct Gabarit {
@@ -100,7 +108,9 @@ const REECRITURE: Gabarit = Gabarit {
 /// la consigne du réécrivain de retouche de Qwen-Image 2.1).
 const RETOUCHE: Gabarit = Gabarit {
     role: "You translate image-editing instructions for an instruction-based image editing model.\nThe user writes an instruction, often in French. Rewrite it as a short English imperative instruction (one or two sentences).",
-    priorite: Some("Edit exactly what the user names. Keep the user's own action, target and details."),
+    priorite: Some(
+        "Edit exactly what the user names. Keep the user's own action, target and details. The picture, if you can see it, is only context: never describe it.",
+    ),
     remplace: &["plan", "texte"],
     plan: &[
         "Lead with the change the user names, and make it clear and unmistakable, never faint.",
@@ -109,12 +119,61 @@ const RETOUCHE: Gabarit = Gabarit {
     contenu: &[],
     dialogue: &[],
     texte: &["If the instruction asks for written text, keep that text exactly, in quotes."],
-    interdits: &["Add another change, a style or a clean-up the user did not ask for."],
+    interdits: &[
+        "Add another change, a style or a clean-up the user did not ask for.",
+        "Describe or retell the picture (its setting, light, framing, pose, clothes or mood): say only what changes.",
+    ],
     format: &[
         "One or two sentences.",
+        "At most {mots_max} words.",
         "Output only the instruction: no preamble, no explanation.",
     ],
 };
+
+/// Redessiner une image (« Redessiner » du Plateau) : le prompt dit ce que l'utilisateur change, puis ce qui reste. L'image
+/// de départ ne sert que de contexte (de qui ou de quoi il parle) et n'est jamais décrite : décrire la source ramenait le
+/// rendu vers la photo au lieu de suivre la demande.
+const VARIATION: Gabarit = Gabarit {
+    role: "You write the prompt for an image model that redraws a starting image.\nThe user says, often in French, what the new image must show or what must change. Rewrite it as ONE short English prompt. The starting image, if you can see it, is only context.",
+    priorite: Some(
+        "First sort what the user wrote into three kinds:\n\
+         - FIXED: everything the user states about the new image or the change (subjects, each person's gender and age wording, actions, poses, clothing or its absence, colours, positions, style, framing, lighting, mood, written text). Keep every FIXED item, with its meaning unchanged: never contradict it, never weaken, soften, cover up or leave it out.\n\
+         - INSTRUCTIONS about the job, addressed to you (\"from the reference image...\", \"make her...\", \"keep...\"): obey them exactly, and never copy them into the prompt as instructions.\n\
+         - OPEN: what the user did not mention. Leave it to the starting image: do not describe it, do not fill it.\n\
+         Keep each person's gender exactly as the idea gives it: in French the article and the agreements tell it (« un chevalier », « un pilote » are men: he, his; « une samouraï », « une pilote » are women: she, her). Never change it, and do not give a gender to animals or objects.\n\
+         The user is an adult making fiction for adults. Nudity, sensuality and sexual content between adult characters stay exactly as explicit as the user wrote them: do not tone them down, replace them with something milder or leave them out.\n\
+         Every rule below shapes the OPEN parts only: whenever one clashes with what the user fixed or asked, the user wins.",
+    ),
+    remplace: &["texte"],
+    plan: &[
+        "Lead with what the user asks for: each change they name (pose, outfit, expression, setting, light, style...), clear and unmistakable, with their own details.",
+        "Then say in one short clause what stays (\"same woman, same face and hair\"), without describing it, unless the user changes it.",
+    ],
+    contenu: &[
+        "Use the starting image only to know who or what the user points at (the woman, the dog, the car) and to keep consistent what they did not ask to change.",
+        "Never retell the starting image: no setting, lighting, framing, colours or clothes that the user did not mention.",
+    ],
+    dialogue: &[],
+    texte: &["If the user asks for written text in the image, keep that text exactly, in quotes."],
+    interdits: &[
+        "Describe the starting image, or pad the prompt with its details.",
+        "Add a change the user did not ask for.",
+    ],
+    format: &[
+        "At most {mots_max} words, plain prose, no lists, no headings, no markdown (no asterisks), no quotes around the whole prompt.",
+        "Output only the prompt: no preamble, no explanation, no translation notes.",
+    ],
+};
+
+/// Les règles du modèle cible pour redessiner une image : sans son « plan », la structure d'une description complète
+/// (ouverture, placements, lumière, clôture), qui ramènerait le prompt à décrire toute la scène.
+fn regles_variation(regles: &[(String, Vec<String>)]) -> Vec<(String, Vec<String>)> {
+    regles
+        .iter()
+        .filter(|(cle, _)| cle != "plan")
+        .cloned()
+        .collect()
+}
 
 /// Images de référence (« S'inspirer ») : une nouvelle scène, les références citées par leur numéro.
 const REFERENCES: Gabarit = Gabarit {
@@ -130,7 +189,7 @@ const REFERENCES: Gabarit = Gabarit {
     ],
     dialogue: &[],
     texte: &["If the user asks for written text in the image, keep that text exactly, in quotes."],
-    interdits: &[],
+    interdits: &["Retell what the reference pictures show: they are context, not the content to write."],
     format: &[
         "1 to 4 sentences, at most 90 words, plain prose, no markdown.",
         "Output only the instruction: no preamble, no explanation.",
@@ -288,12 +347,18 @@ pub fn bloc_usage(usage: &str, regles: &[(String, Vec<String>)], champs: bool) -
     let g = match usage {
         "retouche" => &RETOUCHE,
         "references" => &REFERENCES,
+        "variation" => &VARIATION,
         "video" if champs => &VIDEO_CHAMPS,
         "video" => &VIDEO,
         _ => &REECRITURE,
     };
+    let regles = if usage == "variation" {
+        regles_variation(regles)
+    } else {
+        regles.to_vec()
+    };
     let mut blocs = vec![ENTETE_USAGE.to_owned()];
-    blocs.extend(sections_usage(g, regles));
+    blocs.extend(sections_usage(g, &regles));
     blocs.join("\n\n")
 }
 
@@ -327,6 +392,7 @@ pub fn consigne_d_origine(usage: &str) -> Option<String> {
         "retouche" => Some(gabarit(&RETOUCHE, &[])),
         "precisions" => Some(PRECISIONS.to_owned()),
         "references" => Some(gabarit(&REFERENCES, &[])),
+        "variation" => Some(gabarit(&VARIATION, &[])),
         "video" => Some(gabarit(&VIDEO, &[])),
         "decoupage" => Some(crate::decoupage::CONSIGNE_DECOUPAGE.to_owned()),
         "directions" => Some(crate::directions::CONSIGNE_DIRECTIONS.to_owned()),
@@ -360,7 +426,18 @@ pub fn consigne_references(
 /// La consigne de traduction d'une instruction de retouche pour ce modèle cible, toujours suivie de la clause
 /// verrouillée. `reecrite` : celle de Réglages pour ce GGUF.
 pub fn consigne_retouche(reecrite: Option<&str>, regles: &[(String, Vec<String>)]) -> String {
-    consigne(&RETOUCHE, reecrite, None, regles)
+    consigne(&RETOUCHE, reecrite, Some(MOTS_MAX_RETOUCHE), regles)
+}
+
+/// La consigne d'un prompt pour redessiner une image, toujours suivie de la clause verrouillée. `reecrite` : celle de
+/// Réglages pour ce GGUF, qui garde son texte. Les règles du modèle cible y entrent sans leur « plan » (la structure
+/// d'une description complète) : ce prompt dit ce qui change, il ne décrit pas toute la scène.
+pub fn consigne_variation(
+    reecrite: Option<&str>,
+    mots_max: Option<u64>,
+    regles: &[(String, Vec<String>)],
+) -> String {
+    consigne(&VARIATION, reecrite, mots_max, &regles_variation(regles))
 }
 
 fn consigne(
@@ -563,6 +640,7 @@ pub fn preparer_video(
         lancement,
         specialiste: None,
         mots,
+        edition: false,
     })
 }
 
@@ -668,6 +746,8 @@ pub enum Defaut {
     Longueur { mots: u64, min: u64, max: u64 },
     Preambule,
     TexteCite,
+    /// Une instruction d'édition qui décrit l'image au lieu de dire ce qui change.
+    Description,
 }
 
 impl Defaut {
@@ -678,6 +758,7 @@ impl Defaut {
             Self::Longueur { mots, min, max } => format!("{mots} mots au lieu de {min} à {max}"),
             Self::Preambule => "commence par un préambule".to_owned(),
             Self::TexteCite => "le texte cité dans l'idée n'est pas repris mot pour mot".to_owned(),
+            Self::Description => "décrit l'image au lieu de dire ce qui change".to_owned(),
         }
     }
 
@@ -690,6 +771,7 @@ impl Defaut {
             }
             Self::Preambule => "it starts with a preamble instead of the prompt itself".to_owned(),
             Self::TexteCite => "the text quoted in the idea is not kept word for word".to_owned(),
+            Self::Description => "it describes the picture instead of saying what changes".to_owned(),
         }
     }
 }
@@ -756,6 +838,40 @@ pub fn defauts(texte: &str, idee: &str, attentes: &Attentes) -> Vec<Defaut> {
     sortie
 }
 
+/// Le texte commence par dire ce que montre l'image (« The image shows… », « In this photo… ») : il la décrit au lieu
+/// de dire ce qui change. Seules les ouvertures sans ambiguïté comptent : « A photograph of… » peut être le prompt
+/// voulu d'un rendu.
+fn decrit_l_image(texte: &str) -> bool {
+    Regex::new(
+        r"(?i)^\s*(?:(?:the|this)\s+(?:\w+\s+){0,2}(?:image|picture|photo|photograph)\s+(?:shows?|depicts?|features?|contains?|portrays?|is)\b|in\s+(?:the|this)\s+(?:\w+\s+)?(?:image|picture|photo|photograph)\b)",
+    )
+    .is_ok_and(|r| r.is_match(texte))
+}
+
+/// Les défauts d'une instruction d'édition (retouche, redessiner, mélanger) : ceux d'un prompt, sauf que la longueur n'a
+/// pas le minimum de 40 mots (une instruction est courte) mais son plafond, et que décrire l'image au lieu de dire ce
+/// qui change est un défaut.
+pub fn defauts_edition(texte: &str, idee: &str, attentes: &Attentes) -> Vec<Defaut> {
+    let sans_longueur = Attentes {
+        mots_max: None,
+        ..*attentes
+    };
+    let mut sortie = defauts(texte, idee, &sans_longueur);
+    let max = attentes.mots_max.unwrap_or(MOTS_MAX_RETOUCHE);
+    let mots = u64::try_from(controler(texte, idee, None).mots).unwrap_or(u64::MAX);
+    if !(MOTS_MIN_EDITION..=max + marge(max)).contains(&mots) {
+        sortie.push(Defaut::Longueur {
+            mots,
+            min: MOTS_MIN_EDITION,
+            max,
+        });
+    }
+    if decrit_l_image(texte) {
+        sortie.push(Defaut::Description);
+    }
+    sortie
+}
+
 fn liste(defauts: &[Defaut]) -> String {
     defauts
         .iter()
@@ -811,9 +927,17 @@ pub fn ecrire_controle(
     attentes: &Attentes,
     mut appeler: impl FnMut(&Demande) -> Result<String, String>,
 ) -> Result<Controle, String> {
+    // Une instruction d'édition se juge à sa façon : courte, et sans décrire l'image.
+    let juger = |t: &str| {
+        if ecriture.edition {
+            defauts_edition(t, idee, attentes)
+        } else {
+            defauts(t, idee, attentes)
+        }
+    };
     let premiere = appeler(&ecriture.demande)?;
     let texte = extraire(ecriture, idee, &premiere)?;
-    let defauts_un = defauts(&texte, idee, attentes);
+    let defauts_un = juger(&texte);
     if defauts_un.is_empty() {
         return Ok(Controle {
             texte,
@@ -838,7 +962,7 @@ pub fn ecrire_controle(
     };
     let (garde, restants) = match second {
         Some(t) => {
-            let defauts_deux = defauts(&t, idee, attentes);
+            let defauts_deux = juger(&t);
             if defauts_deux.len() <= defauts_un.len() {
                 (t, defauts_deux)
             } else {
@@ -1074,6 +1198,9 @@ pub struct Ecriture {
     pub specialiste: Option<Value>,
     /// La longueur conseillée au LLM, en mots ; rien quand la consigne n'en donne pas.
     pub mots: Option<u64>,
+    /// Une instruction d'édition (retouche, redessiner, mélanger) : courte, elle dit ce qui change sans décrire l'image,
+    /// et son contrôle qualité le vérifie ([`defauts_edition`]).
+    pub edition: bool,
 }
 
 impl Ecriture {
@@ -1112,6 +1239,7 @@ pub fn preparer_reecriture(
             demande,
             specialiste: Some(s),
             mots: None,
+            edition: false,
         });
     }
     let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
@@ -1123,12 +1251,22 @@ pub fn preparer_reecriture(
     let regle = llm::valeurs(&lieux.dossier, &nom);
     let noms = nom_image(workflow);
     let voit = lancement.vision.is_some();
+    // Mélanger (références) et Redessiner (image de départ) écrivent une instruction courte : ce qui change, jamais la
+    // description des images.
+    let edition = images.references > 0 || !images.vues.is_empty();
     let (systeme, contenu, mots) = if images.references > 0 {
         let reecrite = llm::consigne(&lieux.dossier, &nom, "references");
         let systeme = consigne_references(reecrite.as_deref(), &sections_prompt(workflow), noms.as_deref());
         let texte = format!("{idee}\n\n(Reference pictures: {})", images.references);
         let contenu = montrer(&texte, images.vues, "references", voit, noms.as_deref());
-        (systeme, contenu, None)
+        (systeme, contenu, Some(MOTS_MAX_REFERENCES))
+    } else if !images.vues.is_empty() {
+        // La longueur de la fiche du modèle cible (450 mots pour une description complète) ne vaut pas ici.
+        let de_la_fiche = mots_max_de(workflow, reglages_workflow);
+        let mots = Some(de_la_fiche.map_or(MOTS_MAX_VARIATION, |m| m.min(MOTS_MAX_VARIATION)));
+        let reecrite = llm::consigne(&lieux.dossier, &nom, "variation");
+        let systeme = consigne_variation(reecrite.as_deref(), mots, &sections_prompt(workflow));
+        (systeme, montrer(idee, images.vues, "variation", voit, None), mots)
     } else {
         let mots = mots_max_de(workflow, reglages_workflow);
         let reecrite = llm::consigne(&lieux.dossier, &nom, "reecriture");
@@ -1150,6 +1288,7 @@ pub fn preparer_reecriture(
         lancement,
         specialiste: None,
         mots,
+        edition,
     })
 }
 
@@ -1166,13 +1305,13 @@ pub struct Vue {
 fn note_vue(usage: &str) -> &'static str {
     match usage {
         "retouche" => {
-            "The picture is the image to edit: name what is really in it (subjects and their gender, objects, setting) so that the instruction fits it."
+            "The picture is the image to edit. It is only context: use it to know what the user points at (which person or object, their gender), never to describe it. Write the instruction the user asked for."
         }
         "variation" => {
-            "The picture is the starting image, partly redrawn: keep its subjects (their gender, looks, clothing), setting and visual style unless the idea changes them."
+            "The picture is the starting image, redrawn. It is only context: use it to know who or what the user points at (their gender included), never to describe it. Write what the user asks to change, then say the rest stays."
         }
         "references" => {
-            "The pictures are the reference pictures, in order (Picture 1, Picture 2…): take from each what the idea asks for, as it really looks."
+            "The pictures are the reference pictures, in order (Picture 1, Picture 2…). They are only context: use them to know what each number means, never to describe them. Write what the user asks for."
         }
         _ => {
             "The picture is the first frame of the clip. Open with one short sentence anchoring it as it really is (visual style, subject, setting), then describe what happens from there. Keep the subjects' gender, looks and clothing, the setting and the visual style consistent (a painting stays a painting)."
@@ -1244,6 +1383,7 @@ pub fn preparer_traduction(
             demande,
             specialiste: Some(s),
             mots: None,
+            edition: false,
         });
     }
     let nom = if crate::fiches::specialiste(&demande_nom).is_some() {
@@ -1276,7 +1416,8 @@ pub fn preparer_traduction(
         },
         lancement,
         specialiste: None,
-        mots: None,
+        mots: Some(MOTS_MAX_RETOUCHE),
+        edition: true,
     })
 }
 
@@ -1326,6 +1467,7 @@ pub fn preparer_precisions(
         lancement,
         specialiste: None,
         mots: None,
+        edition: false,
     })
 }
 
@@ -1372,6 +1514,7 @@ mod tests {
             },
             specialiste: None,
             mots,
+            edition: false,
         }
     }
 
@@ -1772,7 +1915,7 @@ mod tests {
         .unwrap();
         let e =
             preparer_reecriture(&l, "un renard", Some(T2I), Some(&qwen), None, &Images::default()).unwrap();
-        assert!(e.specialiste.is_some());
+        assert!(e.specialiste.is_some() && !e.edition);
         assert_eq!(systeme(&e), format!("Rewrite the prompt.\n\n{CLAUSE_MINEURS}"));
         assert_eq!((e.demande.max_tokens, e.demande.budget_reflexion), (8192, 0));
         assert!((e.demande.temperature - 1.0).abs() < f64::EPSILON);
@@ -1789,6 +1932,15 @@ mod tests {
             .unwrap(),
             "A fox"
         );
+        // Redessiner une image : le spécialiste écrit toujours avec sa propre consigne, comme avant.
+        let depart = [vue(None)];
+        let variation = Images {
+            references: 0,
+            vues: &depart,
+        };
+        let e = preparer_reecriture(&l, "un renard", Some(T2I), Some(&qwen), None, &variation).unwrap();
+        assert!(e.specialiste.is_some() && !e.edition);
+        assert_eq!(systeme(&e), format!("Rewrite the prompt.\n\n{CLAUSE_MINEURS}"));
         // Pour un autre workflow, le spécialiste cède la place au LLM par défaut.
         let krea = workflows::obtenir("krea2_turbo").unwrap();
         let e =
@@ -1815,8 +1967,13 @@ Edit exactly what the user names."
         ));
         assert!(c.contains(
             "OUTPUT FORMAT:
-- One or two sentences."
+- One or two sentences.
+- At most 60 words."
         ));
+        // L'image n'est que du contexte : jamais décrite.
+        assert!(c.contains("The picture, if you can see it, is only context: never describe it."));
+        assert!(c.contains("Describe or retell the picture"));
+        assert!(!c.contains('{'));
         assert!(c.ends_with(CLAUSE_MINEURS));
     }
 
@@ -1900,6 +2057,9 @@ Picture 2: a dog"
             "ROLE:
 You translate image-editing instructions"
         ));
+        // Une instruction courte, contrôlée comme telle.
+        assert_eq!((e.mots, e.edition), (Some(MOTS_MAX_RETOUCHE), true));
+        assert!(systeme(&e).contains("At most 60 words."));
         assert_eq!((e.demande.max_tokens, e.demande.reflechir), (200, false));
         assert!((e.demande.temperature - 0.2).abs() < f64::EPSILON);
         assert!(
@@ -1926,6 +2086,8 @@ You translate image-editing instructions"
         fs::write(llm_dir.join("Qwen-Image-2.1-PE-I2I.consigne.txt"), "Edit.").unwrap();
         let e = preparer_traduction(&l, "fais-la rire", Some(i2i), Some(&edit), Some(&vue(None))).unwrap();
         assert!(e.specialiste.is_some());
+        // Le spécialiste garde sa consigne et son contrôle : rien ne change pour lui.
+        assert!(!e.edition);
         assert_eq!(e.demande.messages[1]["content"][0]["type"], json!("image_url"));
         assert_eq!(e.demande.messages[1]["content"][1]["text"], json!("fais-la rire"));
         // Une précision d'agrandissement, sans image : jamais le spécialiste.
@@ -1966,6 +2128,9 @@ You translate image-editing instructions"
         assert!(consigne.starts_with("ROLE:
 You write instructions for an image model that receives reference pictures, numbered <image1>, <image2>, <image3>."));
         assert!(consigne.contains("\"the woman from <image1>\""));
+        assert!(consigne.contains("at most 90 words"));
+        assert!(consigne.contains("Retell what the reference pictures show"));
+        assert_eq!((e.mots, e.edition), (Some(MOTS_MAX_REFERENCES), true));
         assert!(consigne.ends_with(CLAUSE_MINEURS));
         let message = e.demande.messages[1]["content"].as_str().unwrap();
         assert!(message.starts_with(
@@ -1986,7 +2151,7 @@ You write instructions for an image model that receives reference pictures, numb
         )
         .unwrap();
         assert!(e.specialiste.is_none());
-        // Une variation : la consigne de réécriture, l'image de départ décrite.
+        // Redessiner : ce qui change, puis ce qui reste ; l'image de départ décrite n'est que du contexte.
         let depart = [vue(Some("a red fox"))];
         let variation = Images {
             references: 0,
@@ -2004,13 +2169,137 @@ You write instructions for an image model that receives reference pictures, numb
         .unwrap();
         assert!(systeme(&e).starts_with(
             "ROLE:
-You are an expert prompt writer"
+You write the prompt for an image model that redraws a starting image."
         ));
+        // 70 mots au plus, pas les 150 de la fiche de Krea 2 : on dit ce qui change, on ne décrit pas la scène.
+        assert_eq!((e.mots, e.edition), (Some(MOTS_MAX_VARIATION), true));
+        assert!(systeme(&e).contains("At most 70 words"));
+        let message = e.demande.messages[1]["content"].as_str().unwrap();
+        assert!(message.contains("it was created from this prompt: a red fox"));
+        assert!(message.contains("never to describe it"));
+        // Sa consigne se réécrit dans Réglages sous sa propre clé : celle de la réécriture ne s'y applique plus.
+        fs::write(
+            l.dossier.reglages(),
+            r#"{"llm": {"mistral.gguf": {"consignes": {"reecriture": "Ecris long.", "variation": "Dis ce qui change en {mots_max} mots."}}}}"#,
+        )
+        .unwrap();
+        let e = preparer_reecriture(
+            &l,
+            "en hiver",
+            Some("mistral.gguf"),
+            Some(&krea),
+            None,
+            &variation,
+        )
+        .unwrap();
+        assert!(systeme(&e).starts_with("Dis ce qui change en 70 mots.\n\n"));
+    }
+
+    #[test]
+    fn redessiner_ecrit_ce_qui_change_sans_decrire_l_image() {
+        let c = consigne_variation(None, Some(MOTS_MAX_VARIATION), &[]);
+        assert!(c.starts_with("ROLE:\nYou write the prompt for an image model that redraws"));
+        assert!(c.contains("PROMPT OUTLINE, in this order:\n1. Lead with what the user asks for"));
+        assert!(c.contains("Never retell the starting image"));
+        assert!(c.contains("OUTPUT FORMAT:\n- At most 70 words, plain prose"));
+        assert!(c.ends_with(CLAUSE_MINEURS));
+        // Les règles de genre et pour adultes des autres consignes y sont aussi.
+        assert!(c.contains(GENRE) && c.contains(ADULTES));
+        // Rien de la réécriture d'une description complète.
+        assert!(!c.contains("Make the OPEN parts visual") && !c.contains("40 to"));
+        assert!(!c.contains('{'));
+        // Les règles du modèle cible entrent sans leur « plan » : Qwen-Image 2.1 y range une description entière.
+        let qwen = workflows::obtenir("qwen_image_2_1").unwrap();
+        let regles = sections_prompt(Some(&qwen));
+        assert!(regles.iter().any(|(cle, _)| cle == "plan"));
+        let avec = consigne_variation(None, Some(MOTS_MAX_VARIATION), &regles);
+        assert!(!avec.contains("Open with one sentence naming the medium"));
+        assert!(avec.contains("Name colours with a modifier"));
+        // La conversation écrit avec les mêmes règles.
+        let bloc = bloc_usage("variation", &regles, false);
+        assert!(bloc.contains("Never retell the starting image") && !bloc.contains("Open with one sentence"));
+        // Réglages la montre avec ses repères.
+        assert!(consigne_d_origine("variation").is_some_and(|c| c.contains("{mots_max}")));
+    }
+
+    #[test]
+    fn une_instruction_d_edition_est_courte_et_ne_decrit_pas_l_image() {
+        let attentes = Attentes {
+            mots_max: Some(MOTS_MAX_RETOUCHE),
+            anglais: true,
+        };
+        let bonne = "Give her a new daring pose and outfit. Keep everything else unchanged.";
+        assert!(defauts_edition(bonne, "rends la femme plus provocante", &attentes).is_empty());
+        // Une instruction n'a pas à faire 40 mots, un prompt d'image si.
         assert!(
-            e.demande.messages[1]["content"]
+            defauts(bonne, "", &attentes)
+                .iter()
+                .any(|d| matches!(d, Defaut::Longueur { .. }))
+        );
+        // Elle dit ce qui change : décrire l'image est un défaut.
+        let decrit = "The image shows a woman on a sunlit beach at golden hour, with waves behind her.";
+        let trouves = defauts_edition(decrit, "", &attentes);
+        assert_eq!(trouves, [Defaut::Description]);
+        // Trop longue : la scène redécrite.
+        assert_eq!(
+            defauts_edition(&texte_de(150), "", &attentes),
+            [Defaut::Longueur {
+                mots: 150,
+                min: MOTS_MIN_EDITION,
+                max: MOTS_MAX_RETOUCHE
+            }]
+        );
+        // Coupée.
+        assert_eq!(
+            defauts_edition("Smile.", "", &attentes),
+            [Defaut::Longueur {
+                mots: 1,
+                min: MOTS_MIN_EDITION,
+                max: MOTS_MAX_RETOUCHE
+            }]
+        );
+        // Les autres contrôles restent.
+        let preambule = "Sure! Make the woman more daring and keep everything else unchanged.";
+        let trouves = defauts_edition(preambule, "", &attentes);
+        assert_eq!(trouves, [Defaut::Preambule]);
+        // Seules les ouvertures de description sans ambiguïté comptent.
+        assert!(decrit_l_image("In this photo, the woman stands by a window."));
+        assert!(decrit_l_image("This picture is a portrait of a woman."));
+        assert!(!decrit_l_image("A photograph of the woman from Picture 1, now in a red dress."));
+        assert!(!decrit_l_image("Make the picture warmer and keep everything else unchanged."));
+    }
+
+    #[test]
+    fn une_description_de_l_image_est_redemandee() {
+        let e = Ecriture {
+            edition: true,
+            ..ecriture_de_test(Some(MOTS_MAX_RETOUCHE))
+        };
+        let attentes = e.attentes(None);
+        let decrit = "The image shows a woman on a sunlit beach at golden hour, with waves behind her.";
+        let bonne = "Give her a new daring pose and outfit. Keep everything else unchanged.";
+        let mut demandes = Vec::new();
+        let c = ecrire_controle(&e, "rends la femme plus provocante", &attentes, |d| {
+            demandes.push(d.messages.clone());
+            Ok(if demandes.len() == 1 {
+                decrit.to_owned()
+            } else {
+                bonne.to_owned()
+            })
+        })
+        .unwrap();
+        assert_eq!(c.texte, bonne);
+        assert_eq!(
+            c.redemande.as_deref(),
+            Some("décrit l'image au lieu de dire ce qui change")
+        );
+        assert!(c.reste.is_none());
+        let relance = demandes[1].as_array().unwrap();
+        assert!(
+            relance[2]["content"]
                 .as_str()
                 .unwrap()
-                .contains("it was created from this prompt: a red fox")
+                .contains("it describes the picture instead of saying what changes")
         );
     }
 }

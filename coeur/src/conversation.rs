@@ -701,6 +701,7 @@ pub fn tour(
     let regles = prompt::sections_prompt(wf.as_ref());
     let usage = match forme {
         "image" if !vues.is_empty() && role == "inspirer" => Some("references"),
+        "image" if !vues.is_empty() && role == "variation" => Some("variation"),
         "image" => Some("reecriture"),
         "clip" => Some("video"),
         "retouche" => Some("retouche"),

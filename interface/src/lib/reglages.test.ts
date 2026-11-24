@@ -52,6 +52,7 @@ describe('Réglages', () => {
     expect(libelleChoix(moteur, 'auto')).toBe('Automatique');
     expect(libelleChoix(moteur, 'llama')).toBe('llama');
     expect(nomConsigne('retouche')).toBe('Consigne de retouche');
+    expect(nomConsigne('variation')).toBe('Redessiner une image');
     expect(nomConsigne('decoupage')).toBe('Découpage d’une séquence');
     expect(nomConsigne('directions')).toBe('Directions proposées');
     expect(nomConsigne('verification')).toBe('Vérification d’une image');
