@@ -180,6 +180,46 @@ pub fn analyser(json: &str, actuelle: impl Into<Actuelle>) -> Option<MiseAJour> 
     })
 }
 
+/// Ce que dit la réponse de `releases/latest` à qui la cherche à la demande (« Vérifier maintenant »).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Recherche {
+    /// Une version plus récente, prête à être proposée.
+    Disponible(MiseAJour),
+    /// La version en cours est la dernière publiée.
+    AJour,
+    /// Une version plus récente est annoncée, mais son zip, son empreinte ou son adresse ne sont pas ceux
+    /// d'une release de ce dépôt : rien n'est proposé.
+    Inexploitable(Version),
+    /// La réponse n'est pas une release lisible.
+    Illisible,
+}
+
+/// Lit la réponse de `releases/latest` : comme [`analyser`], mais en disant pourquoi il n'y a rien à proposer.
+/// Une version publiée plus récente dont le zip est inexploitable n'est jamais annoncée « à jour ».
+pub fn rechercher(json: &str, actuelle: impl Into<Actuelle>) -> Recherche {
+    let actuelle = actuelle.into();
+    if let Some(maj) = analyser(json, actuelle) {
+        return Recherche::Disponible(maj);
+    }
+    let Ok(racine) = serde_json::from_str::<Value>(json) else {
+        return Recherche::Illisible;
+    };
+    let Some(version) = texte(&racine, "tag_name")
+        .and_then(|tag| tag.strip_prefix('v'))
+        .and_then(lire_version)
+    else {
+        return Recherche::Illisible;
+    };
+    let publiee = ["draft", "prerelease"]
+        .iter()
+        .all(|&cle| racine.get(cle).and_then(Value::as_bool) != Some(true));
+    if publiee && actuelle.precede(version) {
+        Recherche::Inexploitable(version)
+    } else {
+        Recherche::AJour
+    }
+}
+
 /// Le dossier de travail des mises à jour, dans le cache.
 pub fn dossier_travail(dossier: &crate::Dossier) -> PathBuf {
     dossier.cache().join("mise-a-jour")
@@ -393,6 +433,40 @@ mod tests {
         let brouillon = reponse("v1.2.0", &nom, &bonne, &digest).replace("\"draft\":false", "\"draft\":true");
         assert!(analyser(&brouillon, (1, 0, 0)).is_none());
         assert!(analyser("pas du json", (1, 0, 0)).is_none());
+    }
+
+    #[test]
+    fn la_recherche_a_la_demande_dit_pourquoi() {
+        let nom = zip_attendu("1.2.0");
+        let bonne = format!("{}v1.2.0/{nom}", prefixe_telechargement());
+        let digest = format!("sha256:{}", "0".repeat(64));
+        let release = reponse("v1.2.0", &nom, &bonne, &digest);
+        // Plus récente et complète : proposée.
+        let proposee = rechercher(&release, (1, 1, 0));
+        let Recherche::Disponible(maj) = proposee else {
+            panic!("une version plus récente doit être proposée : {proposee:?}");
+        };
+        assert_eq!(maj.version, (1, 2, 0));
+        // Même version, plus ancienne, ou exe d'essai d'une version déjà dépassée : à jour.
+        assert_eq!(rechercher(&release, (1, 2, 0)), Recherche::AJour);
+        assert_eq!(rechercher(&release, (2, 0, 0)), Recherche::AJour);
+        // Une version plus récente sans zip lisible n'est pas « à jour » : la recherche le dit.
+        let sans_zip = reponse("v1.2.0", "autre-nom.zip", &bonne, &digest);
+        assert_eq!(
+            rechercher(&sans_zip, (1, 1, 0)),
+            Recherche::Inexploitable((1, 2, 0))
+        );
+        assert_eq!(rechercher(&sans_zip, (1, 2, 0)), Recherche::AJour);
+        // Une préversion ou un brouillon ne compte pas.
+        let brouillon = release.replace("\"draft\":false", "\"draft\":true");
+        assert_eq!(rechercher(&brouillon, (1, 1, 0)), Recherche::AJour);
+        // Pas du JSON, ou pas de version lisible.
+        assert_eq!(rechercher("pas du json", (1, 1, 0)), Recherche::Illisible);
+        assert_eq!(rechercher("{}", (1, 1, 0)), Recherche::Illisible);
+        assert_eq!(
+            rechercher(&reponse("1.2.0", &nom, &bonne, &digest), (1, 1, 0)),
+            Recherche::Illisible
+        );
     }
 
     #[test]

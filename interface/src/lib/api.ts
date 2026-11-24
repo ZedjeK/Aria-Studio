@@ -1181,6 +1181,14 @@ export interface InfosMiseAJour {
 export const miseAJourDisponible = (): Promise<InfosMiseAJour | null> =>
   invoke<InfosMiseAJour | null>('mise_a_jour_disponible');
 
+/**
+ * « Vérifier maintenant » : une seule requête anonyme vers GitHub (la dernière release du dépôt de l'appli), à la
+ * demande. Rend la version trouvée, ou null quand l'appli est à jour ; l'erreur dit ce qui a manqué. Rien n'est
+ * téléchargé ni installé.
+ */
+export const chercherMiseAJour = (): Promise<InfosMiseAJour | null> =>
+  invoke<InfosMiseAJour | null>('chercher_mise_a_jour');
+
 /** Ouvre la page de la release dans le navigateur. */
 export const voirNotes = (): Promise<void> => invoke<void>('voir_notes');
 
