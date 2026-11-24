@@ -23,11 +23,12 @@ use crate::{Dossier, prompt, reglages};
 /// Une consigne réécrite fait au plus 4 000 caractères.
 pub const LONGUEUR_CONSIGNE: usize = 4000;
 /// Les usages dont la consigne se réécrit déjà dans cette version.
-pub const CONSIGNES: [&str; 10] = [
+pub const CONSIGNES: [&str; 11] = [
     "reecriture",
     "retouche",
     "precisions",
     "references",
+    "variation",
     "video",
     "decoupage",
     "directions",
