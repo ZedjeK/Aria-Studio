@@ -70,8 +70,8 @@ describe('casting', () => {
       notees: 2,
       total: 4,
       modeles: [
-        { cle: 'A', nom: 'Modèle A', generations: [generation('portrait', 4), generation('neon', 2)], resume: null, liberation: null },
-        { cle: 'B', nom: 'Modèle B', generations: [generation('portrait', null), generation('neon', null)], resume: null, liberation: null },
+        { cle: 'A', nom: 'Modèle A', generations: [generation('portrait', 4), generation('neon', 2)], resume: null, liberation: null, choisissable: true },
+        { cle: 'B', nom: 'Modèle B', generations: [generation('portrait', null), generation('neon', null)], resume: null, liberation: null, choisissable: true },
       ],
     };
     expect(moyennes(c.modeles)).toEqual([3, null]);
@@ -111,12 +111,21 @@ describe('casting', () => {
 
   it('désigne le mieux noté, s’il n’est pas déjà par défaut', () => {
     const modeles = [
-      { cle: 'A', nom: 'A', generations: [generation('p', 4)], resume: null, liberation: null },
-      { cle: 'B', nom: 'B', generations: [generation('p', 5)], resume: null, liberation: null },
-      { cle: 'C', nom: 'C', generations: [generation('p', null)], resume: null, liberation: null },
+      { cle: 'A', nom: 'A', generations: [generation('p', 4)], resume: null, liberation: null, choisissable: true },
+      { cle: 'B', nom: 'B', generations: [generation('p', 5)], resume: null, liberation: null, choisissable: true },
+      { cle: 'C', nom: 'C', generations: [generation('p', null)], resume: null, liberation: null, choisissable: true },
     ];
     expect(cleDuMeilleur(modeles, null)).toBe('B');
     expect(cleDuMeilleur(modeles, 'B')).toBeNull();
     expect(cleDuMeilleur(modeles.slice(2), null)).toBeNull();
+  });
+
+  it('ne désigne jamais le témoin « Sans LLM » : il n’est pas un LLM par défaut possible', () => {
+    const modeles = [
+      { cle: 'bonsai', nom: 'bonsai', generations: [generation('p', 3)], resume: null, liberation: null, choisissable: true },
+      { cle: 'temoin', nom: 'Sans LLM (témoin)', generations: [generation('p', 5)], resume: null, liberation: null, choisissable: false },
+    ];
+    expect(cleDuMeilleur(modeles, null)).toBeNull();
+    expect(cleDuMeilleur(modeles.slice(0, 1), null)).toBe('bonsai');
   });
 });

@@ -992,6 +992,8 @@ pub fn vue(contexte: &Contexte, id: &str) -> Result<Value, String> {
             "generations": gens,
             "resume": if est_revele { w.get("resume").cloned().unwrap_or(Value::Null) } else { Value::Null },
             "liberation": if est_revele { w.get("liberation").cloned().unwrap_or(Value::Null) } else { Value::Null },
+            // Le témoin n'a pas de bouton « Choisir par défaut » ; à l'aveugle, rien ne le trahit.
+            "choisissable": !est_revele || peut_etre_par_defaut(&tache, w),
         }));
     }
     Ok(json!({
@@ -1055,24 +1057,41 @@ pub fn reveler(data: &Path, id: &str) -> Result<(), String> {
     ecrire(data, &r)
 }
 
+/// Ce que dit le choix du témoin « Sans LLM » : il n'est pas un LLM, il ne peut pas être le LLM par défaut.
+const TEMOIN_SANS_DEFAUT: &str = "« Sans LLM (témoin) » n'est pas un LLM : il ne peut pas être le LLM par défaut. \
+     Choisis un des modèles ; pour écrire sans LLM, laisse la réécriture décochée au Plateau.";
+
+/// Ce modèle peut-il devenir le modèle par défaut de sa tâche ? Tout modèle, sauf le témoin d'un Casting LLM, qui
+/// n'a pas de fichier : un LLM par défaut vide ne coupe pas le LLM, il fait retomber l'appli sur un autre GGUF.
+fn peut_etre_par_defaut(tache: &str, workflow: &Value) -> bool {
+    tache != "reecriture" || !texte(workflow, "fichier").is_empty()
+}
+
 /// Fait du modèle choisi le modèle par défaut de sa tâche (`favoris.generation.<tâche>`, ou `favoris.llama.modele`
-/// pour un Casting LLM : le témoin gagnant veut dire « pas de LLM », un modèle vide).
+/// pour un Casting LLM). Le témoin « Sans LLM » d'un Casting LLM est refusé : « pas de LLM » n'est pas un état de
+/// l'appli (le LLM par défaut retomberait sur un autre GGUF sans le dire).
 ///
 /// # Errors
-/// Casting pas encore révélé, modèle inconnu, ou fichiers qui ne s'écrivent pas.
+/// Casting pas encore révélé, modèle inconnu, témoin d'un Casting LLM, ou fichiers qui ne s'écrivent pas.
 pub fn choisir_favori(contexte: &Contexte, id: &str, workflow: &str) -> Result<(), String> {
     let mut r = charger(&contexte.data, id)?;
     if !revele(&r) {
         return Err("Révèle d'abord les modèles".to_owned());
     }
     workflow_de(&r, workflow)?;
-    r.insert("favori".to_owned(), json!(workflow));
-    ecrire(&contexte.data, &r)?;
     let tache = r
         .get("tache")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned();
+    let ok = workflows_de(&r)
+        .get(workflow)
+        .is_some_and(|w| peut_etre_par_defaut(&tache, w));
+    if !ok {
+        return Err(TEMOIN_SANS_DEFAUT.to_owned());
+    }
+    r.insert("favori".to_owned(), json!(workflow));
+    ecrire(&contexte.data, &r)?;
     let (section, cle, valeur) = if tache == "reecriture" {
         let fichier = workflows_de(&r)
             .get(workflow)
@@ -1522,6 +1541,72 @@ mod tests {
         assert_eq!(favoris["generation"]["texte_vers_image"], "qwen_image_2_1");
         assert_eq!(vue(&ctx, &id).unwrap()["par_defaut"], "qwen_image_2_1");
         assert!(charger(&ctx.data, "../x").is_err());
+    }
+
+    /// Un Casting LLM révélé : un GGUF et le témoin « Sans LLM ».
+    fn casting_llm_revele(data: &Path) -> String {
+        let id = "2026-11-25_101500_reecriture";
+        let d = dossier_bancs(data).join(id);
+        fs::create_dir_all(&d).unwrap();
+        let r = json!({
+            "id": id, "tache": "reecriture", "date": "2026-11-25T10:15:00", "seeds": [42],
+            "prompts": [], "vram_base_go": 0.4, "revele": true, "aveugle": ["temoin", "bonsai"],
+            "workflows": {
+                "bonsai": {"nom": "bonsai", "fichier": "bonsai.gguf", "generations": [], "resume": null},
+                "temoin": {"nom": "Sans LLM (témoin)", "fichier": null, "generations": [], "resume": null},
+            },
+            "notes": {}, "favori": null,
+        });
+        fs::write(
+            d.join("resultats.json"),
+            serde_json::to_string_pretty(&r).unwrap(),
+        )
+        .unwrap();
+        id.to_owned()
+    }
+
+    #[test]
+    fn le_temoin_n_est_pas_un_llm_par_defaut() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let id = casting_llm_revele(&ctx.data);
+        let v = vue(&ctx, &id).unwrap();
+        let choisissable = |cle: &str| {
+            let modele = v["modeles"].as_array().unwrap().iter().find(|m| m["cle"] == cle);
+            modele.unwrap()["choisissable"].clone()
+        };
+        assert_eq!(choisissable("bonsai"), json!(true));
+        assert_eq!(choisissable("temoin"), json!(false));
+
+        let refus = choisir_favori(&ctx, &id, "temoin").unwrap_err();
+        assert!(refus.contains("n'est pas un LLM"), "{refus}");
+        // Rien n'a été écrit : ni le favori du casting, ni le LLM par défaut.
+        assert_eq!(charger(&ctx.data, &id).unwrap()["favori"], Value::Null);
+        let favoris = reglages::section(&ctx.dossier, "favoris");
+        assert!(favoris.is_none_or(|f| f.get("llama").is_none()));
+
+        choisir_favori(&ctx, &id, "bonsai").unwrap();
+        let favoris = reglages::section(&ctx.dossier, "favoris").unwrap();
+        assert_eq!(favoris["llama"]["modele"], "bonsai.gguf");
+        assert_eq!(vue(&ctx, &id).unwrap()["favori"], "bonsai");
+    }
+
+    #[test]
+    fn a_l_aveugle_rien_ne_trahit_le_temoin() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = contexte(&temp);
+        let id = casting_llm_revele(&ctx.data);
+        let mut r = charger(&ctx.data, &id).unwrap();
+        r.insert("revele".to_owned(), json!(false));
+        ecrire(&ctx.data, &r).unwrap();
+        let v = vue(&ctx, &id).unwrap();
+        assert!(
+            v["modeles"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|m| m["choisissable"] == json!(true))
+        );
     }
 
     #[test]

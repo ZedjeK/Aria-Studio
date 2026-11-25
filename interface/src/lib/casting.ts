@@ -117,12 +117,16 @@ export function totalChoisi(p: PreparationCasting, choisis: string[]): number {
   return choisis.length * p.essais.length * p.seeds.length;
 }
 
-/** Le seul modèle dont le bouton « Choisir par défaut » est orange : le mieux noté, s'il ne l'est pas déjà. */
+/**
+ * Le seul modèle dont le bouton « Choisir par défaut » est orange : le mieux noté, s'il ne l'est pas déjà et s'il peut
+ * l'être (le témoin « Sans LLM » d'un Casting LLM n'est pas un LLM : s'il gagne, aucun bouton n'est orange).
+ */
 export function cleDuMeilleur(modeles: ModeleCasting[], parDefaut: string | null): string | null {
   const notes = moyennes(modeles);
   const max = Math.max(...notes.filter((n): n is number => n !== null));
   if (!Number.isFinite(max)) return null;
   const i = notes.findIndex((n) => n === max);
-  const cle = modeles[i]?.cle ?? null;
-  return cle !== null && cle !== parDefaut ? cle : null;
+  const meilleur = modeles[i];
+  const cle = meilleur?.cle ?? null;
+  return cle !== null && cle !== parDefaut && meilleur?.choisissable !== false ? cle : null;
 }
