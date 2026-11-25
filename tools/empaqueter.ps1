@@ -68,10 +68,47 @@ if (@(Get-ChildItem -LiteralPath $dossier -Directory).Count -gt 0) {
 $liste = @(Get-ChildItem -LiteralPath $dossier -File | ForEach-Object Name | Sort-Object)
 [IO.File]::WriteAllLines((Join-Path $dossier 'fichiers.txt'), [string[]]$liste, (New-Object Text.UTF8Encoding($false)))
 
+# Témoin pour la mise à jour intégrée de la version 2 : avant d'installer, elle ouvre app\__init__.py dans le zip et
+# y cherche VERSION = "X.Y.Z". Ce n'est pas du code : il est ajouté après fichiers.txt, donc l'installation et les
+# mises à jour ne le copient jamais.
+$dossierTemoin = Join-Path $dossier 'app'
+New-Item -ItemType Directory -Path $dossierTemoin | Out-Null
+$lignesTemoin = @(
+    '# Témoin pour la mise à jour intégrée de la version 2 : elle lit ce numéro avant d''installer.',
+    '# Ce fichier n''est pas du code et n''est pas installé (il n''est pas dans fichiers.txt).',
+    "VERSION = `"$version`""
+)
+[IO.File]::WriteAllLines((Join-Path $dossierTemoin '__init__.py'), [string[]]$lignesTemoin, (New-Object Text.UTF8Encoding($false)))
+
 $zip = Join-Path $release "$nom-$version.zip"
 Compress-Archive -LiteralPath $dossier -DestinationPath $zip
 $empreinte = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText("$zip.sha256", "$empreinte  $nom-$version.zip`n", (New-Object Text.UTF8Encoding($false)))
+
+# Ce que contrôle la mise à jour intégrée de la version 2 avant d'installer (app/installation_maj.py, preparer et
+# _extraire) : l'empreinte au format « empreinte  nom », un dossier racine unique Aria-Studio-X.Y.Z/, l'exe à la
+# racine, le témoin avec la bonne version. Mieux vaut le savoir ici que chez un utilisateur de la v2.
+$ligneEmpreinte = [IO.File]::ReadAllText("$zip.sha256")
+if ($ligneEmpreinte -cne "$empreinte  $nom-$version.zip`n") {
+    throw "Le fichier .sha256 n'est pas au format « empreinte  nom » que lit la version 2."
+}
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::OpenRead($zip)
+try {
+    $racineZip = "$nom-$version/"
+    $entrees = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+    $horsRacine = @($entrees | Where-Object { -not $_.StartsWith($racineZip, [StringComparison]::Ordinal) })
+    if ($horsRacine.Count -gt 0) { throw "Le zip contient des chemins hors de $racineZip, que la version 2 refuse : $($horsRacine -join ', ')." }
+    if ($entrees -cnotcontains "$racineZip$nom.exe") { throw "Le zip n'a pas $nom.exe à la racine de $racineZip, que la version 2 exige." }
+    $temoin = @($archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -ceq "${racineZip}app/__init__.py" })
+    if ($temoin.Count -ne 1) { throw "Le zip n'a pas app/__init__.py, le témoin que la version 2 lit." }
+    $lecteur = New-Object IO.StreamReader($temoin[0].Open(), (New-Object Text.UTF8Encoding($false)))
+    try { $texteTemoin = $lecteur.ReadToEnd() } finally { $lecteur.Dispose() }
+    if ($texteTemoin -notmatch '(?m)^VERSION\s*=\s*"([^"]+)"' -or $Matches[1] -cne $version) {
+        throw "Le témoin app/__init__.py n'annonce pas la version $version."
+    }
+}
+finally { $archive.Dispose() }
 
 Write-Host "Zip       : $zip"
 Write-Host "Empreinte : $empreinte"
