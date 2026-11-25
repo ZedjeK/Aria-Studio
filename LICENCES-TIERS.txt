@@ -21,7 +21,7 @@ Interpréteur
     licences de ses composants dans son dossier .dist-info
 
 Dépendances directes (requirements.txt)
-  fastapi 0.162.5 ............................................... MIT
+  fastapi 0.165.0 ............................................... MIT
   uvicorn 0.54.0 ................................................ BSD-3-Clause
   PyYAML 6.0.3 .................................................. MIT
   httpx 0.28.1 .................................................. BSD-3-Clause
