@@ -334,14 +334,27 @@ pub fn nettoyer(programme: &Path) {
     }
 }
 
-fn suffixe(chemin: &Path, ajout: &str) -> PathBuf {
+pub(crate) fn suffixe(chemin: &Path, ajout: &str) -> PathBuf {
     let mut nom = chemin.as_os_str().to_owned();
     nom.push(ajout);
     PathBuf::from(nom)
 }
 
+/// Retire la marque « téléchargé depuis Internet » d'un fichier : le flux `Zone.Identifier`, que Windows pose sur
+/// ce qui vient d'un navigateur et que `fs::copy` recopierait. Sans marque, il n'y a rien à retirer.
+#[cfg(windows)]
+pub fn retirer_marque(fichier: &Path) {
+    let flux = suffixe(fichier, ":Zone.Identifier");
+    // Pas de marque : rien à retirer, et une marque tenace n'empêche pas d'installer.
+    let _ = fs::remove_file(flux);
+}
+
+/// Hors de Windows, il n'y a pas de marque.
+#[cfg(not(windows))]
+pub fn retirer_marque(_fichier: &Path) {}
+
 /// Dossier de travail resté : il sera retiré au prochain passage.
-fn supprimer_dossier(dossier: &Path) {
+pub(crate) fn supprimer_dossier(dossier: &Path) {
     if dossier.exists() {
         let _ = fs::remove_dir_all(dossier);
     }
@@ -501,5 +514,24 @@ mod tests {
         // Une version d'essai se lit telle quelle dans BUILDINFO.txt.
         fs::write(temp.path().join(INFOS_BUILD), "Aria-Studio 3.0.0-essai.1\n").unwrap();
         assert_eq!(version_installee(temp.path()).as_deref(), Some("3.0.0-essai.1"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn la_marque_internet_ne_suit_pas_la_copie_et_se_retire() {
+        let marque = "[ZoneTransfer]\r\nZoneId=3\r\n";
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("a.exe");
+        fs::write(&source, "exe").unwrap();
+        fs::write(suffixe(&source, ":Zone.Identifier"), marque).unwrap();
+        let copie = temp.path().join("b.exe");
+        copier_contenu(&source, &copie).unwrap();
+        assert!(!suffixe(&copie, ":Zone.Identifier").exists());
+        // Une marque posée sur la copie se retire, le fichier reste.
+        fs::write(suffixe(&copie, ":Zone.Identifier"), marque).unwrap();
+        assert!(suffixe(&copie, ":Zone.Identifier").exists());
+        retirer_marque(&copie);
+        assert!(!suffixe(&copie, ":Zone.Identifier").exists());
+        assert_eq!(fs::read_to_string(&copie).unwrap(), "exe");
     }
 }

@@ -18,6 +18,7 @@ mod mise_a_jour;
 mod moteurs;
 mod notifications;
 mod plateau;
+mod pont_v2;
 mod reglages_fins;
 mod scenario;
 mod securite;
@@ -143,6 +144,12 @@ fn main() {
 
 fn lancer() -> Result<(), String> {
     let profil = Dossier::du_profil().map_err(|e| e.to_string())?;
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    // Lancé par la mise à jour intégrée de la v2 (`--mise-a-jour <pid> <ancien lanceur>`) : installer, relancer et
+    // s'arrêter, sans fenêtre ni instance unique.
+    if let Some(demande) = aria_coeur::pont_v2::lire_demande(&arguments) {
+        std::process::exit(pont_v2::executer(demande, &profil));
+    }
     // Comme en v2 : un data\ à côté de l'exe (clé USB…) garde tout à côté de lui (mode portable).
     let dossier_exe = std::env::current_exe()
         .ok()
@@ -164,11 +171,12 @@ fn lancer() -> Result<(), String> {
         journal::Resultat::Ok,
         None,
     );
+    // Après une mise à jour lancée par la v2 : la version attendue tourne-t-elle ? Avant le ménage du cache.
+    aria_coeur::pont_v2::bilan_au_demarrage(&dossier, identite::VERSION);
     reprendre_les_cles(&dossier);
     let (emplacements, v2_lancee) = reprendre_la_v2(emplacements, &dossier_exe, &profil);
     // Restes d'un remplacement précédent, maintenant que l'ancienne version est arrêtée.
     aria_coeur::installation::nettoyer(&dossier.programme());
-    let arguments: Vec<String> = std::env::args().skip(1).collect();
     // Lancé à l'ouverture de session : l'icône seule, la fenêtre reste rangée jusqu'à ce qu'on l'ouvre.
     let silencieux = identite::EN_FOND && demarrage::est_silencieux(&arguments);
     // Exe lancé hors de programme\ (zip décompressé) : proposition de s'installer, avant la fenêtre de l'appli.

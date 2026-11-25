@@ -46,6 +46,7 @@ pub mod orchestrateur;
 pub mod paliers;
 pub mod personnages;
 pub mod plateau;
+pub mod pont_v2;
 pub mod presence;
 pub mod prompt;
 pub mod reglages;
