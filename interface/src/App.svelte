@@ -30,7 +30,7 @@
     type EnvoiRetouche,
     type Sequence,
   } from './lib/api';
-  import { pastillesMoteurs, type Pastille } from './lib/menu';
+  import { pageDuMenu, pastillesMoteurs, type Pastille } from './lib/menu';
   import { texteBandeau } from './lib/reprise';
   import type { VersPage } from './lib/rushes';
   import Bandeau from './lib/composants/Bandeau.svelte';
@@ -179,9 +179,10 @@
     const minuteurMoteurs = setInterval(() => {
       if (!document.hidden) void relireMoteurs();
     }, 5000);
-    // « Paramètres » et « Voir la mise à jour » dans le menu de l'icône.
+    // « Aller à » et « Voir la mise à jour » dans le menu de l'icône.
     const arretAllerA = ecouter<string>('aller-a', (cible) => {
-      if (cible === 'parametres') page = 'parametres';
+      const versPage = pageDuMenu(cible);
+      if (versPage) page = versPage;
       if (cible === 'mise-a-jour' && miseAJour) dialogueMiseAJour = true;
     });
     // Une version plus récente trouvée au lancement (la recherche ne bloque pas l'appli).
