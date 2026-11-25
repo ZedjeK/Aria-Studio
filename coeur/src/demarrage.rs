@@ -227,7 +227,7 @@ pub mod windows {
         #[test]
         fn une_valeur_d_une_version_d_essai_est_reprise_puis_remplacee() {
             let cles = ClesDeTest::nouvelles("essai");
-            let ancien = Path::new(r"C:ZipAria-Studio.exe");
+            let ancien = Path::new(r"C:\Zip\Aria-Studio.exe");
             let (run, _) = RegKey::predef(HKEY_CURRENT_USER)
                 .create_subkey(&cles.run)
                 .unwrap();
@@ -235,7 +235,7 @@ pub mod windows {
             // Une version d'essai l'avait cochée : la case reste cochée.
             assert!(est_inscrit_sous(&cles.run, &cles.approuves));
             // Cocher de nouveau écrit la valeur « Aria Studio » vers l'exe installé, sans laisser l'ancienne.
-            let installe = Path::new(r"C:Usersmoi.Aria-StudioprogrammeAria-Studio.exe");
+            let installe = Path::new(r"C:\Users\moi\.Aria-Studio\programme\Aria-Studio.exe");
             inscrire_sous(&cles.run, &cles.approuves, installe).unwrap();
             let lue: String = run.get_value(NOM_VALEUR).unwrap();
             assert_eq!(lue, commande_pour(installe));
