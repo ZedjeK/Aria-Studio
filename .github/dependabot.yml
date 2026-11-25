@@ -18,3 +18,40 @@ updates:
     groups:
       mises-a-jour-mineures:
         update-types: ["minor", "patch"]
+
+  # La v3 (Rust, Tauri, Svelte) se construit sur la branche refonte/v3. Dependabot ne lit sa configuration que sur la
+  # branche par défaut : ces entrées lui font ouvrir ses PR vers refonte/v3. À retirer quand la v3 devient la branche
+  # par défaut (son propre .github/dependabot.yml prend alors le relais).
+  - package-ecosystem: "cargo"
+    directory: "/"
+    target-branch: "refonte/v3"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      cargo-mineures:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "npm"
+    directory: "/interface"
+    target-branch: "refonte/v3"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      npm-mineures:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "refonte/v3"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      mises-a-jour-mineures:
+        update-types: ["minor", "patch"]
