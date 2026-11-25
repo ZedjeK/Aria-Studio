@@ -1,13 +1,13 @@
 <!--
-  Le menu de l'icône de notification, aux couleurs de l'appli : « Ouvrir » en gras, le bloc « État », le bloc
-  « Aller à », puis « Démarrer avec Windows » et « Quitter ». Les blocs propres à l'appli (« Agir sans ouvrir »)
-  se placent entre « État » et « Aller à ».
+  Le menu de l'icône de notification, aux couleurs de l'appli : « Ouvrir » en gras, le bloc « État » (ComfyUI, LLM,
+  VRAM, une ligne d'erreur s'il y en a une), « Voir la mise à jour » quand une version existe, le bloc « Agir sans
+  ouvrir », le bloc « Aller à », puis « Démarrer avec Windows » et « Quitter ».
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { actionMenu, ecouter, etatMenu, messageErreur, reglerDemarrageAuto, tailleMenu } from './lib/api';
   import type { ActionMenu, EtatMenu } from './lib/api';
-  import { couleurTon, ligneErreur } from './lib/menu';
+  import { actionsSansOuvrir, couleurTon, ligneErreur, pagesDuMenu } from './lib/menu';
 
   let etat = $state<EtatMenu | null>(null);
   let boite = $state<HTMLElement | null>(null);
@@ -16,7 +16,7 @@
     try {
       etat = await etatMenu();
     } catch (e) {
-      etat = { nom: etat?.nom ?? 'Aria', lignes: [ligneErreur(messageErreur(e))], demarrageAuto: false, miseAJour: null };
+      etat = { nom: etat?.nom ?? 'Aria', lignes: [ligneErreur(messageErreur(e))], demarrageAuto: false, miseAJour: null, generationEnCours: false };
     }
   }
 
@@ -66,8 +66,16 @@
     {/if}
     <div class="separation"></div>
 
+    <p class="titre">Agir sans ouvrir</p>
+    {#each actionsSansOuvrir(etat.generationEnCours) as ligne (ligne.titre)}
+      <button class="ligne" role="menuitem" disabled={!ligne.active} onclick={() => agir(ligne.action)}>{ligne.titre}</button>
+    {/each}
+    <div class="separation"></div>
+
     <p class="titre">Aller à</p>
-    <button class="ligne" role="menuitem" onclick={() => agir('parametres')}>Paramètres</button>
+    {#each pagesDuMenu as { page, titre } (page)}
+      <button class="ligne" role="menuitem" onclick={() => agir({ aller: page })}>{titre}</button>
+    {/each}
     <div class="separation"></div>
 
     <button class="ligne case" role="menuitemcheckbox" aria-checked={etat.demarrageAuto} onclick={basculerDemarrage}>
@@ -106,10 +114,16 @@
     cursor: pointer;
   }
 
-  .ligne:hover,
+  .ligne:hover:not(:disabled),
   .ligne:focus-visible {
     background: #0b1a30;
     outline: none;
+  }
+
+  .ligne:disabled {
+    color: var(--texte-2);
+    cursor: default;
+    opacity: 0.55;
   }
 
   .ouvrir {

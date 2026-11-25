@@ -1,5 +1,35 @@
 // Les points de couleur : bloc « État » du menu de l'icône, pastilles de l'état en direct.
-import type { EtatMoteur, LigneMenu, Ton, Vram } from './api';
+import type { ActionMenu, EtatMoteur, LigneMenu, PageMenu, Ton, Vram } from './api';
+
+/** Les pages du bloc « Aller à » du menu de l'icône, dans l'ordre du menu. */
+export const pagesDuMenu: { page: PageMenu; titre: string }[] = [
+  { page: 'plateau', titre: 'Plateau' },
+  { page: 'montage', titre: 'Montage' },
+  { page: 'modeles', titre: 'Modèles' },
+  { page: 'reglages', titre: 'Réglages' },
+  { page: 'parametres', titre: 'Paramètres' },
+];
+
+/** La page que demande l'événement « aller-a » : une page du menu, ou rien (« mise-a-jour » a son propre chemin). */
+export function pageDuMenu(cible: string): PageMenu | null {
+  return pagesDuMenu.find((p) => p.page === cible)?.page ?? null;
+}
+
+/** Une ligne du bloc « Agir sans ouvrir ». */
+export interface LigneAction {
+  action: ActionMenu;
+  titre: string;
+  /** Grisée quand elle n'a rien à faire. */
+  active: boolean;
+}
+
+/** Le bloc « Agir sans ouvrir » : annuler la génération en cours (seulement si une tourne), libérer la carte. */
+export function actionsSansOuvrir(generationEnCours: boolean): LigneAction[] {
+  return [
+    { action: 'annulerGeneration', titre: 'Annuler la génération en cours', active: generationEnCours },
+    { action: 'libererCarte', titre: 'Libérer la carte graphique', active: true },
+  ];
+}
 
 /** La couleur du point d'une ligne « État » : la même palette que la pastille de l'icône. */
 export function couleurTon(ton: Ton): string {

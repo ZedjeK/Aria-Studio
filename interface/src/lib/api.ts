@@ -1148,9 +1148,20 @@ export interface EtatMenu {
   demarrageAuto: boolean;
   /** La version disponible : « Voir la mise à jour » n'apparaît qu'avec elle. */
   miseAJour: string | null;
+  /** Une génération tourne : « Annuler la génération en cours » n'agit que dans ce cas. */
+  generationEnCours: boolean;
 }
 
-export type ActionMenu = 'ouvrir' | 'parametres' | 'miseAJour' | 'quitter';
+/** Les pages où le menu de l'icône envoie (le nom que reçoit l'événement « aller-a »). */
+export type PageMenu = 'plateau' | 'montage' | 'modeles' | 'reglages' | 'parametres';
+
+export type ActionMenu =
+  | 'ouvrir'
+  | 'annulerGeneration'
+  | 'libererCarte'
+  | { aller: PageMenu }
+  | 'miseAJour'
+  | 'quitter';
 
 export const etatMenu = (): Promise<EtatMenu> => invoke<EtatMenu>('etat_menu');
 

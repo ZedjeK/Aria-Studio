@@ -114,6 +114,22 @@ impl Moteurs {
     }
 }
 
+impl Moteurs {
+    /// Le moteur en cours d'installation, pour l'icône de notification.
+    pub fn installation_en_cours(&self) -> Option<String> {
+        let tache = self.tache.lock().ok()?;
+        tache.as_ref().filter(|t| !t.fini).map(|t| t.nom.clone())
+    }
+
+    /// Rend la carte graphique (voir [`liberer_carte`]), pour le menu de l'icône.
+    ///
+    /// # Errors
+    /// Les moteurs ne se sont pas libérés.
+    pub fn liberer(&self) -> Result<(), String> {
+        liberer_la_carte(&self.orchestrateur, &self.dossier)
+    }
+}
+
 /// Le ComfyUI de l'utilisateur, s'il en a choisi un (`emplacements.comfyui` de `reglages.json`, comme en v2), ou
 /// celui d'une v2 reprise pour un essai.
 fn comfyui_externe(dossier: &Dossier) -> Option<PathBuf> {
@@ -529,22 +545,25 @@ pub async fn choisir_comfyui(moteurs: State<'_, Moteurs>, chemin: Option<String>
 pub async fn liberer_carte(moteurs: State<'_, Moteurs>) -> Result<(), String> {
     let orchestrateur = Arc::clone(&moteurs.orchestrateur);
     let dossier = moteurs.dossier.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        orchestrateur
-            .lock()
-            .map_err(|_| "orchestrateur des moteurs indisponible".to_owned())?
-            .liberer()?;
-        journal::noter(
-            &dossier,
-            "Carte graphique libérée",
-            "",
-            journal::Resultat::Ok,
-            None,
-        );
-        Ok(())
-    })
-    .await
-    .map_err(|e| format!("libération impossible : {e}"))?
+    tauri::async_runtime::spawn_blocking(move || liberer_la_carte(&orchestrateur, &dossier))
+        .await
+        .map_err(|e| format!("libération impossible : {e}"))?
+}
+
+/// Le travail de [`liberer_carte`], aussi lancé par le menu de l'icône : bloque tant qu'un rendu tient les moteurs.
+fn liberer_la_carte(orchestrateur: &Mutex<Orchestrateur>, dossier: &Dossier) -> Result<(), String> {
+    orchestrateur
+        .lock()
+        .map_err(|_| "orchestrateur des moteurs indisponible".to_owned())?
+        .liberer()?;
+    journal::noter(
+        dossier,
+        "Carte graphique libérée",
+        "",
+        journal::Resultat::Ok,
+        None,
+    );
+    Ok(())
 }
 
 /// Au lancement d'Aria, hors du fil de l'interface : reprend un ComfyUI resté seul.
