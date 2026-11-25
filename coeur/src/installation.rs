@@ -27,6 +27,9 @@ pub const ARGUMENT_PORTABLE: &str = "--portable";
 const SUFFIXE_NOUVEAU: &str = ".nouveau";
 const SUFFIXE_ANCIEN: &str = ".ancien";
 const SUFFIXE_TEMPORAIRE: &str = ".tmp";
+/// Le dossier où la v2 est gardée entière quand la v3 prend sa place, comme le faisait la v2 pour sa version d'avant.
+const SUFFIXE_PRECEDENT: &str = ".precedent";
+const SUFFIXE_AVANT: &str = ".avant";
 
 /// Le nom de l'exe livré, sous lequel il est installé.
 pub fn nom_exe() -> String {
@@ -147,6 +150,31 @@ pub fn version_installee(programme: &Path) -> Option<String> {
     Some(version.unwrap_or("precedente").to_owned())
 }
 
+/// Ce qui occupe `programme\`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Installee {
+    /// Rien : pas d'exe de l'appli.
+    Rien,
+    /// Une v3, avec sa version (« precedente » si BUILDINFO.txt ne la dit pas).
+    Version(String),
+    /// Une version 2 : l'exe du lanceur, avec `python\`, `app\` et `web\` autour, mais pas de `fichiers.txt`.
+    Ancienne,
+}
+
+/// Ce qui est installé dans `programme\` : rien, une v3 (elle a toujours son `fichiers.txt`), ou une v2.
+pub fn installee(programme: &Path) -> Installee {
+    match version_installee(programme) {
+        None => Installee::Rien,
+        Some(_) if !programme.join(LISTE).is_file() => Installee::Ancienne,
+        Some(version) => Installee::Version(version),
+    }
+}
+
+/// Où la v2 est gardée entière quand la v3 prend sa place : `programme.precedent`, à côté de `programme`.
+pub fn dossier_v2_gardee(programme: &Path) -> PathBuf {
+    suffixe(programme, SUFFIXE_PRECEDENT)
+}
+
 /// Les dossiers que touche l'installation.
 #[derive(Debug, Clone)]
 pub struct Chemins {
@@ -227,14 +255,64 @@ fn preparer_et_echanger(
         copier_contenu(&de, &chemins.travail.join(nom)).map_err(copie)?;
     }
     copier_contenu(&dossier_source.join(LISTE), &chemins.travail.join(LISTE)).map_err(copie)?;
-    fs::create_dir_all(&chemins.programme).map_err(copie)?;
-    if let Some(version) = version_installee(&chemins.programme) {
-        garder(&chemins.programme, &version, &chemins.versions)
-            .map_err(|e| Echec(format!("La version installée n'a pas pu être mise de côté : {e}")))?;
-    }
     let mut tous = noms.to_vec();
     tous.push(LISTE.to_owned());
+    match installee(&chemins.programme) {
+        // Une v2 : elle est gardée entière à côté, la v3 prend `programme\` à neuf.
+        Installee::Ancienne => return remplacer_la_v2(&tous, chemins),
+        Installee::Version(version) => {
+            garder(&chemins.programme, &version, &chemins.versions)
+                .map_err(|e| Echec(format!("La version installée n'a pas pu être mise de côté : {e}")))?;
+        }
+        Installee::Rien => {}
+    }
+    fs::create_dir_all(&chemins.programme).map_err(copie)?;
     echanger(&chemins.travail, &chemins.programme, &tous)
+}
+
+/// La v2 installée devient `programme.precedent\`, entière (son `python\`, son `app\`, son `web\` : on peut la
+/// remettre), et la v3 s'installe dans un `programme\` neuf. Le `programme.precedent\` d'avant ne disparaît
+/// qu'une fois la v3 en place. À la moindre erreur, tout reprend sa place.
+fn remplacer_la_v2(noms: &[String], chemins: &Chemins) -> Result<(), Echec> {
+    let programme = &chemins.programme;
+    let precedent = dossier_v2_gardee(programme);
+    let avant = suffixe(&precedent, SUFFIXE_AVANT);
+    supprimer_dossier(&avant);
+    let avait_precedent = precedent.exists();
+    let remettre_l_avant = || {
+        if avait_precedent {
+            let _ = fs::rename(&avant, &precedent);
+        }
+    };
+    if avait_precedent && let Err(e) = fs::rename(&precedent, &avant) {
+        return Err(Echec(format!(
+            "Le dossier « {} » n'a pas pu être mis de côté : {e}. Rien n'a été changé.",
+            precedent.display()
+        )));
+    }
+    if let Err(e) = fs::rename(programme, &precedent) {
+        remettre_l_avant();
+        return Err(Echec(format!(
+            "La version 2 n'a pas pu être mise de côté : {e}. Ferme-la (icône de la barre des tâches, \
+             « Quitter »), puis recommence. Rien n'a été changé."
+        )));
+    }
+    let resultat = fs::create_dir_all(programme)
+        .map_err(|e| Echec(format!("Les fichiers n'ont pas pu être copiés : {e}")))
+        .and_then(|()| echanger(&chemins.travail, programme, noms));
+    match resultat {
+        Ok(()) => {
+            supprimer_dossier(&avant);
+            Ok(())
+        }
+        Err(e) => {
+            supprimer_dossier(programme);
+            // La v2 reprend sa place.
+            let _ = fs::rename(&precedent, programme);
+            remettre_l_avant();
+            Err(e)
+        }
+    }
 }
 
 /// Copie la version installée dans `versions`, sous son numéro, et retire les versions gardées avant elle. La copie
@@ -533,5 +611,92 @@ mod tests {
         retirer_marque(&copie);
         assert!(!suffixe(&copie, ":Zone.Identifier").exists());
         assert_eq!(fs::read_to_string(&copie).unwrap(), "exe");
+    }
+
+    /// Une v2 installée : le lanceur, son `python\`, son `app\`, sans `fichiers.txt` ni BUILDINFO.txt.
+    fn v2(programme: &Path) {
+        fs::create_dir_all(programme.join("python")).unwrap();
+        fs::create_dir_all(programme.join("app")).unwrap();
+        fs::write(programme.join(nom_exe()), "lanceur v2").unwrap();
+        fs::write(programme.join("python").join("python.exe"), "python").unwrap();
+        fs::write(programme.join("app").join("main.py"), "app").unwrap();
+    }
+
+    #[test]
+    fn programme_dit_ce_qui_y_est_installe() {
+        let temp = tempfile::tempdir().unwrap();
+        let programme = temp.path().join("programme");
+        assert_eq!(installee(&programme), Installee::Rien);
+        v2(&programme);
+        assert_eq!(installee(&programme), Installee::Ancienne);
+        let chemins = chemins(&temp.path().join("donnees"));
+        let source = temp.path().join("zip");
+        zip(&source, "3.0.0", "exe 3");
+        installer(&source.join(nom_exe()), &chemins).unwrap();
+        assert_eq!(
+            installee(&chemins.programme),
+            Installee::Version("3.0.0".to_owned())
+        );
+    }
+
+    #[test]
+    fn une_v2_deja_installee_est_gardee_entiere() {
+        let temp = tempfile::tempdir().unwrap();
+        let chemins = chemins(&temp.path().join("donnees"));
+        v2(&chemins.programme);
+        let precedent = suffixe(&chemins.programme, SUFFIXE_PRECEDENT);
+        // Un `programme.precedent\` plus ancien : il disparaît, la v2 le remplace.
+        fs::create_dir_all(&precedent).unwrap();
+        fs::write(precedent.join("tres-ancien.txt"), "x").unwrap();
+        let source = temp.path().join("telechargements").join("v3");
+        zip(&source, "3.0.0", "exe 3");
+
+        let installe = installer(&source.join(nom_exe()), &chemins).unwrap();
+
+        assert_eq!(fs::read_to_string(&installe).unwrap(), "exe 3");
+        assert!(chemins.programme.join(LISTE).is_file());
+        assert!(
+            !chemins.programme.join("python").exists(),
+            "rien de la v2 ne reste dans programme"
+        );
+        assert_eq!(
+            fs::read_to_string(precedent.join(nom_exe())).unwrap(),
+            "lanceur v2"
+        );
+        assert!(precedent.join("python").join("python.exe").is_file());
+        assert!(precedent.join("app").join("main.py").is_file());
+        assert!(!precedent.join("tres-ancien.txt").exists());
+        assert!(!suffixe(&precedent, SUFFIXE_AVANT).exists());
+        assert!(!chemins.travail.exists());
+        // La v3 suivante se garde comme d'habitude, dans les sauvegardes : la v2 ne bouge plus.
+        let suivante = temp.path().join("telechargements").join("v3-1");
+        zip(&suivante, "3.1.0", "exe 3.1");
+        installer(&suivante.join(nom_exe()), &chemins).unwrap();
+        assert_eq!(
+            fs::read_to_string(chemins.versions.join("3.0.0").join(nom_exe())).unwrap(),
+            "exe 3"
+        );
+        assert!(precedent.join("python").join("python.exe").is_file());
+    }
+
+    #[test]
+    fn une_installation_ratee_remet_la_v2_et_son_precedent_en_place() {
+        let temp = tempfile::tempdir().unwrap();
+        let chemins = chemins(&temp.path().join("donnees"));
+        v2(&chemins.programme);
+        let precedent = suffixe(&chemins.programme, SUFFIXE_PRECEDENT);
+        fs::create_dir_all(&precedent).unwrap();
+        fs::write(precedent.join("avant.txt"), "x").unwrap();
+        // Rien à copier depuis le dossier de travail : l'échange échoue après la mise de côté de la v2.
+        fs::create_dir_all(&chemins.travail).unwrap();
+        let echec = remplacer_la_v2(&["absent.txt".to_owned()], &chemins).unwrap_err();
+        assert!(echec.0.contains("Aucun fichier"), "{echec}");
+        assert_eq!(
+            fs::read_to_string(chemins.programme.join(nom_exe())).unwrap(),
+            "lanceur v2"
+        );
+        assert!(chemins.programme.join("python").join("python.exe").is_file());
+        assert_eq!(fs::read_to_string(precedent.join("avant.txt")).unwrap(), "x");
+        assert!(!suffixe(&precedent, SUFFIXE_AVANT).exists());
     }
 }

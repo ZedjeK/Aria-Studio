@@ -19,6 +19,24 @@ pub fn est_actif() -> bool {
     }
 }
 
+/// Après une installation : si « Démarrer avec Windows » est coché, la valeur « Aria Studio » vise l'exe installé
+/// (même nom, nouvelle cible). Décoché, ou désactivé dans Windows, il reste comme il est : une installation
+/// n'allume jamais le démarrage.
+pub fn reorienter(exe: &std::path::Path) -> Result<(), String> {
+    if !est_actif() {
+        return Ok(());
+    }
+    #[cfg(windows)]
+    {
+        aria_coeur::demarrage::windows::inscrire(exe).map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = exe;
+        Ok(())
+    }
+}
+
 fn inscrire(actif: bool) -> Result<(), String> {
     if !identite::EN_FOND {
         return Err("cette appli ne démarre pas avec Windows".to_owned());
