@@ -587,6 +587,8 @@
                 <td>
                   {#if c.par_defaut === m.cle}
                     <span class="ok">★ par défaut</span>
+                  {:else if !m.choisissable}
+                    <span class="discret">Pas un LLM : il ne peut pas être le LLM par défaut</span>
                   {:else}
                     <Bouton
                       genre={m.cle === cleMeilleur ? 'principal' : 'secondaire'}

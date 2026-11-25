@@ -1941,6 +1941,8 @@ export interface ModeleCasting {
   generations: GenerationCasting[];
   resume: Record<string, number | string | null> | null;
   liberation: { vram_avant_go?: number; vram_apres_go?: number; duree_s?: number } | null;
+  /** Faux pour le témoin « Sans LLM » d'un Casting LLM révélé : il n'est pas un LLM, il ne peut pas être le défaut. */
+  choisissable: boolean;
 }
 
 export interface VueCasting {
