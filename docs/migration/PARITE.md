@@ -28,10 +28,10 @@ la v3. Ce qu'elle exige, et ce que la v3 doit donc fournir :
 
 | Exigence de la v2 | Où | v3 |
 | --- | --- | --- |
-| Assets `Aria-Studio-X.Y.Z.zip` et `Aria-Studio-X.Y.Z.zip.sha256` (« empreinte  nom ») | `preparer()` | [ ] (déjà le format de `tools/empaqueter.ps1`) |
-| Zip à racine unique `Aria-Studio-X.Y.Z/` | `_extraire()` | [ ] (déjà le format du modèle) |
-| `Aria-Studio.exe` à la racine du zip | `_extraire()` | [ ] |
-| `app/__init__.py` dans le zip, avec `VERSION = "X.Y.Z"` | `_extraire()` | [ ] témoin ajouté au zip, hors de `fichiers.txt` |
+| Assets `Aria-Studio-X.Y.Z.zip` et `Aria-Studio-X.Y.Z.zip.sha256` (« empreinte  nom ») | `preparer()` | [x] le format de `tools/empaqueter.ps1`, relu à chaque empaquetage (ligne `empreinte  nom` exacte, comparée à l'empreinte du zip) |
+| Zip à racine unique `Aria-Studio-X.Y.Z/` | `_extraire()` | [x] relu à chaque empaquetage : aucune entrée hors de `Aria-Studio-X.Y.Z/` (séparateurs `\` de Windows PowerShell 5.1 compris, que la v2 convertit) |
+| `Aria-Studio.exe` à la racine du zip | `_extraire()` | [x] relu à chaque empaquetage |
+| `app/__init__.py` dans le zip, avec `VERSION = "X.Y.Z"` | `_extraire()` | [x] témoin ajouté au zip par `tools/empaqueter.ps1`, après `fichiers.txt` : il n'y est pas, l'installation ne le copie jamais ; sa version est relue à chaque empaquetage (une version d'essai y est écrite telle quelle). Le contrôle de l'empaquetage a été rejoué avec le code d'extraction de la v2 sur des zips de pwsh et de Windows PowerShell 5.1 |
 | L'exe accepte `--mise-a-jour <pid> <ancien lanceur>` | `_relayer()` | [x] `pont_v2::lire_demande` (`coeur/src/pont_v2.rs`), traité par `appli/src/main.rs` avant toute fenêtre et avant l'instance unique (`appli/src/pont_v2.rs`) ; sans numéro, une erreur dite et rien n'est touché |
 | Il attend la fin du processus `<pid>` (120 s au plus) | `MettreAJour()` | [x] `pont_v2::attendre` (un essai toutes les 250 ms, le dernier à l'échéance) ; au bout de 120 s, rien n'est installé et rien n'est relancé (la v2 tourne encore) |
 | Il attend que `programme\` se libère (l'icône v2 le tient, environ 12 s ; 15 s d'attente) | `Installer()` | [x] d'abord le verrou nommé que tient l'icône de la v2 (30 s au plus, même nom que dans `Icone.cs`), puis `programme\` et `programme.precedent\` renommables (15 s chacun) ; sinon rien ne change et l'ancien lanceur repart |
