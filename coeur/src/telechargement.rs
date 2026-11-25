@@ -413,16 +413,18 @@ fn boucle_une(contexte: &Contexte, reseau: &impl Reseau, partage: &Partage, id: 
     partage.occupe.store(true, Ordering::Relaxed);
     let objet = format!("{dossier}/{}", fiche.nom);
     let resultat = telecharger(contexte, reseau, partage, id, &fiche, &dossier);
-    match resultat {
-        Ok(()) => journal::noter(
-            &contexte.dossier,
-            "Modèle téléchargé",
-            &objet,
-            journal::Resultat::Ok,
-            Some(&fiche.source),
-        ),
+    let (etat, erreur) = match resultat {
+        Ok(()) => {
+            journal::noter(
+                &contexte.dossier,
+                "Modèle téléchargé",
+                &objet,
+                journal::Resultat::Ok,
+                Some(&fiche.source),
+            );
+            ("termine", None)
+        }
         Err(_) if partage.annulee(id) => {
-            partage.modifier(id, |t| "annule".clone_into(&mut t.etat));
             journal::noter(
                 &contexte.dossier,
                 "Téléchargement annulé",
@@ -430,12 +432,9 @@ fn boucle_une(contexte: &Contexte, reseau: &impl Reseau, partage: &Partage, id: 
                 journal::Resultat::Annule,
                 None,
             );
+            ("annule", None)
         }
         Err(e) => {
-            partage.modifier(id, |t| {
-                "erreur".clone_into(&mut t.etat);
-                t.erreur = Some(e.clone());
-            });
             journal::noter(
                 &contexte.dossier,
                 "Téléchargement en échec",
@@ -443,15 +442,25 @@ fn boucle_une(contexte: &Contexte, reseau: &impl Reseau, partage: &Partage, id: 
                 journal::Resultat::Erreur,
                 Some(&e),
             );
+            ("erreur", Some(e))
         }
-    }
-    partage.modifier(id, |t| t.debit = 0.0);
+    };
     partage
         .annulations
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .remove(id);
     partage.occupe.store(false, Ordering::Relaxed);
+    // L'état final se pose en dernier : dès qu'il se lit, le registre, le journal et l'indicateur « occupé » sont
+    // à jour. Avant, « terminé » se lisait avant la ligne du journal, et un test (ou une page) qui lisait le journal
+    // aussitôt la trouvait parfois absente.
+    partage.modifier(id, |t| {
+        t.debit = 0.0;
+        etat.clone_into(&mut t.etat);
+        if erreur.is_some() {
+            t.erreur = erreur;
+        }
+    });
 }
 
 fn telecharger(
@@ -521,7 +530,6 @@ fn telecharger(
     let cle = format!("{dossier}/{}", fiche.nom);
     inscrire(contexte, &cle, dossier, fiche, recu, &sha256)
         .map_err(|e| format!("registre des modèles : {e}"))?;
-    partage.modifier(id, |t| "termine".clone_into(&mut t.etat));
     Ok(())
 }
 
@@ -752,6 +760,53 @@ mod tests {
         );
         let journal = journal::lire(&Dossier::a(temp.path()));
         assert_eq!(journal[0].action, "Modèle téléchargé");
+    }
+
+    #[test]
+    fn l_etat_final_ne_se_lit_qu_une_fois_le_journal_ecrit() {
+        // Le journal et l'indicateur « occupé » sont à jour dès que l'état est final, sans attente : on le lit
+        // aussitôt, sur plusieurs téléchargements de suite.
+        for passage in 0..25 {
+            let temp = tempfile::tempdir().unwrap();
+            let faux = Faux::default();
+            let octets = vec![3u8; BLOC / 2];
+            let f = fiche("petit.gguf", &octets);
+            faux.fichiers
+                .lock()
+                .unwrap()
+                .insert(f.url.clone(), octets.clone());
+            let t = Telechargeur::demarrer(contexte(&temp, GRAND), faux);
+            let tache = t.ajouter(f, "llm").unwrap();
+            let fin = attendre(&t, &tache.id);
+            assert_eq!(fin.etat, "termine", "passage {passage} : {:?}", fin.erreur);
+            let journal = journal::lire(&Dossier::a(temp.path()));
+            assert_eq!(
+                journal.first().map(|o| o.action.as_str()),
+                Some("Modèle téléchargé"),
+                "passage {passage}"
+            );
+            assert!(!t.occupe(), "passage {passage}");
+        }
+    }
+
+    #[test]
+    fn un_echec_aussi_est_journalise_avant_d_etre_visible() {
+        for passage in 0..25 {
+            let temp = tempfile::tempdir().unwrap();
+            let faux = Faux::default();
+            let f = fiche("refuse.gguf", b"secret");
+            faux.refuses.lock().unwrap().insert(f.url.clone());
+            let t = Telechargeur::demarrer(contexte(&temp, GRAND), faux);
+            let fin = attendre(&t, &t.ajouter(f, "llm").unwrap().id);
+            assert_eq!(fin.etat, "erreur", "passage {passage}");
+            let journal = journal::lire(&Dossier::a(temp.path()));
+            assert_eq!(
+                journal.first().map(|o| o.action.as_str()),
+                Some("Téléchargement en échec"),
+                "passage {passage}"
+            );
+            assert!(!t.occupe(), "passage {passage}");
+        }
     }
 
     #[test]
