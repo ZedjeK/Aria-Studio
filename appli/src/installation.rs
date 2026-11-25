@@ -5,13 +5,13 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use aria_coeur::installation::{self, Chemins};
+use aria_coeur::installation::{self, Chemins, Installee};
 use aria_coeur::{Reglages, identite, journal};
 use serde::Serialize;
 use tauri::window::Color;
 use tauri::{AppHandle, Manager, State, Theme, WebviewUrl, WebviewWindowBuilder};
 
-use crate::{Etat, erreur_fatale, ouvrir_principale};
+use crate::{Etat, demarrage_auto, erreur_fatale, ouvrir_principale};
 
 /// L'étiquette de la fenêtre, citée par capabilities\installation.json.
 pub const FENETRE_INSTALLATION: &str = "installation";
@@ -39,8 +39,16 @@ pub struct InfosInstallation {
     nom: &'static str,
     version: &'static str,
     dossier: String,
+    /// La version 3 déjà installée, qui sera remplacée et gardée dans les sauvegardes.
     version_installee: Option<String>,
+    /// Une version 2 occupe le dossier d'installation : elle sera gardée entière dans `dossier_v2`.
+    version_2_installee: bool,
+    dossier_v2: String,
     raccourci: Option<String>,
+    /// Un raccourci du même nom est déjà sur le Bureau : la case propose de le mettre à jour, jamais en silence.
+    raccourci_existe: bool,
+    /// « Démarrer avec Windows » est coché : il visera l'exe installé.
+    demarrage_actif: bool,
 }
 
 /// Le raccourci du Bureau : « Aria Nom.lnk ».
@@ -54,12 +62,22 @@ fn chemin_raccourci(app: &AppHandle) -> Option<PathBuf> {
 #[tauri::command]
 pub fn infos_installation(app: AppHandle, etat: State<'_, Etat>) -> InfosInstallation {
     let programme = etat.dossier.programme();
+    let raccourci = chemin_raccourci(&app);
+    let (version_installee, version_2_installee) = match installation::installee(&programme) {
+        Installee::Version(version) => (Some(version), false),
+        Installee::Ancienne => (None, true),
+        Installee::Rien => (None, false),
+    };
     InfosInstallation {
         nom: identite::NOM,
         version: identite::VERSION,
         dossier: programme.display().to_string(),
-        version_installee: installation::version_installee(&programme),
-        raccourci: chemin_raccourci(&app).map(|c| c.display().to_string()),
+        version_installee,
+        version_2_installee,
+        dossier_v2: installation::dossier_v2_gardee(&programme).display().to_string(),
+        raccourci_existe: raccourci.as_deref().is_some_and(Path::exists),
+        raccourci: raccourci.map(|c| c.display().to_string()),
+        demarrage_actif: demarrage_auto::est_actif(),
     }
 }
 
@@ -77,14 +95,31 @@ pub fn installer(app: AppHandle, etat: State<'_, Etat>, raccourci: bool) -> Resu
         );
     }
     let exe = std::env::current_exe().map_err(|e| format!("L'exe de l'appli est introuvable : {e}"))?;
+    let programme = etat.dossier.programme();
+    let etait_la_v2 = installation::installee(&programme) == Installee::Ancienne;
     let installe = installation::installer(&exe, &Chemins::du_dossier(&etat.dossier)).map_err(|e| e.0)?;
     let mut bilan = format!(
         "version {} installée dans {}",
         identite::VERSION,
         etat.dossier.programme().display()
     );
+    if etait_la_v2 {
+        let gardee = installation::dossier_v2_gardee(&programme);
+        bilan.push_str(&format!(", version 2 gardée entière dans {}", gardee.display()));
+    }
+    // L'entrée de démarrage garde son nom et vise l'exe installé, si elle était cochée.
+    match demarrage_auto::reorienter(&installe) {
+        Ok(()) if demarrage_auto::est_actif() => {
+            bilan.push_str(", démarrage avec Windows visé sur l'exe installé");
+        }
+        Ok(()) => {}
+        Err(e) => bilan.push_str(&format!(", démarrage avec Windows non redirigé ({e})")),
+    }
     if raccourci {
+        // Un raccourci déjà là n'est remplacé que parce que la case « mettre à jour » a été cochée.
+        let existait = chemin_raccourci(&app).is_some_and(|lien| lien.exists());
         match chemin_raccourci(&app).map(|lien| systeme::creer_raccourci(&lien, &installe)) {
+            Some(Ok(())) if existait => bilan.push_str(", raccourci du Bureau mis à jour"),
             Some(Ok(())) => bilan.push_str(", raccourci du Bureau créé"),
             Some(Err(e)) => {
                 bilan.push_str(", raccourci non créé");

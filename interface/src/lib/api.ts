@@ -1176,9 +1176,17 @@ export interface InfosInstallation {
   version: string;
   /** Le dossier programme\ du dossier de données. */
   dossier: string;
+  /** La version 3 déjà installée, remplacée puis gardée dans les sauvegardes. */
   versionInstallee: string | null;
+  /** Une version 2 occupe le dossier d'installation : elle est gardée entière dans `dossierV2`. */
+  version2Installee: boolean;
+  dossierV2: string;
   /** Le raccourci du Bureau qui serait créé ; null si le Bureau est introuvable. */
   raccourci: string | null;
+  /** Un raccourci du même nom est déjà sur le Bureau : la case propose de le mettre à jour. */
+  raccourciExiste: boolean;
+  /** « Démarrer avec Windows » est coché : l'entrée visera l'exe installé. */
+  demarrageActif: boolean;
 }
 
 export const infosInstallation = (): Promise<InfosInstallation> => invoke<InfosInstallation>('infos_installation');

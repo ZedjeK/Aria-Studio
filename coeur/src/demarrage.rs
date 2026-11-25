@@ -1,4 +1,4 @@
-//! « Démarrer avec Windows » : une valeur au nom de l'exe dans `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
+//! « Démarrer avec Windows » : une valeur « Aria Studio » (comme la v2) dans `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
 //! qui lance l'exe avec [`ARGUMENT_SILENCIEUX`]. Désactivé par défaut, sans droits administrateur. L'état est toujours
 //! relu dans le registre, jamais retenu : l'utilisateur peut le changer ailleurs, notamment dans la page
 //! « Applications de démarrage » de Windows (`StartupApproved`).
@@ -18,8 +18,22 @@ pub const CLE_RUN: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 /// La clé où Windows note qu'une entrée a été désactivée dans « Applications de démarrage ».
 pub const CLE_APPROUVES: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
-/// Le nom de la valeur dans le registre : celui de l'exe.
-pub const NOM_VALEUR: &str = identite::NOM_EXE;
+/// Le nom de la valeur dans le registre : « Aria Studio », comme la v2. Une appli qui passe de la v2 à la v3 garde
+/// sa case cochée, et n'ouvre pas une seconde entrée de démarrage.
+pub const NOM_VALEUR: &str = identite::NOM;
+
+/// Le nom que les versions d'essai de la v3 donnaient à la valeur (celui de l'exe) : encore lu, et retiré à la
+/// prochaine écriture. Le même que [`NOM_VALEUR`] pour une appli dont le nom n'a pas d'espace.
+pub const NOM_VALEUR_ESSAI: &str = identite::NOM_EXE;
+
+/// Les noms sous lesquels l'appli peut être inscrite : le courant d'abord.
+pub fn noms_de_valeur() -> Vec<&'static str> {
+    if NOM_VALEUR_ESSAI == NOM_VALEUR {
+        vec![NOM_VALEUR]
+    } else {
+        vec![NOM_VALEUR, NOM_VALEUR_ESSAI]
+    }
+}
 
 /// La ligne de commande enregistrée : l'exe entre guillemets, puis l'argument silencieux.
 pub fn commande_pour(exe: &Path) -> String {
@@ -58,7 +72,7 @@ pub mod windows {
     use winreg::RegKey;
     use winreg::enums::{HKEY_CURRENT_USER, KEY_SET_VALUE};
 
-    use super::{CLE_APPROUVES, CLE_RUN, NOM_VALEUR, commande_pour, est_actif};
+    use super::{CLE_APPROUVES, CLE_RUN, NOM_VALEUR, commande_pour, est_actif, noms_de_valeur};
 
     /// Windows lancera-t-il l'appli à l'ouverture de session ? Relu à chaque fois.
     pub fn est_inscrit() -> bool {
@@ -83,15 +97,18 @@ pub mod windows {
     }
 
     pub(crate) fn est_inscrit_sous(run: &str, approuves: &str) -> bool {
+        noms_de_valeur()
+            .into_iter()
+            .any(|nom| est_inscrit_sous_le_nom(run, approuves, nom))
+    }
+
+    fn est_inscrit_sous_le_nom(run: &str, approuves: &str, nom: &str) -> bool {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let commande: Option<String> = hkcu
-            .open_subkey(run)
-            .ok()
-            .and_then(|cle| cle.get_value(NOM_VALEUR).ok());
+        let commande: Option<String> = hkcu.open_subkey(run).ok().and_then(|cle| cle.get_value(nom).ok());
         let approuve = hkcu
             .open_subkey(approuves)
             .ok()
-            .and_then(|cle| cle.get_raw_value(NOM_VALEUR).ok())
+            .and_then(|cle| cle.get_raw_value(nom).ok())
             .map(|valeur| valeur.bytes.to_vec());
         est_actif(commande.as_deref(), approuve.as_deref())
     }
@@ -106,8 +123,14 @@ pub mod windows {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         let (cle, _) = hkcu.create_subkey(run)?;
         cle.set_value(NOM_VALEUR, &commande_pour(exe))?;
+        // Une valeur d'une version d'essai ne doit pas lancer l'appli une seconde fois.
+        for ancien in noms_de_valeur().into_iter().skip(1) {
+            supprimer_valeur(&cle, ancien)?;
+        }
         if let Ok(approuve) = hkcu.open_subkey_with_flags(approuves, KEY_SET_VALUE) {
-            supprimer_valeur(&approuve)?;
+            for nom in noms_de_valeur() {
+                supprimer_valeur(&approuve, nom)?;
+            }
         }
         Ok(())
     }
@@ -115,15 +138,17 @@ pub mod windows {
     pub(crate) fn desinscrire_sous(run: &str) -> io::Result<()> {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         match hkcu.open_subkey_with_flags(run, KEY_SET_VALUE) {
-            Ok(cle) => supprimer_valeur(&cle),
+            Ok(cle) => noms_de_valeur()
+                .into_iter()
+                .try_for_each(|nom| supprimer_valeur(&cle, nom)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e),
         }
     }
 
     /// Supprime la valeur ; sans effet si elle n'existe pas.
-    fn supprimer_valeur(cle: &RegKey) -> io::Result<()> {
-        match cle.delete_value(NOM_VALEUR) {
+    fn supprimer_valeur(cle: &RegKey, nom: &str) -> io::Result<()> {
+        match cle.delete_value(nom) {
             Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
             _ => Ok(()),
         }
@@ -132,6 +157,7 @@ pub mod windows {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use crate::demarrage::NOM_VALEUR_ESSAI;
 
         /// Des clés à part sous HKCU, jamais celles que lit Windows ; effacées à la fin du test.
         struct ClesDeTest {
@@ -194,6 +220,34 @@ pub mod windows {
         }
 
         #[test]
+        fn la_valeur_a_le_nom_de_la_v2() {
+            assert_eq!(NOM_VALEUR, "Aria Studio");
+        }
+
+        #[test]
+        fn une_valeur_d_une_version_d_essai_est_reprise_puis_remplacee() {
+            let cles = ClesDeTest::nouvelles("essai");
+            let ancien = Path::new(r"C:\Zip\Aria-Studio.exe");
+            let (run, _) = RegKey::predef(HKEY_CURRENT_USER)
+                .create_subkey(&cles.run)
+                .unwrap();
+            run.set_value(NOM_VALEUR_ESSAI, &commande_pour(ancien)).unwrap();
+            // Une version d'essai l'avait cochée : la case reste cochée.
+            assert!(est_inscrit_sous(&cles.run, &cles.approuves));
+            // Cocher de nouveau écrit la valeur « Aria Studio » vers l'exe installé, sans laisser l'ancienne.
+            let installe = Path::new(r"C:\Users\moi\.Aria-Studio\programme\Aria-Studio.exe");
+            inscrire_sous(&cles.run, &cles.approuves, installe).unwrap();
+            let lue: String = run.get_value(NOM_VALEUR).unwrap();
+            assert_eq!(lue, commande_pour(installe));
+            assert!(run.get_value::<String, _>(NOM_VALEUR_ESSAI).is_err());
+            // Décocher retire aussi l'ancienne valeur, si une version d'essai en avait laissé une.
+            run.set_value(NOM_VALEUR_ESSAI, &commande_pour(ancien)).unwrap();
+            desinscrire_sous(&cles.run).unwrap();
+            assert!(!est_inscrit_sous(&cles.run, &cles.approuves));
+            assert!(run.get_value::<String, _>(NOM_VALEUR_ESSAI).is_err());
+        }
+
+        #[test]
         fn un_chemin_relatif_est_refuse() {
             let cles = ClesDeTest::nouvelles("relatif");
             assert!(inscrire_sous(&cles.run, &cles.approuves, Path::new("Aria-Essai.exe")).is_err());
@@ -237,5 +291,11 @@ mod tests {
         assert!(est_silencieux(["Aria-Essai.exe", "--silencieux"]));
         assert!(est_silencieux(["Aria-Essai.exe", "--SILENCIEUX"]));
         assert!(!est_silencieux(["Aria-Essai.exe"]));
+    }
+
+    #[test]
+    fn le_nom_de_la_valeur_est_celui_de_la_v2_et_l_essai_est_reconnu() {
+        assert_eq!(NOM_VALEUR, "Aria Studio");
+        assert_eq!(noms_de_valeur(), vec!["Aria Studio", "Aria-Studio"]);
     }
 }

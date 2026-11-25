@@ -7,6 +7,7 @@
   import { onMount } from 'svelte';
   import { infosInstallation, installer, lancerSansInstaller, messageErreur } from './lib/api';
   import type { InfosInstallation } from './lib/api';
+  import { libelleRaccourci, texteDemarrage, texteInstallee } from './lib/installation';
   import ASavoir from './lib/composants/ASavoir.svelte';
   import Bouton from './lib/composants/Bouton.svelte';
   import Panneau from './lib/composants/Panneau.svelte';
@@ -51,11 +52,11 @@
   <Panneau titre="Dossier d'installation" accentue>
     {#if infos}
       <p class="code">{infos.dossier}</p>
-      {#if infos.versionInstallee}
-        <p class="discret">
-          La version {infos.versionInstallee} déjà installée sera remplacée par la {infos.version}, et gardée dans les
-          sauvegardes.
-        </p>
+      {#if texteInstallee(infos)}
+        <p class="discret">{texteInstallee(infos)}</p>
+      {/if}
+      {#if texteDemarrage(infos)}
+        <p class="discret">{texteDemarrage(infos)}</p>
       {/if}
     {/if}
   </Panneau>
@@ -63,7 +64,7 @@
   <div class="options">
     <label class="ligne">
       <input type="checkbox" bind:checked={raccourci} disabled={!infos?.raccourci} />
-      Créer un raccourci sur le Bureau
+      {libelleRaccourci(infos?.raccourciExiste ?? false)}
     </label>
     {#if infos?.raccourci}<p class="aide code">{infos.raccourci}</p>{/if}
 
