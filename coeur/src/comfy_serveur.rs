@@ -477,7 +477,8 @@ fn pythons() -> Vec<Processus> {
         .collect()
 }
 
-fn processus_existe(pid: u32) -> bool {
+/// Le processus `pid` tourne-t-il encore ?
+pub fn processus_existe(pid: u32) -> bool {
     let Ok(mut systeme) = System::new() else {
         return false;
     };

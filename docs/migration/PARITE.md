@@ -32,13 +32,13 @@ la v3. Ce qu'elle exige, et ce que la v3 doit donc fournir :
 | Zip à racine unique `Aria-Studio-X.Y.Z/` | `_extraire()` | [ ] (déjà le format du modèle) |
 | `Aria-Studio.exe` à la racine du zip | `_extraire()` | [ ] |
 | `app/__init__.py` dans le zip, avec `VERSION = "X.Y.Z"` | `_extraire()` | [ ] témoin ajouté au zip, hors de `fichiers.txt` |
-| L'exe accepte `--mise-a-jour <pid> <ancien lanceur>` | `_relayer()` | [ ] |
-| Il attend la fin du processus `<pid>` (120 s au plus) | `MettreAJour()` | [ ] |
-| Il attend que `programme\` se libère (l'icône v2 le tient, environ 12 s ; 15 s d'attente) | `Installer()` | [ ] |
-| Il installe dans `programme\`, la v2 entière gardée (`programme.precedent\` en v2) | `Installer()` | [ ] la v2 n'a ni `fichiers.txt` ni `BUILDINFO.txt` : elle est gardée en bloc |
-| Il retire la marque « téléchargé depuis Internet » | `RetirerMarque()` | [ ] |
-| Il relance la v3 depuis `programme\`, ou l'ancien lanceur en cas d'échec | `MettreAJour()` | [ ] |
-| La v3 lit `cache\mise-a-jour\relais.json` au démarrage et note le bilan au journal | `bilan_au_demarrage()` | [ ] |
+| L'exe accepte `--mise-a-jour <pid> <ancien lanceur>` | `_relayer()` | [x] `pont_v2::lire_demande` (`coeur/src/pont_v2.rs`), traité par `appli/src/main.rs` avant toute fenêtre et avant l'instance unique (`appli/src/pont_v2.rs`) ; sans numéro, une erreur dite et rien n'est touché |
+| Il attend la fin du processus `<pid>` (120 s au plus) | `MettreAJour()` | [x] `pont_v2::attendre` (un essai toutes les 250 ms, le dernier à l'échéance) ; au bout de 120 s, rien n'est installé et rien n'est relancé (la v2 tourne encore) |
+| Il attend que `programme\` se libère (l'icône v2 le tient, environ 12 s ; 15 s d'attente) | `Installer()` | [x] d'abord le verrou nommé que tient l'icône de la v2 (30 s au plus, même nom que dans `Icone.cs`), puis `programme\` et `programme.precedent\` renommables (15 s chacun) ; sinon rien ne change et l'ancien lanceur repart |
+| Il installe dans `programme\`, la v2 entière gardée (`programme.precedent\` en v2) | `Installer()` | [x] la v2 n'a ni `fichiers.txt` ni `BUILDINFO.txt` : elle est gardée en bloc. `fichiers.txt` est copié dans `programme.nouveau\`, puis `programme\` devient `programme.precedent\` (celui d'avant passe de côté et n'est supprimé qu'une fois la v3 en place) et `programme.nouveau\` devient `programme\` ; à la moindre erreur tout reprend sa place. Un `programme\` déjà en v3 passe par `installation::installer` (version gardée dans les sauvegardes). Le témoin `app/__init__.py` n'est pas dans `fichiers.txt` : il n'est jamais copié |
+| Il retire la marque « téléchargé depuis Internet » | `RetirerMarque()` | [x] contenu copié seul (`installation::copier_contenu`), puis `installation::retirer_marque` sur chaque fichier copié ; testé sous Windows avec un vrai flux `Zone.Identifier` |
+| Il relance la v3 depuis `programme\`, ou l'ancien lanceur en cas d'échec | `MettreAJour()` | [x] `pont_v2::mettre_a_jour` rend l'exe installé, ou un refus (message, et ancien lanceur seulement s'il existe encore) ; `appli/src/pont_v2.rs` lance l'un ou l'autre depuis son dossier et dit l'échec dans une boîte de dialogue et au journal. Le lancement lui-même (exe sous Windows) n'est pas testé automatiquement |
+| La v3 lit `cache\mise-a-jour\relais.json` au démarrage et note le bilan au journal | `bilan_au_demarrage()` | [x] `pont_v2::bilan_au_demarrage`, appelé avant le ménage du dossier de travail : « Mise à jour installée » (de → vers) si la version attendue tourne, sinon « Mise à jour non installée » avec la version qui tourne ; le fichier est lu une seule fois, un relais illisible ne fait pas de faux bilan |
 
 Essai obligatoire avant la release : une v2.4.x réellement installée se met à jour vers une prerelease v3.
 
