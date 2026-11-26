@@ -37,7 +37,7 @@
   import BarreTitre from './lib/composants/BarreTitre.svelte';
   import Bouton from './lib/composants/Bouton.svelte';
   import EtatDirectVram from './lib/EtatDirectVram.svelte';
-  import FondAnime from './lib/composants/FondAnime.svelte';
+  import FondGouttes from './lib/composants/FondGouttes.svelte';
   import MenuLateral from './lib/composants/MenuLateral.svelte';
   import DialogueAssistant from './dialogues/Assistant.svelte';
   import DialogueMiseAJour from './dialogues/MiseAJour.svelte';
@@ -233,7 +233,7 @@
     <!-- Décor : nuit profonde, grille fine, halo bleu au centre, halo orange en bas à droite. -->
     <div class="decor" aria-hidden="true"></div>
     {#if reglages}
-      <FondAnime reglages={reglages.fond} />
+      <FondGouttes reglages={reglages.fond} />
     {/if}
 
     <BarreTitre>
