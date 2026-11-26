@@ -4,6 +4,54 @@ Un bloc par version, le plus récent en haut. Les notes complètes d'une version
 sont dans `docs/releases/` (à partir de la 2.0.0) et dans la page de sa release sur
 GitHub (pour les précédentes).
 
+## 3.0.0 (à publier)
+
+Aria Studio est réécrite : une vraie appli Windows en un seul exe, avec sa propre fenêtre, sans navigateur ni Python. Elle relit tes réglages, ton journal et tes données de la 2.4 telles quelles, et la mise à jour intégrée de la 2.4 sait l'installer. Les versions `3.0.0-essai.N` servent d'abord à l'essayer ; elles ne sont jamais proposées en mise à jour. Ce qui n'a jamais tourné en vrai est listé dans `docs/migration/PARITE.md`.
+
+### Ajouté
+
+- Le LLM en fait plus. Chaque prompt qu'il écrit est contrôlé (langue, longueur, texte que tu avais cité) et redemandé une fois s'il manque son but ; s'il tombe en panne, ton idée part telle quelle au lieu d'un échec. Au Scénario, il propose trois directions à partir d'une envie vague. Il vérifie une image d'après ce que tu avais demandé, propose un prompt corrigé et choisit les meilleures d'un lot (il lui faut un LLM qui voit). Un bouton « 🩺 Expliquer » dit la cause probable d'une erreur et quoi faire.
+- Une icône près de l'horloge plus complète : l'état de ComfyUI, du LLM et de la mémoire de la carte graphique, annuler la génération en cours ou libérer la carte sans ouvrir la fenêtre, aller à une page, démarrer avec Windows, quitter.
+- Windows te prévient quand une image, une retouche, un clip, une séquence ou un casting se termine, si la fenêtre d'Aria n'est pas devant toi (Paramètres → Notifications).
+- Relancer l'exe quand Aria tourne déjà ramène sa fenêtre, au lieu d'en ouvrir une seconde.
+- Paramètres : « Vérifier maintenant » cherche une nouvelle version à la demande, et « Voir la mise à jour » ouvre ses notes.
+- Au Scénario : un bouton Créer qui envoie le prompt au Plateau et lance la création ; un champ Format dans l'atelier Image ; le dialogue et la musique d'ambiance d'un clip dans son idée.
+- Au Plateau, on voit quels LLM regardent les images ; la fiche d'une création garde ton idée, ce que le LLM a écrit et ce qui est vraiment parti au modèle.
+- Dans les Rushes et les Bobines : la fiche d'un fichier, sa sélection, le menu du clic droit, et depuis cette fiche : réutiliser, prendre en référence, animer, retoucher, ouvrir le Scénario.
+- Dans Modèles : la corbeille prend tous les modèles, déposés à la main compris ; un bouton dit pourquoi un workflow n'est pas prêt ; les LLM spécialisés de Qwen-Image 2.1 sont présentés comme facultatifs.
+- Dans Réglages : « Chercher un réglage » et « Modifiés seulement », « Ouvrir dans Modèles » à côté du checkpoint par défaut. En haut à droite, les pastilles d'état de ComfyUI et du LLM montrent en fond la part de mémoire de la carte graphique utilisée.
+- Une v2 déjà installée se met à jour vers la 3 par son propre bouton « Installer » : elle est gardée entière dans `programme.precedent\`, et tu peux la relancer de là.
+- Pour un essai en mode portable sur un PC qui a une v2 installée, la 3 reprend d'elle-même ses modèles, son ComfyUI et ses llama-server, sans rien copier ni toucher.
+- `LICENCES-TIERS.txt` est complet : chaque composant embarqué et chaque modèle proposé, avec sa licence.
+
+### Modifié
+
+- Aria Studio a sa propre fenêtre et son menu en trois familles (Création, Préparation, Appli) ; il n'y a plus de page web sur `127.0.0.1:8075`, plus de jeton à ouvrir et plus d'onglet qui se rouvre. Les pages Plateau, Retouche, Montage, Scénario, Modèles, Casting et Réglages sont refaites sur la même maquette ; le Journal et les Paramètres (démarrage, installation, mises à jour, notifications, fond animé) ont chacun leur page, à la place de Réglages → Application.
+- Tes clés Civitai et Hugging Face sont rangées dans `secrets\`, chiffrées par Windows pour ton compte, dans le dossier de données. Celles que la 2.4 avait mises dans le Gestionnaire d'identification de Windows y sont recopiées au lancement ; l'entrée d'origine reste en place.
+- Claude se branche avec une nouvelle commande, `Aria-Studio.exe --mcp` : refais le branchement depuis Réglages → Claude (MCP). L'outil `generer_image` n'a plus de paramètre `idee` (le prompt est noté comme idée), et `etat` dit quel moteur tient la carte graphique.
+- La mise à jour intégrée vérifie la taille et l'empreinte SHA-256 annoncées par GitHub pour le zip de la dernière release ; la version d'avant est gardée dans `sauvegardes\versions\`.
+- Redessiner une image et la Retouche font écrire au LLM ce qui change, sans décrire l'image.
+- Casting : « Nouveau casting » et « Comparer », les tâches et les candidats en cartes, « par défaut » à la place de « favori », la révélation des modèles demande confirmation.
+- Casting : les images de départ des castings de retouche et d'image vers vidéo sont désormais les tiennes (figées depuis un casting, importées ou prises dans les Rushes), pas celles que livrait l'exe.
+- Réglages : le checkpoint par défaut se choisit dans Modèles ; les réglages du LLM sont en quatre groupes.
+- Installation : une v2 déjà installée est gardée entière ; un raccourci du Bureau déjà présent est proposé en mise à jour, jamais remplacé en silence ; l'entrée « Démarrer avec Windows » garde le nom « Aria Studio » et vise l'exe installé.
+
+### Corrigé
+
+- Casting LLM : « Sans LLM (témoin) » ne peut plus être choisi comme LLM par défaut. Il n'en est pas un, et le choisir faisait retomber Aria sur un autre LLM sans le dire.
+- Scénario, conversation : un refus du LLM est dit comme tel, et sa réponse s'affiche.
+- Casting : la préparation ne montre plus le texte d'une erreur technique.
+- Relancer l'exe n'ouvre plus un nouvel onglet : il ramène la fenêtre.
+
+### Retiré
+
+- La page web, le serveur local et Python : tout tient dans l'exe.
+- La restauration des sauvegardes de réglages (Réglages → Historique) : les copies sont toujours faites dans `sauvegardes\`, mais aucune page ne les restaure encore.
+- Le glisser-déposer d'une image dans la Retouche : on passe par les Rushes ou l'import.
+- Le dialogue de la garde de la carte graphique (forcer ou annuler l'attente) ; l'attente, elle, existe toujours.
+- Au Casting : le pic de mémoire de ComfyUI, la pause des téléchargements pendant un casting et « Ouvrir dans Modèles » ne sont pas encore repris.
+- La promotion d'un terme dans le socle du filtre AS-18 : le socle est embarqué dans l'exe, tes ajouts restent dans `reglages.json`.
+
 ## 2.4.0 (2026-11-19)
 
 Écriture des prompts par le LLM, après une revue de ses consignes et de ses réglages ; un serveur MCP pour piloter Aria depuis Claude ; ComfyUI s'installe sous Windows 10 avec 7-Zip. Notes complètes : `docs/releases/v2.4.0.md`.
