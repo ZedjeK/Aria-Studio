@@ -40,7 +40,7 @@ la v3. Ce qu'elle exige, et ce que la v3 doit donc fournir :
 | Il relance la v3 depuis `programme\`, ou l'ancien lanceur en cas d'échec | `MettreAJour()` | [x] `pont_v2::mettre_a_jour` rend l'exe installé, ou un refus (message, et ancien lanceur seulement s'il existe encore) ; `appli/src/pont_v2.rs` lance l'un ou l'autre depuis son dossier et dit l'échec dans une boîte de dialogue et au journal. Le lancement lui-même (exe sous Windows) n'est pas testé automatiquement |
 | La v3 lit `cache\mise-a-jour\relais.json` au démarrage et note le bilan au journal | `bilan_au_demarrage()` | [x] `pont_v2::bilan_au_demarrage`, appelé avant le ménage du dossier de travail : « Mise à jour installée » (de → vers) si la version attendue tourne, sinon « Mise à jour non installée » avec la version qui tourne ; le fichier est lu une seule fois, un relais illisible ne fait pas de faux bilan |
 
-Essai obligatoire avant la release : une v2.4.x réellement installée se met à jour vers une prerelease v3.
+Essai obligatoire avant la release : une v2.4.x réellement installée se met à jour vers une prerelease v3. Le déroulé, avec un faux GitHub local qui ne publie rien : [ESSAI-PONT.md](ESSAI-PONT.md).
 
 ## 2. Données d'un utilisateur v2
 
