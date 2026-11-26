@@ -63,6 +63,13 @@ where
         .any(|a| a.as_ref().eq_ignore_ascii_case(ARGUMENT_SILENCIEUX))
 }
 
+/// Un second lancement doit-il ramener la fenêtre de l'instance qui tourne ? Oui, sauf à l'ouverture de session
+/// (`--silencieux`) : l'icône est déjà là, la fenêtre reste rangée. `arguments` : la ligne de commande du second
+/// lancement, nom de l'exe compris (c'est ce que reçoit le greffon d'instance unique).
+pub fn doit_ramener(arguments: &[String]) -> bool {
+    !est_silencieux(arguments.iter().skip(1))
+}
+
 /// L'accès au registre, sous `HKEY_CURRENT_USER` : sans droits administrateur.
 #[cfg(windows)]
 pub mod windows {
@@ -297,5 +304,31 @@ mod tests {
     fn le_nom_de_la_valeur_est_celui_de_la_v2_et_l_essai_est_reconnu() {
         assert_eq!(NOM_VALEUR, "Aria Studio");
         assert_eq!(noms_de_valeur(), vec!["Aria Studio", "Aria-Studio"]);
+    }
+
+    fn ligne(arguments: &[&str]) -> Vec<String> {
+        arguments.iter().map(|a| (*a).to_owned()).collect()
+    }
+
+    #[test]
+    fn relancer_l_exe_ramene_la_fenetre() {
+        assert!(doit_ramener(&ligne(&["Aria-Essai.exe"])));
+        assert!(doit_ramener(&ligne(&["Aria-Essai.exe", "--portable"])));
+    }
+
+    #[test]
+    fn un_lancement_silencieux_ne_fait_pas_surgir_la_fenetre() {
+        assert!(!doit_ramener(&ligne(&["Aria-Essai.exe", "--silencieux"])));
+        assert!(!doit_ramener(&ligne(&[
+            "Aria-Essai.exe",
+            "--portable",
+            "--SILENCIEUX"
+        ])));
+    }
+
+    #[test]
+    fn le_nom_de_l_exe_n_est_pas_un_argument() {
+        assert!(doit_ramener(&ligne(&["--silencieux"])));
+        assert!(doit_ramener(&[]));
     }
 }

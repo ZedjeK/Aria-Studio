@@ -26,6 +26,7 @@ mod telechargements;
 mod vision;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use aria_coeur::emplacements::Emplacements;
 use aria_coeur::{Dossier, Reglages, demarrage, identite, journal};
@@ -163,61 +164,26 @@ fn lancer() -> Result<(), String> {
         mcp::relayer(&dossier);
         return Ok(());
     }
-    let portable = if emplacements.portable { " (portable)" } else { "" };
-    journal::noter(
-        &dossier,
-        "Aria lancée",
-        &format!("{} {}{portable}", identite::NOM, identite::VERSION),
-        journal::Resultat::Ok,
-        None,
-    );
-    // Après une mise à jour lancée par la v2 : la version attendue tourne-t-elle ? Avant le ménage du cache.
-    aria_coeur::pont_v2::bilan_au_demarrage(&dossier, identite::VERSION);
-    reprendre_les_cles(&dossier);
-    let (emplacements, v2_lancee) = reprendre_la_v2(emplacements, &dossier_exe, &profil);
-    // Restes d'un remplacement précédent, maintenant que l'ancienne version est arrêtée.
-    aria_coeur::installation::nettoyer(&dossier.programme());
     // Lancé à l'ouverture de session : l'icône seule, la fenêtre reste rangée jusqu'à ce qu'on l'ouvre.
     let silencieux = identite::EN_FOND && demarrage::est_silencieux(&arguments);
-    // Exe lancé hors de programme\ (zip décompressé) : proposition de s'installer, avant la fenêtre de l'appli.
-    // Jamais en mode portable, comme en v2.
-    let proposer = !silencieux
-        && !emplacements.portable
-        && std::env::current_exe().is_ok_and(|exe| {
-            aria_coeur::installation::doit_proposer(&exe, &dossier, &Reglages::charger(&dossier), &arguments)
-        });
-    let cache_webview = dossier.cache_webview();
-    let moteurs = moteurs::Moteurs::new(&emplacements)?;
-    moteurs::reprendre(&moteurs);
-    let poignee = notifications::Poignee::default();
-    let plateau = plateau::demarrer(&emplacements, &moteurs, std::sync::Arc::clone(&poignee));
-    let telechargeur = telechargements::demarrer(&emplacements);
-    // Le canal local du serveur MCP pour Claude (127.0.0.1, jeton neuf à chaque lancement).
-    let session_mcp = mcp::ouvrir(&dossier, &plateau, &moteurs);
+    let lancement = Lancement {
+        emplacements,
+        dossier_exe,
+        profil,
+        arguments,
+        silencieux,
+    };
 
     tauri::Builder::default()
         // Toujours le premier greffon : relancer l'exe ramène la fenêtre existante au lieu d'en ouvrir une autre.
-        // Un second lancement silencieux (ouverture de session) ne fait pas surgir la fenêtre.
+        // Un second lancement silencieux (ouverture de session) ne fait pas surgir la fenêtre. Ce second lancement
+        // s'arrête ici, dans le greffon : rien de ce que fait `demarrer_instance` (journal, canal MCP, moteurs) ne
+        // doit avoir eu lieu avant, sinon il écraserait le canal de l'instance qui tourne.
         .plugin(tauri_plugin_single_instance::init(|app, arguments, _dossier| {
-            if !demarrage::est_silencieux(arguments.iter().skip(1)) {
+            if demarrage::doit_ramener(&arguments) {
                 ramener(app);
             }
         }))
-        .manage(emplacements.clone())
-        .manage(lieux::RepriseAuLancement { v2_lancee })
-        .manage(Etat {
-            dossier,
-            cache_webview,
-        })
-        .manage(icone::Presence::default())
-        .manage(mise_a_jour::Disponible::default())
-        .manage(moteurs)
-        .manage(plateau)
-        .manage(telechargeur)
-        .manage(std::sync::Arc::new(aria_coeur::retrouver::Suivi::default()))
-        .manage(std::sync::Arc::new(decouvrir::Sources(
-            telechargements::Https::new(),
-        )))
         .invoke_handler(tauri::generate_handler![
             commandes::identite,
             commandes::lire_reglages,
@@ -363,35 +329,102 @@ fn lancer() -> Result<(), String> {
             plateau::source_casting_depuis_rush,
             plateau::lancer_casting,
         ])
-        .setup(move |app| {
-            // La file du Plateau peut prévenir dès que l'appli existe ; la poignée ne se pose qu'une fois.
-            let _ = poignee.set(app.handle().clone());
-            if proposer {
-                installation::ouvrir_fenetre(app.handle())?;
-            } else {
-                ouvrir_principale(app.handle(), !silencieux)?;
-            }
-            Ok(())
-        })
+        .setup(move |app| demarrer_instance(app.handle(), lancement).map_err(Into::into))
         .build(tauri::generate_context!())
         .map_err(|e| format!("l'interface n'a pas pu démarrer : {e}"))?
-        .run(move |app, evenement| {
+        .run(|app, evenement| {
             if let RunEvent::Exit = evenement {
+                // Si le démarrage n'a pas eu lieu (instance déjà là, erreur), il n'y a rien à fermer.
+                let Some(etat) = app.try_state::<Etat>() else {
+                    return;
+                };
                 // Les moteurs lancés par Aria s'arrêtent avec elle, et le canal MCP se ferme.
-                moteurs::arreter(&app.state::<moteurs::Moteurs>());
-                if let Some(session) = &session_mcp {
-                    aria_coeur::mcp::fermer_canal(&app.state::<Etat>().dossier, session);
+                if let Some(moteurs) = app.try_state::<moteurs::Moteurs>() {
+                    moteurs::arreter(&moteurs);
                 }
-                journal::noter(
-                    &app.state::<Etat>().dossier,
-                    "Aria fermée",
-                    "",
-                    journal::Resultat::Ok,
-                    None,
-                );
+                if let Some(SessionMcp(Some(session))) = app.try_state::<SessionMcp>().as_deref() {
+                    aria_coeur::mcp::fermer_canal(&etat.dossier, session);
+                }
+                journal::noter(&etat.dossier, "Aria fermée", "", journal::Resultat::Ok, None);
             }
         });
     Ok(())
+}
+
+/// Le canal MCP de ce lancement, gardé pour le fermer à la sortie (rien si le canal n'a pas pu s'ouvrir).
+struct SessionMcp(Option<aria_coeur::mcp::Session>);
+
+/// Ce que `lancer` a décidé avant que Tauri ne démarre ; seule l'instance qui tourne le met en œuvre.
+struct Lancement {
+    emplacements: Emplacements,
+    dossier_exe: PathBuf,
+    profil: Dossier,
+    arguments: Vec<String>,
+    silencieux: bool,
+}
+
+/// Le démarrage de l'instance, une fois le greffon d'instance unique passé : journal, reprise de la v2, moteurs,
+/// Plateau, téléchargements, canal MCP, puis la fenêtre (la proposition d'installation, ou celle de l'appli).
+fn demarrer_instance(app: &AppHandle, lancement: Lancement) -> Result<(), String> {
+    let Lancement {
+        emplacements,
+        dossier_exe,
+        profil,
+        arguments,
+        silencieux,
+    } = lancement;
+    let dossier = emplacements.dossier.clone();
+    let portable = if emplacements.portable { " (portable)" } else { "" };
+    journal::noter(
+        &dossier,
+        "Aria lancée",
+        &format!("{} {}{portable}", identite::NOM, identite::VERSION),
+        journal::Resultat::Ok,
+        None,
+    );
+    // Après une mise à jour lancée par la v2 : la version attendue tourne-t-elle ? Avant le ménage du cache.
+    aria_coeur::pont_v2::bilan_au_demarrage(&dossier, identite::VERSION);
+    reprendre_les_cles(&dossier);
+    let (emplacements, v2_lancee) = reprendre_la_v2(emplacements, &dossier_exe, &profil);
+    // Restes d'un remplacement précédent, maintenant que l'ancienne version est arrêtée.
+    aria_coeur::installation::nettoyer(&dossier.programme());
+    // Exe lancé hors de programme (zip décompressé) : proposition de s'installer, avant la fenêtre de l'appli.
+    // Jamais en mode portable, comme en v2.
+    let proposer = !silencieux
+        && !emplacements.portable
+        && std::env::current_exe().is_ok_and(|exe| {
+            aria_coeur::installation::doit_proposer(&exe, &dossier, &Reglages::charger(&dossier), &arguments)
+        });
+    let cache_webview = dossier.cache_webview();
+    let moteurs = moteurs::Moteurs::new(&emplacements)?;
+    moteurs::reprendre(&moteurs);
+    let poignee = notifications::Poignee::default();
+    let plateau = plateau::demarrer(&emplacements, &moteurs, Arc::clone(&poignee));
+    let telechargeur = telechargements::demarrer(&emplacements);
+    // Le canal local du serveur MCP pour Claude (127.0.0.1, jeton neuf à chaque lancement).
+    let session_mcp = mcp::ouvrir(&dossier, &plateau, &moteurs);
+
+    app.manage(emplacements);
+    app.manage(lieux::RepriseAuLancement { v2_lancee });
+    app.manage(Etat {
+        dossier,
+        cache_webview,
+    });
+    app.manage(icone::Presence::default());
+    app.manage(mise_a_jour::Disponible::default());
+    app.manage(moteurs);
+    app.manage(plateau);
+    app.manage(telechargeur);
+    app.manage(Arc::new(aria_coeur::retrouver::Suivi::default()));
+    app.manage(Arc::new(decouvrir::Sources(telechargements::Https::new())));
+    app.manage(SessionMcp(session_mcp));
+    // La file du Plateau peut prévenir dès que l'appli existe ; la poignée ne se pose qu'une fois.
+    let _ = poignee.set(app.clone());
+    if proposer {
+        installation::ouvrir_fenetre(app).map_err(|e| e.to_string())
+    } else {
+        ouvrir_principale(app, !silencieux).map_err(|e| e.to_string())
+    }
 }
 
 /// Ouvre la fenêtre de l'appli et, pour une appli qui sert en arrière-plan, son icône de notification.
